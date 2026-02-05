@@ -16,9 +16,29 @@ from sqlalchemy import desc
 from app.database import get_db
 from app.models import Cluster, DailyCheckLog, CheckSchedule, CheckScheduleType, StatusEnum
 from app.services.daily_checker import DailyChecker
+from app.checkers import get_registry
 
 
 router = APIRouter(prefix="/daily-check", tags=["Daily Check"])
+
+
+# ============================================
+# Checker Info
+# ============================================
+
+class CheckerInfo(BaseModel):
+    name: str
+    description: str
+    category: str
+    icon: str
+    enabled: bool
+
+
+@router.get("/checkers", response_model=List[CheckerInfo])
+async def list_available_checkers():
+    """사용 가능한 체커 목록 조회"""
+    registry = get_registry()
+    return registry.info()
 
 
 # ============================================

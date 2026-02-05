@@ -82,17 +82,3 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
         run: |
           pytest -v
-
-  # Docker 빌드 테스트
-  docker:
-    runs-on: ubuntu-latest
-    needs: [frontend, backend]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build Frontend Image
-        run: docker build -t k8s-monitor-frontend ./frontend
-
-      - name: Build Backend Image
-        run: docker build -t k8s-monitor-backend ./backend

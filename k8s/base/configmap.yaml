@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k8s-monitor-config
+  namespace: k8s-monitor
+  labels:
+    app.kubernetes.io/name: k8s-daily-monitor
+data:
+  APP_NAME: "K8s Daily Monitor"
+  DEBUG: "false"
+  CHECK_INTERVAL_MINUTES: "5"
+  CHECK_TIMEOUT_SECONDS: "30"
+  ANSIBLE_PLAYBOOK_DIR: "/app/ansible/playbooks"
+  ANSIBLE_INVENTORY_DIR: "/app/ansible/inventory"
+  # Database connection (host is service name)
+  DATABASE_HOST: "postgres"
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: "k8s_monitor"
+  # Redis connection
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"

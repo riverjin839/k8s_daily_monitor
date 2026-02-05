@@ -1,0 +1,54 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: k8s-monitor-prod
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: k8s-daily-monitor
+    app.kubernetes.io/env: prod
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/YOUR_ORG/k8s_daily_monitor.git  # 수정 필요
+    targetRevision: main
+    path: k8s/overlays/prod
+
+  destination:
+    server: https://kubernetes.default.svc  # 또는 외부 클러스터 URL
+    namespace: k8s-monitor-prod
+
+  syncPolicy:
+    # 프로덕션은 수동 동기화
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+
+  # Health checks
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+      jsonPointers:
+        - /spec/minReplicas
+        - /spec/maxReplicas
+
+  info:
+    - name: Environment
+      value: Production
+    - name: Team
+      value: DevOps
+    - name: SyncPolicy
+      value: Manual (require approval)

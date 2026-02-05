@@ -20,6 +20,8 @@ spec:
         app.kubernetes.io/part-of: k8s-daily-monitor
     spec:
       serviceAccountName: k8s-monitor-sa
+      imagePullSecrets:
+        - name: nexus-registry-secret
       initContainers:
         - name: wait-for-redis
           image: redis:7-alpine
@@ -54,16 +56,6 @@ spec:
                 configMapKeyRef:
                   name: k8s-monitor-config
                   key: CHECK_TIMEOUT_SECONDS
-            - name: ANSIBLE_PLAYBOOK_DIR
-              valueFrom:
-                configMapKeyRef:
-                  name: k8s-monitor-config
-                  key: ANSIBLE_PLAYBOOK_DIR
-            - name: ANSIBLE_INVENTORY_DIR
-              valueFrom:
-                configMapKeyRef:
-                  name: k8s-monitor-config
-                  key: ANSIBLE_INVENTORY_DIR
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -111,16 +103,10 @@ spec:
             timeoutSeconds: 15
             failureThreshold: 3
           volumeMounts:
-            - name: ansible-playbooks
-              mountPath: /app/ansible/playbooks
-              readOnly: true
             - name: kubeconfig
               mountPath: /root/.kube
               readOnly: true
       volumes:
-        - name: ansible-playbooks
-          configMap:
-            name: ansible-playbooks
         - name: kubeconfig
           secret:
             secretName: kubeconfig-secret

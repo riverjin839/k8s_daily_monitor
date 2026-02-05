@@ -83,3 +83,12 @@ secretGenerator:
 
 generatorOptions:
   disableNameSuffixHash: true
+
+# Nexus registry images (Jenkins CI will update these)
+images:
+  - name: k8s-daily-monitor/backend
+    newName: nexus.company.com:5000/k8s-monitor/backend
+    newTag: latest
+  - name: k8s-daily-monitor/frontend
+    newName: nexus.company.com:5000/k8s-monitor/frontend
+    newTag: latest

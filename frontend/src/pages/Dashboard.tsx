@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Header } from '@/components/layout';
 import {
   SummaryStats,
@@ -10,6 +11,7 @@ import { useClusterStore } from '@/stores/clusterStore';
 import { useClusters, useSummary, useAddons, useLogs, useHealthCheck } from '@/hooks/useCluster';
 
 export function Dashboard() {
+  const navigate = useNavigate();
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
   const { clusters, summary, addons, logs } = useClusterStore();
 
@@ -36,8 +38,7 @@ export function Dashboard() {
   };
 
   const handleSettings = () => {
-    // TODO: Settings modal/page
-    console.log('Open settings');
+    navigate('/settings');
   };
 
   // 현재 표시할 애드온

@@ -20,6 +20,8 @@ spec:
         app.kubernetes.io/part-of: k8s-daily-monitor
     spec:
       serviceAccountName: k8s-monitor-sa
+      imagePullSecrets:
+        - name: nexus-registry-secret
       initContainers:
         - name: wait-for-redis
           image: redis:7-alpine

@@ -15,6 +15,7 @@ resources:
   # Configuration
   - configmap.yaml
   - secret.yaml
+  - registry-secret.yaml
 
   # Database
   - postgres/statefulset.yaml
@@ -43,11 +44,6 @@ resources:
 
   # Autoscaling
   - hpa.yaml
-
-configMapGenerator:
-  - name: ansible-playbooks
-    files:
-      - ../ansible-playbooks/check_cluster.yml
 
 generatorOptions:
   disableNameSuffixHash: true

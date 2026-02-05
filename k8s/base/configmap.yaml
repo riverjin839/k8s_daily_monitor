@@ -10,8 +10,6 @@ data:
   DEBUG: "false"
   CHECK_INTERVAL_MINUTES: "5"
   CHECK_TIMEOUT_SECONDS: "30"
-  ANSIBLE_PLAYBOOK_DIR: "/app/ansible/playbooks"
-  ANSIBLE_INVENTORY_DIR: "/app/ansible/inventory"
   # Database connection (host is service name)
   DATABASE_HOST: "postgres"
   DATABASE_PORT: "5432"

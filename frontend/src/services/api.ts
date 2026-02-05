@@ -1,0 +1,59 @@
+import axios from 'axios';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse } from '@/types';
+
+const api = axios.create({
+  baseURL: '/api/v1',
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Request interceptor
+api.interceptors.request.use(
+  (config) => {
+    // 인증 토큰 추가 등
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error('API Error:', error.response?.data || error.message);
+    return Promise.reject(error);
+  }
+);
+
+// Clusters API
+export const clustersApi = {
+  getAll: () => api.get<ApiResponse<Cluster[]>>('/clusters'),
+  getById: (id: string) => api.get<ApiResponse<Cluster>>(`/clusters/${id}`),
+  create: (data: Partial<Cluster>) => api.post<ApiResponse<Cluster>>('/clusters', data),
+  update: (id: string, data: Partial<Cluster>) => api.put<ApiResponse<Cluster>>(`/clusters/${id}`, data),
+  delete: (id: string) => api.delete(`/clusters/${id}`),
+};
+
+// Health API
+export const healthApi = {
+  runCheck: (clusterId: string) => api.post<ApiResponse<void>>(`/health/check/${clusterId}`),
+  getStatus: (clusterId: string) => api.get<ApiResponse<Cluster>>(`/health/status/${clusterId}`),
+  getAddons: (clusterId: string) => api.get<ApiResponse<Addon[]>>(`/health/addons/${clusterId}`),
+  getSummary: () => api.get<ApiResponse<SummaryStats>>('/health/summary'),
+};
+
+// History API
+export const historyApi = {
+  getLogs: (clusterId?: string, page = 1, pageSize = 20) =>
+    api.get<PaginatedResponse<CheckLog>>('/history', {
+      params: { clusterId, page, pageSize },
+    }),
+  exportCsv: (clusterId: string) =>
+    api.get(`/history/${clusterId}/export`, { responseType: 'blob' }),
+};
+
+export default api;

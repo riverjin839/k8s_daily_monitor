@@ -1,0 +1,58 @@
+---
+# MinIO S3 Health Check Playbook
+
+- name: MinIO S3 Health Check
+  hosts: localhost
+  gather_facts: no
+  
+  vars:
+    minio_endpoint: "{{ minio_endpoint | default('http://minio.minio-system.svc:9000') }}"
+    minio_access_key: "{{ minio_access_key | default('') }}"
+    minio_secret_key: "{{ minio_secret_key | default('') }}"
+    
+  tasks:
+    - name: Check MinIO health endpoint
+      uri:
+        url: "{{ minio_endpoint }}/minio/health/live"
+        method: GET
+        timeout: 10
+      register: minio_health
+      ignore_errors: yes
+      
+    - name: Check MinIO readiness
+      uri:
+        url: "{{ minio_endpoint }}/minio/health/ready"
+        method: GET
+        timeout: 10
+      register: minio_ready
+      ignore_errors: yes
+      
+    - name: Set MinIO status
+      set_fact:
+        minio_status: >-
+          {{
+            'healthy' if (minio_health.status == 200 and minio_ready.status == 200)
+            else 'warning' if (minio_health.status == 200 or minio_ready.status == 200)
+            else 'critical'
+          }}
+
+    - name: Check MinIO bucket list (if credentials provided)
+      command: >
+        mc ls minio/
+      register: bucket_list
+      ignore_errors: yes
+      when: minio_access_key != '' and minio_secret_key != ''
+      changed_when: false
+
+    - name: Generate MinIO health report
+      set_fact:
+        minio_report:
+          endpoint: "{{ minio_endpoint }}"
+          live: "{{ minio_health.status | default('error') }}"
+          ready: "{{ minio_ready.status | default('error') }}"
+          status: "{{ minio_status }}"
+          timestamp: "{{ lookup('pipe', 'date -Iseconds') }}"
+
+    - name: Display MinIO health report
+      debug:
+        var: minio_report

@@ -1,5 +1,6 @@
 from app.routers.clusters import router as clusters_router
 from app.routers.health import router as health_router
 from app.routers.history import router as history_router
+from app.routers.daily_check import router as daily_check_router
 
-__all__ = ["clusters_router", "health_router", "history_router"]
+__all__ = ["clusters_router", "health_router", "history_router", "daily_check_router"]

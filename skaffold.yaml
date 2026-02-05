@@ -1,0 +1,61 @@
+apiVersion: skaffold/v4beta6
+kind: Config
+metadata:
+  name: k8s-daily-monitor
+
+build:
+  artifacts:
+    - image: k8s-daily-monitor/backend
+      context: backend
+      docker:
+        dockerfile: Dockerfile
+    - image: k8s-daily-monitor/frontend
+      context: frontend
+      docker:
+        dockerfile: Dockerfile
+  local:
+    push: false
+    useBuildkit: true
+
+manifests:
+  kustomize:
+    paths:
+      - k8s/overlays/dev
+
+deploy:
+  kubectl: {}
+
+profiles:
+  - name: dev
+    activation:
+      - kubeContext: minikube
+      - kubeContext: docker-desktop
+      - kubeContext: kind-.*
+    manifests:
+      kustomize:
+        paths:
+          - k8s/overlays/dev
+    deploy:
+      kubectl:
+        hooks:
+          before:
+            - host:
+                command: ["sh", "-c", "kubectl create namespace k8s-monitor-dev --dry-run=client -o yaml | kubectl apply -f -"]
+
+  - name: prod
+    manifests:
+      kustomize:
+        paths:
+          - k8s/overlays/prod
+
+portForward:
+  - resourceType: service
+    resourceName: dev-frontend
+    namespace: k8s-monitor-dev
+    port: 80
+    localPort: 8080
+  - resourceType: service
+    resourceName: dev-backend
+    namespace: k8s-monitor-dev
+    port: 8000
+    localPort: 8000

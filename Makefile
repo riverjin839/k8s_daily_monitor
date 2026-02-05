@@ -1,15 +1,26 @@
-.PHONY: help install dev build test clean docker-up docker-down
+.PHONY: help install dev build test clean docker-up docker-down \
+	k8s-dev k8s-prod k8s-delete-dev k8s-delete-prod k8s-status skaffold-dev
 
 help:
 	@echo "K8s Daily Monitor - Available commands:"
 	@echo ""
-	@echo "  make install      - Install all dependencies"
-	@echo "  make dev          - Start development servers"
-	@echo "  make build        - Build for production"
-	@echo "  make test         - Run all tests"
-	@echo "  make clean        - Clean build artifacts"
-	@echo "  make docker-up    - Start Docker Compose"
-	@echo "  make docker-down  - Stop Docker Compose"
+	@echo "  make install         - Install all dependencies"
+	@echo "  make dev             - Start development servers"
+	@echo "  make build           - Build for production"
+	@echo "  make test            - Run all tests"
+	@echo "  make clean           - Clean build artifacts"
+	@echo ""
+	@echo "Docker Commands:"
+	@echo "  make docker-up       - Start Docker Compose"
+	@echo "  make docker-down     - Stop Docker Compose"
+	@echo ""
+	@echo "Kubernetes Commands:"
+	@echo "  make k8s-dev         - Deploy to Kubernetes (dev)"
+	@echo "  make k8s-prod        - Deploy to Kubernetes (prod)"
+	@echo "  make k8s-delete-dev  - Delete dev deployment"
+	@echo "  make k8s-delete-prod - Delete prod deployment"
+	@echo "  make k8s-status      - Show Kubernetes resources status"
+	@echo "  make skaffold-dev    - Start Skaffold development mode"
 	@echo ""
 
 # Install dependencies
@@ -68,3 +79,59 @@ docker-rebuild:
 	docker-compose down
 	docker-compose build --no-cache
 	docker-compose up -d
+
+# Kubernetes Deployments
+k8s-dev:
+	@echo "Deploying to Kubernetes (dev environment)..."
+	kubectl apply -k k8s/overlays/dev
+	@echo ""
+	@echo "Waiting for deployments..."
+	kubectl rollout status deployment/dev-backend -n k8s-monitor-dev --timeout=300s || true
+	kubectl rollout status deployment/dev-frontend -n k8s-monitor-dev --timeout=300s || true
+	@echo ""
+	@echo "Dev deployment complete!"
+	@echo "Add 'k8s-monitor-dev.local' to /etc/hosts pointing to your ingress IP"
+
+k8s-prod:
+	@echo "Deploying to Kubernetes (prod environment)..."
+	kubectl apply -k k8s/overlays/prod
+	@echo ""
+	@echo "Waiting for deployments..."
+	kubectl rollout status deployment/prod-backend -n k8s-monitor-prod --timeout=300s || true
+	kubectl rollout status deployment/prod-frontend -n k8s-monitor-prod --timeout=300s || true
+	@echo ""
+	@echo "Prod deployment complete!"
+
+k8s-delete-dev:
+	@echo "Deleting dev Kubernetes deployment..."
+	kubectl delete -k k8s/overlays/dev --ignore-not-found
+
+k8s-delete-prod:
+	@echo "Deleting prod Kubernetes deployment..."
+	kubectl delete -k k8s/overlays/prod --ignore-not-found
+
+k8s-status:
+	@echo "=== Namespaces ==="
+	kubectl get ns | grep k8s-monitor || echo "No k8s-monitor namespaces found"
+	@echo ""
+	@echo "=== Dev Environment ==="
+	kubectl get all -n k8s-monitor-dev 2>/dev/null || echo "Dev namespace not found"
+	@echo ""
+	@echo "=== Prod Environment ==="
+	kubectl get all -n k8s-monitor-prod 2>/dev/null || echo "Prod namespace not found"
+
+k8s-logs-dev:
+	kubectl logs -l app.kubernetes.io/part-of=k8s-daily-monitor -n k8s-monitor-dev --tail=100 -f
+
+k8s-logs-prod:
+	kubectl logs -l app.kubernetes.io/part-of=k8s-daily-monitor -n k8s-monitor-prod --tail=100 -f
+
+# Skaffold for local Kubernetes development
+skaffold-dev:
+	skaffold dev --profile=dev --port-forward
+
+skaffold-run:
+	skaffold run --profile=dev
+
+skaffold-delete:
+	skaffold delete --profile=dev

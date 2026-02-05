@@ -1,0 +1,53 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: k8s-monitor
+
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: kustomize
+    includeSelectors: false
+
+resources:
+  # Namespace
+  - namespace.yaml
+
+  # Configuration
+  - configmap.yaml
+  - secret.yaml
+
+  # Database
+  - postgres/statefulset.yaml
+  - postgres/service.yaml
+
+  # Cache/Message Broker
+  - redis/deployment.yaml
+  - redis/service.yaml
+
+  # Backend API
+  - backend/serviceaccount.yaml
+  - backend/deployment.yaml
+  - backend/service.yaml
+
+  # Celery Workers
+  - celery/worker-deployment.yaml
+  - celery/beat-deployment.yaml
+
+  # Frontend
+  - frontend/nginx-configmap.yaml
+  - frontend/deployment.yaml
+  - frontend/service.yaml
+
+  # Networking
+  - ingress.yaml
+
+  # Autoscaling
+  - hpa.yaml
+
+configMapGenerator:
+  - name: ansible-playbooks
+    files:
+      - ../ansible-playbooks/check_cluster.yml
+
+generatorOptions:
+  disableNameSuffixHash: true

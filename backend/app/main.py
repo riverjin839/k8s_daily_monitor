@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database import engine, Base, SessionLocal
-from app.routers import clusters_router, health_router, history_router
+from app.routers import clusters_router, health_router, history_router, daily_check_router
 
 
 @asynccontextmanager
@@ -53,6 +53,7 @@ app.add_middleware(
 app.include_router(clusters_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
 app.include_router(history_router, prefix="/api/v1")
+app.include_router(daily_check_router, prefix="/api/v1")
 
 
 @app.get("/")

@@ -6,19 +6,25 @@ namespace: k8s-monitor
 resources:
   - ../../base
 
-# 내부 레지스트리 이미지로 교체
+# ============================================
+# 폐쇄망 K8s 클러스터 설정
+# 대상 클러스터: 10.61.162.101
+# API Server: https://10.61.162.101:6443
+# ============================================
+
+# 내부 레지스트리 이미지로 교체 (레지스트리 주소 수정 필요)
 images:
   - name: k8s-daily-monitor/backend
-    newName: YOUR_REGISTRY/k8s-monitor/backend  # 예: harbor.internal:5000/k8s-monitor/backend
+    newName: 10.61.162.101:5000/k8s-monitor/backend
     newTag: latest
   - name: k8s-daily-monitor/frontend
-    newName: YOUR_REGISTRY/k8s-monitor/frontend  # 예: harbor.internal:5000/k8s-monitor/frontend
+    newName: 10.61.162.101:5000/k8s-monitor/frontend
     newTag: latest
   - name: postgres:15-alpine
-    newName: YOUR_REGISTRY/library/postgres  # 내부 레지스트리의 postgres
+    newName: 10.61.162.101:5000/library/postgres
     newTag: 15-alpine
   - name: redis:7-alpine
-    newName: YOUR_REGISTRY/library/redis  # 내부 레지스트리의 redis
+    newName: 10.61.162.101:5000/library/redis
     newTag: 7-alpine
 
 patches:

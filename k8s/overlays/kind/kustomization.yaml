@@ -1,0 +1,131 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: k8s-monitor
+
+resources:
+  - ../../base
+
+# ============================================
+# kind 로컬 개발 환경
+# namePrefix 없음 (서비스 디스커버리 깨짐 방지)
+# 로컬 레지스트리 이미지 사용
+# ============================================
+
+# 로컬 레지스트리 이미지로 교체
+images:
+  - name: k8s-daily-monitor/backend
+    newName: localhost:5001/k8s-monitor/backend
+    newTag: latest
+  - name: k8s-daily-monitor/frontend
+    newName: localhost:5001/k8s-monitor/frontend
+    newTag: latest
+
+patches:
+  # Ingress 비활성화 (NodePort 사용)
+  - patch: |-
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: k8s-monitor-ingress
+    target:
+      kind: Ingress
+
+  # HPA 비활성화
+  - patch: |-
+      $patch: delete
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: backend-hpa
+    target:
+      kind: HorizontalPodAutoscaler
+      name: backend-hpa
+  - patch: |-
+      $patch: delete
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: celery-worker-hpa
+    target:
+      kind: HorizontalPodAutoscaler
+      name: celery-worker-hpa
+  - patch: |-
+      $patch: delete
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: frontend-hpa
+    target:
+      kind: HorizontalPodAutoscaler
+      name: frontend-hpa
+
+  # 레플리카 1로 축소
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+
+  # Frontend NodePort
+  - patch: |-
+      - op: replace
+        path: /spec/type
+        value: NodePort
+      - op: add
+        path: /spec/ports/0/nodePort
+        value: 30080
+    target:
+      kind: Service
+      name: frontend
+
+  # Backend NodePort
+  - patch: |-
+      - op: replace
+        path: /spec/type
+        value: NodePort
+      - op: add
+        path: /spec/ports/0/nodePort
+        value: 30800
+    target:
+      kind: Service
+      name: backend
+
+  # imagePullPolicy를 IfNotPresent로 (로컬 레지스트리용)
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment
+      name: backend
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment
+      name: frontend
+
+configMapGenerator:
+  - name: k8s-monitor-config
+    behavior: merge
+    literals:
+      - DEBUG=true
+      - CHECK_INTERVAL_MINUTES=1
+
+secretGenerator:
+  - name: k8s-monitor-secret
+    behavior: merge
+    literals:
+      - DATABASE_PASSWORD=postgres
+      - SECRET_KEY=kind-dev-secret-key
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/k8s_monitor
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+
+generatorOptions:
+  disableNameSuffixHash: true

@@ -283,24 +283,9 @@ deploy() {
     # 네임스페이스
     kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 
-    # Kustomize로 배포 (dev overlay 기반)
-    log_info "  Kustomize 적용 중..."
-    run_cmd kubectl apply -k "${PROJECT_ROOT}/k8s/overlays/dev"
-
-    # 이미지 경로를 로컬 레지스트리로 패치
-    log_info "  이미지 경로 패치 중..."
-    local ns="k8s-monitor-dev"
-    for dep in backend celery-worker celery-beat; do
-        kubectl set image "deployment/dev-${dep}" \
-            "*=localhost:${REGISTRY_PORT}/k8s-monitor/backend:latest" \
-            -n "${ns}" 2>/dev/null || true
-        log_debug "  patched: dev-${dep}"
-    done
-
-    kubectl set image deployment/dev-frontend \
-        "*=localhost:${REGISTRY_PORT}/k8s-monitor/frontend:latest" \
-        -n "${ns}" 2>/dev/null || true
-    log_debug "  patched: dev-frontend"
+    # kind 전용 overlay 사용 (namePrefix 없음, 로컬 레지스트리 이미지)
+    log_info "  Kustomize 적용 중 (kind overlay)..."
+    run_cmd kubectl apply -k "${PROJECT_ROOT}/k8s/overlays/kind"
 
     log_info "배포 완료"
     echo ""
@@ -313,7 +298,7 @@ wait_and_verify() {
     log_step "[5/5] 배포 확인 중..."
     echo ""
 
-    local ns="k8s-monitor-dev"
+    local ns="${NAMESPACE}"
 
     log_info "Pod 상태 대기 중 (최대 3분)..."
     kubectl wait --for=condition=ready pod \
@@ -349,7 +334,7 @@ wait_and_verify() {
     echo -e "  API Docs:  ${YELLOW}http://localhost:30800/docs${NC}"
     echo ""
     echo -e "  kubectl:   ${CYAN}kubectl get all -n ${ns}${NC}"
-    echo -e "  로그:      ${CYAN}kubectl logs -f deploy/dev-backend -n ${ns}${NC}"
+    echo -e "  로그:      ${CYAN}kubectl logs -f deploy/backend -n ${ns}${NC}"
     echo ""
 }
 
@@ -370,14 +355,14 @@ reload() {
     log_step "이미지 재빌드 & 재배포 중..."
     build_and_push
 
-    local ns="k8s-monitor-dev"
-    kubectl rollout restart deployment/dev-backend -n "${ns}"
-    kubectl rollout restart deployment/dev-frontend -n "${ns}"
-    kubectl rollout restart deployment/dev-celery-worker -n "${ns}"
-    kubectl rollout restart deployment/dev-celery-beat -n "${ns}"
+    local ns="${NAMESPACE}"
+    kubectl rollout restart deployment/backend -n "${ns}"
+    kubectl rollout restart deployment/frontend -n "${ns}"
+    kubectl rollout restart deployment/celery-worker -n "${ns}"
+    kubectl rollout restart deployment/celery-beat -n "${ns}"
 
     log_info "롤아웃 대기 중..."
-    kubectl rollout status deployment/dev-backend -n "${ns}" --timeout=120s || true
+    kubectl rollout status deployment/backend -n "${ns}" --timeout=120s || true
 
     echo ""
     kubectl get pods -n "${ns}"
@@ -410,7 +395,7 @@ debug_info() {
         kubectl get nodes -o wide --context "kind-${CLUSTER_NAME}" 2>/dev/null || true
         echo ""
 
-        local ns="k8s-monitor-dev"
+        local ns="${NAMESPACE}"
         echo -e "${YELLOW}--- Pod 상태 ---${NC}"
         kubectl get pods -n "${ns}" -o wide 2>/dev/null || echo "(네임스페이스 없음)"
         echo ""
@@ -476,12 +461,12 @@ case "${COMMAND}" in
         reload
         ;;
     status)
-        kubectl get all -n k8s-monitor-dev
+        kubectl get all -n "${NAMESPACE}"
         echo ""
-        kubectl get pods -n k8s-monitor-dev -o wide
+        kubectl get pods -n "${NAMESPACE}" -o wide
         ;;
     logs)
-        kubectl logs -f "deploy/dev-${SUBARG:-backend}" -n k8s-monitor-dev
+        kubectl logs -f "deploy/${SUBARG:-backend}" -n "${NAMESPACE}"
         ;;
     debug)
         debug_info

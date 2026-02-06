@@ -356,12 +356,20 @@ reload() {
     build_and_push
 
     local ns="${NAMESPACE}"
+
+    # kustomize 재적용 (imagePullPolicy: Always 보장)
+    log_info "  Kustomize 재적용 중..."
+    run_cmd kubectl apply -k "${PROJECT_ROOT}/k8s/overlays/kind"
+
+    # 노드에 캐시된 이미지 제거 후 재시작 (latest 태그 갱신 보장)
+    log_info "  Pod 재시작 중 (이미지 재pull 강제)..."
     kubectl rollout restart deployment/backend -n "${ns}"
     kubectl rollout restart deployment/frontend -n "${ns}"
     kubectl rollout restart deployment/celery-worker -n "${ns}"
     kubectl rollout restart deployment/celery-beat -n "${ns}"
 
     log_info "롤아웃 대기 중..."
+    kubectl rollout status deployment/frontend -n "${ns}" --timeout=120s || true
     kubectl rollout status deployment/backend -n "${ns}" --timeout=120s || true
 
     echo ""

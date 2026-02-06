@@ -59,7 +59,11 @@ export const useClusterStore = create<ClusterState>((set) => ({
       logs: [log, ...state.logs].slice(0, 100), // 최근 100개만 유지
     })),
 
-  setSummary: (summary) => set({ summary }),
+  setSummary: (summary) => set({
+    summary: (summary && typeof summary === 'object' && 'totalClusters' in summary)
+      ? summary
+      : { totalClusters: 0, healthy: 0, warning: 0, critical: 0 },
+  }),
 
   setIsLoading: (isLoading) => set({ isLoading }),
 

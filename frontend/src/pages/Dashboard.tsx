@@ -51,7 +51,10 @@ export function Dashboard() {
 
       <main className="max-w-[1600px] mx-auto px-8 py-8">
         {/* Summary Stats */}
-        <SummaryStats stats={summary} isLoading={summaryLoading} />
+        <SummaryStats
+          stats={summary ?? { totalClusters: 0, healthy: 0, warning: 0, critical: 0 }}
+          isLoading={summaryLoading}
+        />
 
         {/* Cluster Status Section */}
         <section className="mb-8">

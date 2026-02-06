@@ -91,12 +91,6 @@ containerdConfigPatches:
       endpoint = ["http://${REGISTRY_NAME}:5000"]
 nodes:
   - role: control-plane
-    kubeadmConfigPatches:
-      - |
-        kind: InitConfiguration
-        nodeRegistration:
-          kubeletExtraConfig:
-            nodeStatusUpdateFrequency: 10s
     extraPortMappings:
       - containerPort: 30080
         hostPort: 30080

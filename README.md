@@ -214,43 +214,50 @@ k8s_daily_monitor/
 
 ## 빠른 시작
 
-### 1. Docker Compose (로컬 개발)
+### 1. kind 로컬 개발 (권장)
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/k8s_daily_monitor.git
 cd k8s_daily_monitor
 
-# 전체 스택 실행
-docker-compose up -d
+# 한 줄로 전체 환경 구축 (kind + 빌드 + 배포)
+bash scripts/kind-setup.sh up
 
-# 접속
-# Frontend: http://localhost:5173
-# Backend:  http://localhost:8000
-# API Docs: http://localhost:8000/docs
+# 접속: http://localhost:30080 (Frontend), http://localhost:30800/docs (API)
+# 코드 수정 후: bash scripts/kind-setup.sh reload
+# 정리: bash scripts/kind-setup.sh destroy
 ```
 
-### 2. Kubernetes 배포 (개발 환경)
+### 2. Docker Compose (로컬 개발)
 
 ```bash
-# Kustomize로 배포
-kubectl apply -k k8s/overlays/dev
-
-# 또는 Make 사용
-make k8s-dev
+docker-compose up -d
+# Frontend: http://localhost:5173 | Backend: http://localhost:8000/docs
 ```
 
 ### 3. 폐쇄망 배포
 
 ```bash
-# 이미지 빌드 및 저장
-./scripts/deploy-airgap.sh save
-
-# 폐쇄망에서 배포
-REGISTRY=10.61.162.101:5000 ./scripts/deploy-airgap.sh all
-
-# 클러스터 등록 및 테스트
-API_URL=http://10.61.162.101:30800 ./scripts/init-cluster.sh
+# 대화형 실행 (CLI/레지스트리/로그인 자동 입력)
+bash scripts/deploy-airgap.sh all
 ```
+
+### 4. Helm + CI/CD 운영 배포
+
+```bash
+# Helm 배포
+helm install k8s-monitor ./helm/k8s-daily-monitor \
+  -f ./helm/k8s-daily-monitor/values-prod.yaml \
+  -n k8s-monitor --create-namespace
+```
+
+> **3단계 배포 전략 상세 가이드: [docs/DEPLOY_GUIDE.md](docs/DEPLOY_GUIDE.md)**
+>
+> | Phase | 환경 | 도구 | 스크립트 |
+> |-------|------|------|----------|
+> | 1 | 로컬 (Mac/Linux) | kind + Kustomize | `scripts/kind-setup.sh` |
+> | 2 | 폐쇄망 | podman/nerdctl + Kustomize/Helm | `scripts/deploy-airgap.sh` |
+> | 3 | 운영 CI/CD | Jenkins + Helm + ArgoCD | `Jenkinsfile` + `argocd/` |
 
 ## 환경별 접속 정보
 

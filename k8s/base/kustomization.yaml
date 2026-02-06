@@ -47,7 +47,7 @@ resources:
 configMapGenerator:
   - name: ansible-playbooks
     files:
-      - ../ansible-playbooks/check_cluster.yml
+      - check_cluster.yml=ansible-playbooks-check_cluster.yml
 
 generatorOptions:
   disableNameSuffixHash: true

@@ -93,7 +93,7 @@ patches:
       kind: Service
       name: backend
 
-  # imagePullPolicy를 IfNotPresent로 (로컬 레지스트리용)
+  # imagePullPolicy를 IfNotPresent로 (로컬 레지스트리용 - 모든 Deployment)
   - patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/imagePullPolicy
@@ -108,6 +108,20 @@ patches:
     target:
       kind: Deployment
       name: frontend
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment
+      name: celery-worker
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment
+      name: celery-beat
 
 configMapGenerator:
   - name: k8s-monitor-config

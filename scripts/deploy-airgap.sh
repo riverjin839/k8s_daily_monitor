@@ -5,8 +5,11 @@ set -e
 # 폐쇄망 K8s 배포 스크립트
 # ============================================
 
-# 설정 - 환경에 맞게 수정하세요
-REGISTRY="${REGISTRY:-harbor.internal:5000}"
+# 프로젝트 루트 경로 (스크립트 위치 기준으로 상위 디렉토리)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# 기본값
 NAMESPACE="${NAMESPACE:-k8s-monitor}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 
@@ -14,102 +17,300 @@ IMAGE_TAG="${IMAGE_TAG:-latest}"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
-echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN} K8s Daily Monitor - 폐쇄망 배포${NC}"
-echo -e "${GREEN}========================================${NC}"
-echo ""
-echo -e "Registry: ${YELLOW}${REGISTRY}${NC}"
-echo -e "Namespace: ${YELLOW}${NAMESPACE}${NC}"
-echo -e "Image Tag: ${YELLOW}${IMAGE_TAG}${NC}"
-echo ""
+# ============================================
+# 컨테이너 런타임 선택
+# ============================================
+select_container_cli() {
+    if [ -n "${CTR_CLI:-}" ]; then
+        # 환경변수로 이미 지정된 경우
+        if ! command -v "${CTR_CLI}" &>/dev/null; then
+            echo -e "${RED}오류: ${CTR_CLI} 명령어를 찾을 수 없습니다.${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}컨테이너 런타임: ${YELLOW}${CTR_CLI}${NC}"
+        return
+    fi
 
-# 1. Docker 이미지 빌드
-build_images() {
-    echo -e "${GREEN}[1/4] Docker 이미지 빌드 중...${NC}"
+    echo -e "${CYAN}========================================${NC}"
+    echo -e "${CYAN} 컨테이너 런타임 선택${NC}"
+    echo -e "${CYAN}========================================${NC}"
 
-    docker build -t ${REGISTRY}/k8s-monitor/backend:${IMAGE_TAG} ./backend
-    docker build -t ${REGISTRY}/k8s-monitor/frontend:${IMAGE_TAG} ./frontend
+    # 사용 가능한 CLI 탐지
+    local available=()
+    for cli in podman nerdctl docker; do
+        if command -v "${cli}" &>/dev/null; then
+            available+=("${cli}")
+        fi
+    done
 
-    echo -e "${GREEN}✓ 이미지 빌드 완료${NC}"
+    if [ ${#available[@]} -eq 0 ]; then
+        echo -e "${RED}오류: 사용 가능한 컨테이너 런타임이 없습니다.${NC}"
+        echo -e "${RED}podman, nerdctl, docker 중 하나를 설치해 주세요.${NC}"
+        exit 1
+    fi
+
+    echo ""
+    echo -e "사용 가능한 컨테이너 런타임:"
+    for i in "${!available[@]}"; do
+        local ver
+        ver=$("${available[$i]}" --version 2>/dev/null | head -1)
+        echo -e "  ${YELLOW}$((i+1)))${NC} ${available[$i]}  ${CYAN}(${ver})${NC}"
+    done
+    echo ""
+
+    if [ ${#available[@]} -eq 1 ]; then
+        CTR_CLI="${available[0]}"
+        echo -e "자동 선택: ${YELLOW}${CTR_CLI}${NC}"
+    else
+        while true; do
+            read -rp "선택 [1-${#available[@]}] (기본: 1): " choice
+            choice="${choice:-1}"
+            if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#available[@]} ]; then
+                CTR_CLI="${available[$((choice-1))]}"
+                break
+            fi
+            echo -e "${RED}잘못된 입력입니다.${NC}"
+        done
+    fi
+
+    echo -e "${GREEN}선택됨: ${YELLOW}${CTR_CLI}${NC}"
+    echo ""
 }
 
-# 2. 이미지 푸시 (레지스트리 접근 가능한 경우)
+# ============================================
+# 레지스트리 정보 입력
+# ============================================
+input_registry_info() {
+    if [ -n "${REGISTRY:-}" ]; then
+        echo -e "레지스트리: ${YELLOW}${REGISTRY}${NC}"
+        return
+    fi
+
+    echo -e "${CYAN}========================================${NC}"
+    echo -e "${CYAN} Private 레지스트리 설정${NC}"
+    echo -e "${CYAN}========================================${NC}"
+    echo ""
+
+    read -rp "레지스트리 주소 (예: harbor.local:5000): " REGISTRY
+    if [ -z "${REGISTRY}" ]; then
+        echo -e "${RED}오류: 레지스트리 주소를 입력해 주세요.${NC}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}레지스트리: ${YELLOW}${REGISTRY}${NC}"
+    echo ""
+}
+
+# ============================================
+# 레지스트리 로그인
+# ============================================
+registry_login() {
+    echo -e "${CYAN}========================================${NC}"
+    echo -e "${CYAN} 레지스트리 로그인${NC}"
+    echo -e "${CYAN}========================================${NC}"
+    echo ""
+
+    # 이미 로그인 되어있는지 확인 시도
+    if [ -n "${REGISTRY_USER:-}" ] && [ -n "${REGISTRY_PASS:-}" ]; then
+        echo -e "환경변수에서 계정정보 사용: ${YELLOW}${REGISTRY_USER}${NC}"
+        echo "${REGISTRY_PASS}" | ${CTR_CLI} login "${REGISTRY}" -u "${REGISTRY_USER}" --password-stdin
+        echo -e "${GREEN}✓ 로그인 성공${NC}"
+        return
+    fi
+
+    read -rp "로그인이 필요합니까? [Y/n]: " need_login
+    need_login="${need_login:-Y}"
+
+    if [[ "${need_login}" =~ ^[Yy]$ ]]; then
+        read -rp "사용자명: " REGISTRY_USER
+        read -rsp "비밀번호: " REGISTRY_PASS
+        echo ""
+
+        if [ -z "${REGISTRY_USER}" ] || [ -z "${REGISTRY_PASS}" ]; then
+            echo -e "${RED}오류: 사용자명과 비밀번호를 입력해 주세요.${NC}"
+            exit 1
+        fi
+
+        echo "${REGISTRY_PASS}" | ${CTR_CLI} login "${REGISTRY}" -u "${REGISTRY_USER}" --password-stdin
+        echo -e "${GREEN}✓ 로그인 성공${NC}"
+    else
+        echo -e "${YELLOW}로그인 건너뜀${NC}"
+    fi
+    echo ""
+}
+
+# ============================================
+# 설정 요약 출력
+# ============================================
+print_config() {
+    echo -e "${GREEN}========================================${NC}"
+    echo -e "${GREEN} K8s Daily Monitor - 폐쇄망 배포${NC}"
+    echo -e "${GREEN}========================================${NC}"
+    echo ""
+    echo -e "  프로젝트 경로 : ${YELLOW}${PROJECT_ROOT}${NC}"
+    echo -e "  컨테이너 CLI  : ${YELLOW}${CTR_CLI}${NC}"
+    echo -e "  Registry      : ${YELLOW}${REGISTRY}${NC}"
+    echo -e "  Namespace     : ${YELLOW}${NAMESPACE}${NC}"
+    echo -e "  Image Tag     : ${YELLOW}${IMAGE_TAG}${NC}"
+    echo ""
+}
+
+# ============================================
+# 1. 컨테이너 이미지 빌드
+# ============================================
+build_images() {
+    echo -e "${GREEN}[1/4] 컨테이너 이미지 빌드 중...${NC}"
+    echo ""
+
+    echo -e "  → backend 빌드 중..."
+    ${CTR_CLI} build \
+        -t "${REGISTRY}/k8s-monitor/backend:${IMAGE_TAG}" \
+        -f "${PROJECT_ROOT}/backend/Dockerfile" \
+        "${PROJECT_ROOT}/backend"
+
+    echo ""
+    echo -e "  → frontend 빌드 중..."
+    ${CTR_CLI} build \
+        -t "${REGISTRY}/k8s-monitor/frontend:${IMAGE_TAG}" \
+        -f "${PROJECT_ROOT}/frontend/Dockerfile" \
+        "${PROJECT_ROOT}/frontend"
+
+    echo ""
+    echo -e "${GREEN}✓ 이미지 빌드 완료${NC}"
+    echo ""
+}
+
+# ============================================
+# 2. 이미지 푸시
+# ============================================
 push_images() {
     echo -e "${GREEN}[2/4] 이미지 푸시 중...${NC}"
 
-    docker push ${REGISTRY}/k8s-monitor/backend:${IMAGE_TAG}
-    docker push ${REGISTRY}/k8s-monitor/frontend:${IMAGE_TAG}
+    ${CTR_CLI} push "${REGISTRY}/k8s-monitor/backend:${IMAGE_TAG}"
+    ${CTR_CLI} push "${REGISTRY}/k8s-monitor/frontend:${IMAGE_TAG}"
 
     echo -e "${GREEN}✓ 이미지 푸시 완료${NC}"
+    echo ""
 }
 
+# ============================================
 # 3. 이미지 저장 (오프라인 전송용)
+# ============================================
 save_images() {
     echo -e "${GREEN}[2/4] 이미지를 tar 파일로 저장 중...${NC}"
 
-    mkdir -p ./images
+    local img_dir="${PROJECT_ROOT}/images"
+    mkdir -p "${img_dir}"
 
-    docker save ${REGISTRY}/k8s-monitor/backend:${IMAGE_TAG} | gzip > ./images/backend.tar.gz
-    docker save ${REGISTRY}/k8s-monitor/frontend:${IMAGE_TAG} | gzip > ./images/frontend.tar.gz
+    ${CTR_CLI} save "${REGISTRY}/k8s-monitor/backend:${IMAGE_TAG}" | gzip > "${img_dir}/backend.tar.gz"
+    ${CTR_CLI} save "${REGISTRY}/k8s-monitor/frontend:${IMAGE_TAG}" | gzip > "${img_dir}/frontend.tar.gz"
 
     # 기반 이미지도 저장
-    docker pull postgres:15-alpine
-    docker pull redis:7-alpine
-    docker save postgres:15-alpine | gzip > ./images/postgres.tar.gz
-    docker save redis:7-alpine | gzip > ./images/redis.tar.gz
+    ${CTR_CLI} pull postgres:15-alpine 2>/dev/null || true
+    ${CTR_CLI} pull redis:7-alpine 2>/dev/null || true
+    ${CTR_CLI} save postgres:15-alpine | gzip > "${img_dir}/postgres.tar.gz"
+    ${CTR_CLI} save redis:7-alpine | gzip > "${img_dir}/redis.tar.gz"
 
-    echo -e "${GREEN}✓ 이미지 저장 완료 (./images/ 디렉토리)${NC}"
+    echo -e "${GREEN}✓ 이미지 저장 완료 (${img_dir}/)${NC}"
+    echo ""
 }
 
-# 4. Kustomize 이미지 경로 업데이트
+# ============================================
+# 4. 이미지 로드 (오프라인 전송 받은 후)
+# ============================================
+load_images() {
+    echo -e "${GREEN}이미지 로드 중...${NC}"
+
+    local img_dir="${PROJECT_ROOT}/images"
+
+    if [ ! -d "${img_dir}" ]; then
+        echo -e "${RED}오류: ${img_dir} 디렉토리가 없습니다.${NC}"
+        exit 1
+    fi
+
+    for tarfile in "${img_dir}"/*.tar.gz; do
+        if [ -f "${tarfile}" ]; then
+            echo -e "  → $(basename "${tarfile}") 로드 중..."
+            ${CTR_CLI} load < "${tarfile}"
+        fi
+    done
+
+    echo -e "${GREEN}✓ 이미지 로드 완료${NC}"
+    echo ""
+}
+
+# ============================================
+# 5. Kustomize 이미지 경로 업데이트
+# ============================================
 update_kustomization() {
     echo -e "${GREEN}[3/4] Kustomization 이미지 경로 업데이트 중...${NC}"
 
-    cd k8s/overlays/airgap
+    cd "${PROJECT_ROOT}/k8s/overlays/airgap"
 
-    # kustomize edit으로 이미지 경로 설정
-    kustomize edit set image \
-        k8s-daily-monitor/backend=${REGISTRY}/k8s-monitor/backend:${IMAGE_TAG} \
-        k8s-daily-monitor/frontend=${REGISTRY}/k8s-monitor/frontend:${IMAGE_TAG}
+    if command -v kustomize &>/dev/null; then
+        kustomize edit set image \
+            "k8s-daily-monitor/backend=${REGISTRY}/k8s-monitor/backend:${IMAGE_TAG}" \
+            "k8s-daily-monitor/frontend=${REGISTRY}/k8s-monitor/frontend:${IMAGE_TAG}"
+    else
+        echo -e "${YELLOW}kustomize CLI 없음 - kustomization.yaml 직접 확인 필요${NC}"
+    fi
 
-    cd -
+    cd "${PROJECT_ROOT}"
     echo -e "${GREEN}✓ Kustomization 업데이트 완료${NC}"
+    echo ""
 }
 
-# 5. K8s 배포
+# ============================================
+# 6. K8s 배포
+# ============================================
 deploy() {
     echo -e "${GREEN}[4/4] Kubernetes에 배포 중...${NC}"
 
     # 네임스페이스 생성
-    kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+    kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 
     # 배포
-    kubectl apply -k k8s/overlays/airgap
+    kubectl apply -k "${PROJECT_ROOT}/k8s/overlays/airgap"
 
     echo ""
     echo -e "${GREEN}✓ 배포 완료!${NC}"
     echo ""
-    echo -e "Frontend: ${YELLOW}http://<NODE_IP>:30080${NC}"
-    echo -e "Backend API: ${YELLOW}http://<NODE_IP>:30800${NC}"
+
+    # Node IP 자동 탐지
+    local node_ip
+    node_ip=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || echo "<NODE_IP>")
+
+    echo -e "Frontend:    ${YELLOW}http://${node_ip}:30080${NC}"
+    echo -e "Backend API: ${YELLOW}http://${node_ip}:30800${NC}"
+    echo -e "API Docs:    ${YELLOW}http://${node_ip}:30800/docs${NC}"
+    echo ""
 }
 
-# 6. 상태 확인
+# ============================================
+# 7. 상태 확인
+# ============================================
 status() {
     echo -e "${GREEN}배포 상태 확인 중...${NC}"
     echo ""
-    kubectl get all -n ${NAMESPACE}
+    kubectl get all -n "${NAMESPACE}"
+    echo ""
+    echo -e "${CYAN}--- Pod 상태 상세 ---${NC}"
+    kubectl get pods -n "${NAMESPACE}" -o wide
 }
 
-# 7. K8s API 서버 헬스 체크
+# ============================================
+# 8. K8s API 서버 헬스 체크
+# ============================================
 check_api_server() {
     echo -e "${GREEN}K8s API 서버 상태 확인 중...${NC}"
 
     if kubectl cluster-info &>/dev/null; then
         echo -e "${GREEN}✓ API 서버 정상${NC}"
         kubectl get --raw='/healthz' 2>/dev/null && echo ""
-        kubectl get nodes
+        kubectl get nodes -o wide
         return 0
     else
         echo -e "${RED}✗ API 서버 연결 실패${NC}"
@@ -117,23 +318,44 @@ check_api_server() {
     fi
 }
 
+# ============================================
 # 메인
+# ============================================
 case "${1:-}" in
     build)
+        select_container_cli
+        input_registry_info
+        print_config
         build_images
         ;;
     push)
+        select_container_cli
+        input_registry_info
+        registry_login
+        print_config
         push_images
         ;;
     save)
+        select_container_cli
+        input_registry_info
+        print_config
         build_images
         save_images
         ;;
+    load)
+        select_container_cli
+        load_images
+        ;;
     deploy)
+        input_registry_info
         update_kustomization
         deploy
         ;;
     all)
+        select_container_cli
+        input_registry_info
+        registry_login
+        print_config
         build_images
         push_images
         update_kustomization
@@ -146,23 +368,34 @@ case "${1:-}" in
         check_api_server
         ;;
     *)
-        echo "사용법: $0 {build|push|save|deploy|all|status|check}"
+        echo -e "${GREEN}========================================${NC}"
+        echo -e "${GREEN} K8s Daily Monitor - 폐쇄망 배포${NC}"
+        echo -e "${GREEN}========================================${NC}"
         echo ""
-        echo "  build   - Docker 이미지 빌드"
-        echo "  push    - 레지스트리에 이미지 푸시"
+        echo "사용법: $0 {build|push|save|load|deploy|all|status|check}"
+        echo ""
+        echo "  build   - 컨테이너 이미지 빌드"
+        echo "  push    - 레지스트리에 이미지 푸시 (로그인 포함)"
         echo "  save    - 이미지를 tar.gz로 저장 (오프라인 전송용)"
+        echo "  load    - tar.gz 이미지 로드 (폐쇄망에서 수신 후)"
         echo "  deploy  - K8s에 배포"
-        echo "  all     - 빌드 → 푸시 → 배포"
+        echo "  all     - 빌드 → 로그인 → 푸시 → 배포"
         echo "  status  - 배포 상태 확인"
         echo "  check   - K8s API 서버 헬스 체크"
         echo ""
-        echo "환경변수:"
-        echo "  REGISTRY  - 컨테이너 레지스트리 (기본: harbor.internal:5000)"
-        echo "  NAMESPACE - K8s 네임스페이스 (기본: k8s-monitor)"
-        echo "  IMAGE_TAG - 이미지 태그 (기본: latest)"
+        echo "환경변수 (선택, 미입력시 대화형으로 입력받음):"
+        echo "  CTR_CLI       - 컨테이너 런타임 (docker|podman|nerdctl)"
+        echo "  REGISTRY      - 컨테이너 레지스트리 주소"
+        echo "  REGISTRY_USER - 레지스트리 사용자명"
+        echo "  REGISTRY_PASS - 레지스트리 비밀번호"
+        echo "  NAMESPACE     - K8s 네임스페이스 (기본: k8s-monitor)"
+        echo "  IMAGE_TAG     - 이미지 태그 (기본: latest)"
         echo ""
         echo "예시:"
-        echo "  REGISTRY=myregistry.local:5000 $0 all"
+        echo "  $0 build                             # 대화형으로 CLI/레지스트리 입력"
+        echo "  $0 all                               # 빌드부터 배포까지 전체 수행"
+        echo "  CTR_CLI=podman REGISTRY=10.0.0.1:5000 $0 build  # 환경변수로 지정"
+        echo ""
         exit 1
         ;;
 esac

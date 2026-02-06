@@ -1,0 +1,51 @@
+# ============================================
+# Phase 2: 폐쇄망 환경
+# 사용: helm install k8s-monitor ./helm/k8s-daily-monitor -f ./helm/k8s-daily-monitor/values-airgap.yaml
+# ============================================
+
+# -- 폐쇄망 Private Registry (실제 주소로 변경)
+global:
+  imageRegistry: "10.61.162.101:5000"
+  # imagePullSecrets:
+  #   - name: registry-secret
+
+config:
+  debug: "true"
+  checkIntervalMinutes: "5"
+
+secrets:
+  databasePassword: "postgres"
+  secretKey: "airgap-secret-key-change-this"
+
+backend:
+  replicaCount: 1
+  image:
+    repository: k8s-monitor/backend
+
+frontend:
+  replicaCount: 1
+  image:
+    repository: k8s-monitor/frontend
+
+postgresql:
+  image:
+    repository: library/postgres
+
+redis:
+  image:
+    repository: library/redis
+
+celery:
+  worker:
+    replicaCount: 1
+
+ingress:
+  enabled: false
+
+hpa:
+  enabled: false
+
+nodePort:
+  enabled: true
+  frontend: 30080
+  backend: 30800

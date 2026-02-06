@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker
+  labels:
+    app.kubernetes.io/name: celery-worker
+    app.kubernetes.io/component: worker
+    {{- include "k8s-daily-monitor.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.celery.worker.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: celery-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: celery-worker
+        app.kubernetes.io/component: worker
+        app.kubernetes.io/part-of: k8s-daily-monitor
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: wait-for-redis
+          image: {{ include "k8s-daily-monitor.image" (dict "global" .Values.global "repository" .Values.redis.image.repository "tag" .Values.redis.image.tag) }}
+          command: ["sh", "-c", "until redis-cli -h redis ping; do echo 'Waiting for redis...'; sleep 2; done"]
+      containers:
+        - name: celery-worker
+          image: {{ include "k8s-daily-monitor.image" (dict "global" .Values.global "repository" .Values.backend.image.repository "tag" .Values.backend.image.tag) }}
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          command: [celery, -A, app.celery_app, worker, --loglevel=info, "--concurrency={{ .Values.celery.worker.concurrency }}"]
+          envFrom:
+            - configMapRef:
+                name: k8s-monitor-config
+            - secretRef:
+                name: k8s-monitor-secret
+          resources:
+            {{- toYaml .Values.celery.worker.resources | nindent 12 }}
+          livenessProbe:
+            exec:
+              command: [celery, -A, app.celery_app, inspect, ping, --timeout, "10"]
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 15
+          volumeMounts:
+            - name: kubeconfig
+              mountPath: /root/.kube
+              readOnly: true
+      volumes:
+        - name: kubeconfig
+          secret:
+            secretName: kubeconfig-secret
+            optional: true

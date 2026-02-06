@@ -1,0 +1,67 @@
+# ============================================
+# ArgoCD Application - K8s Daily Monitor
+# ============================================
+# 적용: kubectl apply -f argocd/application.yaml
+#
+# 사전 조건:
+#   1. ArgoCD에 Git repo 등록 (argocd repo add ...)
+#   2. 타겟 K8s 클러스터 등록 (argocd cluster add ...)
+#   3. 네임스페이스 생성 (kubectl create ns k8s-monitor)
+# ============================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: k8s-daily-monitor
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: k8s-daily-monitor
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  # -- Git 소스
+  source:
+    # 폐쇄망 내부 Git 주소로 변경
+    repoURL: https://git.company.internal/devops/k8s_daily_monitor.git
+    targetRevision: main
+    path: helm/k8s-daily-monitor
+
+    helm:
+      # 환경별 values 파일
+      valueFiles:
+        - values.yaml
+        - values-prod.yaml
+
+      # Jenkins CI에서 이미지 태그를 동적으로 주입
+      parameters:
+        - name: global.imageRegistry
+          value: "10.61.162.101:5000"
+        - name: backend.image.tag
+          value: "latest"
+        - name: frontend.image.tag
+          value: "latest"
+
+  # -- 배포 대상 클러스터
+  destination:
+    # 같은 클러스터면 https://kubernetes.default.svc
+    # 다른 클러스터면 ArgoCD에 등록된 클러스터 URL
+    server: https://kubernetes.default.svc
+    namespace: k8s-monitor
+
+  # -- 동기화 정책
+  syncPolicy:
+    automated:
+      prune: true       # Git에서 삭제된 리소스 자동 삭제
+      selfHeal: true    # 수동 변경 시 자동 복원
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

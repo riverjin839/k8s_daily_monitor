@@ -1,0 +1,43 @@
+# ============================================
+# ArgoCD AppProject - 모니터링 프로젝트
+# ============================================
+# 선택사항: default 프로젝트 대신 전용 프로젝트 사용 시
+# 적용: kubectl apply -f argocd/project.yaml
+# ============================================
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: k8s-monitoring
+  namespace: argocd
+spec:
+  description: K8s Daily Monitoring Applications
+
+  # 허용 소스 Git
+  sourceRepos:
+    - https://git.company.internal/devops/k8s_daily_monitor.git
+
+  # 배포 허용 대상
+  destinations:
+    - namespace: k8s-monitor
+      server: https://kubernetes.default.svc
+    - namespace: k8s-monitor
+      server: '*'
+
+  # 허용 리소스
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+
+  namespaceResourceWhitelist:
+    - group: ''
+      kind: '*'
+    - group: apps
+      kind: '*'
+    - group: autoscaling
+      kind: '*'
+    - group: networking.k8s.io
+      kind: '*'

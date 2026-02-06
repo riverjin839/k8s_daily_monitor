@@ -1,0 +1,13 @@
+apiVersion: v2
+name: k8s-daily-monitor
+description: DevOps K8s Daily Monitoring Dashboard
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - kubernetes
+  - monitoring
+  - dashboard
+  - devops
+maintainers:
+  - name: riverjin839

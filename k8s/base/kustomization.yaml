@@ -12,10 +12,6 @@ resources:
   # Namespace
   - namespace.yaml
 
-  # Configuration
-  - configmap.yaml
-  - secret.yaml
-
   # Database
   - postgres/statefulset.yaml
   - postgres/service.yaml
@@ -45,9 +41,33 @@ resources:
   - hpa.yaml
 
 configMapGenerator:
+  - name: k8s-monitor-config
+    literals:
+      - APP_NAME=K8s Daily Monitor
+      - DEBUG=false
+      - CHECK_INTERVAL_MINUTES=5
+      - CHECK_TIMEOUT_SECONDS=30
+      - ANSIBLE_PLAYBOOK_DIR=/app/ansible/playbooks
+      - ANSIBLE_INVENTORY_DIR=/app/ansible/inventory
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=k8s_monitor
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
   - name: ansible-playbooks
     files:
       - check_cluster.yml=ansible-playbooks-check_cluster.yml
+
+secretGenerator:
+  - name: k8s-monitor-secret
+    literals:
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=changeme-in-production
+      - SECRET_KEY=your-super-secret-key-change-this-in-production
+      - DATABASE_URL=postgresql://postgres:changeme-in-production@postgres:5432/k8s_monitor
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
 
 generatorOptions:
   disableNameSuffixHash: true

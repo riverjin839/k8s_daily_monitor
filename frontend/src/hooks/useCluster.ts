@@ -20,8 +20,9 @@ export function useClusters() {
     queryKey: queryKeys.clusters,
     queryFn: async () => {
       const { data } = await clustersApi.getAll();
-      setClusters(data.data);
-      return data.data;
+      const clusters = data?.data ?? [];
+      setClusters(clusters);
+      return clusters;
     },
     refetchInterval: 30000, // 30초마다 자동 리페치
   });
@@ -84,8 +85,9 @@ export function useSummary() {
     queryKey: queryKeys.summary,
     queryFn: async () => {
       const { data } = await healthApi.getSummary();
-      setSummary(data.data);
-      return data.data;
+      const summary = data?.data ?? { totalClusters: 0, healthy: 0, warning: 0, critical: 0 };
+      setSummary(summary);
+      return summary;
     },
     refetchInterval: 30000,
   });
@@ -99,8 +101,9 @@ export function useAddons(clusterId: string) {
     queryKey: queryKeys.addons(clusterId),
     queryFn: async () => {
       const { data } = await healthApi.getAddons(clusterId);
-      setAddons(clusterId, data.data);
-      return data.data;
+      const addons = data?.data ?? [];
+      setAddons(clusterId, addons);
+      return addons;
     },
     enabled: !!clusterId,
     refetchInterval: 30000,
@@ -138,7 +141,8 @@ export function useLogs(clusterId?: string) {
     queryKey: queryKeys.logs(clusterId),
     queryFn: async () => {
       const { data } = await historyApi.getLogs(clusterId);
-      setLogs(data.data);
+      const logs = data?.data ?? [];
+      setLogs(logs);
       return data;
     },
     refetchInterval: 30000,

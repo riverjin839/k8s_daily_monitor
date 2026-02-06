@@ -29,7 +29,11 @@ function StatCard({ title, value, icon, colorClass, bgClass }: StatCardProps) {
   );
 }
 
+const defaultStats: SummaryStatsType = { totalClusters: 0, healthy: 0, warning: 0, critical: 0 };
+
 export function SummaryStats({ stats, isLoading }: SummaryStatsProps) {
+  const s = stats ?? defaultStats;
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -47,28 +51,28 @@ export function SummaryStats({ stats, isLoading }: SummaryStatsProps) {
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
       <StatCard
         title="Total Clusters"
-        value={stats.totalClusters}
+        value={s.totalClusters}
         icon="☸"
         colorClass="text-foreground"
         bgClass="bg-primary/10"
       />
       <StatCard
         title="Healthy"
-        value={stats.healthy}
+        value={s.healthy}
         icon="✓"
         colorClass="text-status-healthy"
         bgClass="bg-status-healthy/10"
       />
       <StatCard
         title="Warning"
-        value={stats.warning}
+        value={s.warning}
         icon="!"
         colorClass="text-status-warning"
         bgClass="bg-status-warning/10"
       />
       <StatCard
         title="Critical"
-        value={stats.critical}
+        value={s.critical}
         icon="✕"
         colorClass="text-status-critical"
         bgClass="bg-status-critical/10"

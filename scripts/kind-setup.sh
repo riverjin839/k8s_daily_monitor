@@ -255,7 +255,7 @@ build_and_push() {
         "${PROJECT_ROOT}/backend"
 
     log_info "  → frontend 빌드 중..."
-    run_cmd docker build \
+    run_cmd docker build --no-cache \
         -t "localhost:${REGISTRY_PORT}/k8s-monitor/frontend:latest" \
         -f "${PROJECT_ROOT}/frontend/Dockerfile" \
         "${PROJECT_ROOT}/frontend"

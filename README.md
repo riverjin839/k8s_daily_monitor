@@ -217,7 +217,7 @@ k8s_daily_monitor/
 ### 1. Docker Compose (로컬 개발)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/k8s_daily_monitor.git
+git clone https://github.com/riverjin839/k8s_daily_monitor.git
 cd k8s_daily_monitor
 
 # 전체 스택 실행

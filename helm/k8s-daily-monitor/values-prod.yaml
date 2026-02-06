@@ -1,0 +1,41 @@
+# ============================================
+# Phase 3: 운영 환경 (ArgoCD로 배포)
+# ============================================
+
+global:
+  imageRegistry: ""  # CI에서 주입
+  # imagePullSecrets:
+  #   - name: registry-secret
+
+config:
+  debug: "false"
+  checkIntervalMinutes: "5"
+  checkTimeoutSeconds: "30"
+
+secrets:
+  databasePassword: "CHANGE_ME_IN_PRODUCTION"
+  secretKey: "CHANGE_ME_IN_PRODUCTION"
+
+backend:
+  replicaCount: 2
+  image:
+    tag: ""  # CI에서 주입
+
+frontend:
+  replicaCount: 2
+  image:
+    tag: ""  # CI에서 주입
+
+celery:
+  worker:
+    replicaCount: 2
+
+ingress:
+  enabled: true
+  host: k8s-monitor.company.internal
+
+hpa:
+  enabled: true
+
+nodePort:
+  enabled: false

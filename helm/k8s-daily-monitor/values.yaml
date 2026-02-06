@@ -1,0 +1,178 @@
+# ============================================
+# K8s Daily Monitor - Helm Values
+# ============================================
+
+# -- 글로벌 설정
+global:
+  # -- 컨테이너 이미지 레지스트리
+  imageRegistry: ""
+  # -- 이미지 Pull Secret (private registry용)
+  imagePullSecrets: []
+
+# -- 앱 설정
+config:
+  appName: "K8s Daily Monitor"
+  debug: "false"
+  checkIntervalMinutes: "5"
+  checkTimeoutSeconds: "30"
+  ansiblePlaybookDir: "/app/ansible/playbooks"
+  ansibleInventoryDir: "/app/ansible/inventory"
+
+# -- Secret 설정
+secrets:
+  databaseUser: "postgres"
+  databasePassword: "changeme-in-production"
+  secretKey: "your-super-secret-key-change-this-in-production"
+
+# ============================================
+# Backend (FastAPI)
+# ============================================
+backend:
+  replicaCount: 2
+  image:
+    repository: k8s-daily-monitor/backend
+    tag: latest
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 8000
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "200m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 10
+    periodSeconds: 5
+
+# ============================================
+# Frontend (Nginx + React)
+# ============================================
+frontend:
+  replicaCount: 2
+  image:
+    repository: k8s-daily-monitor/frontend
+    tag: latest
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
+
+# ============================================
+# PostgreSQL
+# ============================================
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "15-alpine"
+  storage:
+    size: 10Gi
+    storageClassName: ""
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# ============================================
+# Redis
+# ============================================
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: "7-alpine"
+  maxmemory: "256mb"
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+# ============================================
+# Celery
+# ============================================
+celery:
+  worker:
+    replicaCount: 2
+    concurrency: 2
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "200m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+  beat:
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+
+# ============================================
+# Ingress
+# ============================================
+ingress:
+  enabled: true
+  className: nginx
+  host: k8s-monitor.local
+  annotations: {}
+
+# ============================================
+# HPA (Horizontal Pod Autoscaler)
+# ============================================
+hpa:
+  enabled: true
+  backend:
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilization: 70
+  celeryWorker:
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilization: 70
+  frontend:
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilization: 70
+
+# ============================================
+# RBAC
+# ============================================
+serviceAccount:
+  create: true
+  name: k8s-monitor-sa
+
+# ============================================
+# NodePort (폐쇄망/개발용)
+# ============================================
+nodePort:
+  enabled: false
+  frontend: 30080
+  backend: 30800

@@ -1,0 +1,40 @@
+# ============================================
+# Phase 1: 로컬 kind 개발 환경
+# 사용: helm install k8s-monitor ./helm/k8s-daily-monitor -f ./helm/k8s-daily-monitor/values-dev.yaml
+# ============================================
+
+config:
+  debug: "true"
+  checkIntervalMinutes: "1"
+
+secrets:
+  databasePassword: "postgres"
+  secretKey: "dev-secret-key"
+
+backend:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+
+frontend:
+  replicaCount: 1
+
+celery:
+  worker:
+    replicaCount: 1
+
+ingress:
+  enabled: false
+
+hpa:
+  enabled: false
+
+nodePort:
+  enabled: true
+  frontend: 30080
+  backend: 30800

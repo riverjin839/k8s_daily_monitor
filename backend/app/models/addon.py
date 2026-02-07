@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, DateTime, Enum, ForeignKey, Integer
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.database import Base
 from app.models.cluster import StatusEnum
@@ -19,6 +19,7 @@ class Addon(Base):
     check_playbook = Column(String(100), nullable=True)
     status = Column(Enum(StatusEnum), default=StatusEnum.healthy)
     response_time = Column(Integer, nullable=True)  # milliseconds
+    details = Column(JSONB, nullable=True)
     last_check = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

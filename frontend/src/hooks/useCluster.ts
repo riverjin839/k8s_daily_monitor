@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { clustersApi, healthApi, historyApi } from '@/services/api';
 import { useClusterStore } from '@/stores/clusterStore';
-import { Cluster } from '@/types';
+import { Cluster, Addon } from '@/types';
 
 // Query Keys
 export const queryKeys = {
@@ -114,6 +114,21 @@ export function useAddons(clusterId: string) {
     },
     enabled: !!clusterId,
     refetchInterval: 30000,
+  });
+}
+
+// Create Addon
+export function useCreateAddon() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: Partial<Addon>) => healthApi.createAddon(data),
+    onSuccess: (_, variables) => {
+      const clusterId = variables.clusterId;
+      if (clusterId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.addons(clusterId) });
+      }
+    },
   });
 }
 

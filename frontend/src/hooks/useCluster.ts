@@ -85,7 +85,14 @@ export function useSummary() {
     queryKey: queryKeys.summary,
     queryFn: async () => {
       const { data } = await healthApi.getSummary();
-      const summary = data?.data ?? { totalClusters: 0, healthy: 0, warning: 0, critical: 0 };
+      // Backend /health/summary는 data wrapper 없이 직접 반환
+      const raw = data?.data ?? data;
+      const summary = {
+        totalClusters: raw?.totalClusters ?? 0,
+        healthy: raw?.healthy ?? 0,
+        warning: raw?.warning ?? 0,
+        critical: raw?.critical ?? 0,
+      };
       setSummary(summary);
       return summary;
     },

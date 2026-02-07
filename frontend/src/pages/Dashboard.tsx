@@ -5,12 +5,14 @@ import {
   ClusterTabs,
   AddonGrid,
   HistoryLog,
+  AddClusterModal,
 } from '@/components/dashboard';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useClusters, useSummary, useAddons, useLogs, useHealthCheck } from '@/hooks/useCluster';
 
 export function Dashboard() {
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
+  const [showAddCluster, setShowAddCluster] = useState(false);
   const { clusters, summary, addons, logs } = useClusterStore();
 
   // Queries
@@ -59,9 +61,17 @@ export function Dashboard() {
         {/* Cluster Status Section */}
         <section className="mb-8">
           <div className="flex items-center justify-between mb-5">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              📊 Cluster Status
-            </h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                Cluster Status
+              </h2>
+              <button
+                onClick={() => setShowAddCluster(true)}
+                className="px-3 py-1.5 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
+              >
+                + Add Cluster
+              </button>
+            </div>
             <ClusterTabs
               clusters={clusters}
               selectedId={selectedClusterId}
@@ -83,6 +93,12 @@ export function Dashboard() {
           onViewAll={() => console.log('View all logs')}
         />
       </main>
+
+      {/* Add Cluster Modal */}
+      <AddClusterModal
+        isOpen={showAddCluster}
+        onClose={() => setShowAddCluster(false)}
+      />
     </div>
   );
 }

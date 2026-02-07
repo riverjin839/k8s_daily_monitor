@@ -6,6 +6,11 @@ function toCamelCase(str: string): string {
   return str.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
 }
 
+// camelCase → snake_case 변환 (Frontend → Backend 요청 시)
+function toSnakeCase(str: string): string {
+  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+}
+
 function convertKeys(obj: unknown): unknown {
   if (Array.isArray(obj)) return obj.map(convertKeys);
   if (obj !== null && typeof obj === 'object') {
@@ -13,6 +18,19 @@ function convertKeys(obj: unknown): unknown {
       Object.entries(obj as Record<string, unknown>).map(([key, value]) => [
         toCamelCase(key),
         convertKeys(value),
+      ])
+    );
+  }
+  return obj;
+}
+
+function convertKeysToSnake(obj: unknown): unknown {
+  if (Array.isArray(obj)) return obj.map(convertKeysToSnake);
+  if (obj !== null && typeof obj === 'object') {
+    return Object.fromEntries(
+      Object.entries(obj as Record<string, unknown>).map(([key, value]) => [
+        toSnakeCase(key),
+        convertKeysToSnake(value),
       ])
     );
   }
@@ -27,9 +45,12 @@ const api = axios.create({
   },
 });
 
-// Request interceptor
+// Request interceptor - camelCase → snake_case 자동 변환
 api.interceptors.request.use(
   (config) => {
+    if (config.data && typeof config.data === 'object') {
+      config.data = convertKeysToSnake(config.data);
+    }
     return config;
   },
   (error) => {

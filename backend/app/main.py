@@ -3,17 +3,28 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 
 from app.config import settings
 from app.database import engine, Base, SessionLocal
 from app.routers import clusters_router, health_router, history_router, daily_check_router
 
 
+def _run_migrations():
+    """기존 테이블에 누락된 컬럼 추가 (경량 마이그레이션)"""
+    inspector = inspect(engine)
+    if "addons" in inspector.get_table_names():
+        columns = [col["name"] for col in inspector.get_columns("addons")]
+        if "details" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE addons ADD COLUMN details JSONB"))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: DB 테이블 생성
     Base.metadata.create_all(bind=engine)
+    _run_migrations()
     yield
     # Shutdown: 필요한 정리 작업
 

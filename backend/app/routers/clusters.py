@@ -4,13 +4,23 @@ from uuid import UUID
 from typing import List
 
 from app.database import get_db
-from app.models import Cluster
+from app.models import Cluster, Addon
 from app.schemas import (
     ClusterCreate,
     ClusterUpdate,
     ClusterResponse,
     ClusterListResponse,
 )
+
+# 클러스터 생성 시 자동 등록할 기본 애드온
+DEFAULT_ADDONS = [
+    {
+        "name": "etcd Leader",
+        "type": "etcd-leader",
+        "icon": "💾",
+        "description": "etcd leader election & health status",
+    },
+]
 
 router = APIRouter(prefix="/clusters", tags=["clusters"])
 
@@ -47,6 +57,13 @@ def create_cluster(cluster_data: ClusterCreate, db: Session = Depends(get_db)):
     
     cluster = Cluster(**cluster_data.model_dump())
     db.add(cluster)
+    db.flush()  # ID 생성을 위해 flush
+
+    # 기본 애드온 자동 등록
+    for addon_config in DEFAULT_ADDONS:
+        addon = Addon(cluster_id=cluster.id, **addon_config)
+        db.add(addon)
+
     db.commit()
     db.refresh(cluster)
     return cluster

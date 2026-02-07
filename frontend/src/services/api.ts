@@ -87,6 +87,8 @@ export const healthApi = {
   getStatus: (clusterId: string) => api.get<ApiResponse<Cluster>>(`/health/status/${clusterId}`),
   getAddons: (clusterId: string) => api.get<ApiResponse<Addon[]>>(`/health/addons/${clusterId}`),
   getSummary: () => api.get<ApiResponse<SummaryStats>>('/health/summary'),
+  createAddon: (data: Partial<Addon>) => api.post<ApiResponse<Addon>>('/health/addons', data),
+  deleteAddon: (addonId: string) => api.delete(`/health/addons/${addonId}`),
 };
 
 // History API

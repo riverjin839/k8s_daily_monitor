@@ -8,7 +8,7 @@ import {
   AddClusterModal,
 } from '@/components/dashboard';
 import { useClusterStore } from '@/stores/clusterStore';
-import { useClusters, useSummary, useAddons, useLogs, useHealthCheck } from '@/hooks/useCluster';
+import { useClusters, useSummary, useAddons, useLogs, useHealthCheck, useCreateAddon } from '@/hooks/useCluster';
 
 export function Dashboard() {
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
@@ -19,12 +19,14 @@ export function Dashboard() {
   const { isLoading: clustersLoading } = useClusters();
   const { isLoading: summaryLoading } = useSummary();
   const { isLoading: logsLoading } = useLogs();
-  
+
   // 선택된 클러스터의 애드온 로드
-  const { isLoading: addonsLoading } = useAddons(selectedClusterId || clusters[0]?.id || '');
+  const activeClusterId = selectedClusterId || clusters[0]?.id || '';
+  const { isLoading: addonsLoading } = useAddons(activeClusterId);
 
   // Health Check mutation
   const healthCheck = useHealthCheck();
+  const createAddon = useCreateAddon();
 
   const handleRunCheck = () => {
     if (selectedClusterId) {
@@ -40,6 +42,19 @@ export function Dashboard() {
   const handleSettings = () => {
     // TODO: Settings modal/page
     console.log('Open settings');
+  };
+
+  const handleAddEtcdAddon = () => {
+    const clusterId = activeClusterId;
+    if (!clusterId) return;
+
+    createAddon.mutate({
+      clusterId,
+      name: 'etcd Leader',
+      type: 'etcd-leader',
+      icon: '💾',
+      description: 'etcd leader election & health status',
+    });
   };
 
   // 현재 표시할 애드온
@@ -82,6 +97,7 @@ export function Dashboard() {
           <AddonGrid
             addons={currentAddons}
             isLoading={clustersLoading || addonsLoading}
+            onAddEtcdAddon={clusters.length > 0 ? handleAddEtcdAddon : undefined}
           />
         </section>
 

@@ -5,6 +5,8 @@ from uuid import UUID
 from app.database import get_db
 from app.models import Cluster, Addon, CheckLog, StatusEnum
 from app.schemas import (
+    AddonCreate,
+    AddonResponse,
     AddonListResponse,
     ClusterResponse,
     SummaryStatsResponse,
@@ -59,6 +61,48 @@ def get_cluster_addons(cluster_id: UUID, db: Session = Depends(get_db)):
     
     addons = db.query(Addon).filter(Addon.cluster_id == cluster_id).all()
     return AddonListResponse(data=addons)
+
+
+@router.post("/addons", response_model=AddonResponse, status_code=status.HTTP_201_CREATED)
+def create_addon(addon_data: AddonCreate, db: Session = Depends(get_db)):
+    """애드온 생성"""
+    cluster = db.query(Cluster).filter(Cluster.id == addon_data.cluster_id).first()
+    if not cluster:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cluster not found"
+        )
+
+    # 중복 체크
+    existing = db.query(Addon).filter(
+        Addon.cluster_id == addon_data.cluster_id,
+        Addon.name == addon_data.name
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Addon '{addon_data.name}' already exists for this cluster"
+        )
+
+    addon = Addon(**addon_data.model_dump())
+    db.add(addon)
+    db.commit()
+    db.refresh(addon)
+    return addon
+
+
+@router.delete("/addons/{addon_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_addon(addon_id: UUID, db: Session = Depends(get_db)):
+    """애드온 삭제"""
+    addon = db.query(Addon).filter(Addon.id == addon_id).first()
+    if not addon:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Addon not found"
+        )
+    db.delete(addon)
+    db.commit()
+    return None
 
 
 @router.get("/summary", response_model=SummaryStatsResponse)

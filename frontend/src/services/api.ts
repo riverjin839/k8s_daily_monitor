@@ -61,7 +61,7 @@ api.interceptors.request.use(
 // Response interceptor - snake_case → camelCase 자동 변환
 api.interceptors.response.use(
   (response) => {
-    if (response.data && typeof response.data === 'object') {
+    if (response.data && typeof response.data === 'object' && !(response.data instanceof Blob)) {
       response.data = convertKeys(response.data);
     }
     return response;
@@ -89,9 +89,8 @@ export const healthApi = {
   getSummary: () => api.get<ApiResponse<SummaryStats>>('/health/summary'),
   exportReport: (clusterId?: string, fmt: 'md' | 'csv' = 'md') =>
     api.get('/health/report', {
-      params: { ...(clusterId ? { clusterId } : {}), fmt },
+      params: { ...(clusterId ? { cluster_id: clusterId } : {}), fmt },
       responseType: 'blob',
-      transformResponse: [(data: Blob) => data],
     }),
   createAddon: (data: Partial<Addon>) => api.post<ApiResponse<Addon>>('/health/addons', data),
   deleteAddon: (addonId: string) => api.delete(`/health/addons/${addonId}`),
@@ -123,9 +122,8 @@ export const playbooksApi = {
   getDashboard: (clusterId: string) => api.get<ApiResponse<Playbook[]>>(`/playbooks/dashboard/${clusterId}`),
   exportReport: (clusterId?: string) =>
     api.get('/playbooks/report', {
-      params: clusterId ? { clusterId } : {},
+      params: clusterId ? { cluster_id: clusterId } : {},
       responseType: 'blob',
-      transformResponse: [(data: Blob) => data],  // interceptor 변환 방지
     }),
 };
 

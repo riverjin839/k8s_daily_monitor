@@ -18,6 +18,9 @@ def _run_migrations():
         if "details" not in columns:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE addons ADD COLUMN details JSONB"))
+        if "config" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE addons ADD COLUMN config JSONB"))
     if "playbooks" in inspector.get_table_names():
         columns = [col["name"] for col in inspector.get_columns("playbooks")]
         if "show_on_dashboard" not in columns:

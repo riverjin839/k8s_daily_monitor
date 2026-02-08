@@ -136,6 +136,137 @@ function SystemPodDetails({ details }: { details: Details }) {
   );
 }
 
+// ── DevOps tool detail renderers ─────────────────────
+
+function NexusDetails({ details }: { details: Details }) {
+  const writable = details.writable as boolean;
+  const systemStatus = String(details.systemStatus ?? 'unknown');
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <span className={`inline-block w-2 h-2 rounded-full ${writable ? 'bg-green-500' : 'bg-red-500'}`} />
+        <span className={`text-sm font-semibold font-mono ${writable ? 'text-green-400' : 'text-red-400'}`}>
+          {writable ? 'Writable' : 'Read-Only'}
+        </span>
+      </div>
+      <div className="text-xs text-muted-foreground font-mono">
+        System: {systemStatus}
+      </div>
+    </div>
+  );
+}
+
+function JenkinsDetails({ details }: { details: Details }) {
+  const mode = String(details.mode ?? 'UNKNOWN');
+  const quietingDown = details.quietingDown as boolean;
+  const numExecutors = Number(details.numExecutors ?? 0);
+  const queueItems = Number(details.queueItems ?? 0);
+
+  const modeColor = mode === 'NORMAL' && !quietingDown
+    ? 'text-green-400' : quietingDown ? 'text-yellow-400' : 'text-red-400';
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-xs font-mono">
+        <span className="text-muted-foreground flex items-center gap-1.5">
+          <span className={`inline-block w-2 h-2 rounded-full ${
+            mode === 'NORMAL' && !quietingDown ? 'bg-green-500' : quietingDown ? 'bg-yellow-500' : 'bg-red-500'
+          }`} />
+          Mode
+        </span>
+        <span className={modeColor}>{quietingDown ? 'Quieting Down' : mode}</span>
+      </div>
+      <div className="flex items-center justify-between text-xs font-mono">
+        <span className="text-muted-foreground">Executors</span>
+        <span className="text-muted-foreground">{numExecutors}</span>
+      </div>
+      <div className="flex items-center justify-between text-xs font-mono">
+        <span className="text-muted-foreground">Queue</span>
+        <span className={queueItems > 20 ? 'text-yellow-400' : 'text-muted-foreground'}>{queueItems}</span>
+      </div>
+    </div>
+  );
+}
+
+interface ProblemApp {
+  name: string;
+  sync: string;
+  health: string;
+}
+
+function ArgoCDDetails({ details }: { details: Details }) {
+  const totalApps = Number(details.totalApps ?? 0);
+  const synced = Number(details.synced ?? 0);
+  const outOfSync = Number(details.outOfSync ?? 0);
+  const healthy = Number(details.healthy ?? 0);
+  const degraded = Number(details.degraded ?? 0);
+  const progressing = Number(details.progressing ?? 0);
+  const problemApps: ProblemApp[] = Array.isArray(details.problemApps) ? details.problemApps : [];
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-3 text-xs font-mono">
+        <span className="text-muted-foreground">Apps: <strong className="text-foreground">{totalApps}</strong></span>
+        <span className="text-green-400">Synced: {synced}</span>
+        {outOfSync > 0 && <span className="text-yellow-400">OutOfSync: {outOfSync}</span>}
+      </div>
+      <div className="flex items-center gap-3 text-xs font-mono">
+        <span className="text-green-400">Healthy: {healthy}</span>
+        {degraded > 0 && <span className="text-red-400">Degraded: {degraded}</span>}
+        {progressing > 0 && <span className="text-blue-400">Progressing: {progressing}</span>}
+      </div>
+      {problemApps.length > 0 && (
+        <div className="pt-1 border-t border-border/50 space-y-0.5">
+          {problemApps.slice(0, 3).map((app) => (
+            <div key={app.name} className="flex items-center justify-between text-xs font-mono">
+              <span className="text-muted-foreground truncate max-w-[120px]">{app.name}</span>
+              <span className={app.health === 'Degraded' ? 'text-red-400' : 'text-yellow-400'}>
+                {app.sync}/{app.health}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface HealthCheck {
+  name: string;
+  status: string;
+}
+
+function KeycloakDetails({ details }: { details: Details }) {
+  const ready = details.ready as boolean;
+  const overallStatus = String(details.overallStatus ?? 'unknown');
+  const dbStatus = String(details.dbStatus ?? 'unknown');
+  const checks: HealthCheck[] = Array.isArray(details.checks) ? details.checks : [];
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <span className={`inline-block w-2 h-2 rounded-full ${ready ? 'bg-green-500' : 'bg-red-500'}`} />
+        <span className={`text-sm font-semibold font-mono ${ready ? 'text-green-400' : 'text-red-400'}`}>
+          {ready ? 'Auth Service Ready' : 'Not Ready'}
+        </span>
+      </div>
+      {checks.length > 0 ? (
+        checks.map((chk) => (
+          <div key={chk.name} className="flex items-center justify-between text-xs font-mono">
+            <span className="text-muted-foreground">{chk.name}</span>
+            <span className={chk.status === 'UP' ? 'text-green-400' : 'text-red-400'}>{chk.status}</span>
+          </div>
+        ))
+      ) : (
+        <div className="text-xs text-muted-foreground font-mono">
+          Status: {overallStatus} / DB: {dbStatus}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Detail renderer dispatcher ─────────────────────────
 
 function AddonDetails({ addon }: { addon: Addon }) {
@@ -154,6 +285,14 @@ function AddonDetails({ addon }: { addon: Addon }) {
     case 'system-pod':
     case 'systemPod':
       return <SystemPodDetails details={addon.details} />;
+    case 'nexus':
+      return <NexusDetails details={addon.details} />;
+    case 'jenkins':
+      return <JenkinsDetails details={addon.details} />;
+    case 'argocd':
+      return <ArgoCDDetails details={addon.details} />;
+    case 'keycloak':
+      return <KeycloakDetails details={addon.details} />;
     default:
       return (
         <>

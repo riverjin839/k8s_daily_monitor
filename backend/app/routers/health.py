@@ -209,6 +209,27 @@ def _extract_addon_value(addon: Addon) -> str:
         pct = d.get("ratio_pct")
         return f"{ready}/{total} ({pct}%)" if pct is not None else f"{ready}/{total}"
 
+    if addon_type == "nexus":
+        writable = d.get("writable", False)
+        return "Writable" if writable else "Read-Only"
+
+    if addon_type == "jenkins":
+        mode = d.get("mode", "?")
+        executors = d.get("num_executors", 0)
+        queue = d.get("queue_items", 0)
+        return f"Mode:{mode}, Exec:{executors}, Q:{queue}"
+
+    if addon_type == "argocd":
+        total = d.get("total_apps", 0)
+        synced = d.get("synced", 0)
+        degraded = d.get("degraded", 0)
+        return f"{synced}/{total} synced, {degraded} degraded"
+
+    if addon_type == "keycloak":
+        ready = d.get("ready", False)
+        db = d.get("db_status", "?")
+        return f"Ready, DB:{db}" if ready else f"NotReady, DB:{db}"
+
     return f"{addon.response_time}ms" if addon.response_time else "-"
 
 
@@ -236,6 +257,27 @@ def _extract_addon_note(addon: Addon) -> str:
         components = d.get("components", [])
         unhealthy = [c["name"] for c in components if c.get("status") != "healthy"]
         return f"unhealthy: {', '.join(unhealthy)}" if unhealthy else "없음"
+
+    if addon_type == "nexus":
+        sys_status = d.get("system_status", "")
+        return f"Read-Only (system: {sys_status})" if not d.get("writable") else "없음"
+
+    if addon_type == "jenkins":
+        if d.get("quieting_down"):
+            return "Quieting down (preparing shutdown)"
+        queue = d.get("queue_items", 0)
+        return f"Queue backed up ({queue} items)" if queue > 20 else "없음"
+
+    if addon_type == "argocd":
+        problems = d.get("problem_apps", [])
+        if problems:
+            return ", ".join(f"{p.get('name','?')}({p.get('health','?')})" for p in problems[:3])
+        return "없음"
+
+    if addon_type == "keycloak":
+        checks = d.get("checks", [])
+        down = [c["name"] for c in checks if c.get("status") != "UP"]
+        return f"DOWN: {', '.join(down)}" if down else "없음"
 
     err = d.get("error", "")
     if err:

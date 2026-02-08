@@ -20,6 +20,7 @@ class Addon(Base):
     status = Column(Enum(StatusEnum), default=StatusEnum.healthy)
     response_time = Column(Integer, nullable=True)  # milliseconds
     details = Column(JSONB, nullable=True)
+    config = Column(JSONB, nullable=True)  # tool-specific settings (url, token, namespace, etc.)
     last_check = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

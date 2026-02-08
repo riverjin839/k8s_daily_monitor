@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult } from '@/types';
 
 // snake_case → camelCase 변환 (Backend는 snake_case, Frontend는 camelCase)
 function toCamelCase(str: string): string {
@@ -99,6 +99,20 @@ export const historyApi = {
     }),
   exportCsv: (clusterId: string) =>
     api.get(`/history/${clusterId}/export`, { responseType: 'blob' }),
+};
+
+// Playbooks API
+export const playbooksApi = {
+  getAll: (clusterId?: string) =>
+    api.get<ApiResponse<Playbook[]>>('/playbooks', {
+      params: clusterId ? { clusterId } : {},
+    }),
+  getById: (id: string) => api.get<ApiResponse<Playbook>>(`/playbooks/${id}`),
+  create: (data: Partial<Playbook>) => api.post<ApiResponse<Playbook>>('/playbooks', data),
+  update: (id: string, data: Partial<Playbook>) =>
+    api.put<ApiResponse<Playbook>>(`/playbooks/${id}`, data),
+  delete: (id: string) => api.delete(`/playbooks/${id}`),
+  run: (id: string) => api.post<PlaybookRunResult>(`/playbooks/${id}/run`),
 };
 
 export default api;

@@ -27,6 +27,7 @@ class Cluster(Base):
     # Relationships
     addons = relationship("Addon", back_populates="cluster", cascade="all, delete-orphan")
     check_logs = relationship("CheckLog", back_populates="cluster", cascade="all, delete-orphan")
+    playbooks = relationship("Playbook", back_populates="cluster", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Cluster(name={self.name}, status={self.status})>"

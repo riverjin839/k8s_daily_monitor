@@ -7,9 +7,27 @@ interface AddonCardProps {
   onClick?: () => void;
 }
 
+// ── Detail type definitions ────────────────────────────
+
+type DetailValues = string | number | boolean | null | undefined;
+type Details = Record<string, DetailValues | DetailValues[] | Record<string, DetailValues>[]>;
+
+interface NodeIssue {
+  node: string;
+  reason: string;
+}
+
+interface ComponentStatus {
+  name: string;
+  status: string;
+  latencyMs?: number;
+  ready?: number;
+  total?: number;
+}
+
 // ── Type-specific detail renderers ─────────────────────
 
-function EtcdDetails({ details }: { details: Record<string, any> }) {
+function EtcdDetails({ details }: { details: Details }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
       {details.isLeader !== undefined && (
@@ -33,10 +51,10 @@ function EtcdDetails({ details }: { details: Record<string, any> }) {
   );
 }
 
-function NodeDetails({ details }: { details: Record<string, any> }) {
-  const total = details.total ?? 0;
-  const ready = details.ready ?? 0;
-  const issues = (details.issues as any[]) ?? [];
+function NodeDetails({ details }: { details: Details }) {
+  const total = (details.total as number) ?? 0;
+  const ready = (details.ready as number) ?? 0;
+  const issues = (details.issues as NodeIssue[]) ?? [];
   const pct = total > 0 ? Math.round((ready / total) * 100) : 0;
 
   return (
@@ -59,13 +77,13 @@ function NodeDetails({ details }: { details: Record<string, any> }) {
   );
 }
 
-function ControlPlaneDetails({ details }: { details: Record<string, any> }) {
-  const components = (details.components as any[]) ?? [];
-  const apiLatency = details.apiLatencyMs ?? 0;
+function ControlPlaneDetails({ details }: { details: Details }) {
+  const components = (details.components as ComponentStatus[]) ?? [];
+  const apiLatency = (details.apiLatencyMs as number) ?? 0;
 
   return (
     <div className="space-y-1.5">
-      {components.map((comp: any) => (
+      {components.map((comp) => (
         <div key={comp.name} className="flex items-center justify-between text-xs font-mono">
           <span className="text-muted-foreground flex items-center gap-1.5">
             <span className={`inline-block w-2 h-2 rounded-full ${
@@ -89,12 +107,12 @@ function ControlPlaneDetails({ details }: { details: Record<string, any> }) {
   );
 }
 
-function SystemPodDetails({ details }: { details: Record<string, any> }) {
-  const readyPods = details.readyPods ?? 0;
-  const totalPods = details.totalPods ?? 0;
-  const totalNodes = details.totalNodes;
-  const ratioPct = details.ratioPct;
-  const kind = details.kind ?? 'deployment';
+function SystemPodDetails({ details }: { details: Details }) {
+  const readyPods = (details.readyPods as number) ?? 0;
+  const totalPods = (details.totalPods as number) ?? 0;
+  const totalNodes = details.totalNodes as number | undefined;
+  const ratioPct = details.ratioPct as number | undefined;
+  const kind = (details.kind as string) ?? 'deployment';
 
   const denominator = kind === 'daemonset' && totalNodes !== undefined ? totalNodes : totalPods;
   const pct = denominator > 0 ? Math.round((readyPods / denominator) * 100) : 0;

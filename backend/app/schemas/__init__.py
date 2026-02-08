@@ -20,6 +20,14 @@ from app.schemas.check_log import (
     CheckLogListResponse,
     SummaryStatsResponse,
 )
+from app.schemas.playbook import (
+    PlaybookBase,
+    PlaybookCreate,
+    PlaybookUpdate,
+    PlaybookResponse,
+    PlaybookListResponse,
+    PlaybookRunResponse,
+)
 
 __all__ = [
     "StatusEnum",
@@ -38,4 +46,10 @@ __all__ = [
     "CheckLogResponse",
     "CheckLogListResponse",
     "SummaryStatsResponse",
+    "PlaybookBase",
+    "PlaybookCreate",
+    "PlaybookUpdate",
+    "PlaybookResponse",
+    "PlaybookListResponse",
+    "PlaybookRunResponse",
 ]

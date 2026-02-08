@@ -2,6 +2,7 @@ from app.models.cluster import Cluster, StatusEnum
 from app.models.addon import Addon
 from app.models.check_log import CheckLog
 from app.models.daily_check import DailyCheckLog, CheckSchedule, CheckScheduleType
+from app.models.playbook import Playbook
 
 __all__ = [
     "Cluster",
@@ -11,4 +12,5 @@ __all__ = [
     "DailyCheckLog",
     "CheckSchedule",
     "CheckScheduleType",
+    "Playbook",
 ]

@@ -68,3 +68,31 @@ export interface AddonConfig {
   description: string;
   checkPlaybook: string;
 }
+
+// Playbook
+export interface Playbook {
+  id: string;
+  clusterId: string;
+  name: string;
+  description?: string;
+  playbookPath: string;
+  inventoryPath?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  extraVars?: Record<string, any>;
+  tags?: string;
+  status: string;  // healthy | warning | critical | unknown | running
+  lastRunAt?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  lastResult?: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlaybookRunResult {
+  id: string;
+  status: string;
+  message: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  stats?: Record<string, any>;
+  durationMs: number;
+}

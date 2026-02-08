@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Plus, Play, BookOpen } from 'lucide-react';
+import { Plus, Play, BookOpen, Download } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { PlaybookCard, AddPlaybookModal } from '@/components/playbooks';
 import { usePlaybooks, useCreatePlaybook, useDeletePlaybook, useRunPlaybook } from '@/hooks/usePlaybook';
+import { playbooksApi } from '@/services/api';
 import { usePlaybookStore } from '@/stores/playbookStore';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
@@ -51,6 +52,22 @@ export function PlaybooksPage() {
         runPlaybook.mutate(p.id);
       }
     });
+  };
+
+  const handleExportReport = async () => {
+    try {
+      const { data } = await playbooksApi.exportReport(activeClusterId || undefined);
+      const blob = data instanceof Blob ? data : new Blob([data], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const today = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `k8s-daily-report-${today}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Export failed:', e);
+    }
   };
 
   // 상태별 카운트
@@ -106,13 +123,22 @@ export function PlaybooksPage() {
           )}
 
           {filteredPlaybooks.length > 0 && (
-            <button
-              onClick={handleRunAll}
-              className="px-4 py-2 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors flex items-center gap-2"
-            >
-              <Play className="w-4 h-4" />
-              Run All
-            </button>
+            <>
+              <button
+                onClick={handleExportReport}
+                className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Export .md
+              </button>
+              <button
+                onClick={handleRunAll}
+                className="px-4 py-2 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors flex items-center gap-2"
+              >
+                <Play className="w-4 h-4" />
+                Run All
+              </button>
+            </>
           )}
 
           <button

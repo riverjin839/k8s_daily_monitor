@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -17,6 +18,14 @@ from app.services.playbook_executor import run_playbook
 
 router = APIRouter(prefix="/playbooks", tags=["playbooks"])
 
+STATUS_LABEL = {
+    "healthy": "OK",
+    "warning": "Changed",
+    "critical": "FAILED",
+    "running": "Running",
+    "unknown": "Not Run",
+}
+
 
 @router.get("", response_model=PlaybookListResponse)
 def list_playbooks(
@@ -29,6 +38,86 @@ def list_playbooks(
         query = query.filter(Playbook.cluster_id == cluster_id)
     playbooks = query.order_by(Playbook.created_at.desc()).all()
     return PlaybookListResponse(data=playbooks)
+
+
+@router.get("/report")
+def export_report(
+    cluster_id: UUID | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    """Playbook 실행 결과를 Markdown 테이블로 내보내기"""
+    query = db.query(Playbook).join(Cluster)
+    if cluster_id:
+        query = query.filter(Playbook.cluster_id == cluster_id)
+    playbooks = query.order_by(Cluster.name, Playbook.name).all()
+
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+
+    lines = [
+        f"# K8s Daily Check Report",
+        f"",
+        f"> Generated: {now}",
+        f"",
+    ]
+
+    # 클러스터별 그룹
+    clusters: dict[str, list] = {}
+    for pb in playbooks:
+        cname = pb.cluster.name
+        clusters.setdefault(cname, []).append(pb)
+
+    if not clusters:
+        lines.append("No playbooks registered.")
+    else:
+        for cluster_name, pbs in clusters.items():
+            lines.append(f"## Cluster: {cluster_name}")
+            lines.append("")
+            lines.append("| 검사 항목 | 날짜 | 상태 | 수치 |")
+            lines.append("|-----------|------|------|------|")
+
+            for pb in pbs:
+                name = pb.name
+                run_date = pb.last_run_at.strftime("%Y-%m-%d %H:%M") if pb.last_run_at else "-"
+                status_label = STATUS_LABEL.get(pb.status, pb.status)
+                stats_str = _format_stats(pb.last_result)
+                lines.append(f"| {name} | {run_date} | {status_label} | {stats_str} |")
+
+            lines.append("")
+
+    md_content = "\n".join(lines)
+    filename = f"k8s-daily-report-{today}.md"
+
+    return PlainTextResponse(
+        content=md_content,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _format_stats(last_result: dict | None) -> str:
+    """last_result에서 수치 문자열 생성"""
+    if not last_result:
+        return "-"
+    stats = last_result.get("stats", {})
+    totals = stats.get("totals")
+    if not totals:
+        # totals 없으면 message만
+        msg = last_result.get("message", "-")
+        return msg[:60]
+
+    parts = []
+    for key in ("ok", "changed", "failures", "unreachable", "skipped"):
+        val = totals.get(key, 0)
+        if val > 0 or key in ("ok", "failures"):
+            parts.append(f"{key}={val}")
+    host_count = totals.get("host_count", 0)
+    if host_count:
+        parts.append(f"hosts={host_count}")
+    duration = last_result.get("duration_ms")
+    if duration is not None:
+        parts.append(f"{duration}ms")
+    return ", ".join(parts)
 
 
 @router.get("/{playbook_id}", response_model=PlaybookResponse)

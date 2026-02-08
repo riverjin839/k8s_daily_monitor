@@ -44,16 +44,18 @@ export function Dashboard() {
     console.log('Open settings');
   };
 
-  const handleAddEtcdAddon = () => {
+  const DEFAULT_ADDONS = [
+    { name: 'etcd Leader', type: 'etcd-leader', icon: '💾', description: 'etcd leader election & health status' },
+    { name: 'Node Status', type: 'node-check', icon: '🖥️', description: 'Node readiness & pressure conditions' },
+    { name: 'Control Plane', type: 'control-plane', icon: '🎛️', description: 'API Server, Scheduler, Controller Manager' },
+    { name: 'CoreDNS', type: 'system-pod', icon: '🔍', description: 'Cluster DNS service' },
+  ];
+
+  const handleAddDefaultAddons = () => {
     const clusterId = activeClusterId;
     if (!clusterId) return;
-
-    createAddon.mutate({
-      clusterId,
-      name: 'etcd Leader',
-      type: 'etcd-leader',
-      icon: '💾',
-      description: 'etcd leader election & health status',
+    DEFAULT_ADDONS.forEach((addon) => {
+      createAddon.mutate({ clusterId, ...addon });
     });
   };
 
@@ -97,7 +99,7 @@ export function Dashboard() {
           <AddonGrid
             addons={currentAddons}
             isLoading={clustersLoading || addonsLoading}
-            onAddEtcdAddon={clusters.length > 0 ? handleAddEtcdAddon : undefined}
+            onAddDefaultAddons={clusters.length > 0 ? handleAddDefaultAddons : undefined}
           />
         </section>
 

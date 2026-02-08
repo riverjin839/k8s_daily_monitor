@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Enum, ForeignKey, Text
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -19,6 +19,7 @@ class Playbook(Base):
     extra_vars = Column(JSONB, nullable=True)              # --extra-vars JSON
     tags = Column(String(255), nullable=True)              # --tags filter
     status = Column(String(20), default="unknown")         # healthy/warning/critical/unknown/running
+    show_on_dashboard = Column(Boolean, default=False)     # Dashboard 카드 표시 여부
     last_run_at = Column(DateTime, nullable=True)
     last_result = Column(JSONB, nullable=True)             # parsed ansible JSON callback output
     created_at = Column(DateTime, default=datetime.utcnow)

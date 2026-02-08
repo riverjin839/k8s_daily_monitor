@@ -1,4 +1,4 @@
-import { Play, Trash2, Clock, Loader2 } from 'lucide-react';
+import { Play, Trash2, Clock, Loader2, LayoutDashboard } from 'lucide-react';
 import { Playbook } from '@/types';
 
 interface PlaybookCardProps {
@@ -6,6 +6,7 @@ interface PlaybookCardProps {
   isRunning: boolean;
   onRun: () => void;
   onDelete: () => void;
+  onToggleDashboard?: () => void;
 }
 
 const statusConfig: Record<string, { color: string; bg: string; label: string }> = {
@@ -27,7 +28,7 @@ function formatTimeAgo(dateStr?: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export function PlaybookCard({ playbook, isRunning, onRun, onDelete }: PlaybookCardProps) {
+export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onToggleDashboard }: PlaybookCardProps) {
   const effectiveStatus = isRunning ? 'running' : playbook.status;
   const config = statusConfig[effectiveStatus] || statusConfig.unknown;
   const result = playbook.lastResult;
@@ -84,6 +85,19 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete }: PlaybookC
           )}
         </div>
         <div className="flex items-center gap-1">
+          {onToggleDashboard && (
+            <button
+              onClick={onToggleDashboard}
+              className={`p-1.5 rounded-md transition-colors ${
+                playbook.showOnDashboard
+                  ? 'bg-primary/15 text-primary'
+                  : 'hover:bg-primary/10 text-muted-foreground'
+              }`}
+              title={playbook.showOnDashboard ? 'Remove from Dashboard' : 'Add to Dashboard'}
+            >
+              <LayoutDashboard className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={onRun}
             disabled={isRunning}

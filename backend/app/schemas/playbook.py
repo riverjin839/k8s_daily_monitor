@@ -24,12 +24,14 @@ class PlaybookUpdate(BaseModel):
     inventory_path: Optional[str] = None
     extra_vars: Optional[dict[str, Any]] = None
     tags: Optional[str] = None
+    show_on_dashboard: Optional[bool] = None
 
 
 class PlaybookResponse(PlaybookBase):
     id: UUID
     cluster_id: UUID
     status: str = "unknown"
+    show_on_dashboard: bool = False
     last_run_at: Optional[datetime] = None
     last_result: Optional[dict[str, Any]] = None
     created_at: datetime

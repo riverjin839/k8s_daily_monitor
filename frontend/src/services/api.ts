@@ -87,6 +87,12 @@ export const healthApi = {
   getStatus: (clusterId: string) => api.get<ApiResponse<Cluster>>(`/health/status/${clusterId}`),
   getAddons: (clusterId: string) => api.get<ApiResponse<Addon[]>>(`/health/addons/${clusterId}`),
   getSummary: () => api.get<ApiResponse<SummaryStats>>('/health/summary'),
+  exportReport: (clusterId?: string, fmt: 'md' | 'csv' = 'md') =>
+    api.get('/health/report', {
+      params: { ...(clusterId ? { clusterId } : {}), fmt },
+      responseType: 'blob',
+      transformResponse: [(data: Blob) => data],
+    }),
   createAddon: (data: Partial<Addon>) => api.post<ApiResponse<Addon>>('/health/addons', data),
   deleteAddon: (addonId: string) => api.delete(`/health/addons/${addonId}`),
 };
@@ -113,6 +119,8 @@ export const playbooksApi = {
     api.put<ApiResponse<Playbook>>(`/playbooks/${id}`, data),
   delete: (id: string) => api.delete(`/playbooks/${id}`),
   run: (id: string) => api.post<PlaybookRunResult>(`/playbooks/${id}/run`),
+  toggleDashboard: (id: string) => api.patch<ApiResponse<Playbook>>(`/playbooks/${id}/dashboard`),
+  getDashboard: (clusterId: string) => api.get<ApiResponse<Playbook[]>>(`/playbooks/dashboard/${clusterId}`),
   exportReport: (clusterId?: string) =>
     api.get('/playbooks/report', {
       params: clusterId ? { clusterId } : {},

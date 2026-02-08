@@ -81,6 +81,7 @@ export interface Playbook {
   extraVars?: Record<string, any>;
   tags?: string;
   status: string;  // healthy | warning | critical | unknown | running
+  showOnDashboard: boolean;
   lastRunAt?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lastResult?: Record<string, any>;

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Download, BookOpen } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
   SummaryStats,
@@ -7,8 +8,12 @@ import {
   HistoryLog,
   AddClusterModal,
 } from '@/components/dashboard';
+import { PlaybookCard } from '@/components/playbooks';
 import { useClusterStore } from '@/stores/clusterStore';
+import { usePlaybookStore } from '@/stores/playbookStore';
 import { useClusters, useSummary, useAddons, useLogs, useHealthCheck, useCreateAddon } from '@/hooks/useCluster';
+import { useDashboardPlaybooks, useRunPlaybook, useDeletePlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
+import { healthApi } from '@/services/api';
 
 export function Dashboard() {
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
@@ -27,6 +32,13 @@ export function Dashboard() {
   // Health Check mutation
   const healthCheck = useHealthCheck();
   const createAddon = useCreateAddon();
+
+  // Dashboard playbooks
+  const { data: dashboardPlaybooks = [] } = useDashboardPlaybooks(activeClusterId);
+  const { runningIds } = usePlaybookStore();
+  const runPlaybook = useRunPlaybook();
+  const deletePlaybook = useDeletePlaybook();
+  const toggleDashboard = useToggleDashboard();
 
   const handleRunCheck = () => {
     if (selectedClusterId) {
@@ -68,6 +80,22 @@ export function Dashboard() {
     });
   };
 
+  const handleDailyReport = async (fmt: 'md' | 'csv') => {
+    try {
+      const { data } = await healthApi.exportReport(activeClusterId || undefined, fmt);
+      const blob = data instanceof Blob ? data : new Blob([data], { type: fmt === 'csv' ? 'text/csv' : 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const today = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `k8s-daily-report-${today}.${fmt}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Export failed:', e);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header onRunCheck={handleRunCheck} onSettings={handleSettings} />
@@ -92,6 +120,20 @@ export function Dashboard() {
               >
                 + Add Cluster
               </button>
+              <button
+                onClick={() => handleDailyReport('md')}
+                className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1.5"
+              >
+                <Download className="w-3 h-3" />
+                Daily Report .md
+              </button>
+              <button
+                onClick={() => handleDailyReport('csv')}
+                className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1.5"
+              >
+                <Download className="w-3 h-3" />
+                .csv
+              </button>
             </div>
             <ClusterTabs
               clusters={clusters}
@@ -106,6 +148,33 @@ export function Dashboard() {
             onAddDefaultAddons={clusters.length > 0 && missingAddons.length > 0 ? handleAddDefaultAddons : undefined}
           />
         </section>
+
+        {/* Dashboard Playbooks */}
+        {dashboardPlaybooks.length > 0 && (
+          <section className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <BookOpen className="w-5 h-5 text-primary" />
+              <h2 className="text-lg font-semibold">Playbook Checks</h2>
+              <span className="text-xs text-muted-foreground">({dashboardPlaybooks.length})</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {dashboardPlaybooks.map((playbook) => (
+                <PlaybookCard
+                  key={playbook.id}
+                  playbook={playbook}
+                  isRunning={runningIds.has(playbook.id)}
+                  onRun={() => runPlaybook.mutate(playbook.id)}
+                  onDelete={() => {
+                    if (confirm(`Delete playbook "${playbook.name}"?`)) {
+                      deletePlaybook.mutate(playbook.id);
+                    }
+                  }}
+                  onToggleDashboard={() => toggleDashboard.mutate(playbook.id)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* History Log */}
         <HistoryLog

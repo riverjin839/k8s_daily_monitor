@@ -22,11 +22,11 @@ _STATUS_KR = {"healthy": "정상", "warning": "주의", "critical": "이상", "u
 
 
 @router.post("/check/{cluster_id}")
-async def run_health_check(
+def run_health_check(
     cluster_id: UUID,
     db: Session = Depends(get_db)
 ):
-    """클러스터 헬스 체크 실행 (동기 – 완료 후 응답)"""
+    """클러스터 헬스 체크 실행 (동기 – threadpool에서 실행)"""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(
@@ -37,7 +37,23 @@ async def run_health_check(
     checker = HealthChecker(db)
     checker.run_check(cluster_id)
 
-    return {"message": "Health check completed", "cluster_id": str(cluster_id)}
+    # 점검 완료된 addon 데이터를 응답에 포함 (프론트엔드 즉시 반영용)
+    addons = db.query(Addon).filter(Addon.cluster_id == cluster_id).all()
+    addon_list = [
+        {
+            "id": str(a.id),
+            "status": a.status.value if hasattr(a.status, "value") else a.status,
+            "response_time": a.response_time,
+            "last_check": a.last_check.isoformat() if a.last_check else None,
+        }
+        for a in addons
+    ]
+
+    return {
+        "message": "Health check completed",
+        "cluster_id": str(cluster_id),
+        "addons_updated": len(addon_list),
+    }
 
 
 @router.get("/status/{cluster_id}", response_model=ClusterResponse)

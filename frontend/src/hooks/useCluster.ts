@@ -142,12 +142,18 @@ export function useHealthCheck() {
     onMutate: () => {
       setIsChecking(true);
     },
-    onSuccess: (_, clusterId) => {
+    onSuccess: async (_, clusterId) => {
       setLastCheckTime(new Date().toISOString());
-      queryClient.invalidateQueries({ queryKey: queryKeys.cluster(clusterId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.addons(clusterId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.summary });
-      queryClient.invalidateQueries({ queryKey: queryKeys.logs() });
+      // refetchQueries: invalidate + 즉시 refetch 보장
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: queryKeys.addons(clusterId) }),
+        queryClient.refetchQueries({ queryKey: queryKeys.cluster(clusterId) }),
+        queryClient.refetchQueries({ queryKey: queryKeys.summary }),
+        queryClient.refetchQueries({ queryKey: queryKeys.logs() }),
+      ]);
+    },
+    onError: (error) => {
+      console.error('Health check failed:', error);
     },
     onSettled: () => {
       setIsChecking(false);

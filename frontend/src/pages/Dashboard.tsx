@@ -40,14 +40,18 @@ export function Dashboard() {
   const deletePlaybook = useDeletePlaybook();
   const toggleDashboard = useToggleDashboard();
 
-  const handleRunCheck = () => {
+  const handleRunCheck = async () => {
     if (selectedClusterId) {
       healthCheck.mutate(selectedClusterId);
-    } else {
-      // 모든 클러스터 점검
-      clusters.forEach((cluster) => {
-        healthCheck.mutate(cluster.id);
-      });
+    } else if (clusters.length > 0) {
+      // 순차 실행: 각 클러스터 점검 완료 후 다음 진행
+      for (const cluster of clusters) {
+        try {
+          await healthCheck.mutateAsync(cluster.id);
+        } catch (e) {
+          console.error(`Check failed for ${cluster.name}:`, e);
+        }
+      }
     }
   };
 

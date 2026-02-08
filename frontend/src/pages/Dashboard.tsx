@@ -51,18 +51,22 @@ export function Dashboard() {
     { name: 'CoreDNS', type: 'system-pod', icon: '🔍', description: 'Cluster DNS service' },
   ];
 
-  const handleAddDefaultAddons = () => {
-    const clusterId = activeClusterId;
-    if (!clusterId) return;
-    DEFAULT_ADDONS.forEach((addon) => {
-      createAddon.mutate({ clusterId, ...addon });
-    });
-  };
-
   // 현재 표시할 애드온
   const currentAddons = selectedClusterId
     ? addons[selectedClusterId] || []
     : Object.values(addons).flat();
+
+  // 이미 등록된 타입을 제외한 missing addons 계산
+  const existingTypes = new Set(currentAddons.map((a) => a.type));
+  const missingAddons = DEFAULT_ADDONS.filter((a) => !existingTypes.has(a.type));
+
+  const handleAddDefaultAddons = () => {
+    const clusterId = activeClusterId;
+    if (!clusterId) return;
+    missingAddons.forEach((addon) => {
+      createAddon.mutate({ clusterId, ...addon });
+    });
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -99,7 +103,7 @@ export function Dashboard() {
           <AddonGrid
             addons={currentAddons}
             isLoading={clustersLoading || addonsLoading}
-            onAddDefaultAddons={clusters.length > 0 ? handleAddDefaultAddons : undefined}
+            onAddDefaultAddons={clusters.length > 0 && missingAddons.length > 0 ? handleAddDefaultAddons : undefined}
           />
         </section>
 

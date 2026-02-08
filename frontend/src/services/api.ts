@@ -113,6 +113,12 @@ export const playbooksApi = {
     api.put<ApiResponse<Playbook>>(`/playbooks/${id}`, data),
   delete: (id: string) => api.delete(`/playbooks/${id}`),
   run: (id: string) => api.post<PlaybookRunResult>(`/playbooks/${id}/run`),
+  exportReport: (clusterId?: string) =>
+    api.get('/playbooks/report', {
+      params: clusterId ? { clusterId } : {},
+      responseType: 'blob',
+      transformResponse: [(data: Blob) => data],  // interceptor 변환 방지
+    }),
 };
 
 export default api;

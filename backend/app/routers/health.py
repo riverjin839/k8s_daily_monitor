@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 from uuid import UUID
@@ -24,22 +24,20 @@ _STATUS_KR = {"healthy": "정상", "warning": "주의", "critical": "이상", "u
 @router.post("/check/{cluster_id}")
 async def run_health_check(
     cluster_id: UUID,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
-    """클러스터 헬스 체크 실행"""
+    """클러스터 헬스 체크 실행 (동기 – 완료 후 응답)"""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Cluster not found"
         )
-    
-    # 백그라운드에서 헬스 체크 실행
+
     checker = HealthChecker(db)
-    background_tasks.add_task(checker.run_check, cluster_id)
-    
-    return {"message": "Health check started", "cluster_id": str(cluster_id)}
+    checker.run_check(cluster_id)
+
+    return {"message": "Health check completed", "cluster_id": str(cluster_id)}
 
 
 @router.get("/status/{cluster_id}", response_model=ClusterResponse)

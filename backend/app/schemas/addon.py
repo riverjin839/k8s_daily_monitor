@@ -11,6 +11,7 @@ class AddonBase(BaseModel):
     icon: str = Field(default="📦", max_length=10)
     description: Optional[str] = None
     check_playbook: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
 
 
 class AddonCreate(AddonBase):
@@ -23,6 +24,7 @@ class AddonUpdate(BaseModel):
     icon: Optional[str] = None
     description: Optional[str] = None
     check_playbook: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
     status: Optional[StatusEnum] = None
 
 
@@ -33,6 +35,7 @@ class AddonResponse(AddonBase):
     response_time: Optional[int] = None
     last_check: datetime
     details: Optional[Dict[str, Any]] = None
+    config: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True

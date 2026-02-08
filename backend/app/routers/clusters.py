@@ -20,6 +20,24 @@ DEFAULT_ADDONS = [
         "icon": "💾",
         "description": "etcd leader election & health status",
     },
+    {
+        "name": "Node Status",
+        "type": "node-check",
+        "icon": "🖥️",
+        "description": "Node readiness & pressure conditions",
+    },
+    {
+        "name": "Control Plane",
+        "type": "control-plane",
+        "icon": "🎛️",
+        "description": "API Server, Scheduler, Controller Manager",
+    },
+    {
+        "name": "CoreDNS",
+        "type": "system-pod",
+        "icon": "🔍",
+        "description": "Cluster DNS service",
+    },
 ]
 
 router = APIRouter(prefix="/clusters", tags=["clusters"])

@@ -45,8 +45,20 @@ export function getStatusIcon(status: Status): string {
   }
 }
 
+// Backend는 datetime.utcnow() (UTC)로 저장하지만 timezone suffix 없이 반환
+// JavaScript new Date()는 suffix 없으면 로컬 시간으로 해석 → UTC 'Z' 붙여서 보정
+function parseUTC(dateString: string): Date {
+  if (!dateString) return new Date();
+  // 이미 timezone info가 있으면 그대로 사용
+  if (dateString.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(dateString)) {
+    return new Date(dateString);
+  }
+  // timezone 없으면 UTC로 해석
+  return new Date(dateString + 'Z');
+}
+
 export function formatDateTime(dateString: string): string {
-  const date = new Date(dateString);
+  const date = parseUTC(dateString);
   return date.toLocaleString('ko-KR', {
     year: 'numeric',
     month: '2-digit',
@@ -58,7 +70,7 @@ export function formatDateTime(dateString: string): string {
 }
 
 export function formatRelativeTime(dateString: string): string {
-  const date = new Date(dateString);
+  const date = parseUTC(dateString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffSec = Math.floor(diffMs / 1000);

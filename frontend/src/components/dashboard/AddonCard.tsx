@@ -9,8 +9,8 @@ interface AddonCardProps {
 
 // ── Detail type definitions ────────────────────────────
 
-type DetailValues = string | number | boolean | null | undefined;
-type Details = Record<string, DetailValues | DetailValues[] | Record<string, DetailValues>[]>;
+// Addon.details 는 backend JSONB에서 nested object를 포함하므로 Addon['details'] 그대로 사용
+type Details = NonNullable<Addon['details']>;
 
 interface NodeIssue {
   node: string;
@@ -52,9 +52,9 @@ function EtcdDetails({ details }: { details: Details }) {
 }
 
 function NodeDetails({ details }: { details: Details }) {
-  const total = (details.total as number) ?? 0;
-  const ready = (details.ready as number) ?? 0;
-  const issues = (details.issues as NodeIssue[]) ?? [];
+  const total = Number(details.total ?? 0);
+  const ready = Number(details.ready ?? 0);
+  const issues: NodeIssue[] = Array.isArray(details.issues) ? details.issues : [];
   const pct = total > 0 ? Math.round((ready / total) * 100) : 0;
 
   return (
@@ -78,8 +78,8 @@ function NodeDetails({ details }: { details: Details }) {
 }
 
 function ControlPlaneDetails({ details }: { details: Details }) {
-  const components = (details.components as ComponentStatus[]) ?? [];
-  const apiLatency = (details.apiLatencyMs as number) ?? 0;
+  const components: ComponentStatus[] = Array.isArray(details.components) ? details.components : [];
+  const apiLatency = Number(details.apiLatencyMs ?? 0);
 
   return (
     <div className="space-y-1.5">
@@ -108,11 +108,11 @@ function ControlPlaneDetails({ details }: { details: Details }) {
 }
 
 function SystemPodDetails({ details }: { details: Details }) {
-  const readyPods = (details.readyPods as number) ?? 0;
-  const totalPods = (details.totalPods as number) ?? 0;
-  const totalNodes = details.totalNodes as number | undefined;
-  const ratioPct = details.ratioPct as number | undefined;
-  const kind = (details.kind as string) ?? 'deployment';
+  const readyPods = Number(details.readyPods ?? 0);
+  const totalPods = Number(details.totalPods ?? 0);
+  const totalNodes = details.totalNodes != null ? Number(details.totalNodes) : undefined;
+  const ratioPct = details.ratioPct != null ? Number(details.ratioPct) : undefined;
+  const kind = String(details.kind ?? 'deployment');
 
   const denominator = kind === 'daemonset' && totalNodes !== undefined ? totalNodes : totalPods;
   const pct = denominator > 0 ? Math.round((readyPods / denominator) * 100) : 0;

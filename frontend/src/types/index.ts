@@ -22,7 +22,8 @@ export interface Addon {
   description: string;
   status: Status;
   responseTime?: number;
-  details?: Record<string, string | number>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  details?: Record<string, any>;
   lastCheck: string;
 }
 

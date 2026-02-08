@@ -6,6 +6,7 @@ import { Playbook } from '@/types';
 export const playbookKeys = {
   all: ['playbooks'] as const,
   byCluster: (clusterId: string) => ['playbooks', clusterId] as const,
+  dashboard: (clusterId: string) => ['playbooks', 'dashboard', clusterId] as const,
   detail: (id: string) => ['playbooks', 'detail', id] as const,
 };
 
@@ -54,6 +55,31 @@ export function useDeletePlaybook() {
     mutationFn: (id: string) => playbooksApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: playbookKeys.all });
+    },
+  });
+}
+
+export function useDashboardPlaybooks(clusterId: string) {
+  return useQuery({
+    queryKey: playbookKeys.dashboard(clusterId),
+    queryFn: async () => {
+      const { data } = await playbooksApi.getDashboard(clusterId);
+      return data?.data ?? [];
+    },
+    enabled: !!clusterId,
+    refetchInterval: 15000,
+  });
+}
+
+export function useToggleDashboard() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => playbooksApi.toggleDashboard(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: playbookKeys.all });
+      // 모든 dashboard 쿼리도 invalidate
+      queryClient.invalidateQueries({ queryKey: ['playbooks', 'dashboard'] });
     },
   });
 }

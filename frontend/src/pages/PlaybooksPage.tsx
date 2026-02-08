@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Plus, Play, BookOpen, Download } from 'lucide-react';
 import { Header } from '@/components/layout';
 import { PlaybookCard, AddPlaybookModal } from '@/components/playbooks';
-import { usePlaybooks, useCreatePlaybook, useDeletePlaybook, useRunPlaybook } from '@/hooks/usePlaybook';
+import { usePlaybooks, useCreatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
 import { playbooksApi } from '@/services/api';
 import { usePlaybookStore } from '@/stores/playbookStore';
 import { useClusters } from '@/hooks/useCluster';
@@ -22,6 +22,7 @@ export function PlaybooksPage() {
   const createPlaybook = useCreatePlaybook();
   const deletePlaybook = useDeletePlaybook();
   const runPlaybook = useRunPlaybook();
+  const toggleDashboard = useToggleDashboard();
 
   // 현재 클러스터의 playbooks만 필터
   const filteredPlaybooks = activeClusterId
@@ -182,6 +183,7 @@ export function PlaybooksPage() {
                   deletePlaybook.mutate(playbook.id);
                 }
               }}
+              onToggleDashboard={() => toggleDashboard.mutate(playbook.id)}
             />
           ))}
         </div>

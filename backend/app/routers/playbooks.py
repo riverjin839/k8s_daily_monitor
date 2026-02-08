@@ -120,6 +120,31 @@ def _format_stats(last_result: dict | None) -> str:
     return ", ".join(parts)
 
 
+@router.get("/dashboard/{cluster_id}", response_model=PlaybookListResponse)
+def get_dashboard_playbooks(cluster_id: UUID, db: Session = Depends(get_db)):
+    """Dashboard에 표시할 Playbook 목록 (show_on_dashboard=True)"""
+    playbooks = (
+        db.query(Playbook)
+        .filter(Playbook.cluster_id == cluster_id, Playbook.show_on_dashboard.is_(True))
+        .order_by(Playbook.name)
+        .all()
+    )
+    return PlaybookListResponse(data=playbooks)
+
+
+@router.patch("/{playbook_id}/dashboard", response_model=PlaybookResponse)
+def toggle_dashboard(playbook_id: UUID, db: Session = Depends(get_db)):
+    """Playbook의 Dashboard 표시 토글"""
+    playbook = db.query(Playbook).filter(Playbook.id == playbook_id).first()
+    if not playbook:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playbook not found")
+
+    playbook.show_on_dashboard = not playbook.show_on_dashboard
+    db.commit()
+    db.refresh(playbook)
+    return playbook
+
+
 @router.get("/{playbook_id}", response_model=PlaybookResponse)
 def get_playbook(playbook_id: UUID, db: Session = Depends(get_db)):
     """Playbook 상세 조회"""

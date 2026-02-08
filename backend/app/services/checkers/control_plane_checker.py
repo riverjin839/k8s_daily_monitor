@@ -1,7 +1,7 @@
 """ControlPlaneChecker: API Server latency + scheduler/controller-manager pod 상태."""
 from datetime import datetime
 
-import httpx
+from kubernetes import client
 
 from app.models import StatusEnum
 from app.services.checkers.base import BaseChecker, CheckResult
@@ -85,20 +85,24 @@ class ControlPlaneChecker(BaseChecker):
         )
 
     def _check_api_server(self) -> tuple[StatusEnum, int]:
-        """API Server /livez 엔드포인트 latency 체크."""
-        url = f"{self.cluster.api_endpoint}/livez"
+        """API Server 상태 체크 (K8s client 인증 사용)."""
+        v1 = self._get_k8s_client()
+        t0 = datetime.utcnow()
         try:
-            t0 = datetime.utcnow()
-            with httpx.Client(verify=False, timeout=10.0) as client:
-                resp = client.get(url)
+            # /livez 를 K8s client 인증으로 호출 (SSL/토큰 자동 처리)
+            v1.api_client.call_api(
+                "/livez", "GET", response_type="str",
+            )
             latency = self._elapsed_ms(t0)
-
-            if resp.status_code == 200:
-                if latency > 3000:
-                    return StatusEnum.warning, latency
-                return StatusEnum.healthy, latency
-            return StatusEnum.warning, latency
-        except httpx.TimeoutException:
-            return StatusEnum.critical, 10000
+            if latency > 3000:
+                return StatusEnum.warning, latency
+            return StatusEnum.healthy, latency
+        except client.ApiException as e:
+            latency = self._elapsed_ms(t0)
+            # 401/403 등은 서버 자체는 응답 → warning
+            if e.status and e.status < 500:
+                return StatusEnum.warning, latency
+            return StatusEnum.critical, latency
         except Exception:
-            return StatusEnum.critical, 0
+            latency = self._elapsed_ms(t0)
+            return StatusEnum.critical, latency

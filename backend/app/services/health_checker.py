@@ -68,10 +68,10 @@ class HealthChecker:
         # fallback: ansible playbook 또는 HTTP 체크
         try:
             if addon.check_playbook:
-                s, m, t = self._run_ansible_check(cluster, addon)
+                s, m, t, d = self._run_ansible_check(cluster, addon)
             else:
-                s, m, t = self._run_http_check(cluster, addon)
-            return CheckResult(status=s, message=m, response_time=t)
+                s, m, t, d = self._run_http_check(cluster, addon)
+            return CheckResult(status=s, message=m, response_time=t, details=d)
         except Exception as e:
             return CheckResult(
                 status=StatusEnum.critical,
@@ -82,7 +82,7 @@ class HealthChecker:
 
     def _run_ansible_check(
         self, cluster: Cluster, addon: Addon
-    ) -> tuple[StatusEnum, str, int]:
+    ) -> tuple[StatusEnum, str, int, dict | None]:
         playbook_path = f"{settings.ansible_playbook_dir}/{addon.check_playbook}"
         try:
             start = datetime.utcnow()
@@ -97,17 +97,25 @@ class HealthChecker:
                 timeout=settings.check_timeout_seconds,
             )
             elapsed = int((datetime.utcnow() - start).total_seconds() * 1000)
+
+            # stdout에서 핵심 메시지 추출
+            output = result.stdout.strip().split("\n")[-1] if result.stdout else ""
+            if "PLAY RECAP" in output:
+                output = "Check completed"
+            details = {"result": output} if output else None
+
             if result.returncode == 0:
-                return StatusEnum.healthy, f"{addon.name} check passed", elapsed
-            return StatusEnum.warning, f"{addon.name} check failed: {result.stderr[:200]}", elapsed
+                msg = output or f"{addon.name} check passed"
+                return StatusEnum.healthy, msg, elapsed, details
+            return StatusEnum.warning, f"{addon.name} failed: {result.stderr[:200]}", elapsed, details
         except subprocess.TimeoutExpired:
-            return StatusEnum.critical, f"{addon.name} timed out", settings.check_timeout_seconds * 1000
+            return StatusEnum.critical, f"{addon.name} timed out", settings.check_timeout_seconds * 1000, None
         except Exception as e:
-            return StatusEnum.critical, f"{addon.name} error: {str(e)}", 0
+            return StatusEnum.critical, f"{addon.name} error: {str(e)}", 0, None
 
     def _run_http_check(
         self, cluster: Cluster, addon: Addon
-    ) -> tuple[StatusEnum, str, int]:
+    ) -> tuple[StatusEnum, str, int, dict | None]:
         import httpx
 
         endpoint_map = {"API Server": "/healthz", "etcd": "/health", "Metrics Server": "/metrics"}
@@ -120,12 +128,14 @@ class HealthChecker:
                 response = client.get(url)
             elapsed = int((datetime.utcnow() - start).total_seconds() * 1000)
 
+            details = {"endpoint": endpoint, "status_code": response.status_code}
+
             if response.status_code == 200:
                 if elapsed > 3000:
-                    return StatusEnum.warning, f"{addon.name} slow ({elapsed}ms)", elapsed
-                return StatusEnum.healthy, f"{addon.name} healthy ({elapsed}ms)", elapsed
-            return StatusEnum.warning, f"{addon.name} returned {response.status_code}", elapsed
+                    return StatusEnum.warning, f"{addon.name} slow ({elapsed}ms)", elapsed, details
+                return StatusEnum.healthy, f"{addon.name} healthy ({elapsed}ms)", elapsed, details
+            return StatusEnum.warning, f"{addon.name} returned {response.status_code}", elapsed, details
         except httpx.TimeoutException:
-            return StatusEnum.critical, f"{addon.name} timeout", 10000
+            return StatusEnum.critical, f"{addon.name} timeout", 10000, {"endpoint": endpoint}
         except Exception as e:
-            return StatusEnum.critical, f"{addon.name} failed: {str(e)}", 0
+            return StatusEnum.critical, f"{addon.name} failed: {str(e)}", 0, None

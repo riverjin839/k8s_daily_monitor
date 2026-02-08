@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, BookOpen } from 'lucide-react';
+import { Download, BookOpen, Plus } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
   SummaryStats,
@@ -7,6 +7,7 @@ import {
   AddonGrid,
   HistoryLog,
   AddClusterModal,
+  AddAddonModal,
 } from '@/components/dashboard';
 import { PlaybookCard } from '@/components/playbooks';
 import { useClusterStore } from '@/stores/clusterStore';
@@ -18,6 +19,7 @@ import { healthApi } from '@/services/api';
 export function Dashboard() {
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
   const [showAddCluster, setShowAddCluster] = useState(false);
+  const [showAddAddon, setShowAddAddon] = useState(false);
   const { clusters, summary, addons, logs } = useClusterStore();
 
   // Queries
@@ -124,6 +126,15 @@ export function Dashboard() {
               >
                 + Add Cluster
               </button>
+              {clusters.length > 0 && (
+                <button
+                  onClick={() => setShowAddAddon(true)}
+                  className="px-3 py-1.5 text-xs font-medium bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 rounded-lg transition-colors flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  Add Check
+                </button>
+              )}
               <button
                 onClick={() => handleDailyReport('md')}
                 className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1.5"
@@ -193,6 +204,13 @@ export function Dashboard() {
       <AddClusterModal
         isOpen={showAddCluster}
         onClose={() => setShowAddCluster(false)}
+      />
+
+      {/* Add Addon Modal */}
+      <AddAddonModal
+        isOpen={showAddAddon}
+        onClose={() => setShowAddAddon(false)}
+        clusterId={activeClusterId}
       />
     </div>
   );

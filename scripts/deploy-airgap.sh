@@ -18,10 +18,12 @@ IMAGE_TAG="${IMAGE_TAG:-latest}"
 # PIP_INDEX_URL   - PyPI 프록시 (예: http://nexus.local:8081/repository/pypi-proxy/simple)
 # PIP_TRUSTED_HOST - pip trusted-host (예: nexus.local)
 # NPM_REGISTRY    - npm 프록시 (예: http://nexus.local:8081/repository/npm-proxy/)
+# ALPINE_MIRROR_URL - Alpine apk 미러 (예: http://nexus.local:8081/repository/alpine-proxy)
 APT_MIRROR_URL="${APT_MIRROR_URL:-}"
 PIP_INDEX_URL="${PIP_INDEX_URL:-}"
 PIP_TRUSTED_HOST="${PIP_TRUSTED_HOST:-}"
 NPM_REGISTRY="${NPM_REGISTRY:-}"
+ALPINE_MIRROR_URL="${ALPINE_MIRROR_URL:-}"
 
 # 색상 출력
 RED='\033[0;31m'
@@ -174,6 +176,9 @@ print_config() {
     if [ -n "${NPM_REGISTRY}" ]; then
         echo -e "  NPM Registry  : ${YELLOW}${NPM_REGISTRY}${NC}"
     fi
+    if [ -n "${ALPINE_MIRROR_URL}" ]; then
+        echo -e "  Alpine Mirror : ${YELLOW}${ALPINE_MIRROR_URL}${NC}"
+    fi
     echo ""
 }
 
@@ -199,6 +204,9 @@ build_images() {
     local frontend_args=()
     if [ -n "${NPM_REGISTRY}" ]; then
         frontend_args+=(--build-arg "NPM_REGISTRY=${NPM_REGISTRY}")
+    fi
+    if [ -n "${ALPINE_MIRROR_URL}" ]; then
+        frontend_args+=(--build-arg "ALPINE_MIRROR_URL=${ALPINE_MIRROR_URL}")
     fi
 
     echo -e "  → backend 빌드 중..."
@@ -434,6 +442,7 @@ case "${1:-}" in
         echo "  PIP_INDEX_URL   - PyPI 프록시 URL"
         echo "  PIP_TRUSTED_HOST- pip trusted-host 도메인"
         echo "  NPM_REGISTRY    - npm 레지스트리 프록시 URL"
+        echo "  ALPINE_MIRROR_URL- Alpine apk 미러 URL"
         echo ""
         echo "예시:"
         echo "  $0 build                             # 대화형으로 CLI/레지스트리 입력"
@@ -444,6 +453,7 @@ case "${1:-}" in
         echo "  APT_MIRROR_URL=http://nexus:8081/repository/apt-proxy \\"
         echo "  PIP_INDEX_URL=http://nexus:8081/repository/pypi-proxy/simple \\"
         echo "  NPM_REGISTRY=http://nexus:8081/repository/npm-proxy/ \\"
+        echo "  ALPINE_MIRROR_URL=http://nexus:8081/repository/alpine-proxy \\"
         echo "  REGISTRY=10.0.0.1:5000 $0 build"
         echo ""
         exit 1

@@ -11,10 +11,11 @@ ARG PIP_INDEX_URL=""
 ARG PIP_TRUSTED_HOST=""
 
 # apt 소스를 Nexus 프록시로 변경 (폐쇄망)
+# bookworm main만 사용 — gcc, libpq-dev, ansible 모두 main에 포함
+# bookworm-security는 upstream이 다르므로(security.debian.org) 별도 Nexus 프록시 필요 → 생략
 RUN if [ -n "${APT_MIRROR_URL}" ]; then \
-        echo "deb ${APT_MIRROR_URL} bookworm main" > /etc/apt/sources.list && \
-        echo "deb ${APT_MIRROR_URL} bookworm-updates main" >> /etc/apt/sources.list && \
-        echo "deb ${APT_MIRROR_URL}-security bookworm-security main" >> /etc/apt/sources.list; \
+        rm -f /etc/apt/sources.list.d/*.sources && \
+        echo "deb ${APT_MIRROR_URL} bookworm main" > /etc/apt/sources.list; \
     fi
 
 # 시스템 패키지 설치

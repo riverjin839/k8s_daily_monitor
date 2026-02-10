@@ -11,18 +11,18 @@ ARG PIP_INDEX_URL=""
 ARG PIP_TRUSTED_HOST=""
 
 # apt 소스를 Nexus 프록시로 변경 (폐쇄망)
-# bookworm main만 사용 — gcc, libpq-dev, ansible 모두 main에 포함
-# bookworm-security는 upstream이 다르므로(security.debian.org) 별도 Nexus 프록시 필요 → 생략
 RUN if [ -n "${APT_MIRROR_URL}" ]; then \
         rm -f /etc/apt/sources.list.d/*.sources && \
         echo "deb ${APT_MIRROR_URL} bookworm main" > /etc/apt/sources.list; \
     fi
 
-# 시스템 패키지 설치
+# 시스템 패키지 설치 (최소화)
+# - gcc, libpq-dev 제거: psycopg2-binary가 wheel로 libpq 내장, 컴파일 불필요
+# - ansible 제거: ansible-runner(pip)가 ansible-core 자동 설치
+# - openssh-client: ansible SSH 연결용, sshpass: 패스워드 기반 SSH용
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libpq-dev \
-    ansible \
+    openssh-client \
+    sshpass \
     && rm -rf /var/lib/apt/lists/*
 
 # pip 프록시 설정 (폐쇄망)

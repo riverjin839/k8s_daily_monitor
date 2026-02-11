@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     check_timeout_seconds: int = 30
 
     # AI Agent (Ollama)
-    ollama_url: str = "http://ollama.monitoring.svc:11434"
+    ollama_url: str = "http://ollama:11434"
     ollama_model: str = "llama3"
     ollama_timeout: int = 120
     

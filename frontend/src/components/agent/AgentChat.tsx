@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { X, Send, Bot, Loader2, WifiOff, Download } from 'lucide-react';
+import { X, Send, Bot, Loader2, WifiOff } from 'lucide-react';
 import { agentApi } from '@/services/api';
 import { useClusterStore } from '@/stores/clusterStore';
-import type { AgentChatResponse, AgentPullProgress } from '@/types';
+import type { AgentChatResponse } from '@/types';
 
 interface ChatMessage {
   id: string;
@@ -17,10 +17,6 @@ export function AgentChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOnline, setIsOnline] = useState<boolean | null>(null); // null = unknown
-  const [modelMissing, setModelMissing] = useState(false);
-  const [pullProgress, setPullProgress] = useState<AgentPullProgress | null>(null);
-  const [isPulling, setIsPulling] = useState(false);
-  const pullAbortRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { clusters, addons } = useClusterStore();
@@ -42,12 +38,8 @@ export function AgentChat() {
     try {
       const { data } = await agentApi.health();
       setIsOnline(data.status === 'online');
-      // Check if model is missing from detail message
-      const detail = (data as { detail?: string }).detail || '';
-      setModelMissing(detail.includes('not pulled'));
     } catch {
       setIsOnline(false);
-      setModelMissing(false);
     }
   }, []);
 
@@ -56,40 +48,6 @@ export function AgentChat() {
       checkHealth();
     }
   }, [isOpen, checkHealth]);
-
-  const formatBytes = (bytes: number): string => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
-  };
-
-  const handlePullModel = async () => {
-    if (isPulling) return;
-    setIsPulling(true);
-    setPullProgress({ status: 'starting', percent: 0, completedBytes: 0, totalBytes: 0 });
-
-    const abort = new AbortController();
-    pullAbortRef.current = abort;
-
-    try {
-      await agentApi.pullModelStream(
-        (progress) => setPullProgress(progress),
-        abort.signal,
-      );
-      // Pull finished — re-check health
-      setPullProgress(null);
-      setIsPulling(false);
-      setModelMissing(false);
-      checkHealth();
-    } catch {
-      if (!abort.signal.aborted) {
-        setPullProgress({ status: 'error', percent: 0, completedBytes: 0, totalBytes: 0, error: 'Download failed.' });
-      }
-      setIsPulling(false);
-    }
-  };
 
   const buildContext = (): Record<string, unknown> | undefined => {
     if (clusters.length === 0) return undefined;
@@ -172,20 +130,10 @@ export function AgentChat() {
             <div className="flex items-center gap-2">
               <Bot className="w-5 h-5 text-primary" />
               <span className="font-semibold text-sm">AI Agent</span>
-              {isPulling && (
-                <span className="flex items-center gap-1 text-xs text-blue-400">
-                  <Loader2 className="w-3 h-3 animate-spin" /> Downloading
-                </span>
-              )}
-              {!isPulling && isOnline === true && !modelMissing && (
+              {isOnline === true && (
                 <span className="w-2 h-2 rounded-full bg-green-500" title="Online" />
               )}
-              {!isPulling && isOnline === true && modelMissing && (
-                <span className="flex items-center gap-1 text-xs text-orange-400">
-                  <Download className="w-3 h-3" /> No model
-                </span>
-              )}
-              {!isPulling && isOnline === false && (
+              {isOnline === false && (
                 <span className="flex items-center gap-1 text-xs text-orange-400">
                   <WifiOff className="w-3 h-3" /> Offline
                 </span>
@@ -199,54 +147,9 @@ export function AgentChat() {
             </button>
           </div>
 
-          {/* Model Download Banner */}
-          {modelMissing && !isPulling && (
-            <div className="px-4 py-3 bg-orange-500/10 border-b border-orange-500/20">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-orange-300">AI Model not installed</span>
-                <button
-                  onClick={handlePullModel}
-                  className="flex items-center gap-1 px-3 py-1 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
-                >
-                  <Download className="w-3 h-3" />
-                  Download
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Pull Progress Bar */}
-          {isPulling && pullProgress && (
-            <div className="px-4 py-3 bg-blue-500/10 border-b border-blue-500/20">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs text-blue-300 truncate max-w-[60%]">
-                  {pullProgress.status === 'error'
-                    ? pullProgress.error
-                    : pullProgress.status.startsWith('pulling')
-                      ? 'Downloading model...'
-                      : pullProgress.status}
-                </span>
-                <span className="text-xs font-mono text-blue-400">
-                  {pullProgress.percent.toFixed(1)}%
-                </span>
-              </div>
-              <div className="w-full h-2 bg-blue-900/40 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-500 rounded-full transition-all duration-300 ease-out"
-                  style={{ width: `${Math.min(pullProgress.percent, 100)}%` }}
-                />
-              </div>
-              {pullProgress.totalBytes > 0 && (
-                <div className="text-[10px] text-blue-400/70 mt-1 text-right">
-                  {formatBytes(pullProgress.completedBytes)} / {formatBytes(pullProgress.totalBytes)}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-            {messages.length === 0 && !modelMissing && !isPulling && (
+            {messages.length === 0 && (
               <div className="text-center text-muted-foreground text-sm py-12">
                 <Bot className="w-10 h-10 mx-auto mb-3 opacity-30" />
                 <p>Ask me about your Kubernetes clusters.</p>

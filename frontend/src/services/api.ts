@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, AgentPullProgress } from '@/types';
 
 // snake_case → camelCase 변환 (Backend는 snake_case, Frontend는 camelCase)
 function toCamelCase(str: string): string {
@@ -133,6 +133,34 @@ export const agentApi = {
     api.post<AgentChatResponse>('/agent/chat', data, { timeout: 120000 }),
   health: () =>
     api.get<AgentHealthResponse>('/agent/health', { timeout: 5000 }),
+  pullModelStream: (onProgress: (progress: AgentPullProgress) => void, signal?: AbortSignal) => {
+    return fetch('/api/v1/agent/pull-model/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+      signal,
+    }).then(async (response) => {
+      const reader = response.body?.getReader();
+      if (!reader) return;
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6)) as AgentPullProgress;
+              onProgress(data);
+            } catch { /* skip malformed */ }
+          }
+        }
+      }
+    });
+  },
 };
 
 export default api;

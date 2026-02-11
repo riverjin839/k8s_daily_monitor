@@ -7,7 +7,7 @@ from sqlalchemy import text, inspect
 
 from app.config import settings
 from app.database import engine, Base, SessionLocal
-from app.routers import clusters_router, health_router, history_router, daily_check_router, playbooks_router
+from app.routers import clusters_router, health_router, history_router, daily_check_router, playbooks_router, agent_router
 
 
 def _run_migrations():
@@ -74,6 +74,7 @@ app.include_router(health_router, prefix="/api/v1")
 app.include_router(history_router, prefix="/api/v1")
 app.include_router(daily_check_router, prefix="/api/v1")
 app.include_router(playbooks_router, prefix="/api/v1")
+app.include_router(agent_router, prefix="/api/v1")
 
 
 @app.get("/")

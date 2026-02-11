@@ -99,3 +99,21 @@ export interface PlaybookRunResult {
   stats?: Record<string, any>;
   durationMs: number;
 }
+
+// AI Agent
+export interface AgentChatRequest {
+  query: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  context?: Record<string, any>;
+}
+
+export interface AgentChatResponse {
+  status: 'ok' | 'offline';
+  answer: string;
+  model: string;
+}
+
+export interface AgentHealthResponse {
+  status: 'online' | 'offline';
+  detail?: string;
+}

@@ -40,6 +40,9 @@ resources:
   # Autoscaling
   - hpa.yaml
 
+  # AI Agent (Optional - Ollama)
+  - ollama.yaml
+
 configMapGenerator:
   - name: k8s-monitor-config
     literals:
@@ -54,6 +57,7 @@ configMapGenerator:
       - DATABASE_NAME=k8s_monitor
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - OLLAMA_URL=http://ollama:11434
   - name: ansible-playbooks
     files:
       - check_cluster.yml=ansible-playbooks-check_cluster.yml

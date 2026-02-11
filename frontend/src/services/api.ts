@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse } from '@/types';
 
 // snake_case → camelCase 변환 (Backend는 snake_case, Frontend는 camelCase)
 function toCamelCase(str: string): string {
@@ -125,6 +125,14 @@ export const playbooksApi = {
       params: clusterId ? { cluster_id: clusterId } : {},
       responseType: 'blob',
     }),
+};
+
+// Agent API (AI Mode — fail-safe)
+export const agentApi = {
+  chat: (data: AgentChatRequest) =>
+    api.post<AgentChatResponse>('/agent/chat', data, { timeout: 120000 }),
+  health: () =>
+    api.get<AgentHealthResponse>('/agent/health', { timeout: 5000 }),
 };
 
 export default api;

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 
 from app.services.agent_service import agent_service
 
@@ -74,6 +75,16 @@ async def pull_model(body: AgentPullRequest = AgentPullRequest()):
     """Trigger model download on Ollama (runs server-side)."""
     result = await agent_service.pull_model(model=body.model)
     return AgentPullResponse(**result)
+
+
+@router.post("/pull-model/stream")
+async def pull_model_stream(body: AgentPullRequest = AgentPullRequest()):
+    """Stream model pull progress as SSE (Server-Sent Events)."""
+    async def event_generator():
+        async for chunk in agent_service.pull_model_stream(model=body.model):
+            yield f"data: {chunk}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.get("/models", response_model=AgentModelsResponse)

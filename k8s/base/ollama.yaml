@@ -24,6 +24,21 @@ spec:
       containers:
         - name: ollama
           image: ollama/ollama:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              # Start Ollama server in background
+              ollama serve &
+              # Wait for server to be ready
+              until curl -sf http://localhost:11434/ > /dev/null 2>&1; do
+                echo "Waiting for Ollama server..."
+                sleep 2
+              done
+              echo "Ollama server ready. Pulling model..."
+              ollama pull llama3
+              echo "Model pull complete. Ollama is fully ready."
+              # Keep container running (wait for background serve process)
+              wait
           ports:
             - containerPort: 11434
               protocol: TCP

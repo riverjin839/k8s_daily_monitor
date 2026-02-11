@@ -33,6 +33,20 @@ class AgentHealthResponse(BaseModel):
     detail: Optional[str] = None
 
 
+class AgentPullRequest(BaseModel):
+    model: Optional[str] = Field(default=None, description="Model name to pull (defaults to configured model)")
+
+
+class AgentPullResponse(BaseModel):
+    status: str
+    message: str
+
+
+class AgentModelsResponse(BaseModel):
+    status: str
+    models: list[str] = []
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────
 
 @router.post("/chat", response_model=AgentChatResponse)
@@ -50,6 +64,20 @@ async def agent_chat(body: AgentChatRequest):
 
 @router.get("/health", response_model=AgentHealthResponse)
 async def agent_health():
-    """Quick Ollama availability probe (does NOT load a model)."""
+    """Quick Ollama availability probe — also checks if the model is pulled."""
     result = await agent_service.health_check()
     return AgentHealthResponse(**result)
+
+
+@router.post("/pull-model", response_model=AgentPullResponse)
+async def pull_model(body: AgentPullRequest = AgentPullRequest()):
+    """Trigger model download on Ollama (runs server-side)."""
+    result = await agent_service.pull_model(model=body.model)
+    return AgentPullResponse(**result)
+
+
+@router.get("/models", response_model=AgentModelsResponse)
+async def list_models():
+    """List models currently available on Ollama."""
+    result = await agent_service.list_models()
+    return AgentModelsResponse(**result)

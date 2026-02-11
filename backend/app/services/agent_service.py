@@ -45,9 +45,19 @@ class AIAgentService:
         try:
             async with httpx.AsyncClient(timeout=5) as client:
                 resp = await client.get(f"{self.base_url}/")
-                if resp.status_code == 200:
-                    return {"status": "online"}
-                return {"status": "offline", "detail": f"HTTP {resp.status_code}"}
+                if resp.status_code != 200:
+                    return {"status": "offline", "detail": f"HTTP {resp.status_code}"}
+                # Check if the model is available
+                tags_resp = await client.get(f"{self.base_url}/api/tags")
+                if tags_resp.status_code == 200:
+                    models = tags_resp.json().get("models", [])
+                    model_names = [m.get("name", "").split(":")[0] for m in models]
+                    if self.model not in model_names:
+                        return {
+                            "status": "online",
+                            "detail": f"Server running but model '{self.model}' not pulled. Available: {model_names or 'none'}",
+                        }
+                return {"status": "online"}
         except Exception as exc:
             logger.debug("Ollama health-check failed: %s", exc)
             return {"status": "offline", "detail": str(exc)}
@@ -94,13 +104,51 @@ class AIAgentService:
             return self._fallback("AI Agent request timed out. The model may be loading or the server is overloaded.")
 
         except httpx.HTTPStatusError as exc:
-            logger.warning("Ollama returned HTTP %s: %s", exc.response.status_code, exc.response.text[:200])
-            return self._fallback(f"AI Agent returned an error (HTTP {exc.response.status_code}).")
+            code = exc.response.status_code
+            logger.warning("Ollama returned HTTP %s: %s", code, exc.response.text[:200])
+            if code == 404:
+                return self._fallback(
+                    f"Model '{self.model}' is not available. "
+                    "It may still be downloading. Use the pull-model endpoint or wait for auto-pull to finish."
+                )
+            return self._fallback(f"AI Agent returned an error (HTTP {code}).")
 
         except Exception as exc:
             # Catch-all so nothing leaks to the caller.
             logger.exception("Unexpected error calling Ollama: %s", exc)
             return self._fallback("AI Agent encountered an unexpected error.")
+
+    async def pull_model(self, model: Optional[str] = None) -> dict:
+        """Trigger model pull on Ollama. Returns status immediately (pull runs server-side)."""
+        target = model or self.model
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(
+                    f"{self.base_url}/api/pull",
+                    json={"name": target, "stream": False},
+                )
+                if resp.status_code == 200:
+                    return {"status": "ok", "message": f"Model '{target}' pull initiated."}
+                return {"status": "error", "message": f"HTTP {resp.status_code}: {resp.text[:200]}"}
+        except httpx.ConnectError:
+            return {"status": "offline", "message": "Ollama service is not reachable."}
+        except httpx.TimeoutException:
+            return {"status": "ok", "message": f"Model '{target}' pull started (large model, request timed out but pull continues server-side)."}
+        except Exception as exc:
+            logger.exception("Error pulling model: %s", exc)
+            return {"status": "error", "message": str(exc)}
+
+    async def list_models(self) -> dict:
+        """List models available on Ollama."""
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.get(f"{self.base_url}/api/tags")
+                if resp.status_code == 200:
+                    models = resp.json().get("models", [])
+                    return {"status": "ok", "models": [m.get("name", "") for m in models]}
+                return {"status": "error", "models": []}
+        except Exception:
+            return {"status": "offline", "models": []}
 
     # ------------------------------------------------------------------
     # Internals

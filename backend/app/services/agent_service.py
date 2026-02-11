@@ -6,9 +6,8 @@ returns a graceful fallback response instead of raising exceptions.
 The main dashboard is NEVER affected by AI availability.
 """
 
-import json
 import logging
-from typing import AsyncIterator, Optional
+from typing import Optional
 
 import httpx
 
@@ -138,64 +137,6 @@ class AIAgentService:
         except Exception as exc:
             logger.exception("Error pulling model: %s", exc)
             return {"status": "error", "message": str(exc)}
-
-    async def pull_model_stream(self, model: Optional[str] = None) -> AsyncIterator[str]:
-        """Stream model pull progress from Ollama as SSE events.
-
-        Yields JSON strings with keys: status, percent, completed_bytes, total_bytes
-        """
-        target = model or self.model
-        layer_totals: dict[str, int] = {}
-        layer_completed: dict[str, int] = {}
-
-        try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(None)) as client:
-                async with client.stream(
-                    "POST",
-                    f"{self.base_url}/api/pull",
-                    json={"name": target, "stream": True},
-                ) as response:
-                    async for line in response.aiter_lines():
-                        line = line.strip()
-                        if not line:
-                            continue
-                        try:
-                            data = json.loads(line)
-                        except json.JSONDecodeError:
-                            continue
-
-                        status = data.get("status", "")
-                        digest = data.get("digest", "")
-                        total = data.get("total", 0)
-                        completed = data.get("completed", 0)
-
-                        # Track per-layer progress
-                        if digest and total > 0:
-                            layer_totals[digest] = total
-                            layer_completed[digest] = completed
-
-                        # Calculate overall progress
-                        sum_total = sum(layer_totals.values())
-                        sum_completed = sum(layer_completed.values())
-                        percent = round((sum_completed / sum_total * 100), 1) if sum_total > 0 else 0
-
-                        event = {
-                            "status": status,
-                            "percent": percent,
-                            "completedBytes": sum_completed,
-                            "totalBytes": sum_total,
-                        }
-
-                        if status == "success":
-                            event["percent"] = 100
-
-                        yield json.dumps(event)
-
-        except httpx.ConnectError:
-            yield json.dumps({"status": "error", "percent": 0, "completedBytes": 0, "totalBytes": 0, "error": "Ollama service is not reachable."})
-        except Exception as exc:
-            logger.exception("Error streaming model pull: %s", exc)
-            yield json.dumps({"status": "error", "percent": 0, "completedBytes": 0, "totalBytes": 0, "error": str(exc)})
 
     async def list_models(self) -> dict:
         """List models available on Ollama."""

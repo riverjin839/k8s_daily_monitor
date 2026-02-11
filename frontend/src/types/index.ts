@@ -117,11 +117,3 @@ export interface AgentHealthResponse {
   status: 'online' | 'offline';
   detail?: string;
 }
-
-export interface AgentPullProgress {
-  status: string;
-  percent: number;
-  completedBytes: number;
-  totalBytes: number;
-  error?: string;
-}

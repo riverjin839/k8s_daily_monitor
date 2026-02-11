@@ -5,6 +5,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ollama
+  namespace: k8s-monitor
   labels:
     app: ollama
     component: ai-agent
@@ -23,7 +24,7 @@ spec:
     spec:
       containers:
         - name: ollama
-          image: ollama/ollama:latest
+          image: ghcr.io/riverjin839/ollama-qwen2.5-coder:7b
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -51,8 +52,8 @@ spec:
               value: "0.0.0.0"
           resources:
             requests:
-              cpu: "4"
-              memory: 8Gi
+              cpu: "2"
+              memory: 4Gi
             limits:
               cpu: "8"
               memory: 16Gi

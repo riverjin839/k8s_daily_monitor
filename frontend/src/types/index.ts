@@ -117,3 +117,32 @@ export interface AgentHealthResponse {
   status: 'online' | 'offline';
   detail?: string;
 }
+
+// PromQL Metric Card
+export interface MetricCard {
+  id: string;
+  title: string;
+  description?: string;
+  icon: string;
+  promql: string;
+  unit: string;
+  displayType: 'value' | 'gauge' | 'list';
+  category: string;
+  thresholds?: string;  // "warning:70,critical:90"
+  grafanaPanelUrl?: string;
+  sortOrder: number;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MetricQueryResult {
+  cardId: string;
+  status: 'ok' | 'error' | 'offline';
+  value?: number | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  labels?: Record<string, any> | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  results?: Array<Record<string, any>> | null;
+  error?: string | null;
+}

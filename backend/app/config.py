@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     ollama_url: str = "http://ollama:11434"
     ollama_model: str = "llama3"
     ollama_timeout: int = 120
+
+    # Prometheus / Grafana
+    prometheus_url: str = "http://prometheus-k8s.monitoring.svc:9090"
+    grafana_url: str = "http://grafana.monitoring.svc:3000"
     
     class Config:
         env_file = ".env"

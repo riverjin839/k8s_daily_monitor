@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, BookOpen, Plus } from 'lucide-react';
+import { Download, BookOpen, Plus, Activity } from 'lucide-react';
 import { Header } from '@/components/layout';
 import {
   SummaryStats,
@@ -8,18 +8,22 @@ import {
   HistoryLog,
   AddClusterModal,
   AddAddonModal,
+  MetricCardGrid,
+  AddMetricCardModal,
 } from '@/components/dashboard';
 import { PlaybookCard } from '@/components/playbooks';
 import { useClusterStore } from '@/stores/clusterStore';
 import { usePlaybookStore } from '@/stores/playbookStore';
 import { useClusters, useSummary, useAddons, useLogs, useHealthCheck, useCreateAddon } from '@/hooks/useCluster';
 import { useDashboardPlaybooks, useRunPlaybook, useDeletePlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
+import { useMetricCards, useMetricResults, useDeleteMetricCard } from '@/hooks/useMetricCards';
 import { healthApi } from '@/services/api';
 
 export function Dashboard() {
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
   const [showAddCluster, setShowAddCluster] = useState(false);
   const [showAddAddon, setShowAddAddon] = useState(false);
+  const [showAddMetric, setShowAddMetric] = useState(false);
   const { clusters, summary, addons, logs } = useClusterStore();
 
   // Queries
@@ -41,6 +45,11 @@ export function Dashboard() {
   const runPlaybook = useRunPlaybook();
   const deletePlaybook = useDeletePlaybook();
   const toggleDashboard = useToggleDashboard();
+
+  // PromQL Metric Cards
+  const { data: metricCards = [], isLoading: metricsLoading } = useMetricCards();
+  const { data: metricResults = [] } = useMetricResults();
+  const deleteMetricCard = useDeleteMetricCard();
 
   const handleRunCheck = async () => {
     if (selectedClusterId) {
@@ -164,6 +173,34 @@ export function Dashboard() {
           />
         </section>
 
+        {/* Prometheus Insights (PromQL Metric Cards) */}
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Activity className="w-5 h-5 text-primary" />
+              <h2 className="text-lg font-semibold">Prometheus Insights</h2>
+              <span className="text-xs text-muted-foreground">({metricCards.length})</span>
+            </div>
+            <button
+              onClick={() => setShowAddMetric(true)}
+              className="px-3 py-1.5 text-xs font-medium bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 rounded-lg transition-colors flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" />
+              Add Metric
+            </button>
+          </div>
+          <MetricCardGrid
+            cards={metricCards}
+            results={metricResults}
+            isLoading={metricsLoading}
+            onDeleteCard={(id) => {
+              if (confirm('Delete this metric card?')) {
+                deleteMetricCard.mutate(id);
+              }
+            }}
+          />
+        </section>
+
         {/* Dashboard Playbooks */}
         {dashboardPlaybooks.length > 0 && (
           <section className="mb-8">
@@ -211,6 +248,12 @@ export function Dashboard() {
         isOpen={showAddAddon}
         onClose={() => setShowAddAddon(false)}
         clusterId={activeClusterId}
+      />
+
+      {/* Add Metric Card Modal */}
+      <AddMetricCardModal
+        isOpen={showAddMetric}
+        onClose={() => setShowAddMetric(false)}
       />
     </div>
   );

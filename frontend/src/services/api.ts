@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult } from '@/types';
 
 // snake_case → camelCase 변환 (Backend는 snake_case, Frontend는 camelCase)
 function toCamelCase(str: string): string {
@@ -133,6 +133,28 @@ export const agentApi = {
     api.post<AgentChatResponse>('/agent/chat', data, { timeout: 120000 }),
   health: () =>
     api.get<AgentHealthResponse>('/agent/health', { timeout: 5000 }),
+};
+
+// PromQL Metric Cards API
+export const promqlApi = {
+  getCards: (category?: string) =>
+    api.get<{ data: MetricCard[] }>('/promql/cards', {
+      params: category ? { category } : {},
+    }),
+  getCard: (id: string) => api.get<MetricCard>(`/promql/cards/${id}`),
+  createCard: (data: Partial<MetricCard>) =>
+    api.post<MetricCard>('/promql/cards', data),
+  updateCard: (id: string, data: Partial<MetricCard>) =>
+    api.put<MetricCard>(`/promql/cards/${id}`, data),
+  deleteCard: (id: string) => api.delete(`/promql/cards/${id}`),
+  queryCard: (id: string) =>
+    api.get<MetricQueryResult>(`/promql/query/${id}`),
+  queryAll: () =>
+    api.get<MetricQueryResult[]>('/promql/query/all'),
+  testQuery: (promql: string) =>
+    api.post<MetricQueryResult>('/promql/query/test', { promql }),
+  health: () =>
+    api.get<{ status: string; detail?: string }>('/promql/health', { timeout: 5000 }),
 };
 
 export default api;

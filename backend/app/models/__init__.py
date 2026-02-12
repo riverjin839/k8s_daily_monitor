@@ -3,6 +3,7 @@ from app.models.addon import Addon
 from app.models.check_log import CheckLog
 from app.models.daily_check import DailyCheckLog, CheckSchedule, CheckScheduleType
 from app.models.playbook import Playbook
+from app.models.metric_card import MetricCard
 
 __all__ = [
     "Cluster",
@@ -13,4 +14,5 @@ __all__ = [
     "CheckSchedule",
     "CheckScheduleType",
     "Playbook",
+    "MetricCard",
 ]

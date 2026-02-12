@@ -30,6 +30,7 @@ class AgentChatResponse(BaseModel):
 
 class AgentHealthResponse(BaseModel):
     status: str = Field(..., description="'online' or 'offline'")
+    model: Optional[str] = Field(default=None, description="Configured model name")
     detail: Optional[str] = None
 
 

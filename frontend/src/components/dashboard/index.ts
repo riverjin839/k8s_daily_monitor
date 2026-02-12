@@ -5,3 +5,6 @@ export { ClusterTabs } from './ClusterTabs';
 export { HistoryLog } from './HistoryLog';
 export { AddClusterModal } from './AddClusterModal';
 export { AddAddonModal } from './AddAddonModal';
+export { MetricCard } from './MetricCard';
+export { MetricCardGrid } from './MetricCardGrid';
+export { AddMetricCardModal } from './AddMetricCardModal';

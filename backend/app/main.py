@@ -7,7 +7,7 @@ from sqlalchemy import text, inspect
 
 from app.config import settings
 from app.database import engine, Base, SessionLocal
-from app.routers import clusters_router, health_router, history_router, daily_check_router, playbooks_router, agent_router
+from app.routers import clusters_router, health_router, history_router, daily_check_router, playbooks_router, agent_router, promql_router
 
 
 def _run_migrations():
@@ -28,11 +28,95 @@ def _run_migrations():
                 conn.execute(text("ALTER TABLE playbooks ADD COLUMN show_on_dashboard BOOLEAN DEFAULT FALSE"))
 
 
+def _seed_default_metric_cards():
+    """Seed default PromQL metric cards if the table is empty."""
+    from app.models.metric_card import MetricCard
+
+    db = SessionLocal()
+    try:
+        if db.query(MetricCard).count() > 0:
+            return  # already seeded
+
+        defaults = [
+            MetricCard(
+                title="CrashLoopBackOff Pods",
+                description="Number of pods stuck in CrashLoopBackOff",
+                icon="🚨",
+                promql='sum(kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"}) OR on() vector(0)',
+                unit="count",
+                display_type="value",
+                category="alert",
+                thresholds="warning:1,critical:3",
+                sort_order=0,
+            ),
+            MetricCard(
+                title="Failed Pods",
+                description="Number of pods in Failed phase",
+                icon="💀",
+                promql='sum(kube_pod_status_phase{phase="Failed"}) OR on() vector(0)',
+                unit="count",
+                display_type="value",
+                category="alert",
+                thresholds="warning:1,critical:5",
+                sort_order=1,
+            ),
+            MetricCard(
+                title="Cluster CPU Usage",
+                description="Overall cluster CPU utilization",
+                icon="⚡",
+                promql='100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)',
+                unit="%",
+                display_type="gauge",
+                category="resource",
+                thresholds="warning:70,critical:90",
+                sort_order=2,
+            ),
+            MetricCard(
+                title="Cluster Memory Usage",
+                description="Overall cluster memory utilization",
+                icon="🧠",
+                promql="100 * (1 - (sum(node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes)))",
+                unit="%",
+                display_type="gauge",
+                category="resource",
+                thresholds="warning:75,critical:90",
+                sort_order=3,
+            ),
+            MetricCard(
+                title="PVC Disk Usage > 80%",
+                description="Persistent volumes nearing capacity",
+                icon="💾",
+                promql="(kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) * 100 > 80",
+                unit="%",
+                display_type="list",
+                category="storage",
+                thresholds="warning:80,critical:95",
+                sort_order=4,
+            ),
+            MetricCard(
+                title="Inbound Network Traffic",
+                description="Cluster-wide inbound traffic rate",
+                icon="🌐",
+                promql="sum(rate(container_network_receive_bytes_total[5m]))",
+                unit="bytes/s",
+                display_type="value",
+                category="network",
+                sort_order=5,
+            ),
+        ]
+
+        db.add_all(defaults)
+        db.commit()
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: DB 테이블 생성
     Base.metadata.create_all(bind=engine)
     _run_migrations()
+    _seed_default_metric_cards()
     yield
     # Shutdown: 필요한 정리 작업
 
@@ -75,6 +159,7 @@ app.include_router(history_router, prefix="/api/v1")
 app.include_router(daily_check_router, prefix="/api/v1")
 app.include_router(playbooks_router, prefix="/api/v1")
 app.include_router(agent_router, prefix="/api/v1")
+app.include_router(promql_router, prefix="/api/v1")
 
 
 @app.get("/")

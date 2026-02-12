@@ -55,12 +55,13 @@ class AIAgentService:
                     if self.model not in model_names:
                         return {
                             "status": "online",
+                            "model": self.model,
                             "detail": f"Server running but model '{self.model}' not pulled. Available: {model_names or 'none'}",
                         }
-                return {"status": "online"}
+                return {"status": "online", "model": self.model}
         except Exception as exc:
             logger.debug("Ollama health-check failed: %s", exc)
-            return {"status": "offline", "detail": str(exc)}
+            return {"status": "offline", "model": self.model, "detail": str(exc)}
 
     async def ask_agent(self, query: str, context: Optional[dict] = None) -> dict:
         """

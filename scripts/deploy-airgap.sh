@@ -238,6 +238,11 @@ push_images() {
     ${CTR_CLI} push "${REGISTRY}/k8s-monitor/backend:${IMAGE_TAG}"
     ${CTR_CLI} push "${REGISTRY}/k8s-monitor/frontend:${IMAGE_TAG}"
 
+    # Monitoring stack images
+    for img in prom/prometheus:v2.51.0 grafana/grafana:10.4.0 kube-state-metrics/kube-state-metrics:v2.12.0 prom/node-exporter:v1.7.0; do
+        ${CTR_CLI} push "${REGISTRY}/${img}" 2>/dev/null || true
+    done
+
     echo -e "${GREEN}✓ 이미지 푸시 완료${NC}"
     echo ""
 }
@@ -259,6 +264,15 @@ save_images() {
     ${CTR_CLI} pull redis:7-alpine 2>/dev/null || true
     ${CTR_CLI} save postgres:15-alpine | gzip > "${img_dir}/postgres.tar.gz"
     ${CTR_CLI} save redis:7-alpine | gzip > "${img_dir}/redis.tar.gz"
+
+    # Monitoring stack images
+    for img in prom/prometheus:v2.51.0 grafana/grafana:10.4.0 prom/node-exporter:v1.7.0; do
+        ${CTR_CLI} pull "${img}" 2>/dev/null || true
+        local name="${img//\//-}"
+        ${CTR_CLI} save "${img}" | gzip > "${img_dir}/${name}.tar.gz"
+    done
+    ${CTR_CLI} pull registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.12.0 2>/dev/null || true
+    ${CTR_CLI} save registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.12.0 | gzip > "${img_dir}/kube-state-metrics.tar.gz"
 
     echo -e "${GREEN}✓ 이미지 저장 완료 (${img_dir}/)${NC}"
     echo ""

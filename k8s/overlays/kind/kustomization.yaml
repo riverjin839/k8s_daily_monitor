@@ -93,6 +93,30 @@ patches:
       kind: Service
       name: backend
 
+  # Prometheus NodePort
+  - patch: |-
+      - op: replace
+        path: /spec/type
+        value: NodePort
+      - op: add
+        path: /spec/ports/0/nodePort
+        value: 30090
+    target:
+      kind: Service
+      name: prometheus
+
+  # Grafana NodePort
+  - patch: |-
+      - op: replace
+        path: /spec/type
+        value: NodePort
+      - op: add
+        path: /spec/ports/0/nodePort
+        value: 30030
+    target:
+      kind: Service
+      name: grafana
+
 configMapGenerator:
   - name: k8s-monitor-config
     behavior: merge

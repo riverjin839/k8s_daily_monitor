@@ -100,23 +100,46 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check kubeconfig secret availability
+        id: check-secret
+        env:
+          KUBECONFIG_SECRET: ${{ secrets.KUBECONFIG_DEV }}
+        run: |
+          if [ -z "$KUBECONFIG_SECRET" ]; then
+            echo "⚠️  KUBECONFIG_DEV secret is not configured."
+            echo "   To enable Kubernetes deployment, add the KUBECONFIG_DEV secret to the"
+            echo "   'dev' environment in: Settings → Environments → dev → Secrets."
+            echo "   The value must be the base64-encoded kubeconfig YAML:"
+            echo "     cat ~/.kube/config | base64 -w0"
+            echo "has_kubeconfig=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_kubeconfig=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup kubectl
+        if: steps.check-secret.outputs.has_kubeconfig == 'true'
         uses: azure/setup-kubectl@v3
         with:
           version: 'v1.28.0'
 
       - name: Setup Kustomize
+        if: steps.check-secret.outputs.has_kubeconfig == 'true'
         uses: imranismail/setup-kustomize@v2
         with:
           kustomize-version: '5.3.0'
 
       - name: Configure kubectl
+        if: steps.check-secret.outputs.has_kubeconfig == 'true'
+        env:
+          KUBECONFIG_SECRET: ${{ secrets.KUBECONFIG_DEV }}
         run: |
           mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG_DEV }}" | base64 -d > ~/.kube/config
+          echo "$KUBECONFIG_SECRET" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
+          kubectl cluster-info
 
       - name: Update image tags in kustomization
+        if: steps.check-secret.outputs.has_kubeconfig == 'true'
         working-directory: k8s/overlays/dev
         run: |
           kustomize edit set image \
@@ -124,16 +147,19 @@ jobs:
             k8s-daily-monitor/frontend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
 
       - name: Deploy to Dev Kubernetes
+        if: steps.check-secret.outputs.has_kubeconfig == 'true'
         run: |
           kustomize build k8s/overlays/dev | kubectl apply -f -
 
       - name: Wait for deployment rollout
+        if: steps.check-secret.outputs.has_kubeconfig == 'true'
         run: |
           kubectl rollout status deployment/dev-backend -n k8s-monitor-dev --timeout=300s
           kubectl rollout status deployment/dev-frontend -n k8s-monitor-dev --timeout=300s
           kubectl rollout status deployment/dev-celery-worker -n k8s-monitor-dev --timeout=300s
 
       - name: Verify deployment
+        if: steps.check-secret.outputs.has_kubeconfig == 'true'
         run: |
           echo "=== Deployment Status ==="
           kubectl get deployments -n k8s-monitor-dev
@@ -154,23 +180,46 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check kubeconfig secret availability
+        id: check-secret
+        env:
+          KUBECONFIG_SECRET: ${{ secrets.KUBECONFIG_PROD }}
+        run: |
+          if [ -z "$KUBECONFIG_SECRET" ]; then
+            echo "⚠️  KUBECONFIG_PROD secret is not configured."
+            echo "   To enable Kubernetes deployment, add the KUBECONFIG_PROD secret to the"
+            echo "   'prod' environment in: Settings → Environments → prod → Secrets."
+            echo "   The value must be the base64-encoded kubeconfig YAML:"
+            echo "     cat ~/.kube/config | base64 -w0"
+            echo "has_kubeconfig=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_kubeconfig=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup kubectl
+        if: steps.check-secret.outputs.has_kubeconfig == 'true'
         uses: azure/setup-kubectl@v3
         with:
           version: 'v1.28.0'
 
       - name: Setup Kustomize
+        if: steps.check-secret.outputs.has_kubeconfig == 'true'
         uses: imranismail/setup-kustomize@v2
         with:
           kustomize-version: '5.3.0'
 
       - name: Configure kubectl
+        if: steps.check-secret.outputs.has_kubeconfig == 'true'
+        env:
+          KUBECONFIG_SECRET: ${{ secrets.KUBECONFIG_PROD }}
         run: |
           mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG_PROD }}" | base64 -d > ~/.kube/config
+          echo "$KUBECONFIG_SECRET" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
+          kubectl cluster-info
 
       - name: Update image tags in kustomization
+        if: steps.check-secret.outputs.has_kubeconfig == 'true'
         working-directory: k8s/overlays/prod
         run: |
           kustomize edit set image \
@@ -178,16 +227,19 @@ jobs:
             k8s-daily-monitor/frontend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.sha }}
 
       - name: Deploy to Prod Kubernetes
+        if: steps.check-secret.outputs.has_kubeconfig == 'true'
         run: |
           kustomize build k8s/overlays/prod | kubectl apply -f -
 
       - name: Wait for deployment rollout
+        if: steps.check-secret.outputs.has_kubeconfig == 'true'
         run: |
           kubectl rollout status deployment/prod-backend -n k8s-monitor-prod --timeout=300s
           kubectl rollout status deployment/prod-frontend -n k8s-monitor-prod --timeout=300s
           kubectl rollout status deployment/prod-celery-worker -n k8s-monitor-prod --timeout=300s
 
       - name: Verify deployment
+        if: steps.check-secret.outputs.has_kubeconfig == 'true'
         run: |
           echo "=== Deployment Status ==="
           kubectl get deployments -n k8s-monitor-prod
@@ -199,7 +251,7 @@ jobs:
           kubectl get services -n k8s-monitor-prod
 
       - name: Post deployment notification
-        if: success()
+        if: steps.check-secret.outputs.has_kubeconfig == 'true' && success()
         run: |
           echo "Production deployment completed successfully!"
           echo "Image tags: ${{ github.sha }}"

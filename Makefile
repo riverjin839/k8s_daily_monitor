@@ -1,5 +1,6 @@
 .PHONY: help install dev build test clean docker-up docker-down \
-	k8s-dev k8s-prod k8s-delete-dev k8s-delete-prod k8s-status skaffold-dev
+	k8s-dev k8s-prod k8s-delete-dev k8s-delete-prod k8s-status skaffold-dev \
+	monitoring-status monitoring-test monitoring-port-forward monitoring-images
 
 help:
 	@echo "K8s Daily Monitor - Available commands:"
@@ -21,6 +22,12 @@ help:
 	@echo "  make k8s-delete-prod - Delete prod deployment"
 	@echo "  make k8s-status      - Show Kubernetes resources status"
 	@echo "  make skaffold-dev    - Start Skaffold development mode"
+	@echo ""
+	@echo "Monitoring Commands:"
+	@echo "  make monitoring-status       - Check Prometheus/Grafana pod status"
+	@echo "  make monitoring-test         - Test PromQL queries"
+	@echo "  make monitoring-port-forward - Port-forward Prometheus & Grafana"
+	@echo "  make monitoring-images       - List images for airgap"
 	@echo ""
 
 # Install dependencies
@@ -135,3 +142,16 @@ skaffold-run:
 
 skaffold-delete:
 	skaffold delete --profile=dev
+
+# Monitoring Stack
+monitoring-status:
+	@bash scripts/setup-monitoring.sh status
+
+monitoring-test:
+	@bash scripts/setup-monitoring.sh test
+
+monitoring-port-forward:
+	@bash scripts/setup-monitoring.sh port-forward
+
+monitoring-images:
+	@bash scripts/setup-monitoring.sh images

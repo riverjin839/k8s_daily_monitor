@@ -170,9 +170,94 @@ serviceAccount:
   name: k8s-monitor-sa
 
 # ============================================
+# Monitoring Stack (Prometheus + Grafana)
+# ============================================
+monitoring:
+  enabled: true
+  prometheus:
+    image:
+      repository: prom/prometheus
+      tag: "v2.51.0"
+    retention: "15d"
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "200m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+  grafana:
+    image:
+      repository: grafana/grafana
+      tag: "10.4.0"
+    adminUser: "admin"
+    adminPassword: "admin"
+    anonymousAccess: true
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "300m"
+  kubeStateMetrics:
+    image:
+      repository: registry.k8s.io/kube-state-metrics/kube-state-metrics
+      tag: "v2.12.0"
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+  nodeExporter:
+    image:
+      repository: prom/node-exporter
+      tag: "v1.7.0"
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "25m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+
+# ============================================
+# OpenClaw AI Alert Agent (Optional)
+# ============================================
+openclaw:
+  enabled: false
+  image:
+    repository: openclaw/openclaw
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  # Alert channels — set real values via --set or values-override
+  telegram:
+    botToken: ""
+    chatId: ""
+  slack:
+    webhookUrl: ""
+  # K8s event watch settings
+  watch:
+    namespaces: ""
+    eventTypes: "Warning"
+    errorPatterns: "CrashLoopBackOff,OOMKilled,ImagePullBackOff,ErrImagePull,FailedScheduling,Unhealthy,BackOff"
+    intervalSeconds: "30"
+
+# ============================================
 # NodePort (폐쇄망/개발용)
 # ============================================
 nodePort:
   enabled: false
   frontend: 30080
   backend: 30800
+  prometheus: 30090
+  grafana: 30030

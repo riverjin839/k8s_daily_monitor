@@ -1,0 +1,105 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-config
+  labels:
+    app: grafana
+    component: monitoring
+data:
+  # Auto-provision Prometheus as default datasource
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: true
+
+  # Auto-provision K8s overview dashboard
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards
+          foldersFromFilesStructure: false
+
+  # Minimal K8s Cluster Overview dashboard
+  k8s-overview.json: |
+    {
+      "annotations": { "list": [] },
+      "title": "K8s Cluster Overview",
+      "uid": "k8s-overview",
+      "version": 1,
+      "panels": [
+        {
+          "title": "CPU Usage %",
+          "type": "gauge",
+          "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
+          "targets": [{
+            "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+            "refId": "A"
+          }],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": { "steps": [{"color":"green","value":null},{"color":"yellow","value":70},{"color":"red","value":90}] },
+              "unit": "percent", "max": 100
+            }
+          }
+        },
+        {
+          "title": "Memory Usage %",
+          "type": "gauge",
+          "gridPos": { "h": 8, "w": 6, "x": 6, "y": 0 },
+          "targets": [{
+            "expr": "100 * (1 - (sum(node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes)))",
+            "refId": "A"
+          }],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": { "steps": [{"color":"green","value":null},{"color":"yellow","value":75},{"color":"red","value":90}] },
+              "unit": "percent", "max": 100
+            }
+          }
+        },
+        {
+          "title": "CrashLoopBackOff Pods",
+          "type": "stat",
+          "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
+          "targets": [{
+            "expr": "sum(kube_pod_container_status_waiting_reason{reason=\"CrashLoopBackOff\"}) OR on() vector(0)",
+            "refId": "A"
+          }],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": { "steps": [{"color":"green","value":null},{"color":"red","value":1}] }
+            }
+          }
+        },
+        {
+          "title": "Failed Pods",
+          "type": "stat",
+          "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
+          "targets": [{
+            "expr": "sum(kube_pod_status_phase{phase=\"Failed\"}) OR on() vector(0)",
+            "refId": "A"
+          }],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": { "steps": [{"color":"green","value":null},{"color":"red","value":1}] }
+            }
+          }
+        }
+      ],
+      "schemaVersion": 39,
+      "templating": { "list": [] },
+      "time": { "from": "now-1h", "to": "now" },
+      "refresh": "30s"
+    }

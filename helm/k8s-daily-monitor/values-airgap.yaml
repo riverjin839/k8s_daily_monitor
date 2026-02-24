@@ -39,6 +39,21 @@ celery:
   worker:
     replicaCount: 1
 
+monitoring:
+  enabled: true
+  prometheus:
+    image:
+      repository: prom/prometheus
+  grafana:
+    image:
+      repository: grafana/grafana
+  kubeStateMetrics:
+    image:
+      repository: kube-state-metrics/kube-state-metrics
+  nodeExporter:
+    image:
+      repository: prom/node-exporter
+
 ingress:
   enabled: false
 
@@ -49,3 +64,5 @@ nodePort:
   enabled: true
   frontend: 30080
   backend: 30800
+  prometheus: 30090
+  grafana: 30030

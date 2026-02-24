@@ -1,3 +1,13 @@
+# ============================================
+# Air-Gap + OpenClaw — Composite overlay
+# ============================================
+#
+# Deploys the full stack + OpenClaw with all images
+# pulled from the internal registry (10.61.162.101:5000).
+#
+# Usage:
+#   kubectl apply -k k8s/overlays/airgap-openclaw/
+# ============================================
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -5,14 +15,9 @@ namespace: k8s-monitor
 
 resources:
   - ../../base
+  - ../../base/openclaw
 
-# ============================================
-# 폐쇄망 K8s 클러스터 설정
-# 대상 클러스터: 10.61.162.101
-# API Server: https://10.61.162.101:6443
-# ============================================
-
-# 내부 레지스트리 이미지로 교체 (레지스트리 주소 수정 필요)
+# Internal registry image mapping
 images:
   - name: k8s-daily-monitor/backend
     newName: 10.61.162.101:5000/k8s-monitor/backend
@@ -26,7 +31,7 @@ images:
   - name: redis:7-alpine
     newName: 10.61.162.101:5000/library/redis
     newTag: 7-alpine
-  # Monitoring stack images
+  # Monitoring stack
   - name: prom/prometheus:v2.51.0
     newName: 10.61.162.101:5000/prom/prometheus
     newTag: v2.51.0
@@ -39,9 +44,13 @@ images:
   - name: prom/node-exporter:v1.7.0
     newName: 10.61.162.101:5000/prom/node-exporter
     newTag: v1.7.0
+  # OpenClaw (air-gap)
+  - name: openclaw/openclaw:latest
+    newName: 10.61.162.101:5000/openclaw/openclaw
+    newTag: latest
 
 patches:
-  # Ingress 비활성화 (폐쇄망에서는 NodePort 또는 LoadBalancer 사용)
+  # Ingress 비활성화
   - patch: |-
       $patch: delete
       apiVersion: networking.k8s.io/v1
@@ -51,7 +60,7 @@ patches:
     target:
       kind: Ingress
 
-  # Frontend를 NodePort로 노출
+  # Frontend NodePort
   - patch: |-
       - op: replace
         path: /spec/type
@@ -63,7 +72,7 @@ patches:
       kind: Service
       name: frontend
 
-  # Backend를 NodePort로 노출 (API 직접 접근용)
+  # Backend NodePort
   - patch: |-
       - op: replace
         path: /spec/type
@@ -75,7 +84,7 @@ patches:
       kind: Service
       name: backend
 
-  # Prometheus NodePort (모니터링 직접 접근)
+  # Prometheus NodePort
   - patch: |-
       - op: replace
         path: /spec/type
@@ -99,7 +108,7 @@ patches:
       kind: Service
       name: grafana
 
-  # HPA 비활성화 (리소스 제한된 환경)
+  # HPA 비활성화
   - patch: |-
       $patch: delete
       apiVersion: autoscaling/v2
@@ -128,7 +137,7 @@ patches:
       kind: HorizontalPodAutoscaler
       name: frontend-hpa
 
-  # 레플리카 수 축소
+  # 레플리카 축소
   - patch: |-
       - op: replace
         path: /spec/replicas

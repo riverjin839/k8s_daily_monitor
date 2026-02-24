@@ -43,6 +43,9 @@ resources:
   # AI Agent (Optional - Ollama)
   - ollama.yaml
 
+  # Monitoring Stack (Prometheus, Grafana, kube-state-metrics, node-exporter)
+  - monitoring/
+
 configMapGenerator:
   - name: k8s-monitor-config
     literals:
@@ -58,6 +61,8 @@ configMapGenerator:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - OLLAMA_URL=http://ollama:11434
+      - PROMETHEUS_URL=http://prometheus:9090
+      - GRAFANA_URL=http://grafana:3000
   - name: ansible-playbooks
     files:
       - check_cluster.yml=ansible-playbooks-check_cluster.yml

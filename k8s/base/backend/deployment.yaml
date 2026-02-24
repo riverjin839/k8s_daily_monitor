@@ -90,6 +90,16 @@ spec:
                 secretKeyRef:
                   name: k8s-monitor-secret
                   key: SECRET_KEY
+            - name: PROMETHEUS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: k8s-monitor-config
+                  key: PROMETHEUS_URL
+            - name: GRAFANA_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: k8s-monitor-config
+                  key: GRAFANA_URL
           resources:
             requests:
               memory: "256Mi"

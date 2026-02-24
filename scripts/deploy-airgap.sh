@@ -13,17 +13,15 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 NAMESPACE="${NAMESPACE:-k8s-monitor}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 
-# 폐쇄망 Nexus 프록시 설정 (선택)
-# APT_MIRROR_URL  - Debian apt 프록시 (예: http://nexus.local:8081/repository/debian-proxy)
-# PIP_INDEX_URL   - PyPI 프록시 (예: http://nexus.local:8081/repository/pypi-proxy/simple)
-# PIP_TRUSTED_HOST - pip trusted-host (예: nexus.local)
-# NPM_REGISTRY    - npm 프록시 (예: http://nexus.local:8081/repository/npm-proxy/)
-# ALPINE_MIRROR_URL - Alpine apk 미러 (예: http://nexus.local:8081/repository/alpine-proxy)
-APT_MIRROR_URL="${APT_MIRROR_URL:-}"
+# 폐쇄망 Nexus 프록시 설정 (선택, backend+frontend 모두 Alpine 기반)
+# ALPINE_MIRROR_URL - Alpine apk 미러 (예: http://nexus:8081/repository/alpine-proxy)
+# PIP_INDEX_URL     - PyPI 프록시 (예: http://nexus:8081/repository/pypi-proxy/simple)
+# PIP_TRUSTED_HOST  - pip trusted-host (예: nexus)
+# NPM_REGISTRY      - npm 프록시 (예: http://nexus:8081/repository/npm-proxy/)
+ALPINE_MIRROR_URL="${ALPINE_MIRROR_URL:-}"
 PIP_INDEX_URL="${PIP_INDEX_URL:-}"
 PIP_TRUSTED_HOST="${PIP_TRUSTED_HOST:-}"
 NPM_REGISTRY="${NPM_REGISTRY:-}"
-ALPINE_MIRROR_URL="${ALPINE_MIRROR_URL:-}"
 
 # 색상 출력
 RED='\033[0;31m'
@@ -167,17 +165,14 @@ print_config() {
     echo -e "  Registry      : ${YELLOW}${REGISTRY}${NC}"
     echo -e "  Namespace     : ${YELLOW}${NAMESPACE}${NC}"
     echo -e "  Image Tag     : ${YELLOW}${IMAGE_TAG}${NC}"
-    if [ -n "${APT_MIRROR_URL}" ]; then
-        echo -e "  APT Mirror    : ${YELLOW}${APT_MIRROR_URL}${NC}"
+    if [ -n "${ALPINE_MIRROR_URL}" ]; then
+        echo -e "  Alpine Mirror : ${YELLOW}${ALPINE_MIRROR_URL}${NC}"
     fi
     if [ -n "${PIP_INDEX_URL}" ]; then
         echo -e "  PyPI Proxy    : ${YELLOW}${PIP_INDEX_URL}${NC}"
     fi
     if [ -n "${NPM_REGISTRY}" ]; then
         echo -e "  NPM Registry  : ${YELLOW}${NPM_REGISTRY}${NC}"
-    fi
-    if [ -n "${ALPINE_MIRROR_URL}" ]; then
-        echo -e "  Alpine Mirror : ${YELLOW}${ALPINE_MIRROR_URL}${NC}"
     fi
     echo ""
 }
@@ -189,10 +184,10 @@ build_images() {
     echo -e "${GREEN}[1/4] 컨테이너 이미지 빌드 중...${NC}"
     echo ""
 
-    # 폐쇄망 프록시 build-arg 구성
+    # 폐쇄망 프록시 build-arg 구성 (backend + frontend 모두 Alpine)
     local backend_args=()
-    if [ -n "${APT_MIRROR_URL}" ]; then
-        backend_args+=(--build-arg "APT_MIRROR_URL=${APT_MIRROR_URL}")
+    if [ -n "${ALPINE_MIRROR_URL}" ]; then
+        backend_args+=(--build-arg "ALPINE_MIRROR_URL=${ALPINE_MIRROR_URL}")
     fi
     if [ -n "${PIP_INDEX_URL}" ]; then
         backend_args+=(--build-arg "PIP_INDEX_URL=${PIP_INDEX_URL}")
@@ -437,12 +432,11 @@ case "${1:-}" in
         echo "  NAMESPACE      - K8s 네임스페이스 (기본: k8s-monitor)"
         echo "  IMAGE_TAG      - 이미지 태그 (기본: latest)"
         echo ""
-        echo "폐쇄망 Nexus 프록시 환경변수 (선택):"
-        echo "  APT_MIRROR_URL  - Debian apt 미러 URL"
-        echo "  PIP_INDEX_URL   - PyPI 프록시 URL"
-        echo "  PIP_TRUSTED_HOST- pip trusted-host 도메인"
-        echo "  NPM_REGISTRY    - npm 레지스트리 프록시 URL"
-        echo "  ALPINE_MIRROR_URL- Alpine apk 미러 URL"
+        echo "폐쇄망 Nexus 프록시 환경변수 (선택, backend+frontend 모두 Alpine):"
+        echo "  ALPINE_MIRROR_URL - Alpine apk 미러 URL"
+        echo "  PIP_INDEX_URL     - PyPI 프록시 URL"
+        echo "  PIP_TRUSTED_HOST  - pip trusted-host 도메인"
+        echo "  NPM_REGISTRY      - npm 레지스트리 프록시 URL"
         echo ""
         echo "예시:"
         echo "  $0 build                             # 대화형으로 CLI/레지스트리 입력"
@@ -450,10 +444,9 @@ case "${1:-}" in
         echo "  CTR_CLI=podman REGISTRY=10.0.0.1:5000 $0 build  # 환경변수로 지정"
         echo ""
         echo "  # 폐쇄망 Nexus 프록시 빌드 예시:"
-        echo "  APT_MIRROR_URL=http://nexus:8081/repository/apt-proxy \\"
+        echo "  ALPINE_MIRROR_URL=http://nexus:8081/repository/alpine-proxy \\"
         echo "  PIP_INDEX_URL=http://nexus:8081/repository/pypi-proxy/simple \\"
         echo "  NPM_REGISTRY=http://nexus:8081/repository/npm-proxy/ \\"
-        echo "  ALPINE_MIRROR_URL=http://nexus:8081/repository/alpine-proxy \\"
         echo "  REGISTRY=10.0.0.1:5000 $0 build"
         echo ""
         exit 1

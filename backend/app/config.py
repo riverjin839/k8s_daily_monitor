@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     ollama_model: str = "llama3"
     ollama_timeout: int = 120
 
+    # OpenClaw Alert Channels
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+    slack_webhook_url: str = ""
+
     # Prometheus / Grafana
     prometheus_url: str = "http://prometheus-k8s.monitoring.svc:9090"
     grafana_url: str = "http://grafana.monitoring.svc:3000"

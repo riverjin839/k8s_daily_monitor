@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate } from '@/types';
 
 // snake_case → camelCase 변환 (Backend는 snake_case, Frontend는 camelCase)
 function toCamelCase(str: string): string {
@@ -155,6 +155,47 @@ export const promqlApi = {
     api.post<MetricQueryResult>('/promql/query/test', { promql }),
   health: () =>
     api.get<{ status: string; detail?: string }>('/promql/health', { timeout: 5000 }),
+};
+
+// Issues API
+export const issuesApi = {
+  getAll: (params?: {
+    clusterId?: string;
+    assignee?: string;
+    issueArea?: string;
+    occurredFrom?: string;
+    occurredTo?: string;
+  }) =>
+    api.get<IssueListResponse>('/issues', {
+      params: params
+        ? Object.fromEntries(
+            Object.entries(params)
+              .filter(([, v]) => v !== undefined && v !== '')
+              .map(([k, v]) => [toSnakeCase(k), v])
+          )
+        : undefined,
+    }),
+  getById: (id: string) => api.get<Issue>(`/issues/${id}`),
+  create: (data: IssueCreate) => api.post<Issue>('/issues', data),
+  update: (id: string, data: IssueUpdate) => api.put<Issue>(`/issues/${id}`, data),
+  delete: (id: string) => api.delete(`/issues/${id}`),
+  exportCsv: (params?: {
+    clusterId?: string;
+    assignee?: string;
+    issueArea?: string;
+    occurredFrom?: string;
+    occurredTo?: string;
+  }) =>
+    api.get('/issues/export/csv', {
+      params: params
+        ? Object.fromEntries(
+            Object.entries(params)
+              .filter(([, v]) => v !== undefined && v !== '')
+              .map(([k, v]) => [toSnakeCase(k), v])
+          )
+        : undefined,
+      responseType: 'blob',
+    }),
 };
 
 export default api;

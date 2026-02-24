@@ -1,0 +1,1 @@
+export { IssueModal } from './IssueModal';

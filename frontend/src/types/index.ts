@@ -136,6 +136,41 @@ export interface MetricCard {
   updatedAt: string;
 }
 
+// Issue Board
+export interface Issue {
+  id: string;
+  assignee: string;
+  clusterId?: string;
+  clusterName?: string;
+  issueArea: string;
+  issueContent: string;
+  actionContent?: string;
+  occurredAt: string;   // ISO date "YYYY-MM-DD"
+  resolvedAt?: string;  // ISO date "YYYY-MM-DD"
+  remarks?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IssueListResponse {
+  data: Issue[];
+  total: number;
+}
+
+export interface IssueCreate {
+  assignee: string;
+  clusterId?: string;
+  clusterName?: string;
+  issueArea: string;
+  issueContent: string;
+  actionContent?: string;
+  occurredAt: string;
+  resolvedAt?: string;
+  remarks?: string;
+}
+
+export interface IssueUpdate extends Partial<IssueCreate> {}
+
 export interface MetricQueryResult {
   cardId: string;
   status: 'ok' | 'error' | 'offline';

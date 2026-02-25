@@ -7,6 +7,7 @@ from app.routers.agent import router as agent_router
 from app.routers.promql import router as promql_router
 from app.routers.openclaw import router as openclaw_router
 from app.routers.issues import router as issues_router
+from app.routers.tasks import router as tasks_router
 
 __all__ = [
     "clusters_router",
@@ -18,4 +19,5 @@ __all__ = [
     "promql_router",
     "openclaw_router",
     "issues_router",
+    "tasks_router",
 ]

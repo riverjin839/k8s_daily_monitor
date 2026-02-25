@@ -7,7 +7,7 @@ from sqlalchemy import text, inspect
 
 from app.config import settings
 from app.database import engine, Base, SessionLocal
-from app.routers import clusters_router, health_router, history_router, daily_check_router, playbooks_router, agent_router, promql_router, openclaw_router, issues_router
+from app.routers import clusters_router, health_router, history_router, daily_check_router, playbooks_router, agent_router, promql_router, openclaw_router, issues_router, tasks_router
 
 
 def _run_migrations():
@@ -162,6 +162,7 @@ app.include_router(agent_router, prefix="/api/v1")
 app.include_router(promql_router, prefix="/api/v1")
 app.include_router(openclaw_router, prefix="/api/v1")
 app.include_router(issues_router, prefix="/api/v1")
+app.include_router(tasks_router, prefix="/api/v1")
 
 
 @app.get("/")

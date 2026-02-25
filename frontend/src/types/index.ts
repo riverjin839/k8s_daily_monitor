@@ -171,6 +171,43 @@ export interface IssueCreate {
 
 export interface IssueUpdate extends Partial<IssueCreate> {}
 
+// Task Board
+export interface Task {
+  id: string;
+  assignee: string;
+  clusterId?: string;
+  clusterName?: string;
+  taskCategory: string;
+  taskContent: string;
+  resultContent?: string;
+  scheduledAt: string;
+  completedAt?: string;
+  priority: 'high' | 'medium' | 'low';
+  remarks?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskListResponse {
+  data: Task[];
+  total: number;
+}
+
+export interface TaskCreate {
+  assignee: string;
+  clusterId?: string;
+  clusterName?: string;
+  taskCategory: string;
+  taskContent: string;
+  resultContent?: string;
+  scheduledAt: string;
+  completedAt?: string;
+  priority: string;
+  remarks?: string;
+}
+
+export interface TaskUpdate extends Partial<TaskCreate> {}
+
 export interface MetricQueryResult {
   cardId: string;
   status: 'ok' | 'error' | 'offline';

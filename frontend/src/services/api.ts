@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate } from '@/types';
 
 // snake_case → camelCase 변환 (Backend는 snake_case, Frontend는 camelCase)
 function toCamelCase(str: string): string {
@@ -187,6 +187,50 @@ export const issuesApi = {
     occurredTo?: string;
   }) =>
     api.get('/issues/export/csv', {
+      params: params
+        ? Object.fromEntries(
+            Object.entries(params)
+              .filter(([, v]) => v !== undefined && v !== '')
+              .map(([k, v]) => [toSnakeCase(k), v])
+          )
+        : undefined,
+      responseType: 'blob',
+    }),
+};
+
+// Tasks API
+export const tasksApi = {
+  getAll: (params?: {
+    clusterId?: string;
+    assignee?: string;
+    taskCategory?: string;
+    priority?: string;
+    scheduledFrom?: string;
+    scheduledTo?: string;
+    completed?: boolean;
+  }) =>
+    api.get<TaskListResponse>('/tasks', {
+      params: params
+        ? Object.fromEntries(
+            Object.entries(params)
+              .filter(([, v]) => v !== undefined && v !== '')
+              .map(([k, v]) => [toSnakeCase(k), v])
+          )
+        : undefined,
+    }),
+  getById: (id: string) => api.get<Task>(`/tasks/${id}`),
+  create: (data: TaskCreate) => api.post<Task>('/tasks', data),
+  update: (id: string, data: TaskUpdate) => api.put<Task>(`/tasks/${id}`, data),
+  delete: (id: string) => api.delete(`/tasks/${id}`),
+  exportCsv: (params?: {
+    clusterId?: string;
+    assignee?: string;
+    taskCategory?: string;
+    priority?: string;
+    scheduledFrom?: string;
+    scheduledTo?: string;
+  }) =>
+    api.get('/tasks/export/csv', {
       params: params
         ? Object.fromEntries(
             Object.entries(params)

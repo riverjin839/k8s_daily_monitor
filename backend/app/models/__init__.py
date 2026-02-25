@@ -5,6 +5,7 @@ from app.models.daily_check import DailyCheckLog, CheckSchedule, CheckScheduleTy
 from app.models.playbook import Playbook
 from app.models.metric_card import MetricCard
 from app.models.issue import Issue
+from app.models.task import Task
 
 __all__ = [
     "Cluster",
@@ -17,4 +18,5 @@ __all__ = [
     "Playbook",
     "MetricCard",
     "Issue",
+    "Task",
 ]

@@ -7,6 +7,7 @@ import {
   ListTodo,
   Settings,
   Link2,
+  Calculator,
   Pencil,
   Check,
   X,
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { to: '/issues', defaultLabel: '이슈 게시판', icon: ClipboardList },
   { to: '/tasks', defaultLabel: '작업 게시판', icon: ListTodo },
   { to: '/links', defaultLabel: '클러스터 링크', icon: Link2 },
+  { to: '/cidr', defaultLabel: 'CIDR 계산기', icon: Calculator },
   { to: '/settings', defaultLabel: 'Settings', icon: Settings },
 ];
 

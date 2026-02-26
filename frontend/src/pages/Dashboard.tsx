@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Download, BookOpen, Plus, Activity } from 'lucide-react';
-import { Header } from '@/components/layout';
+import { Download, BookOpen, Plus, Activity, RefreshCw } from 'lucide-react';
+import { formatDateTime } from '@/lib/utils';
 import {
   SummaryStats,
   ClusterTabs,
@@ -24,7 +24,7 @@ export function Dashboard() {
   const [showAddCluster, setShowAddCluster] = useState(false);
   const [showAddAddon, setShowAddAddon] = useState(false);
   const [showAddMetric, setShowAddMetric] = useState(false);
-  const { clusters, summary, addons, logs } = useClusterStore();
+  const { clusters, summary, addons, logs, isChecking, lastCheckTime } = useClusterStore();
 
   // Queries
   const { isLoading: clustersLoading } = useClusters();
@@ -113,7 +113,25 @@ export function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header onRunCheck={handleRunCheck} onSettings={handleSettings} />
+      {/* Page top bar */}
+      <div className="px-8 py-4 border-b border-border flex items-center justify-between">
+        <h1 className="font-semibold text-base">Dashboard</h1>
+        <div className="flex items-center gap-4">
+          {lastCheckTime && (
+            <span className="text-xs text-muted-foreground font-mono">
+              Last check: {formatDateTime(lastCheckTime)}
+            </span>
+          )}
+          <button
+            onClick={handleRunCheck}
+            disabled={isChecking}
+            className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />
+            {isChecking ? 'Checking...' : 'Run Check'}
+          </button>
+        </div>
+      </div>
 
       <main className="max-w-[1600px] mx-auto px-8 py-8">
         {/* Summary Stats */}

@@ -1,1 +1,1 @@
-export { IssueModal } from './IssueModal';
+export { IssueModal, saveIssueImages } from './IssueModal';

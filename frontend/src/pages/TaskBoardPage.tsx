@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { Plus, Download, Pencil, Trash2, ListTodo, Search, X } from 'lucide-react';
-import { Header } from '@/components/layout';
-import { TaskModal } from '@/components/tasks';
+import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus } from 'lucide-react';
+import { TaskModal, saveTaskImages } from '@/components/tasks';
 import { useTasks, useCreateTask, useUpdateTask, useDeleteTask } from '@/hooks/useTasks';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
@@ -11,6 +10,17 @@ import { Task, TaskCreate, TaskUpdate } from '@/types';
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '-';
   return dateStr.slice(0, 10);
+}
+
+function hasLocalImages(id: string): boolean {
+  try {
+    const raw = localStorage.getItem('k8s:img:task:' + id);
+    if (!raw) return false;
+    const arr = JSON.parse(raw) as string[];
+    return arr.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 const PRIORITY_STYLES: Record<string, { dot: string; label: string; text: string }> = {
@@ -48,19 +58,26 @@ export function TaskBoardPage() {
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
 
-  const handleCreate = (formData: TaskCreate) => {
-    createTask.mutate(formData);
+  const handleCreate = async (formData: TaskCreate, images: string[]) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res: any = await createTask.mutateAsync(formData);
+    const newId: string | undefined = res?.data?.id ?? res?.id;
+    if (images.length > 0 && newId) {
+      saveTaskImages(newId, images);
+    }
   };
 
-  const handleUpdate = (formData: TaskCreate) => {
+  const handleUpdate = async (formData: TaskCreate, images: string[]) => {
     if (!editTask) return;
-    updateTask.mutate({ id: editTask.id, data: formData as TaskUpdate });
+    await updateTask.mutateAsync({ id: editTask.id, data: formData as TaskUpdate });
+    saveTaskImages(editTask.id, images);
     setEditTask(null);
   };
 
   const handleDelete = (task: Task) => {
     if (!confirm(`"${task.taskCategory}" 작업을 삭제하시겠습니까?`)) return;
     deleteTask.mutate(task.id);
+    localStorage.removeItem('k8s:img:task:' + task.id);
   };
 
   const handleEdit = (task: Task) => {
@@ -104,8 +121,6 @@ export function TaskBoardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
-
       <main className="max-w-[1600px] mx-auto px-8 py-8">
         {/* Page Header */}
         <div className="flex items-center justify-between mb-6">
@@ -268,6 +283,7 @@ export function TaskBoardPage() {
                   {tasks.map((task) => {
                     const isCompleted = !!task.completedAt;
                     const pStyle = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium;
+                    const hasImages = hasLocalImages(task.id);
                     return (
                       <tr
                         key={task.id}
@@ -305,7 +321,12 @@ export function TaskBoardPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 max-w-xs">
-                          <p className="line-clamp-2 text-foreground/90">{task.taskContent}</p>
+                          <div className="flex items-start gap-1.5">
+                            <p className="line-clamp-2 text-foreground/90">{task.taskContent}</p>
+                            {hasImages && (
+                              <ImagePlus className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" title="이미지 첨부 있음" />
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 max-w-xs">
                           <p className="line-clamp-2 text-muted-foreground">

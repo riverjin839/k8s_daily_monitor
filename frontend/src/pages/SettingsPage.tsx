@@ -1,6 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock } from 'lucide-react';
-import { Header } from '@/components/layout';
 import { useClusters, useCreateCluster, useUpdateCluster, useDeleteCluster } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { Cluster } from '@/types';
@@ -20,6 +19,13 @@ function ClusterFormModal({
   const [name, setName] = useState(editCluster?.name ?? '');
   const [apiEndpoint, setApiEndpoint] = useState(editCluster?.apiEndpoint ?? '');
   const [kubeconfigPath, setKubeconfigPath] = useState(editCluster?.kubeconfigPath ?? '');
+
+  // Re-populate fields whenever the target cluster changes
+  useEffect(() => {
+    setName(editCluster?.name ?? '');
+    setApiEndpoint(editCluster?.apiEndpoint ?? '');
+    setKubeconfigPath(editCluster?.kubeconfigPath ?? '');
+  }, [editCluster]);
 
   if (!isOpen) return null;
 
@@ -142,8 +148,6 @@ export function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
-
       <main className="max-w-[1200px] mx-auto px-8 py-8">
         {/* Page Header */}
         <div className="flex items-center justify-between mb-6">

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Plus, Play, BookOpen, Download } from 'lucide-react';
-import { Header } from '@/components/layout';
 import { PlaybookCard, AddPlaybookModal } from '@/components/playbooks';
 import { usePlaybooks, useCreatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
 import { playbooksApi } from '@/services/api';
@@ -81,8 +80,6 @@ export function PlaybooksPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
-
       <main className="max-w-[1600px] mx-auto px-8 py-8">
       {/* Page Header */}
       <div className="flex items-center justify-between mb-6">

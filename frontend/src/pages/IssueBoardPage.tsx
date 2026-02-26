@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Plus, Download, Pencil, Trash2, ClipboardList, Search, X } from 'lucide-react';
-import { Header } from '@/components/layout';
+import { Plus, Download, Pencil, Trash2, ClipboardList, Search, X, ImagePlus } from 'lucide-react';
 import { IssueModal } from '@/components/issues';
+import { saveIssueImages } from '@/lib/issueImages';
 import { useIssues, useCreateIssue, useUpdateIssue, useDeleteIssue } from '@/hooks/useIssues';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
@@ -11,6 +11,17 @@ import { Issue, IssueCreate, IssueUpdate } from '@/types';
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '-';
   return dateStr.slice(0, 10);
+}
+
+function hasLocalImages(id: string): boolean {
+  try {
+    const raw = localStorage.getItem('k8s:img:issue:' + id);
+    if (!raw) return false;
+    const arr = JSON.parse(raw) as string[];
+    return arr.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 const STATUS_DOT: Record<string, string> = {
@@ -45,19 +56,26 @@ export function IssueBoardPage() {
   const updateIssue = useUpdateIssue();
   const deleteIssue = useDeleteIssue();
 
-  const handleCreate = (formData: IssueCreate) => {
-    createIssue.mutate(formData);
+  const handleCreate = async (formData: IssueCreate, images: string[]) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res: any = await createIssue.mutateAsync(formData);
+    const newId: string | undefined = res?.data?.id ?? res?.id;
+    if (images.length > 0 && newId) {
+      saveIssueImages(newId, images);
+    }
   };
 
-  const handleUpdate = (formData: IssueCreate) => {
+  const handleUpdate = async (formData: IssueCreate, images: string[]) => {
     if (!editIssue) return;
-    updateIssue.mutate({ id: editIssue.id, data: formData as IssueUpdate });
+    await updateIssue.mutateAsync({ id: editIssue.id, data: formData as IssueUpdate });
+    saveIssueImages(editIssue.id, images);
     setEditIssue(null);
   };
 
   const handleDelete = (issue: Issue) => {
     if (!confirm(`"${issue.issueArea}" 이슈를 삭제하시겠습니까?`)) return;
     deleteIssue.mutate(issue.id);
+    localStorage.removeItem('k8s:img:issue:' + issue.id);
   };
 
   const handleEdit = (issue: Issue) => {
@@ -100,8 +118,6 @@ export function IssueBoardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
-
       <main className="max-w-[1600px] mx-auto px-8 py-8">
         {/* Page Header */}
         <div className="flex items-center justify-between mb-6">
@@ -255,6 +271,7 @@ export function IssueBoardPage() {
                 <tbody>
                   {issues.map((issue) => {
                     const isResolved = !!issue.resolvedAt;
+                    const hasImages = hasLocalImages(issue.id);
                     return (
                       <tr
                         key={issue.id}
@@ -286,7 +303,12 @@ export function IssueBoardPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 max-w-xs">
-                          <p className="line-clamp-2 text-foreground/90">{issue.issueContent}</p>
+                          <div className="flex items-start gap-1.5">
+                            <p className="line-clamp-2 text-foreground/90">{issue.issueContent}</p>
+                            {hasImages && (
+                              <ImagePlus className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" title="이미지 첨부 있음" />
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 max-w-xs">
                           <p className="line-clamp-2 text-muted-foreground">

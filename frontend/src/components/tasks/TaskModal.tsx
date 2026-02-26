@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { X, ImagePlus, Trash2 } from 'lucide-react';
 import { Task, TaskCreate } from '@/types';
+import { loadTaskImages } from '@/lib/taskImages';
 
 interface TaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: TaskCreate) => void;
+  onSubmit: (data: TaskCreate, images: string[]) => void;
   clusters: { id: string; name: string }[];
   editTask?: Task | null;
 }
@@ -46,6 +47,7 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
   const [completedAt, setCompletedAt] = useState('');
   const [priority, setPriority] = useState('medium');
   const [remarks, setRemarks] = useState('');
+  const [images, setImages] = useState<string[]>([]);
 
   useEffect(() => {
     if (editTask) {
@@ -60,6 +62,7 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
       setCompletedAt(editTask.completedAt ?? '');
       setPriority(editTask.priority);
       setRemarks(editTask.remarks ?? '');
+      setImages(loadTaskImages(editTask.id));
     } else {
       setAssignee('');
       setClusterId('');
@@ -71,8 +74,33 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
       setCompletedAt('');
       setPriority('medium');
       setRemarks('');
+      setImages([]);
     }
   }, [editTask, isOpen]);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = Array.from(e.clipboardData.items);
+    const imageItems = items.filter((item) => item.type.startsWith('image/'));
+    if (imageItems.length === 0) return;
+
+    e.preventDefault();
+    imageItems.forEach((item) => {
+      const file = item.getAsFile();
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target?.result as string;
+        if (dataUrl) {
+          setImages((prev) => [...prev, dataUrl]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
+  const removeImage = (index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+  };
 
   if (!isOpen) return null;
 
@@ -83,18 +111,21 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
     e.preventDefault();
     if (!assignee.trim() || !resolvedCategory || !taskContent.trim() || !scheduledAt) return;
 
-    onSubmit({
-      assignee: assignee.trim(),
-      clusterId: clusterId || undefined,
-      clusterName: selectedCluster?.name,
-      taskCategory: resolvedCategory,
-      taskContent: taskContent.trim(),
-      resultContent: resultContent.trim() || undefined,
-      scheduledAt,
-      completedAt: completedAt || undefined,
-      priority,
-      remarks: remarks.trim() || undefined,
-    });
+    onSubmit(
+      {
+        assignee: assignee.trim(),
+        clusterId: clusterId || undefined,
+        clusterName: selectedCluster?.name,
+        taskCategory: resolvedCategory,
+        taskContent: taskContent.trim(),
+        resultContent: resultContent.trim() || undefined,
+        scheduledAt,
+        completedAt: completedAt || undefined,
+        priority,
+        remarks: remarks.trim() || undefined,
+      },
+      images,
+    );
     onClose();
   };
 
@@ -185,10 +216,16 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
           </div>
 
           <div>
-            <label className={labelClass}>작업 내용 *</label>
+            <label className={labelClass}>
+              작업 내용 *
+              <span className="ml-2 text-xs text-muted-foreground font-normal">
+                (Ctrl+V 로 이미지 붙여넣기 가능)
+              </span>
+            </label>
             <textarea
               value={taskContent}
               onChange={(e) => setTaskContent(e.target.value)}
+              onPaste={handlePaste}
               placeholder="수행할 작업을 상세히 기술하세요"
               rows={4}
               className={`${inputClass} resize-none`}
@@ -197,15 +234,55 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
           </div>
 
           <div>
-            <label className={labelClass}>작업 결과</label>
+            <label className={labelClass}>
+              작업 결과
+              <span className="ml-2 text-xs text-muted-foreground font-normal">
+                (Ctrl+V 로 이미지 붙여넣기 가능)
+              </span>
+            </label>
             <textarea
               value={resultContent}
               onChange={(e) => setResultContent(e.target.value)}
+              onPaste={handlePaste}
               placeholder="작업 결과를 기술하세요 (선택 사항)"
               rows={3}
               className={`${inputClass} resize-none`}
             />
           </div>
+
+          {/* Image Attachments Preview */}
+          {images.length > 0 ? (
+            <div>
+              <label className={`${labelClass} flex items-center gap-1`}>
+                <ImagePlus className="w-4 h-4" />
+                첨부 이미지 ({images.length}개)
+              </label>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {images.map((src, idx) => (
+                  <div key={idx} className="relative group">
+                    <img
+                      src={src}
+                      alt={`첨부 이미지 ${idx + 1}`}
+                      className="w-24 h-24 object-cover rounded-lg border border-border cursor-pointer"
+                      onClick={() => window.open(src, '_blank')}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(idx)}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <ImagePlus className="w-3.5 h-3.5" />
+              내용란에 이미지를 붙여넣으면 자동으로 첨부됩니다
+            </p>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>

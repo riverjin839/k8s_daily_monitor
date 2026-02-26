@@ -1,19 +1,20 @@
 import { useMemo, useState } from 'react';
-import { Tags } from 'lucide-react';
+import { Tags, Search, LayoutList, Tag } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { useClusterStore } from '@/stores/clusterStore';
 import { useNodeList, usePatchNodeLabels, NodeInfo } from '@/hooks/useNodeLabels';
 import { NodeLabelEditorModal, NodeLabelsTable } from '@/components/node-labels';
 
 export function NodeLabelsPage() {
-  const { clusters } = useClusterStore();
-  useClusters();
+  // useClusters() 반환값을 직접 사용 — 스토어 타이밍 이슈 방지
+  const { data: clusters = [], isLoading: clustersLoading } = useClusters();
 
   const [selectedClusterId, setSelectedClusterId] = useState<string>('');
   const [selectedNode, setSelectedNode] = useState<NodeInfo | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'node' | 'label'>('node');
 
   const activeClusterId = selectedClusterId || clusters[0]?.id || '';
-  const { data: nodes = [], isLoading } = useNodeList(activeClusterId);
+  const { data: nodes = [], isLoading: nodesLoading } = useNodeList(activeClusterId);
   const patchNodeLabels = usePatchNodeLabels(activeClusterId);
 
   const activeClusterName = useMemo(
@@ -21,33 +22,111 @@ export function NodeLabelsPage() {
     [clusters, activeClusterId],
   );
 
+  const isLoading = clustersLoading || nodesLoading;
+
   return (
     <div className="min-h-screen bg-background">
       <main className="max-w-[1500px] mx-auto px-8 py-8">
+        {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <Tags className="w-5 h-5 text-primary" />
             <h1 className="text-xl font-semibold">Node Labels</h1>
+            {activeClusterName !== '-' && (
+              <span className="text-sm text-muted-foreground">
+                — <span className="font-medium text-foreground">{activeClusterName}</span>
+              </span>
+            )}
           </div>
-          <select
-            value={activeClusterId}
-            onChange={(e) => setSelectedClusterId(e.target.value)}
-            className="px-3 py-2 bg-card border border-border rounded-lg text-sm"
-          >
-            {clusters.map((cluster) => (
-              <option key={cluster.id} value={cluster.id}>{cluster.name}</option>
-            ))}
-          </select>
+
+          {/* Cluster select */}
+          {clustersLoading ? (
+            <div className="px-3 py-2 bg-card border border-border rounded-lg text-sm text-muted-foreground">
+              Loading clusters...
+            </div>
+          ) : (
+            <select
+              value={activeClusterId}
+              onChange={(e) => setSelectedClusterId(e.target.value)}
+              className="px-3 py-2 bg-card border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+            >
+              {clusters.length === 0 ? (
+                <option value="">No clusters</option>
+              ) : (
+                clusters.map((cluster) => (
+                  <option key={cluster.id} value={cluster.id}>
+                    {cluster.name}
+                  </option>
+                ))
+              )}
+            </select>
+          )}
         </div>
 
-        <div className="text-sm text-muted-foreground mb-4">
-          Cluster: <span className="font-medium text-foreground">{activeClusterName}</span>
+        {/* Toolbar: search + view mode */}
+        <div className="flex items-center gap-3 mb-4">
+          {/* Search box */}
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="노드명 또는 레이블 키/값 검색..."
+              className="w-full pl-9 pr-3 py-2 bg-card border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+            />
+          </div>
+
+          {/* View mode toggle */}
+          <div className="flex items-center gap-1 bg-secondary rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('node')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                viewMode === 'node'
+                  ? 'bg-card text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <LayoutList className="w-3.5 h-3.5" />
+              노드 기준
+            </button>
+            <button
+              onClick={() => setViewMode('label')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                viewMode === 'label'
+                  ? 'bg-card text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Tag className="w-3.5 h-3.5" />
+              레이블 기준
+            </button>
+          </div>
+
+          {/* Node / match count */}
+          {!isLoading && nodes.length > 0 && (
+            <span className="text-xs text-muted-foreground">
+              {nodes.length}개 노드
+            </span>
+          )}
         </div>
 
+        {/* Table */}
         {isLoading ? (
-          <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground">Loading nodes...</div>
+          <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground">
+            {clustersLoading ? 'Loading clusters...' : 'Loading nodes...'}
+          </div>
+        ) : !activeClusterId ? (
+          <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground">
+            클러스터를 선택하세요.
+          </div>
         ) : (
-          <NodeLabelsTable nodes={nodes} onEdit={setSelectedNode} />
+          <NodeLabelsTable
+            nodes={nodes}
+            onEdit={setSelectedNode}
+            searchQuery={searchQuery}
+            viewMode={viewMode}
+          />
         )}
       </main>
 

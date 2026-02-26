@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus } from 'lucide-react';
-import { TaskModal } from '@/components/tasks';
+import { TaskModal, TaskDetailModal } from '@/components/tasks';
 import { saveTaskImages } from '@/lib/taskImages';
 import { useTasks, useCreateTask, useUpdateTask, useDeleteTask } from '@/hooks/useTasks';
 import { useClusters } from '@/hooks/useCluster';
@@ -33,6 +33,7 @@ const PRIORITY_STYLES: Record<string, { dot: string; label: string; text: string
 export function TaskBoardPage() {
   const [showModal, setShowModal] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [filterClusterId, setFilterClusterId] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
@@ -82,6 +83,13 @@ export function TaskBoardPage() {
   };
 
   const handleEdit = (task: Task) => {
+    setSelectedTask(null);
+    setEditTask(task);
+    setShowModal(true);
+  };
+
+  const handleDetailEdit = (task: Task) => {
+    setSelectedTask(null);
     setEditTask(task);
     setShowModal(true);
   };
@@ -288,7 +296,8 @@ export function TaskBoardPage() {
                     return (
                       <tr
                         key={task.id}
-                        className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors"
+                        className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer"
+                        onClick={() => setSelectedTask(task)}
                       >
                         <td className="px-4 py-3">
                           <span className="flex items-center gap-1.5">
@@ -348,14 +357,14 @@ export function TaskBoardPage() {
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-center gap-1">
                             <button
-                              onClick={() => handleEdit(task)}
+                              onClick={(e) => { e.stopPropagation(); handleEdit(task); }}
                               className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
                               title="수정"
                             >
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
                             <button
-                              onClick={() => handleDelete(task)}
+                              onClick={(e) => { e.stopPropagation(); handleDelete(task); }}
                               className="p-1.5 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400"
                               title="삭제"
                             >
@@ -380,6 +389,14 @@ export function TaskBoardPage() {
         clusters={clusters}
         editTask={editTask}
       />
+
+      {selectedTask && (
+        <TaskDetailModal
+          task={selectedTask}
+          onClose={() => setSelectedTask(null)}
+          onEdit={handleDetailEdit}
+        />
+      )}
     </div>
   );
 }

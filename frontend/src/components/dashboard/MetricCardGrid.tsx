@@ -6,9 +6,10 @@ interface MetricCardGridProps {
   results: MetricQueryResult[];
   isLoading?: boolean;
   onDeleteCard?: (id: string) => void;
+  onEditCard?: (card: MetricCardType) => void;
 }
 
-export function MetricCardGrid({ cards, results, isLoading, onDeleteCard }: MetricCardGridProps) {
+export function MetricCardGrid({ cards, results, isLoading, onDeleteCard, onEditCard }: MetricCardGridProps) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -43,6 +44,7 @@ export function MetricCardGrid({ cards, results, isLoading, onDeleteCard }: Metr
           card={card}
           result={resultMap.get(card.id)}
           onDelete={onDeleteCard ? () => onDeleteCard(card.id) : undefined}
+          onEdit={onEditCard ? () => onEditCard(card) : undefined}
         />
       ))}
     </div>

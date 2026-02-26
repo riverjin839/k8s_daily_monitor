@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, FlaskConical, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { useCreateMetricCard, useTestPromql } from '@/hooks/useMetricCards';
+import { useCreateMetricCard, useUpdateMetricCard, useTestPromql } from '@/hooks/useMetricCards';
+import { MetricCard } from '@/types';
 
 interface AddMetricCardModalProps {
   isOpen: boolean;
   onClose: () => void;
+  editCard?: MetricCard | null;
 }
 
 const CATEGORY_OPTIONS = [
@@ -54,7 +56,9 @@ const PROMQL_TEMPLATES = [
   },
 ];
 
-export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps) {
+export function AddMetricCardModal({ isOpen, onClose, editCard }: AddMetricCardModalProps) {
+  const isEditing = !!editCard;
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [icon, setIcon] = useState('📊');
@@ -69,7 +73,27 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
   const [testResult, setTestResult] = useState<string>('');
 
   const createCard = useCreateMetricCard();
+  const updateCard = useUpdateMetricCard();
   const testQuery = useTestPromql();
+
+  // Populate form when editCard changes
+  useEffect(() => {
+    if (editCard) {
+      setTitle(editCard.title);
+      setDescription(editCard.description ?? '');
+      setIcon(editCard.icon);
+      setPromql(editCard.promql);
+      setUnit(editCard.unit);
+      setDisplayType(editCard.displayType);
+      setCategory(editCard.category);
+      setThresholds(editCard.thresholds ?? '');
+      setGrafanaPanelUrl(editCard.grafanaPanelUrl ?? '');
+      setTestStatus('idle');
+      setTestResult('');
+    } else {
+      resetForm();
+    }
+  }, [editCard]);
 
   if (!isOpen) return null;
 
@@ -78,7 +102,6 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
     setTestStatus('loading');
     try {
       const { data } = await testQuery.mutateAsync(promql);
-      // data has been auto-converted to camelCase by interceptor
       const d = data as unknown as Record<string, unknown>;
       if (d.status === 'ok') {
         setTestStatus('ok');
@@ -94,9 +117,9 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
     }
   };
 
-  const handleCreate = () => {
+  const handleSubmit = () => {
     if (!title.trim() || !promql.trim()) return;
-    createCard.mutate({
+    const payload = {
       title: title.trim(),
       description: description.trim() || undefined,
       icon,
@@ -106,9 +129,13 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
       category,
       thresholds: thresholds.trim() || undefined,
       grafanaPanelUrl: grafanaPanelUrl.trim() || undefined,
-      sortOrder: 99,
-      enabled: true,
-    });
+    };
+
+    if (isEditing && editCard) {
+      updateCard.mutate({ id: editCard.id, data: payload });
+    } else {
+      createCard.mutate({ ...payload, sortOrder: 99, enabled: true });
+    }
     resetForm();
     onClose();
   };
@@ -135,6 +162,9 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
     setTestResult('');
   };
 
+  const inputClass =
+    'w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50';
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
@@ -143,31 +173,35 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-card rounded-t-2xl z-10">
-          <h2 className="text-lg font-semibold">Add Metric Card</h2>
+          <h2 className="text-lg font-semibold">
+            {isEditing ? 'Edit Metric Card' : 'Add Metric Card'}
+          </h2>
           <button onClick={onClose} className="p-1 hover:bg-secondary rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="px-6 py-5 space-y-5">
-          {/* Quick Templates */}
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-              Quick Templates
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              {PROMQL_TEMPLATES.map((tpl) => (
-                <button
-                  key={tpl.label}
-                  onClick={() => handleTemplateSelect(tpl)}
-                  className="text-left p-2.5 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-all"
-                >
-                  <div className="text-xs font-medium">{tpl.label}</div>
-                  <div className="text-[10px] text-muted-foreground font-mono truncate mt-0.5">{tpl.promql}</div>
-                </button>
-              ))}
+          {/* Quick Templates — only shown when creating */}
+          {!isEditing && (
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                Quick Templates
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {PROMQL_TEMPLATES.map((tpl) => (
+                  <button
+                    key={tpl.label}
+                    onClick={() => handleTemplateSelect(tpl)}
+                    className="text-left p-2.5 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-all"
+                  >
+                    <div className="text-xs font-medium">{tpl.label}</div>
+                    <div className="text-[10px] text-muted-foreground font-mono truncate mt-0.5">{tpl.promql}</div>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Title + Icon */}
           <div className="grid grid-cols-[1fr_80px] gap-3">
@@ -180,7 +214,7 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g. Cluster CPU Usage"
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className={inputClass}
               />
             </div>
             <div>
@@ -189,7 +223,7 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
                 type="text"
                 value={icon}
                 onChange={(e) => setIcon(e.target.value)}
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className={`${inputClass} text-center`}
               />
             </div>
           </div>
@@ -202,7 +236,7 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Short explanation of what this metric shows"
-              className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className={inputClass}
             />
           </div>
 
@@ -218,7 +252,6 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
               rows={3}
               className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
             />
-            {/* Test button */}
             <div className="flex items-center gap-3 mt-2">
               <button
                 onClick={handleTest}
@@ -248,7 +281,7 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className={inputClass}
               >
                 {CATEGORY_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -262,7 +295,7 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
               <select
                 value={displayType}
                 onChange={(e) => setDisplayType(e.target.value)}
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className={inputClass}
               >
                 {DISPLAY_TYPES.map((dt) => (
                   <option key={dt.value} value={dt.value}>{dt.label}</option>
@@ -274,7 +307,7 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
               <select
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
-                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className={inputClass}
               >
                 {UNIT_OPTIONS.map((u) => (
                   <option key={u} value={u}>{u || '(none)'}</option>
@@ -293,7 +326,7 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
               value={thresholds}
               onChange={(e) => setThresholds(e.target.value)}
               placeholder="warning:70,critical:90"
-              className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className={`${inputClass} font-mono`}
             />
             <p className="text-[10px] text-muted-foreground mt-1">
               Color thresholds: green → warning → critical (red)
@@ -310,7 +343,7 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
               value={grafanaPanelUrl}
               onChange={(e) => setGrafanaPanelUrl(e.target.value)}
               placeholder="http://grafana.monitoring.svc:3000/d/..."
-              className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className={`${inputClass} font-mono`}
             />
           </div>
 
@@ -323,11 +356,11 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
               Cancel
             </button>
             <button
-              onClick={handleCreate}
+              onClick={handleSubmit}
               disabled={!title.trim() || !promql.trim()}
               className="flex-1 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-40"
             >
-              Create Card
+              {isEditing ? 'Save Changes' : 'Create Card'}
             </button>
           </div>
         </div>

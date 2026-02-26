@@ -24,6 +24,7 @@ export function Dashboard() {
   const [showAddCluster, setShowAddCluster] = useState(false);
   const [showAddAddon, setShowAddAddon] = useState(false);
   const [showAddMetric, setShowAddMetric] = useState(false);
+  const [editMetricCard, setEditMetricCard] = useState<import('@/types').MetricCard | null>(null);
   const { clusters, summary, addons, logs, isChecking, lastCheckTime } = useClusterStore();
 
   // Queries
@@ -206,6 +207,7 @@ export function Dashboard() {
             cards={metricCards}
             results={metricResults}
             isLoading={metricsLoading}
+            onEditCard={(card) => { setEditMetricCard(card); setShowAddMetric(true); }}
             onDeleteCard={(id) => {
               if (confirm('Delete this metric card?')) {
                 deleteMetricCard.mutate(id);
@@ -263,10 +265,11 @@ export function Dashboard() {
         clusterId={activeClusterId}
       />
 
-      {/* Add Metric Card Modal */}
+      {/* Add / Edit Metric Card Modal */}
       <AddMetricCardModal
         isOpen={showAddMetric}
-        onClose={() => setShowAddMetric(false)}
+        onClose={() => { setShowAddMetric(false); setEditMetricCard(null); }}
+        editCard={editMetricCard}
       />
     </div>
   );

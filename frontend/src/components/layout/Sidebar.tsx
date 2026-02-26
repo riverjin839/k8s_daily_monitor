@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -11,6 +11,7 @@ import {
   Check,
   X,
 } from 'lucide-react';
+import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 
 const NAV_ITEMS = [
   { to: '/', defaultLabel: 'Dashboard', icon: LayoutDashboard },
@@ -21,42 +22,30 @@ const NAV_ITEMS = [
   { to: '/settings', defaultLabel: 'Settings', icon: Settings },
 ];
 
-const TITLE_KEY = 'k8s-monitor-app-title';
-const NAV_LABELS_KEY = 'k8s:nav-labels';
 const DEFAULT_TITLE = 'K8s Daily Monitor';
-
-function loadNavLabels(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(NAV_LABELS_KEY);
-    if (raw) return JSON.parse(raw) as Record<string, string>;
-  } catch { /* empty */ }
-  return {};
-}
-
-function saveNavLabels(labels: Record<string, string>) {
-  localStorage.setItem(NAV_LABELS_KEY, JSON.stringify(labels));
-}
 
 export function Sidebar() {
   const location = useLocation();
+  const { data: settings } = useUiSettings();
+  const updateSettings = useUpdateUiSettings();
 
-  // App title editing
-  const [title, setTitle] = useState(() => localStorage.getItem(TITLE_KEY) || DEFAULT_TITLE);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [editTitleValue, setEditTitleValue] = useState(title);
-
-  // Nav label editing
-  const [navLabels, setNavLabels] = useState<Record<string, string>>(loadNavLabels);
+  const [editTitleValue, setEditTitleValue] = useState('');
   const [editingNavPath, setEditingNavPath] = useState<string | null>(null);
   const [editNavValue, setEditNavValue] = useState('');
 
+  const title = settings?.appTitle || DEFAULT_TITLE;
+  const navLabels = useMemo(() => settings?.navLabels || {}, [settings?.navLabels]);
+
+  useEffect(() => {
+    setEditTitleValue(title);
+  }, [title]);
+
   const getLabel = (to: string, defaultLabel: string) => navLabels[to] || defaultLabel;
 
-  /* ---- Title handlers ---- */
   const handleTitleSave = () => {
     const newTitle = editTitleValue.trim() || DEFAULT_TITLE;
-    setTitle(newTitle);
-    localStorage.setItem(TITLE_KEY, newTitle);
+    updateSettings.mutate({ appTitle: newTitle, navLabels });
     setIsEditingTitle(false);
   };
 
@@ -75,7 +64,6 @@ export function Sidebar() {
     setIsEditingTitle(true);
   };
 
-  /* ---- Nav label handlers ---- */
   const startNavEdit = (e: React.MouseEvent, to: string, defaultLabel: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -85,10 +73,8 @@ export function Sidebar() {
 
   const saveNavLabel = (to: string) => {
     const updated = { ...navLabels, [to]: editNavValue.trim() || '' };
-    // Remove blank entries (revert to default)
     if (!editNavValue.trim()) delete updated[to];
-    setNavLabels(updated);
-    saveNavLabels(updated);
+    updateSettings.mutate({ appTitle: title, navLabels: updated });
     setEditingNavPath(null);
   };
 
@@ -103,7 +89,6 @@ export function Sidebar() {
 
   return (
     <aside className="fixed top-0 left-0 h-full w-[220px] bg-card border-r border-border flex flex-col z-40">
-      {/* Logo + Editable Title */}
       <div className="px-4 py-5 border-b border-border">
         <div className="flex items-start gap-3">
           <div className="w-8 h-8 bg-gradient-to-br from-primary to-blue-700 rounded-lg flex items-center justify-center text-white text-sm flex-shrink-0 mt-0.5">
@@ -120,18 +105,10 @@ export function Sidebar() {
                 autoFocus
               />
               <div className="flex items-center gap-1 mt-1">
-                <button
-                  onClick={handleTitleSave}
-                  className="p-0.5 text-primary hover:text-primary/80"
-                  title="저장"
-                >
+                <button onClick={handleTitleSave} className="p-0.5 text-primary hover:text-primary/80" title="저장">
                   <Check className="w-3.5 h-3.5" />
                 </button>
-                <button
-                  onClick={handleTitleCancel}
-                  className="p-0.5 text-muted-foreground hover:text-foreground"
-                  title="취소"
-                >
+                <button onClick={handleTitleCancel} className="p-0.5 text-muted-foreground hover:text-foreground" title="취소">
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -151,7 +128,6 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
         {NAV_ITEMS.map(({ to, defaultLabel, icon: Icon }) => {
           const isActive = location.pathname === to;
@@ -160,10 +136,7 @@ export function Sidebar() {
 
           if (isEditing) {
             return (
-              <div
-                key={to}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/50 border border-primary/30"
-              >
+              <div key={to} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/50 border border-primary/30">
                 <Icon className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
                 <input
                   type="text"
@@ -173,18 +146,10 @@ export function Sidebar() {
                   className="flex-1 min-w-0 bg-transparent text-sm font-medium focus:outline-none"
                   autoFocus
                 />
-                <button
-                  onClick={() => saveNavLabel(to)}
-                  className="p-0.5 text-primary hover:text-primary/80 flex-shrink-0"
-                  title="저장"
-                >
+                <button onClick={() => saveNavLabel(to)} className="p-0.5 text-primary hover:text-primary/80 flex-shrink-0" title="저장">
                   <Check className="w-3.5 h-3.5" />
                 </button>
-                <button
-                  onClick={cancelNavEdit}
-                  className="p-0.5 text-muted-foreground hover:text-foreground flex-shrink-0"
-                  title="취소"
-                >
+                <button onClick={cancelNavEdit} className="p-0.5 text-muted-foreground hover:text-foreground flex-shrink-0" title="취소">
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -196,9 +161,7 @@ export function Sidebar() {
               <Link
                 to={to}
                 className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                  isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 }`}
               >
                 <Icon className="w-4 h-4 flex-shrink-0" />
@@ -216,7 +179,6 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer */}
       <div className="px-4 py-3 border-t border-border">
         <p className="text-xs text-muted-foreground text-center">K8s Daily Monitor</p>
       </div>

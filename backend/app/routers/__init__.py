@@ -8,6 +8,7 @@ from app.routers.promql import router as promql_router
 from app.routers.openclaw import router as openclaw_router
 from app.routers.issues import router as issues_router
 from app.routers.tasks import router as tasks_router
+from app.routers.ui_settings import router as ui_settings_router
 
 __all__ = [
     "clusters_router",
@@ -20,4 +21,5 @@ __all__ = [
     "openclaw_router",
     "issues_router",
     "tasks_router",
+    "ui_settings_router",
 ]

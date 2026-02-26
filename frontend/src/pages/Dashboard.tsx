@@ -18,12 +18,14 @@ import { useClusters, useSummary, useAddons, useLogs, useHealthCheck, useCreateA
 import { useDashboardPlaybooks, useRunPlaybook, useDeletePlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
 import { useMetricCards, useMetricResults, useDeleteMetricCard } from '@/hooks/useMetricCards';
 import { healthApi } from '@/services/api';
+import { MetricCard } from '@/types';
 
 export function Dashboard() {
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
   const [showAddCluster, setShowAddCluster] = useState(false);
   const [showAddAddon, setShowAddAddon] = useState(false);
   const [showAddMetric, setShowAddMetric] = useState(false);
+  const [editingMetricCard, setEditingMetricCard] = useState<MetricCard | null>(null);
   const { clusters, summary, addons, logs, isChecking, lastCheckTime } = useClusterStore();
 
   // Queries
@@ -195,7 +197,10 @@ export function Dashboard() {
               <span className="text-xs text-muted-foreground">({metricCards.length})</span>
             </div>
             <button
-              onClick={() => setShowAddMetric(true)}
+              onClick={() => {
+                setEditingMetricCard(null);
+                setShowAddMetric(true);
+              }}
               className="px-3 py-1.5 text-xs font-medium bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 rounded-lg transition-colors flex items-center gap-1"
             >
               <Plus className="w-3 h-3" />
@@ -210,6 +215,10 @@ export function Dashboard() {
               if (confirm('Delete this metric card?')) {
                 deleteMetricCard.mutate(id);
               }
+            }}
+            onEditCard={(card) => {
+              setEditingMetricCard(card);
+              setShowAddMetric(true);
             }}
           />
         </section>
@@ -266,7 +275,11 @@ export function Dashboard() {
       {/* Add Metric Card Modal */}
       <AddMetricCardModal
         isOpen={showAddMetric}
-        onClose={() => setShowAddMetric(false)}
+        onClose={() => {
+          setShowAddMetric(false);
+          setEditingMetricCard(null);
+        }}
+        editingCard={editingMetricCard}
       />
     </div>
   );

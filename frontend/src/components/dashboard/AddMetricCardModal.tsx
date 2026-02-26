@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, FlaskConical, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { useCreateMetricCard, useTestPromql } from '@/hooks/useMetricCards';
+import { useCreateMetricCard, useTestPromql, useUpdateMetricCard } from '@/hooks/useMetricCards';
+import { MetricCard } from '@/types';
 
 interface AddMetricCardModalProps {
   isOpen: boolean;
   onClose: () => void;
+  editingCard?: MetricCard | null;
 }
 
 const CATEGORY_OPTIONS = [
@@ -54,7 +56,7 @@ const PROMQL_TEMPLATES = [
   },
 ];
 
-export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps) {
+export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCardModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [icon, setIcon] = useState('📊');
@@ -69,7 +71,31 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
   const [testResult, setTestResult] = useState<string>('');
 
   const createCard = useCreateMetricCard();
+  const updateCard = useUpdateMetricCard();
   const testQuery = useTestPromql();
+
+  const isEditMode = !!editingCard;
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (editingCard) {
+      setTitle(editingCard.title);
+      setDescription(editingCard.description || '');
+      setIcon(editingCard.icon);
+      setPromql(editingCard.promql);
+      setUnit(editingCard.unit || '');
+      setDisplayType(editingCard.displayType);
+      setCategory(editingCard.category);
+      setThresholds(editingCard.thresholds || '');
+      setGrafanaPanelUrl(editingCard.grafanaPanelUrl || '');
+      setTestStatus('idle');
+      setTestResult('');
+      return;
+    }
+
+    resetForm();
+  }, [isOpen, editingCard]);
 
   if (!isOpen) return null;
 
@@ -78,7 +104,6 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
     setTestStatus('loading');
     try {
       const { data } = await testQuery.mutateAsync(promql);
-      // data has been auto-converted to camelCase by interceptor
       const d = data as unknown as Record<string, unknown>;
       if (d.status === 'ok') {
         setTestStatus('ok');
@@ -94,9 +119,10 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
     }
   };
 
-  const handleCreate = () => {
+  const handleSave = () => {
     if (!title.trim() || !promql.trim()) return;
-    createCard.mutate({
+
+    const payload = {
       title: title.trim(),
       description: description.trim() || undefined,
       icon,
@@ -106,9 +132,16 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
       category,
       thresholds: thresholds.trim() || undefined,
       grafanaPanelUrl: grafanaPanelUrl.trim() || undefined,
-      sortOrder: 99,
-      enabled: true,
-    });
+      sortOrder: editingCard?.sortOrder ?? 99,
+      enabled: editingCard?.enabled ?? true,
+    };
+
+    if (editingCard) {
+      updateCard.mutate({ id: editingCard.id, data: payload });
+    } else {
+      createCard.mutate(payload);
+    }
+
     resetForm();
     onClose();
   };
@@ -141,16 +174,14 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
         className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-card rounded-t-2xl z-10">
-          <h2 className="text-lg font-semibold">Add Metric Card</h2>
+          <h2 className="text-lg font-semibold">{isEditMode ? 'Edit Metric Card' : 'Add Metric Card'}</h2>
           <button onClick={onClose} className="p-1 hover:bg-secondary rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="px-6 py-5 space-y-5">
-          {/* Quick Templates */}
           <div>
             <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
               Quick Templates
@@ -169,7 +200,6 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
             </div>
           </div>
 
-          {/* Title + Icon */}
           <div className="grid grid-cols-[1fr_80px] gap-3">
             <div>
               <label className="block text-sm font-medium mb-1">
@@ -194,7 +224,6 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
             </div>
           </div>
 
-          {/* Description */}
           <div>
             <label className="block text-sm font-medium mb-1">Description</label>
             <input
@@ -206,7 +235,6 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
             />
           </div>
 
-          {/* PromQL Query */}
           <div>
             <label className="block text-sm font-medium mb-1">
               PromQL Query <span className="text-red-400">*</span>
@@ -218,7 +246,6 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
               rows={3}
               className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
             />
-            {/* Test button */}
             <div className="flex items-center gap-3 mt-2">
               <button
                 onClick={handleTest}
@@ -241,7 +268,6 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
             </div>
           </div>
 
-          {/* Category + Display Type + Unit row */}
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-sm font-medium mb-1">Category</label>
@@ -283,7 +309,6 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
             </div>
           </div>
 
-          {/* Thresholds */}
           <div>
             <label className="block text-sm font-medium mb-1">
               Thresholds <span className="text-xs text-muted-foreground">(optional)</span>
@@ -300,7 +325,6 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
             </p>
           </div>
 
-          {/* Grafana Deep Link */}
           <div>
             <label className="block text-sm font-medium mb-1">
               Grafana Panel URL <span className="text-xs text-muted-foreground">(optional)</span>
@@ -314,7 +338,6 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
             />
           </div>
 
-          {/* Actions */}
           <div className="flex gap-3 pt-2">
             <button
               onClick={() => { resetForm(); onClose(); }}
@@ -323,11 +346,11 @@ export function AddMetricCardModal({ isOpen, onClose }: AddMetricCardModalProps)
               Cancel
             </button>
             <button
-              onClick={handleCreate}
+              onClick={handleSave}
               disabled={!title.trim() || !promql.trim()}
               className="flex-1 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-40"
             >
-              Create Card
+              {isEditMode ? 'Save Changes' : 'Create Card'}
             </button>
           </div>
         </div>

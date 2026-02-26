@@ -1,1 +1,1 @@
-export { TaskModal, saveTaskImages } from './TaskModal';
+export { TaskModal } from './TaskModal';

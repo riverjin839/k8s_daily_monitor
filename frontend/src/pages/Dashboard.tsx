@@ -66,11 +66,6 @@ export function Dashboard() {
     }
   };
 
-  const handleSettings = () => {
-    // TODO: Settings modal/page
-    console.log('Open settings');
-  };
-
   const DEFAULT_ADDONS = [
     { name: 'etcd Leader', type: 'etcd-leader', icon: '💾', description: 'etcd leader election & health status' },
     { name: 'Node Status', type: 'node-check', icon: '🖥️', description: 'Node readiness & pressure conditions' },

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus } from 'lucide-react';
-import { TaskModal, saveTaskImages } from '@/components/tasks';
+import { TaskModal } from '@/components/tasks';
+import { saveTaskImages } from '@/lib/taskImages';
 import { useTasks, useCreateTask, useUpdateTask, useDeleteTask } from '@/hooks/useTasks';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';

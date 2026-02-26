@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, ImagePlus, Trash2 } from 'lucide-react';
 import { Task, TaskCreate } from '@/types';
+import { loadTaskImages } from '@/lib/taskImages';
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -35,26 +36,6 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-const STORAGE_KEY_PREFIX = 'k8s:img:task:';
-
-function loadImages(id?: string): string[] {
-  if (!id) return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_PREFIX + id);
-    return raw ? (JSON.parse(raw) as string[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function saveTaskImages(id: string, images: string[]) {
-  if (images.length === 0) {
-    localStorage.removeItem(STORAGE_KEY_PREFIX + id);
-  } else {
-    localStorage.setItem(STORAGE_KEY_PREFIX + id, JSON.stringify(images));
-  }
-}
-
 export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: TaskModalProps) {
   const [assignee, setAssignee] = useState('');
   const [clusterId, setClusterId] = useState('');
@@ -81,7 +62,7 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
       setCompletedAt(editTask.completedAt ?? '');
       setPriority(editTask.priority);
       setRemarks(editTask.remarks ?? '');
-      setImages(loadImages(editTask.id));
+      setImages(loadTaskImages(editTask.id));
     } else {
       setAssignee('');
       setClusterId('');

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, ImagePlus, Trash2 } from 'lucide-react';
 import { Issue, IssueCreate } from '@/types';
+import { loadIssueImages } from '@/lib/issueImages';
 
 interface IssueModalProps {
   isOpen: boolean;
@@ -27,26 +28,6 @@ const ISSUE_AREAS = [
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-const STORAGE_KEY_PREFIX = 'k8s:img:issue:';
-
-function loadImages(id?: string): string[] {
-  if (!id) return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_PREFIX + id);
-    return raw ? (JSON.parse(raw) as string[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function saveIssueImages(id: string, images: string[]) {
-  if (images.length === 0) {
-    localStorage.removeItem(STORAGE_KEY_PREFIX + id);
-  } else {
-    localStorage.setItem(STORAGE_KEY_PREFIX + id, JSON.stringify(images));
-  }
 }
 
 export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: IssueModalProps) {
@@ -76,7 +57,7 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
       setOccurredAt(editIssue.occurredAt);
       setResolvedAt(editIssue.resolvedAt ?? '');
       setRemarks(editIssue.remarks ?? '');
-      setImages(loadImages(editIssue.id));
+      setImages(loadIssueImages(editIssue.id));
     } else {
       setAssignee('');
       setClusterId('');

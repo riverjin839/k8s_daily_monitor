@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, Download, Pencil, Trash2, ClipboardList, Search, X, ImagePlus } from 'lucide-react';
-import { IssueModal, saveIssueImages } from '@/components/issues';
+import { IssueModal } from '@/components/issues';
+import { saveIssueImages } from '@/lib/issueImages';
 import { useIssues, useCreateIssue, useUpdateIssue, useDeleteIssue } from '@/hooks/useIssues';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';

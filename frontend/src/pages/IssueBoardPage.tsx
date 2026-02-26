@@ -306,7 +306,7 @@ export function IssueBoardPage() {
                           <div className="flex items-start gap-1.5">
                             <p className="line-clamp-2 text-foreground/90">{issue.issueContent}</p>
                             {hasImages && (
-                              <ImagePlus className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" title="이미지 첨부 있음" />
+                              <span title="이미지 첨부 있음"><ImagePlus className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" /></span>
                             )}
                           </div>
                         </td>

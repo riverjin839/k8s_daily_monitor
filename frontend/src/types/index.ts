@@ -218,3 +218,26 @@ export interface MetricQueryResult {
   results?: Array<Record<string, any>> | null;
   error?: string | null;
 }
+
+export interface UiSettings {
+  appTitle: string;
+  navLabels: Record<string, string>;
+}
+
+export interface ClusterLink {
+  id: string;
+  label: string;
+  url: string;
+  description?: string;
+}
+
+export interface ClusterLinkGroup {
+  clusterId: string;
+  clusterName: string;
+  links: ClusterLink[];
+}
+
+export interface ClusterLinksPayload {
+  commonLinks: ClusterLink[];
+  clusterGroups: ClusterLinkGroup[];
+}

@@ -250,9 +250,17 @@ export const uiSettingsApi = {
 };
 
 export const nodeLabelsApi = {
-  getNodes: (clusterId: string) => api.get('/clusters/' + clusterId + '/nodes'),
-  patchNodeLabels: (clusterId: string, nodeName: string, payload: { add: Record<string, string>; remove: string[] }) =>
-    api.patch('/clusters/' + clusterId + '/nodes/' + encodeURIComponent(nodeName) + '/labels', payload),
+  getNodes: (clusterId: string) =>
+    api.get(`/clusters/${clusterId}/nodes`),
+  patchNodeLabels: (
+    clusterId: string,
+    nodeName: string,
+    payload: { add: Record<string, string>; remove: string[] }
+  ) =>
+    api.patch(
+      `/clusters/${clusterId}/nodes/${encodeURIComponent(nodeName)}/labels`,
+      payload
+    ),
 };
 
 export default api;

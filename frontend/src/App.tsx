@@ -20,6 +20,16 @@ const queryClient = new QueryClient({
 });
 
 function App() {
+  const appRoutes = [
+    { path: '/', element: <Dashboard /> },
+    { path: '/playbooks', element: <PlaybooksPage /> },
+    { path: '/issues', element: <IssueBoardPage /> },
+    { path: '/tasks', element: <TaskBoardPage /> },
+    { path: '/links', element: <ClusterLinksPage /> },
+    { path: '/node-labels', element: <NodeLabelsPage /> },
+    { path: '/settings', element: <SettingsPage /> },
+  ];
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
@@ -27,13 +37,9 @@ function App() {
           <Sidebar />
           <div className="flex-1 min-w-0 ml-[220px]">
             <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/playbooks" element={<PlaybooksPage />} />
-              <Route path="/issues" element={<IssueBoardPage />} />
-              <Route path="/tasks" element={<TaskBoardPage />} />
-              <Route path="/links" element={<ClusterLinksPage />} />
-              <Route path="/node-labels" element={<NodeLabelsPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
+              {appRoutes.map((route) => (
+                <Route key={route.path} path={route.path} element={route.element} />
+              ))}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>

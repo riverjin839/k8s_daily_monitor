@@ -166,18 +166,23 @@ app.add_middleware(
 )
 
 # 라우터 등록
-app.include_router(clusters_router, prefix="/api/v1")
-app.include_router(health_router, prefix="/api/v1")
-app.include_router(history_router, prefix="/api/v1")
-app.include_router(daily_check_router, prefix="/api/v1")
-app.include_router(playbooks_router, prefix="/api/v1")
-app.include_router(agent_router, prefix="/api/v1")
-app.include_router(promql_router, prefix="/api/v1")
-app.include_router(openclaw_router, prefix="/api/v1")
-app.include_router(issues_router, prefix="/api/v1")
-app.include_router(tasks_router, prefix="/api/v1")
-app.include_router(ui_settings_router, prefix="/api/v1")
-app.include_router(node_labels_router, prefix="/api/v1")
+API_V1_ROUTERS = (
+    clusters_router,
+    health_router,
+    history_router,
+    daily_check_router,
+    playbooks_router,
+    agent_router,
+    promql_router,
+    openclaw_router,
+    issues_router,
+    tasks_router,
+    ui_settings_router,
+    node_labels_router,
+)
+
+for router in API_V1_ROUTERS:
+    app.include_router(router, prefix="/api/v1")
 
 
 @app.get("/")

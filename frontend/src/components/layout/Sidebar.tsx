@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ComponentType } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -7,6 +7,7 @@ import {
   ListTodo,
   Settings,
   Link2,
+  Tags,
   Calculator,
   Pencil,
   Check,
@@ -14,12 +15,13 @@ import {
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 
-const NAV_ITEMS = [
+const NAV_ITEMS: Array<{ to: string; defaultLabel: string; icon: ComponentType<{ className?: string }> }> = [
   { to: '/', defaultLabel: 'Dashboard', icon: LayoutDashboard },
   { to: '/playbooks', defaultLabel: 'Playbooks', icon: BookOpen },
   { to: '/issues', defaultLabel: '이슈 게시판', icon: ClipboardList },
   { to: '/tasks', defaultLabel: '작업 게시판', icon: ListTodo },
   { to: '/links', defaultLabel: '클러스터 링크', icon: Link2 },
+  { to: '/node-labels', defaultLabel: '노드 라벨', icon: Tags },
   { to: '/cidr', defaultLabel: 'CIDR 계산기', icon: Calculator },
   { to: '/settings', defaultLabel: 'Settings', icon: Settings },
 ];

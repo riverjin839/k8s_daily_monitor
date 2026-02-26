@@ -9,6 +9,7 @@ from app.routers.openclaw import router as openclaw_router
 from app.routers.issues import router as issues_router
 from app.routers.tasks import router as tasks_router
 from app.routers.ui_settings import router as ui_settings_router
+from app.routers.node_labels import router as node_labels_router
 
 __all__ = [
     "clusters_router",
@@ -22,4 +23,5 @@ __all__ = [
     "issues_router",
     "tasks_router",
     "ui_settings_router",
+    "node_labels_router",
 ]

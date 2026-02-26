@@ -21,14 +21,19 @@ class NodeLabelService:
         if self._v1 is not None:
             return self._v1
 
-        if self.cluster.kubeconfig_path and os.path.exists(self.cluster.kubeconfig_path):
-            config.load_kube_config(config_file=self.cluster.kubeconfig_path)
-        else:
-            try:
-                config.load_incluster_config()
-            except config.ConfigException:
-                config.load_kube_config()
+        kubeconfig = self.cluster.kubeconfig_path
+        if not kubeconfig:
+            raise ValueError(
+                f"클러스터 '{self.cluster.name}'에 kubeconfig_path가 설정되지 않았습니다. "
+                "클러스터 등록 시 유효한 kubeconfig 경로를 지정하세요."
+            )
+        if not os.path.exists(kubeconfig):
+            raise ValueError(
+                f"kubeconfig 파일을 찾을 수 없습니다: '{kubeconfig}'. "
+                "경로가 올바른지 확인하세요."
+            )
 
+        config.load_kube_config(config_file=kubeconfig)
         self._v1 = client.CoreV1Api()
         return self._v1
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link2, Plus, Pencil, Trash2, ExternalLink, X, Check } from 'lucide-react';
+import { Link2, Plus, Pencil, Trash2, ExternalLink, X, Check, Globe } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 
@@ -17,6 +17,7 @@ interface ClusterLinkGroup {
 }
 
 const STORAGE_KEY = 'k8s:cluster-links';
+const COMMON_LINKS_KEY = 'k8s:common-links';
 
 function loadLinkGroups(): ClusterLinkGroup[] {
   try {
@@ -29,6 +30,19 @@ function loadLinkGroups(): ClusterLinkGroup[] {
 
 function saveLinkGroups(groups: ClusterLinkGroup[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
+}
+
+function loadCommonLinks(): ClusterLink[] {
+  try {
+    const raw = localStorage.getItem(COMMON_LINKS_KEY);
+    return raw ? (JSON.parse(raw) as ClusterLink[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCommonLinks(links: ClusterLink[]) {
+  localStorage.setItem(COMMON_LINKS_KEY, JSON.stringify(links));
 }
 
 function genId() {
@@ -109,26 +123,86 @@ function LinkForm({ initial, onSave, onCancel }: LinkFormProps) {
   );
 }
 
+function LinkCard({
+  link,
+  onEdit,
+  onDelete,
+}: {
+  link: ClusterLink;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="group flex items-start gap-3 px-4 py-3 bg-secondary/40 hover:bg-secondary/70 border border-border rounded-lg transition-colors">
+      <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+        <Link2 className="w-4 h-4 text-primary" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <a
+            href={link.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-sm text-foreground hover:text-primary transition-colors flex items-center gap-1 truncate"
+          >
+            {link.label}
+            <ExternalLink className="w-3 h-3 flex-shrink-0" />
+          </a>
+        </div>
+        {link.description && (
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">{link.description}</p>
+        )}
+        <p className="text-xs text-muted-foreground/60 font-mono truncate mt-0.5">{link.url}</p>
+      </div>
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+        <button
+          onClick={onEdit}
+          className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-foreground"
+          title="수정"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={onDelete}
+          className="p-1.5 hover:bg-red-500/10 rounded-md text-muted-foreground hover:text-red-400"
+          title="삭제"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ClusterLinksPage() {
   const { clusters } = useClusterStore();
   useClusters();
 
+  // Cluster-specific links
   const [linkGroups, setLinkGroups] = useState<ClusterLinkGroup[]>(() => loadLinkGroups());
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [editingLink, setEditingLink] = useState<{ clusterId: string; link: ClusterLink } | null>(null);
 
-  // Sync localStorage whenever linkGroups changes
+  // Common service links
+  const [commonLinks, setCommonLinks] = useState<ClusterLink[]>(() => loadCommonLinks());
+  const [addingCommon, setAddingCommon] = useState(false);
+  const [editingCommonLink, setEditingCommonLink] = useState<ClusterLink | null>(null);
+
   useEffect(() => {
     saveLinkGroups(linkGroups);
   }, [linkGroups]);
 
-  // Merge link groups with registered clusters (add groups for new clusters)
+  useEffect(() => {
+    saveCommonLinks(commonLinks);
+  }, [commonLinks]);
+
+  // Merge link groups with registered clusters
   const allGroups: ClusterLinkGroup[] = clusters.map((cluster) => {
     const existing = linkGroups.find((g) => g.clusterId === cluster.id);
     return existing ?? { clusterId: cluster.id, clusterName: cluster.name, links: [] };
   });
 
-  // Also include orphan groups for deleted clusters
+  // Orphan groups for deleted clusters
   const orphanGroups = linkGroups.filter((g) => !clusters.find((c) => c.id === g.clusterId));
 
   const upsertGroup = (group: ClusterLinkGroup) => {
@@ -172,6 +246,23 @@ export function ClusterLinksPage() {
     );
   };
 
+  /* ---- Common links handlers ---- */
+  const handleAddCommon = (link: ClusterLink) => {
+    setCommonLinks((prev) => [...prev, link]);
+    setAddingCommon(false);
+  };
+
+  const handleEditCommon = (updated: ClusterLink) => {
+    setCommonLinks((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+    setEditingCommonLink(null);
+  };
+
+  const handleDeleteCommon = (linkId: string) => {
+    if (confirm('이 링크를 삭제하시겠습니까?')) {
+      setCommonLinks((prev) => prev.filter((l) => l.id !== linkId));
+    }
+  };
+
   const renderGroup = (group: ClusterLinkGroup, isOrphan = false) => (
     <div key={group.clusterId} className="bg-card border border-border rounded-xl overflow-hidden">
       {/* Cluster header */}
@@ -196,7 +287,6 @@ export function ClusterLinksPage() {
       </div>
 
       <div className="p-4 space-y-2">
-        {/* Add link form */}
         {addingTo === group.clusterId && (
           <LinkForm
             onSave={(link) => handleAddLink(group.clusterId, group.clusterName, link)}
@@ -204,17 +294,18 @@ export function ClusterLinksPage() {
           />
         )}
 
-        {/* Link cards */}
         {group.links.length === 0 && addingTo !== group.clusterId && (
           <div className="text-center py-8">
             <Link2 className="w-8 h-8 mx-auto mb-2 text-muted-foreground/30" />
             <p className="text-sm text-muted-foreground">등록된 링크가 없습니다.</p>
-            <button
-              onClick={() => { setAddingTo(group.clusterId); setEditingLink(null); }}
-              className="mt-2 text-xs text-primary hover:text-primary/80"
-            >
-              + 첫 번째 링크 추가
-            </button>
+            {!isOrphan && (
+              <button
+                onClick={() => { setAddingTo(group.clusterId); setEditingLink(null); }}
+                className="mt-2 text-xs text-primary hover:text-primary/80"
+              >
+                + 첫 번째 링크 추가
+              </button>
+            )}
           </div>
         )}
 
@@ -228,48 +319,15 @@ export function ClusterLinksPage() {
                   onCancel={() => setEditingLink(null)}
                 />
               ) : (
-                <div className="group flex items-start gap-3 px-4 py-3 bg-secondary/40 hover:bg-secondary/70 border border-border rounded-lg transition-colors">
-                  <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Link2 className="w-4 h-4 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-medium text-sm text-foreground hover:text-primary transition-colors flex items-center gap-1 truncate"
-                      >
-                        {link.label}
-                        <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                      </a>
-                    </div>
-                    {link.description && (
-                      <p className="text-xs text-muted-foreground mt-0.5 truncate">{link.description}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground/60 font-mono truncate mt-0.5">{link.url}</p>
-                  </div>
-                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                    <button
-                      onClick={() => { setEditingLink({ clusterId: group.clusterId, link }); setAddingTo(null); }}
-                      className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-foreground"
-                      title="수정"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (confirm(`"${link.label}" 링크를 삭제하시겠습니까?`)) {
-                          handleDeleteLink(group.clusterId, link.id);
-                        }
-                      }}
-                      className="p-1.5 hover:bg-red-500/10 rounded-md text-muted-foreground hover:text-red-400"
-                      title="삭제"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
+                <LinkCard
+                  link={link}
+                  onEdit={() => { setEditingLink({ clusterId: group.clusterId, link }); setAddingTo(null); }}
+                  onDelete={() => {
+                    if (confirm(`"${link.label}" 링크를 삭제하시겠습니까?`)) {
+                      handleDeleteLink(group.clusterId, link.id);
+                    }
+                  }}
+                />
               )}
             </div>
           ))}
@@ -290,19 +348,83 @@ export function ClusterLinksPage() {
           </span>
         </div>
 
-        {clusters.length === 0 ? (
-          <div className="text-center py-20">
-            <Link2 className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-            <p className="text-muted-foreground">
-              등록된 클러스터가 없습니다. Settings에서 클러스터를 먼저 등록해주세요.
-            </p>
+        <div className="space-y-6">
+          {/* Common Service Links Section */}
+          <div className="bg-card border border-emerald-500/20 rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-emerald-500/20 flex items-center justify-between bg-emerald-500/5">
+              <div className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-emerald-400" />
+                <span className="font-semibold text-sm text-emerald-400">공통 서비스 링크</span>
+                <span className="text-xs text-muted-foreground">({commonLinks.length}개 링크)</span>
+                <span className="text-xs text-muted-foreground">— 클러스터 공통 사용 서비스</span>
+              </div>
+              <button
+                onClick={() => { setAddingCommon(true); setEditingCommonLink(null); }}
+                className="px-3 py-1.5 text-xs font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-lg transition-colors flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                링크 추가
+              </button>
+            </div>
+
+            <div className="p-4 space-y-2">
+              {addingCommon && (
+                <LinkForm
+                  onSave={handleAddCommon}
+                  onCancel={() => setAddingCommon(false)}
+                />
+              )}
+
+              {commonLinks.length === 0 && !addingCommon && (
+                <div className="text-center py-8">
+                  <Globe className="w-8 h-8 mx-auto mb-2 text-muted-foreground/30" />
+                  <p className="text-sm text-muted-foreground">등록된 공통 링크가 없습니다.</p>
+                  <button
+                    onClick={() => setAddingCommon(true)}
+                    className="mt-2 text-xs text-emerald-400 hover:text-emerald-300"
+                  >
+                    + 첫 번째 공통 링크 추가
+                  </button>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                {commonLinks.map((link) => (
+                  <div key={link.id}>
+                    {editingCommonLink?.id === link.id ? (
+                      <LinkForm
+                        initial={link}
+                        onSave={handleEditCommon}
+                        onCancel={() => setEditingCommonLink(null)}
+                      />
+                    ) : (
+                      <LinkCard
+                        link={link}
+                        onEdit={() => { setEditingCommonLink(link); setAddingCommon(false); }}
+                        onDelete={() => handleDeleteCommon(link.id)}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        ) : (
-          <div className="space-y-6">
-            {allGroups.map((g) => renderGroup(g))}
-            {orphanGroups.map((g) => renderGroup(g, true))}
-          </div>
-        )}
+
+          {/* Cluster-specific links */}
+          {clusters.length === 0 && orphanGroups.length === 0 ? (
+            <div className="text-center py-12 bg-card border border-border rounded-xl">
+              <Link2 className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
+              <p className="text-muted-foreground">
+                등록된 클러스터가 없습니다. Settings에서 클러스터를 먼저 등록해주세요.
+              </p>
+            </div>
+          ) : (
+            <>
+              {allGroups.map((g) => renderGroup(g))}
+              {orphanGroups.map((g) => renderGroup(g, true))}
+            </>
+          )}
+        </div>
       </main>
     </div>
   );

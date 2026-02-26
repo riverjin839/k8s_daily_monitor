@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus, Download, Pencil, Trash2, ClipboardList, Search, X, ImagePlus } from 'lucide-react';
-import { IssueModal } from '@/components/issues';
+import { IssueModal, IssueDetailModal } from '@/components/issues';
 import { saveIssueImages } from '@/lib/issueImages';
 import { useIssues, useCreateIssue, useUpdateIssue, useDeleteIssue } from '@/hooks/useIssues';
 import { useClusters } from '@/hooks/useCluster';
@@ -32,6 +32,7 @@ const STATUS_DOT: Record<string, string> = {
 export function IssueBoardPage() {
   const [showModal, setShowModal] = useState(false);
   const [editIssue, setEditIssue] = useState<Issue | null>(null);
+  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [filterClusterId, setFilterClusterId] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
   const [filterArea, setFilterArea] = useState('');
@@ -79,6 +80,13 @@ export function IssueBoardPage() {
   };
 
   const handleEdit = (issue: Issue) => {
+    setSelectedIssue(null);
+    setEditIssue(issue);
+    setShowModal(true);
+  };
+
+  const handleDetailEdit = (issue: Issue) => {
+    setSelectedIssue(null);
     setEditIssue(issue);
     setShowModal(true);
   };
@@ -275,7 +283,8 @@ export function IssueBoardPage() {
                     return (
                       <tr
                         key={issue.id}
-                        className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors"
+                        className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer"
+                        onClick={() => setSelectedIssue(issue)}
                       >
                         <td className="px-4 py-3">
                           <span className="flex items-center gap-1.5">
@@ -329,14 +338,14 @@ export function IssueBoardPage() {
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-center gap-1">
                             <button
-                              onClick={() => handleEdit(issue)}
+                              onClick={(e) => { e.stopPropagation(); handleEdit(issue); }}
                               className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
                               title="수정"
                             >
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
                             <button
-                              onClick={() => handleDelete(issue)}
+                              onClick={(e) => { e.stopPropagation(); handleDelete(issue); }}
                               className="p-1.5 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400"
                               title="삭제"
                             >
@@ -361,6 +370,14 @@ export function IssueBoardPage() {
         clusters={clusters}
         editIssue={editIssue}
       />
+
+      {selectedIssue && (
+        <IssueDetailModal
+          issue={selectedIssue}
+          onClose={() => setSelectedIssue(null)}
+          onEdit={handleDetailEdit}
+        />
+      )}
     </div>
   );
 }

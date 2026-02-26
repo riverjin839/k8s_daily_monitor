@@ -6,6 +6,7 @@ import { IssueBoardPage } from '@/pages/IssueBoardPage';
 import { TaskBoardPage } from '@/pages/TaskBoardPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { ClusterLinksPage } from '@/pages/ClusterLinksPage';
+import { NodeLabelsPage } from '@/pages/NodeLabelsPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar } from '@/components/layout';
 
@@ -31,6 +32,7 @@ function App() {
               <Route path="/issues" element={<IssueBoardPage />} />
               <Route path="/tasks" element={<TaskBoardPage />} />
               <Route path="/links" element={<ClusterLinksPage />} />
+              <Route path="/node-labels" element={<NodeLabelsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

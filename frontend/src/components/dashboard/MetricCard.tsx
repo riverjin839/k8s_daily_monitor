@@ -1,10 +1,11 @@
 import { MetricCard as MetricCardType, MetricQueryResult } from '@/types';
-import { ExternalLink, Trash2, AlertTriangle, WifiOff } from 'lucide-react';
+import { ExternalLink, Trash2, AlertTriangle, WifiOff, Pencil } from 'lucide-react';
 
 interface MetricCardProps {
   card: MetricCardType;
   result?: MetricQueryResult;
   onDelete?: () => void;
+  onEdit?: () => void;
 }
 
 // ── Threshold parser ─────────────────────────────────────
@@ -147,7 +148,7 @@ function StatusOverlay({ result }: { result?: MetricQueryResult }) {
 }
 
 // ── Main Card ────────────────────────────────────────────
-export function MetricCard({ card, result, onDelete }: MetricCardProps) {
+export function MetricCard({ card, result, onDelete, onEdit }: MetricCardProps) {
   const hasError = result && result.status !== 'ok';
 
   return (
@@ -176,6 +177,15 @@ export function MetricCard({ card, result, onDelete }: MetricCardProps) {
               title="Delete card"
             >
               <Trash2 className="w-3.5 h-3.5 text-red-400" />
+            </button>
+          )}
+          {onEdit && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="p-1.5 hover:bg-blue-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+              title="Edit card"
+            >
+              <Pencil className="w-3.5 h-3.5 text-blue-400" />
             </button>
           )}
           <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-secondary text-muted-foreground uppercase tracking-wider">

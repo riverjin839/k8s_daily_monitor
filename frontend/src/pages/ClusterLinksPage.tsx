@@ -1,49 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link2, Plus, Pencil, Trash2, ExternalLink, X, Check, Globe } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
+import { useClusterLinks, useUpdateClusterLinks } from '@/hooks/useUiSettings';
 import { useClusterStore } from '@/stores/clusterStore';
-
-interface ClusterLink {
-  id: string;
-  label: string;
-  url: string;
-  description?: string;
-}
-
-interface ClusterLinkGroup {
-  clusterId: string;
-  clusterName: string;
-  links: ClusterLink[];
-}
-
-const STORAGE_KEY = 'k8s:cluster-links';
-const COMMON_LINKS_KEY = 'k8s:common-links';
-
-function loadLinkGroups(): ClusterLinkGroup[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as ClusterLinkGroup[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveLinkGroups(groups: ClusterLinkGroup[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
-}
-
-function loadCommonLinks(): ClusterLink[] {
-  try {
-    const raw = localStorage.getItem(COMMON_LINKS_KEY);
-    return raw ? (JSON.parse(raw) as ClusterLink[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveCommonLinks(links: ClusterLink[]) {
-  localStorage.setItem(COMMON_LINKS_KEY, JSON.stringify(links));
-}
+import { ClusterLink, ClusterLinkGroup } from '@/types';
 
 function genId() {
   return Math.random().toString(36).slice(2, 10);
@@ -177,24 +137,31 @@ function LinkCard({
 export function ClusterLinksPage() {
   const { clusters } = useClusterStore();
   useClusters();
+  const { data: linksData } = useClusterLinks();
+  const updateClusterLinks = useUpdateClusterLinks();
 
   // Cluster-specific links
-  const [linkGroups, setLinkGroups] = useState<ClusterLinkGroup[]>(() => loadLinkGroups());
+  const [linkGroups, setLinkGroups] = useState<ClusterLinkGroup[]>([]);
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [editingLink, setEditingLink] = useState<{ clusterId: string; link: ClusterLink } | null>(null);
 
   // Common service links
-  const [commonLinks, setCommonLinks] = useState<ClusterLink[]>(() => loadCommonLinks());
+  const [commonLinks, setCommonLinks] = useState<ClusterLink[]>([]);
   const [addingCommon, setAddingCommon] = useState(false);
   const [editingCommonLink, setEditingCommonLink] = useState<ClusterLink | null>(null);
 
   useEffect(() => {
-    saveLinkGroups(linkGroups);
-  }, [linkGroups]);
+    if (!linksData) return;
+    setLinkGroups(linksData.clusterGroups || []);
+    setCommonLinks(linksData.commonLinks || []);
+  }, [linksData]);
 
-  useEffect(() => {
-    saveCommonLinks(commonLinks);
-  }, [commonLinks]);
+  const persistLinks = (nextGroups: ClusterLinkGroup[], nextCommon: ClusterLink[]) => {
+    updateClusterLinks.mutate({
+      clusterGroups: nextGroups,
+      commonLinks: nextCommon,
+    });
+  };
 
   // Merge link groups with registered clusters
   const allGroups: ClusterLinkGroup[] = clusters.map((cluster) => {
@@ -205,23 +172,23 @@ export function ClusterLinksPage() {
   // Orphan groups for deleted clusters
   const orphanGroups = linkGroups.filter((g) => !clusters.find((c) => c.id === g.clusterId));
 
-  const upsertGroup = (group: ClusterLinkGroup) => {
-    setLinkGroups((prev) => {
-      const idx = prev.findIndex((g) => g.clusterId === group.clusterId);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = group;
-        return next;
-      }
-      return [...prev, group];
-    });
+  const upsertGroup = (groups: ClusterLinkGroup[], group: ClusterLinkGroup) => {
+    const idx = groups.findIndex((g) => g.clusterId === group.clusterId);
+    if (idx >= 0) {
+      const next = [...groups];
+      next[idx] = group;
+      return next;
+    }
+    return [...groups, group];
   };
 
   const handleAddLink = (clusterId: string, clusterName: string, link: ClusterLink) => {
     const group = allGroups.find((g) => g.clusterId === clusterId) ??
       orphanGroups.find((g) => g.clusterId === clusterId) ??
       { clusterId, clusterName, links: [] };
-    upsertGroup({ ...group, links: [...group.links, link] });
+    const nextGroups = upsertGroup(linkGroups, { ...group, links: [...group.links, link] });
+    setLinkGroups(nextGroups);
+    persistLinks(nextGroups, commonLinks);
     setAddingTo(null);
   };
 
@@ -229,37 +196,45 @@ export function ClusterLinksPage() {
     const group = allGroups.find((g) => g.clusterId === clusterId) ??
       orphanGroups.find((g) => g.clusterId === clusterId) ??
       { clusterId, clusterName, links: [] };
-    upsertGroup({
+    const nextGroups = upsertGroup(linkGroups, {
       ...group,
       links: group.links.map((l) => (l.id === updated.id ? updated : l)),
     });
+    setLinkGroups(nextGroups);
+    persistLinks(nextGroups, commonLinks);
     setEditingLink(null);
   };
 
   const handleDeleteLink = (clusterId: string, linkId: string) => {
-    setLinkGroups((prev) =>
-      prev.map((g) =>
-        g.clusterId === clusterId
-          ? { ...g, links: g.links.filter((l) => l.id !== linkId) }
-          : g,
-      ),
+    const nextGroups = linkGroups.map((g) =>
+      g.clusterId === clusterId
+        ? { ...g, links: g.links.filter((l) => l.id !== linkId) }
+        : g,
     );
+    setLinkGroups(nextGroups);
+    persistLinks(nextGroups, commonLinks);
   };
 
   /* ---- Common links handlers ---- */
   const handleAddCommon = (link: ClusterLink) => {
-    setCommonLinks((prev) => [...prev, link]);
+    const nextCommon = [...commonLinks, link];
+    setCommonLinks(nextCommon);
+    persistLinks(linkGroups, nextCommon);
     setAddingCommon(false);
   };
 
   const handleEditCommon = (updated: ClusterLink) => {
-    setCommonLinks((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+    const nextCommon = commonLinks.map((l) => (l.id === updated.id ? updated : l));
+    setCommonLinks(nextCommon);
+    persistLinks(linkGroups, nextCommon);
     setEditingCommonLink(null);
   };
 
   const handleDeleteCommon = (linkId: string) => {
     if (confirm('이 링크를 삭제하시겠습니까?')) {
-      setCommonLinks((prev) => prev.filter((l) => l.id !== linkId));
+      const nextCommon = commonLinks.filter((l) => l.id !== linkId);
+      setCommonLinks(nextCommon);
+      persistLinks(linkGroups, nextCommon);
     }
   };
 

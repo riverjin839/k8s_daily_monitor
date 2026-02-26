@@ -6,6 +6,7 @@ from app.models.playbook import Playbook
 from app.models.metric_card import MetricCard
 from app.models.issue import Issue
 from app.models.task import Task
+from app.models.app_setting import AppSetting
 
 __all__ = [
     "Cluster",
@@ -19,4 +20,5 @@ __all__ = [
     "MetricCard",
     "Issue",
     "Task",
+    "AppSetting",
 ]

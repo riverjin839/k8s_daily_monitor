@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate, UiSettings, ClusterLinksPayload } from '@/types';
 
 // snake_case → camelCase 변환 (Backend는 snake_case, Frontend는 camelCase)
 function toCamelCase(str: string): string {
@@ -240,6 +240,19 @@ export const tasksApi = {
         : undefined,
       responseType: 'blob',
     }),
+};
+
+export const uiSettingsApi = {
+  get: () => api.get<UiSettings>('/ui-settings'),
+  update: (data: Partial<UiSettings>) => api.put<UiSettings>('/ui-settings', data),
+  getClusterLinks: () => api.get<{ data: ClusterLinksPayload }>('/ui-settings/cluster-links'),
+  updateClusterLinks: (data: ClusterLinksPayload) => api.put<{ data: ClusterLinksPayload }>('/ui-settings/cluster-links', data),
+};
+
+export const nodeLabelsApi = {
+  getNodes: (clusterId: string) => api.get('/clusters/' + clusterId + '/nodes'),
+  patchNodeLabels: (clusterId: string, nodeName: string, payload: { add: Record<string, string>; remove: string[] }) =>
+    api.patch('/clusters/' + clusterId + '/nodes/' + encodeURIComponent(nodeName) + '/labels', payload),
 };
 
 export default api;

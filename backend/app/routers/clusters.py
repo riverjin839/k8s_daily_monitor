@@ -9,6 +9,9 @@ from uuid import UUID
 from app.config import settings
 from app.database import get_db
 from app.models import Cluster, Addon
+from app.models.daily_check import DailyCheckLog, CheckSchedule
+from app.models.issue import Issue
+from app.models.task import Task
 from app.schemas import (
     ClusterCreate,
     ClusterUpdate,
@@ -185,13 +188,25 @@ def delete_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
 
-    # 저장된 kubeconfig 파일도 삭제
+    # 저장된 kubeconfig 파일 삭제
     stored_path = _kubeconfig_store_path(cluster_id)
     if os.path.exists(stored_path):
         try:
             os.remove(stored_path)
         except OSError:
             pass
+
+    # FK 제약 때문에 Cluster 삭제 전 연관 데이터 처리
+    # - DailyCheckLog, CheckSchedule: cluster_id NOT NULL → 먼저 삭제
+    db.query(DailyCheckLog).filter(DailyCheckLog.cluster_id == cluster_id).delete(synchronize_session=False)
+    db.query(CheckSchedule).filter(CheckSchedule.cluster_id == cluster_id).delete(synchronize_session=False)
+    # - Issue, Task: cluster_id nullable → NULL 처리 (레코드 보관)
+    db.query(Issue).filter(Issue.cluster_id == cluster_id).update(
+        {"cluster_id": None}, synchronize_session=False
+    )
+    db.query(Task).filter(Task.cluster_id == cluster_id).update(
+        {"cluster_id": None}, synchronize_session=False
+    )
 
     db.delete(cluster)
     db.commit()

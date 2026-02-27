@@ -1,101 +1,130 @@
-import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock } from 'lucide-react';
-import { useClusters, useCreateCluster, useUpdateCluster, useDeleteCluster } from '@/hooks/useCluster';
+import { useEffect, useState } from 'react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye } from 'lucide-react';
+import { useClusters, useUpdateCluster, useDeleteCluster } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
+import { AddClusterModal, KubeconfigEditModal } from '@/components/dashboard';
 import { Cluster } from '@/types';
 import { getStatusIcon, formatDateTime } from '@/lib/utils';
 
-function ClusterFormModal({
+// ── Edit Cluster Modal ──────────────────────────────────────────────────────
+
+function EditClusterModal({
   isOpen,
   onClose,
-  onSubmit,
-  editCluster,
+  cluster,
 }: {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: { name: string; apiEndpoint: string; kubeconfigPath?: string }) => void;
-  editCluster?: Cluster | null;
+  cluster: Cluster | null;
 }) {
-  const [name, setName] = useState(editCluster?.name ?? '');
-  const [apiEndpoint, setApiEndpoint] = useState(editCluster?.apiEndpoint ?? '');
-  const [kubeconfigPath, setKubeconfigPath] = useState(editCluster?.kubeconfigPath ?? '');
+  const [name, setName] = useState('');
+  const [apiEndpoint, setApiEndpoint] = useState('');
+  const [kubeconfigPath, setKubeconfigPath] = useState('');
+  const [error, setError] = useState('');
 
-  // Re-populate fields whenever the target cluster changes
+  const updateCluster = useUpdateCluster();
+
   useEffect(() => {
-    setName(editCluster?.name ?? '');
-    setApiEndpoint(editCluster?.apiEndpoint ?? '');
-    setKubeconfigPath(editCluster?.kubeconfigPath ?? '');
-  }, [editCluster]);
+    if (cluster) {
+      setName(cluster.name);
+      setApiEndpoint(cluster.apiEndpoint);
+      setKubeconfigPath(cluster.kubeconfigPath ?? '');
+    }
+    setError('');
+  }, [cluster, isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !cluster) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !apiEndpoint.trim()) return;
-    onSubmit({
-      name: name.trim(),
-      apiEndpoint: apiEndpoint.trim(),
-      kubeconfigPath: kubeconfigPath.trim() || undefined,
-    });
-    onClose();
+    if (!name.trim() || !apiEndpoint.trim()) {
+      setError('클러스터 이름과 API Endpoint는 필수입니다.');
+      return;
+    }
+    setError('');
+    try {
+      await updateCluster.mutateAsync({
+        id: cluster.id,
+        data: {
+          name: name.trim(),
+          apiEndpoint: apiEndpoint.trim(),
+          kubeconfigPath: kubeconfigPath.trim() || undefined,
+        },
+      });
+      onClose();
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
+      setError(axiosErr.response?.data?.detail ?? axiosErr.message ?? '수정에 실패했습니다.');
+    }
   };
 
   const inputClass =
-    'w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary';
+    'w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary disabled:opacity-50';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-xl p-6 w-full max-w-lg shadow-xl">
-        <h2 className="text-lg font-semibold mb-4">
-          {editCluster ? '클러스터 수정' : '클러스터 등록'}
-        </h2>
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6">
+        <h2 className="text-lg font-semibold mb-5">클러스터 수정</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">클러스터 이름 *</label>
+            <label className="block text-sm font-medium text-muted-foreground mb-1.5">클러스터 이름 *</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="예: prod-cluster-01"
+              disabled={updateCluster.isPending}
               className={inputClass}
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">API Endpoint *</label>
+            <label className="block text-sm font-medium text-muted-foreground mb-1.5">API Endpoint *</label>
             <input
               type="text"
               value={apiEndpoint}
               onChange={(e) => setApiEndpoint(e.target.value)}
-              placeholder="https://10.0.0.1:6443"
+              disabled={updateCluster.isPending}
               className={inputClass}
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Kubeconfig Path</label>
+            <label className="block text-sm font-medium text-muted-foreground mb-1.5">
+              Kubeconfig 파일 경로
+              <span className="ml-1 text-xs text-muted-foreground/60">(내용 변경은 Kubeconfig 버튼 이용)</span>
+            </label>
             <input
               type="text"
               value={kubeconfigPath}
               onChange={(e) => setKubeconfigPath(e.target.value)}
-              placeholder="/path/to/kubeconfig (선택)"
+              disabled={updateCluster.isPending}
+              placeholder="/root/.kube/config"
               className={inputClass}
             />
           </div>
+          {error && (
+            <div className="flex items-start gap-2 px-3 py-2.5 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+              disabled={updateCluster.isPending}
+              className="px-4 py-2.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors disabled:opacity-40"
             >
               취소
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
+              disabled={updateCluster.isPending}
+              className="px-5 py-2.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
             >
-              {editCluster ? '저장' : '등록'}
+              {updateCluster.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              저장
             </button>
           </div>
         </form>
@@ -104,40 +133,37 @@ function ClusterFormModal({
   );
 }
 
+// ── Main Page ───────────────────────────────────────────────────────────────
+
 export function SettingsPage() {
-  const [showModal, setShowModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [editCluster, setEditCluster] = useState<Cluster | null>(null);
+  const [kubeconfigCluster, setKubeconfigCluster] = useState<Cluster | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const { clusters } = useClusterStore();
   useClusters();
 
-  const createCluster = useCreateCluster();
-  const updateCluster = useUpdateCluster();
   const deleteCluster = useDeleteCluster();
 
-  const handleCreate = (data: { name: string; apiEndpoint: string; kubeconfigPath?: string }) => {
-    createCluster.mutate(data);
-  };
+  const handleDelete = async (cluster: Cluster) => {
+    if (
+      !confirm(
+        `클러스터 "${cluster.name}"을(를) 삭제하시겠습니까?\n관련 Addon, CheckLog, Playbook이 모두 삭제됩니다.`
+      )
+    )
+      return;
 
-  const handleUpdate = (data: { name: string; apiEndpoint: string; kubeconfigPath?: string }) => {
-    if (!editCluster) return;
-    updateCluster.mutate({ id: editCluster.id, data });
-    setEditCluster(null);
-  };
-
-  const handleDelete = (cluster: Cluster) => {
-    if (!confirm(`클러스터 "${cluster.name}"을(를) 삭제하시겠습니까? 관련 Addon, CheckLog, Playbook이 모두 삭제됩니다.`)) return;
-    deleteCluster.mutate(cluster.id);
-  };
-
-  const handleEdit = (cluster: Cluster) => {
-    setEditCluster(cluster);
-    setShowModal(true);
-  };
-
-  const handleModalClose = () => {
-    setShowModal(false);
-    setEditCluster(null);
+    setDeletingId(cluster.id);
+    try {
+      await deleteCluster.mutateAsync(cluster.id);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
+      const msg = axiosErr.response?.data?.detail ?? axiosErr.message ?? '삭제에 실패했습니다.';
+      alert(`삭제 실패: ${msg}`);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const statusCounts = {
@@ -194,7 +220,7 @@ export function SettingsPage() {
           <div className="px-6 py-4 border-b border-border flex items-center justify-between">
             <h2 className="font-semibold">등록된 클러스터</h2>
             <button
-              onClick={() => { setEditCluster(null); setShowModal(true); }}
+              onClick={() => setShowAddModal(true)}
               className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
@@ -207,7 +233,7 @@ export function SettingsPage() {
               <Server className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
               <p className="text-muted-foreground mb-4">등록된 클러스터가 없습니다.</p>
               <button
-                onClick={() => { setEditCluster(null); setShowModal(true); }}
+                onClick={() => setShowAddModal(true)}
                 className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
               >
                 + 첫 번째 클러스터 등록
@@ -225,13 +251,15 @@ export function SettingsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-medium">{cluster.name}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${
-                        cluster.status === 'healthy'
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                          : cluster.status === 'warning'
-                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                          : 'bg-red-500/10 text-red-400 border-red-500/30'
-                      }`}>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full border ${
+                          cluster.status === 'healthy'
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                            : cluster.status === 'warning'
+                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                            : 'bg-red-500/10 text-red-400 border-red-500/30'
+                        }`}
+                      >
                         {cluster.status}
                       </span>
                     </div>
@@ -251,7 +279,14 @@ export function SettingsPage() {
 
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => handleEdit(cluster)}
+                      onClick={() => setKubeconfigCluster(cluster)}
+                      className="p-2 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
+                      title="Kubeconfig 확인/수정"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setEditCluster(cluster)}
                       className="p-2 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
                       title="수정"
                     >
@@ -259,10 +294,15 @@ export function SettingsPage() {
                     </button>
                     <button
                       onClick={() => handleDelete(cluster)}
-                      className="p-2 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400"
+                      disabled={deletingId === cluster.id}
+                      className="p-2 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400 disabled:opacity-40"
                       title="삭제"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      {deletingId === cluster.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -272,12 +312,28 @@ export function SettingsPage() {
         </div>
       </main>
 
-      <ClusterFormModal
-        isOpen={showModal}
-        onClose={handleModalClose}
-        onSubmit={editCluster ? handleUpdate : handleCreate}
-        editCluster={editCluster}
+      {/* Add Cluster Modal — same as dashboard (with connectivity check + kubeconfig tabs) */}
+      <AddClusterModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
       />
+
+      {/* Edit Cluster Modal */}
+      <EditClusterModal
+        isOpen={!!editCluster}
+        onClose={() => setEditCluster(null)}
+        cluster={editCluster}
+      />
+
+      {/* Kubeconfig View / Edit Modal */}
+      {kubeconfigCluster && (
+        <KubeconfigEditModal
+          clusterId={kubeconfigCluster.id}
+          clusterName={kubeconfigCluster.name}
+          isOpen={!!kubeconfigCluster}
+          onClose={() => setKubeconfigCluster(null)}
+        />
+      )}
     </div>
   );
 }

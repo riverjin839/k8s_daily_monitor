@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { X, AlertTriangle, Loader2 } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { X, AlertTriangle, Loader2, FolderOpen, FileText, Upload } from 'lucide-react';
 import { useCreateCluster } from '@/hooks/useCluster';
 
 interface AddClusterModalProps {
@@ -7,9 +7,10 @@ interface AddClusterModalProps {
   onClose: () => void;
 }
 
+type KubeconfigMode = 'path' | 'content';
+
 function extractApiError(err: unknown): string {
   if (!err) return 'Failed to create cluster';
-  // axios error: err.response.data.detail
   const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
   if (axiosErr.response?.data?.detail) return axiosErr.response.data.detail;
   if (axiosErr.message) return axiosErr.message;
@@ -19,11 +20,38 @@ function extractApiError(err: unknown): string {
 export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
   const [name, setName] = useState('');
   const [apiEndpoint, setApiEndpoint] = useState('');
+  const [kubeconfigMode, setKubeconfigMode] = useState<KubeconfigMode>('path');
   const [kubeconfigPath, setKubeconfigPath] = useState('');
+  const [kubeconfigContent, setKubeconfigContent] = useState('');
   const [error, setError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const createCluster = useCreateCluster();
   const isVerifying = createCluster.isPending;
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result;
+      if (typeof text === 'string') setKubeconfigContent(text);
+    };
+    reader.readAsText(file);
+    // reset so same file can be re-selected
+    e.target.value = '';
+  };
+
+  const handleClose = () => {
+    if (isVerifying) return;
+    setName('');
+    setApiEndpoint('');
+    setKubeconfigMode('path');
+    setKubeconfigPath('');
+    setKubeconfigContent('');
+    setError('');
+    onClose();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,12 +66,14 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
       await createCluster.mutateAsync({
         name: name.trim(),
         apiEndpoint: apiEndpoint.trim(),
-        kubeconfigPath: kubeconfigPath.trim() || undefined,
+        ...(kubeconfigMode === 'path' && kubeconfigPath.trim()
+          ? { kubeconfigPath: kubeconfigPath.trim() }
+          : {}),
+        ...(kubeconfigMode === 'content' && kubeconfigContent.trim()
+          ? { kubeconfigContent: kubeconfigContent.trim() }
+          : {}),
       });
-      setName('');
-      setApiEndpoint('');
-      setKubeconfigPath('');
-      onClose();
+      handleClose();
     } catch (err: unknown) {
       setError(extractApiError(err));
     }
@@ -54,7 +84,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60" onClick={isVerifying ? undefined : onClose} />
+      <div className="absolute inset-0 bg-black/60" onClick={handleClose} />
 
       {/* Modal */}
       <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6">
@@ -62,7 +92,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold">Add Cluster</h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             disabled={isVerifying}
             className="p-1.5 rounded-lg hover:bg-secondary transition-colors disabled:opacity-40"
           >
@@ -105,20 +135,81 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
             </p>
           </div>
 
-          {/* Kubeconfig Path */}
+          {/* Kubeconfig section */}
           <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1.5">
-              Kubeconfig Path
-              <span className="ml-1 text-xs text-muted-foreground/60">(노드 라벨 기능 사용 시 필수)</span>
-            </label>
-            <input
-              type="text"
-              value={kubeconfigPath}
-              onChange={(e) => setKubeconfigPath(e.target.value)}
-              disabled={isVerifying}
-              placeholder="e.g. /root/.kube/config"
-              className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary disabled:opacity-50"
-            />
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-muted-foreground">
+                Kubeconfig
+                <span className="ml-1 text-xs text-muted-foreground/60">(노드 라벨 기능 사용 시 필수)</span>
+              </label>
+              {/* Mode toggle */}
+              <div className="flex items-center gap-0.5 bg-secondary rounded-md p-0.5 text-xs">
+                <button
+                  type="button"
+                  disabled={isVerifying}
+                  onClick={() => setKubeconfigMode('path')}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded transition-colors disabled:opacity-50 ${
+                    kubeconfigMode === 'path'
+                      ? 'bg-card text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <FolderOpen className="w-3 h-3" />
+                  파일 경로
+                </button>
+                <button
+                  type="button"
+                  disabled={isVerifying}
+                  onClick={() => setKubeconfigMode('content')}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded transition-colors disabled:opacity-50 ${
+                    kubeconfigMode === 'content'
+                      ? 'bg-card text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <FileText className="w-3 h-3" />
+                  직접 입력
+                </button>
+              </div>
+            </div>
+
+            {kubeconfigMode === 'path' ? (
+              <input
+                type="text"
+                value={kubeconfigPath}
+                onChange={(e) => setKubeconfigPath(e.target.value)}
+                disabled={isVerifying}
+                placeholder="e.g. /root/.kube/config"
+                className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary disabled:opacity-50"
+              />
+            ) : (
+              <div className="space-y-2">
+                <textarea
+                  value={kubeconfigContent}
+                  onChange={(e) => setKubeconfigContent(e.target.value)}
+                  disabled={isVerifying}
+                  placeholder="kubeconfig YAML 내용을 붙여넣으세요..."
+                  rows={6}
+                  className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-xs font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary disabled:opacity-50 resize-none"
+                />
+                <button
+                  type="button"
+                  disabled={isVerifying}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  파일에서 불러오기
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".yaml,.yml,.conf,.config"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </div>
+            )}
           </div>
 
           {/* 연결 검증 중 안내 */}
@@ -141,7 +232,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               disabled={isVerifying}
               className="px-4 py-2.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors disabled:opacity-40"
             >

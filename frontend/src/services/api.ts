@@ -76,9 +76,14 @@ api.interceptors.response.use(
 export const clustersApi = {
   getAll: () => api.get<ApiResponse<Cluster[]>>('/clusters'),
   getById: (id: string) => api.get<ApiResponse<Cluster>>(`/clusters/${id}`),
-  create: (data: Partial<Cluster>) => api.post<ApiResponse<Cluster>>('/clusters', data),
+  create: (data: Partial<Cluster> & { kubeconfigContent?: string }) =>
+    api.post<ApiResponse<Cluster>>('/clusters', data),
   update: (id: string, data: Partial<Cluster>) => api.put<ApiResponse<Cluster>>(`/clusters/${id}`, data),
   delete: (id: string) => api.delete(`/clusters/${id}`),
+  getKubeconfig: (id: string) =>
+    api.get<{ content: string; path: string }>(`/clusters/${id}/kubeconfig`),
+  updateKubeconfig: (id: string, content: string) =>
+    api.put<{ content: string; path: string }>(`/clusters/${id}/kubeconfig`, { content }),
 };
 
 // Health API

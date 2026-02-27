@@ -8,3 +8,4 @@ export { AddAddonModal } from './AddAddonModal';
 export { MetricCard } from './MetricCard';
 export { MetricCardGrid } from './MetricCardGrid';
 export { AddMetricCardModal } from './AddMetricCardModal';
+export { KubeconfigEditModal } from './KubeconfigEditModal';

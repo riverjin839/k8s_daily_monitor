@@ -18,7 +18,8 @@ class ClusterBase(BaseModel):
 
 
 class ClusterCreate(ClusterBase):
-    pass
+    # kubeconfig YAML 원문 (직접 입력 / 파일 업로드 시 사용, DB에 저장하지 않음)
+    kubeconfig_content: Optional[str] = None
 
 
 class ClusterUpdate(BaseModel):

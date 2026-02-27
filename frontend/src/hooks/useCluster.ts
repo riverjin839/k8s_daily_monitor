@@ -10,6 +10,7 @@ export const queryKeys = {
   addons: (clusterId: string) => ['addons', clusterId] as const,
   summary: ['summary'] as const,
   logs: (clusterId?: string) => ['logs', clusterId] as const,
+  kubeconfig: (id: string) => ['kubeconfig', id] as const,
 };
 
 // Clusters
@@ -44,8 +45,36 @@ export function useCreateCluster() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: Partial<Cluster>) => clustersApi.create(data),
+    mutationFn: (data: Partial<Cluster> & { kubeconfigContent?: string }) =>
+      clustersApi.create(data),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.clusters });
+    },
+  });
+}
+
+// Kubeconfig
+export function useKubeconfig(clusterId: string) {
+  return useQuery({
+    queryKey: queryKeys.kubeconfig(clusterId),
+    queryFn: async () => {
+      const { data } = await clustersApi.getKubeconfig(clusterId);
+      return data;
+    },
+    enabled: !!clusterId,
+    retry: false,
+  });
+}
+
+export function useUpdateKubeconfig() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, content }: { id: string; content: string }) =>
+      clustersApi.updateKubeconfig(id, content),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.kubeconfig(id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.cluster(id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.clusters });
     },
   });

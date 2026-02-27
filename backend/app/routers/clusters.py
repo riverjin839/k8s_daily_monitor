@@ -2,10 +2,11 @@ import os
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from uuid import UUID
-from typing import List
 
+from app.config import settings
 from app.database import get_db
 from app.models import Cluster, Addon
 from app.schemas import (
@@ -18,6 +19,24 @@ from app.schemas import (
 _CONNECT_TIMEOUT = 5  # seconds
 
 
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+def _kubeconfig_store_path(cluster_id: UUID) -> str:
+    """클러스터 ID 기반 kubeconfig 저장 경로"""
+    return os.path.join(settings.kubeconfig_store_dir, f"{cluster_id}.yaml")
+
+
+def _save_kubeconfig_content(cluster_id: UUID, content: str) -> str:
+    """kubeconfig YAML 내용을 파일로 저장하고 경로를 반환."""
+    store_dir = settings.kubeconfig_store_dir
+    os.makedirs(store_dir, exist_ok=True)
+    path = _kubeconfig_store_path(cluster_id)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+    os.chmod(path, 0o600)  # 소유자만 읽기/쓰기
+    return path
+
+
 def _verify_cluster_connectivity(api_endpoint: str, kubeconfig_path: str | None) -> None:
     """
     클러스터 등록 전 연결 가능 여부 검증.
@@ -25,7 +44,7 @@ def _verify_cluster_connectivity(api_endpoint: str, kubeconfig_path: str | None)
     - api_endpoint: /healthz 로 HTTP 요청, 응답이 있으면 OK (401/403 포함)
     연결 실패 시 HTTPException(422) 발생.
     """
-    # 1) kubeconfig 파일 존재 확인
+    # 1) kubeconfig 파일 존재 확인 (경로가 직접 지정된 경우)
     if kubeconfig_path:
         if not os.path.exists(kubeconfig_path):
             raise HTTPException(
@@ -65,36 +84,29 @@ def _verify_cluster_connectivity(api_endpoint: str, kubeconfig_path: str | None)
             detail=f"클러스터 연결 검증 실패: {str(exc)[:200]}",
         )
 
-# 클러스터 생성 시 자동 등록할 기본 애드온
+
+# ── 클러스터 생성 시 자동 등록할 기본 애드온 ─────────────────────────────────
 DEFAULT_ADDONS = [
-    {
-        "name": "etcd Leader",
-        "type": "etcd-leader",
-        "icon": "💾",
-        "description": "etcd leader election & health status",
-    },
-    {
-        "name": "Node Status",
-        "type": "node-check",
-        "icon": "🖥️",
-        "description": "Node readiness & pressure conditions",
-    },
-    {
-        "name": "Control Plane",
-        "type": "control-plane",
-        "icon": "🎛️",
-        "description": "API Server, Scheduler, Controller Manager",
-    },
-    {
-        "name": "CoreDNS",
-        "type": "system-pod",
-        "icon": "🔍",
-        "description": "Cluster DNS service",
-    },
+    {"name": "etcd Leader",    "type": "etcd-leader",    "icon": "💾", "description": "etcd leader election & health status"},
+    {"name": "Node Status",    "type": "node-check",     "icon": "🖥️", "description": "Node readiness & pressure conditions"},
+    {"name": "Control Plane",  "type": "control-plane",  "icon": "🎛️", "description": "API Server, Scheduler, Controller Manager"},
+    {"name": "CoreDNS",        "type": "system-pod",     "icon": "🔍", "description": "Cluster DNS service"},
 ]
 
 router = APIRouter(prefix="/clusters", tags=["clusters"])
 
+
+# ── Kubeconfig request/response schemas ───────────────────────────────────────
+class KubeconfigUpdateRequest(BaseModel):
+    content: str
+
+
+class KubeconfigResponse(BaseModel):
+    content: str
+    path: str
+
+
+# ── routes ────────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=ClusterListResponse)
 def get_clusters(db: Session = Depends(get_db)):
@@ -108,10 +120,7 @@ def get_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
     """클러스터 상세 조회"""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cluster not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
     return cluster
 
 
@@ -123,20 +132,30 @@ def create_cluster(cluster_data: ClusterCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cluster with this name already exists"
+            detail="Cluster with this name already exists",
         )
 
-    # 연결 검증 — 실패 시 422 반환, DB 저장 안 함
-    _verify_cluster_connectivity(cluster_data.api_endpoint, cluster_data.kubeconfig_path)
+    # kubeconfig_content → 임시 경로에 저장해 kubeconfig_path 로 활용
+    # (실제 파일 저장은 cluster_id 확정 후에 하므로, 먼저 객체 생성)
+    payload = cluster_data.model_dump(exclude={"kubeconfig_content"})
+    content = cluster_data.kubeconfig_content
 
-    cluster = Cluster(**cluster_data.model_dump())
+    # 연결 검증 (kubeconfig_path 는 content 저장 전 단계이므로 None 으로 전달)
+    effective_path = payload.get("kubeconfig_path")
+    _verify_cluster_connectivity(cluster_data.api_endpoint, effective_path)
+
+    cluster = Cluster(**payload)
     db.add(cluster)
-    db.flush()  # ID 생성을 위해 flush
+    db.flush()  # cluster.id 확정
+
+    # kubeconfig content 가 있으면 파일로 저장하고 경로 갱신
+    if content and content.strip():
+        saved_path = _save_kubeconfig_content(cluster.id, content.strip())
+        cluster.kubeconfig_path = saved_path
 
     # 기본 애드온 자동 등록
     for addon_config in DEFAULT_ADDONS:
-        addon = Addon(cluster_id=cluster.id, **addon_config)
-        db.add(addon)
+        db.add(Addon(cluster_id=cluster.id, **addon_config))
 
     db.commit()
     db.refresh(cluster)
@@ -144,23 +163,16 @@ def create_cluster(cluster_data: ClusterCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/{cluster_id}", response_model=ClusterResponse)
-def update_cluster(
-    cluster_id: UUID,
-    cluster_data: ClusterUpdate,
-    db: Session = Depends(get_db)
-):
+def update_cluster(cluster_id: UUID, cluster_data: ClusterUpdate, db: Session = Depends(get_db)):
     """클러스터 수정"""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cluster not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+
     update_data = cluster_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(cluster, key, value)
-    
+
     db.commit()
     db.refresh(cluster)
     return cluster
@@ -171,11 +183,58 @@ def delete_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
     """클러스터 삭제"""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cluster not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+
+    # 저장된 kubeconfig 파일도 삭제
+    stored_path = _kubeconfig_store_path(cluster_id)
+    if os.path.exists(stored_path):
+        try:
+            os.remove(stored_path)
+        except OSError:
+            pass
+
     db.delete(cluster)
     db.commit()
     return None
+
+
+@router.get("/{cluster_id}/kubeconfig", response_model=KubeconfigResponse)
+def get_kubeconfig(cluster_id: UUID, db: Session = Depends(get_db)):
+    """클러스터 kubeconfig 내용 조회"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+
+    path = cluster.kubeconfig_path
+    if not path or not os.path.exists(path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="kubeconfig 파일이 없습니다. 먼저 kubeconfig를 등록하세요.",
+        )
+
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+    return KubeconfigResponse(content=content, path=path)
+
+
+@router.put("/{cluster_id}/kubeconfig", response_model=KubeconfigResponse)
+def update_kubeconfig(
+    cluster_id: UUID,
+    body: KubeconfigUpdateRequest,
+    db: Session = Depends(get_db),
+):
+    """클러스터 kubeconfig 내용 저장/수정"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+
+    if not body.content.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="kubeconfig 내용이 비어 있습니다.",
+        )
+
+    saved_path = _save_kubeconfig_content(cluster_id, body.content.strip())
+    cluster.kubeconfig_path = saved_path
+    db.commit()
+    return KubeconfigResponse(content=body.content.strip(), path=saved_path)

@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     # Prometheus / Grafana
     prometheus_url: str = "http://prometheus-k8s.monitoring.svc:9090"
     grafana_url: str = "http://grafana.monitoring.svc:3000"
+
+    # Kubeconfig 저장 디렉토리 (content 방식으로 등록 시 사용)
+    kubeconfig_store_dir: str = "/tmp/k8s-monitor/kubeconfigs"
     
     class Config:
         env_file = ".env"

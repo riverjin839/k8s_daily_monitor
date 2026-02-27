@@ -10,6 +10,7 @@ import {
   AddAddonModal,
   MetricCardGrid,
   AddMetricCardModal,
+  KubeconfigEditModal,
 } from '@/components/dashboard';
 import { PlaybookCard } from '@/components/playbooks';
 import { useClusterStore } from '@/stores/clusterStore';
@@ -25,6 +26,7 @@ export function Dashboard() {
   const [showAddCluster, setShowAddCluster] = useState(false);
   const [showAddAddon, setShowAddAddon] = useState(false);
   const [showAddMetric, setShowAddMetric] = useState(false);
+  const [showKubeconfig, setShowKubeconfig] = useState(false);
   const [editingMetricCard, setEditingMetricCard] = useState<MetricCard | null>(null);
   const { clusters, summary, addons, logs, isChecking, lastCheckTime } = useClusterStore();
 
@@ -159,6 +161,14 @@ export function Dashboard() {
                   Add Check
                 </button>
               )}
+              {selectedClusterId && (
+                <button
+                  onClick={() => setShowKubeconfig(true)}
+                  className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+                >
+                  Kubeconfig
+                </button>
+              )}
               <button
                 onClick={() => handleDailyReport('md')}
                 className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1.5"
@@ -281,6 +291,16 @@ export function Dashboard() {
         }}
         editingCard={editingMetricCard}
       />
+
+      {/* Kubeconfig Edit Modal */}
+      {selectedClusterId && (
+        <KubeconfigEditModal
+          clusterId={selectedClusterId}
+          clusterName={clusters.find((c) => c.id === selectedClusterId)?.name ?? ''}
+          isOpen={showKubeconfig}
+          onClose={() => setShowKubeconfig(false)}
+        />
+      )}
     </div>
   );
 }

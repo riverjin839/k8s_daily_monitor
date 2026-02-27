@@ -1,8 +1,17 @@
 import { useMemo, useState } from 'react';
-import { Tags, Search, LayoutList, Tag } from 'lucide-react';
+import { Tags, Search, LayoutList, Tag, AlertTriangle } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useNodeList, usePatchNodeLabels, NodeInfo } from '@/hooks/useNodeLabels';
 import { NodeLabelEditorModal, NodeLabelsTable } from '@/components/node-labels';
+
+function extractErrorMessage(error: unknown): string {
+  if (!error) return '알 수 없는 오류가 발생했습니다.';
+  // axios error
+  const axiosErr = error as { response?: { data?: { detail?: string } }; message?: string };
+  if (axiosErr.response?.data?.detail) return axiosErr.response.data.detail;
+  if (axiosErr.message) return axiosErr.message;
+  return String(error);
+}
 
 export function NodeLabelsPage() {
   // useClusters() 반환값을 직접 사용 — 스토어 타이밍 이슈 방지
@@ -14,7 +23,12 @@ export function NodeLabelsPage() {
   const [viewMode, setViewMode] = useState<'node' | 'label'>('node');
 
   const activeClusterId = selectedClusterId || clusters[0]?.id || '';
-  const { data: nodes = [], isLoading: nodesLoading } = useNodeList(activeClusterId);
+  const {
+    data: nodes = [],
+    isLoading: nodesLoading,
+    isError: nodesError,
+    error: nodesErrorDetail,
+  } = useNodeList(activeClusterId);
   const patchNodeLabels = usePatchNodeLabels(activeClusterId);
 
   const activeClusterName = useMemo(
@@ -119,6 +133,21 @@ export function NodeLabelsPage() {
         ) : !activeClusterId ? (
           <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground">
             클러스터를 선택하세요.
+          </div>
+        ) : nodesError ? (
+          <div className="bg-card border border-red-500/30 rounded-xl p-8">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <AlertTriangle className="w-8 h-8 text-red-400" />
+              <div>
+                <p className="font-medium text-red-400 mb-1">노드 정보를 불러올 수 없습니다</p>
+                <p className="text-sm text-muted-foreground max-w-lg">
+                  {extractErrorMessage(nodesErrorDetail)}
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                클러스터의 kubeconfig 경로와 API Endpoint 설정을 확인하세요.
+              </p>
+            </div>
           </div>
         ) : (
           <NodeLabelsTable

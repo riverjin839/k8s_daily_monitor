@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, Play, BookOpen, Download } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Plus, Play, BookOpen, Download, ArrowUpDown } from 'lucide-react';
 import { PlaybookCard, AddPlaybookModal } from '@/components/playbooks';
 import { usePlaybooks, useCreatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
 import { playbooksApi } from '@/services/api';
@@ -7,9 +7,14 @@ import { usePlaybookStore } from '@/stores/playbookStore';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 
+type PlaybookSortKey = 'name' | 'status' | 'lastRunAt';
+const STATUS_ORDER: Record<string, number> = { critical: 0, warning: 1, healthy: 2, unknown: 3 };
+
 export function PlaybooksPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [selectedClusterId, setSelectedClusterId] = useState<string>('');
+  const [sortKey, setSortKey] = useState<PlaybookSortKey>('name');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const { clusters } = useClusterStore();
   useClusters(); // fetch
@@ -24,9 +29,22 @@ export function PlaybooksPage() {
   const toggleDashboard = useToggleDashboard();
 
   // 현재 클러스터의 playbooks만 필터
-  const filteredPlaybooks = activeClusterId
-    ? playbooks.filter((p) => p.clusterId === activeClusterId)
-    : playbooks;
+  const filteredPlaybooks = useMemo(() => {
+    const base = activeClusterId
+      ? playbooks.filter((p) => p.clusterId === activeClusterId)
+      : playbooks;
+    return [...base].sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === 'name') {
+        cmp = a.name.localeCompare(b.name);
+      } else if (sortKey === 'status') {
+        cmp = (STATUS_ORDER[a.status ?? 'unknown'] ?? 3) - (STATUS_ORDER[b.status ?? 'unknown'] ?? 3);
+      } else if (sortKey === 'lastRunAt') {
+        cmp = (a.lastRunAt ?? '').localeCompare(b.lastRunAt ?? '');
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [playbooks, activeClusterId, sortKey, sortDir]);
 
   const handleCreate = (data: {
     name: string;
@@ -106,6 +124,27 @@ export function PlaybooksPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Sort Controls */}
+          <div className="flex items-center gap-1.5">
+            <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+            <select
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as PlaybookSortKey)}
+              className="px-2 py-1.5 text-xs bg-background border border-border rounded-lg"
+            >
+              <option value="name">이름순</option>
+              <option value="status">상태순</option>
+              <option value="lastRunAt">최근 실행순</option>
+            </select>
+            <button
+              onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+              className="px-2 py-1.5 text-xs bg-background border border-border rounded-lg hover:bg-secondary transition-colors"
+              title={sortDir === 'asc' ? '오름차순' : '내림차순'}
+            >
+              {sortDir === 'asc' ? '↑' : '↓'}
+            </button>
+          </div>
+
           {/* Cluster Selector */}
           {clusters.length > 1 && (
             <select

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, ImagePlus, Trash2 } from 'lucide-react';
+import { X, ImagePlus, Trash2, Settings2, Plus } from 'lucide-react';
 import { Task, TaskCreate } from '@/types';
 import { loadTaskImages } from '@/lib/taskImages';
 
@@ -11,7 +11,7 @@ interface TaskModalProps {
   editTask?: Task | null;
 }
 
-const TASK_CATEGORIES = [
+const DEFAULT_TASK_CATEGORIES = [
   'Cluster 점검',
   'Node 관리',
   'Pod 배포',
@@ -23,8 +23,24 @@ const TASK_CATEGORIES = [
   '업그레이드',
   '장애 대응',
   '문서 작업',
-  '기타',
 ];
+
+const TASK_CATEGORIES = [...DEFAULT_TASK_CATEGORIES, '기타'];
+
+const CATEGORY_STORAGE_KEY = 'k8s:task:categories';
+
+function loadCustomCategories(): string[] {
+  try {
+    const raw = localStorage.getItem(CATEGORY_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomCategories(cats: string[]) {
+  localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(cats));
+}
 
 const PRIORITIES = [
   { value: 'high', label: '높음' },
@@ -48,12 +64,16 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
   const [priority, setPriority] = useState('medium');
   const [remarks, setRemarks] = useState('');
   const [images, setImages] = useState<string[]>([]);
+  const [customCategories, setCustomCategories] = useState<string[]>(loadCustomCategories);
+  const [showCatManage, setShowCatManage] = useState(false);
+  const [newCatInput, setNewCatInput] = useState('');
 
   useEffect(() => {
+    const allKnownCategories = [...TASK_CATEGORIES, ...loadCustomCategories()];
     if (editTask) {
       setAssignee(editTask.assignee);
       setClusterId(editTask.clusterId ?? '');
-      const predefined = TASK_CATEGORIES.includes(editTask.taskCategory);
+      const predefined = allKnownCategories.includes(editTask.taskCategory);
       setTaskCategory(predefined ? editTask.taskCategory : '기타');
       setTaskCategoryCustom(predefined ? '' : editTask.taskCategory);
       setTaskContent(editTask.taskContent);
@@ -76,7 +96,27 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
       setRemarks('');
       setImages([]);
     }
+    setCustomCategories(loadCustomCategories());
+    setShowCatManage(false);
+    setNewCatInput('');
   }, [editTask, isOpen]);
+
+  const addCustomCategory = () => {
+    const cat = newCatInput.trim();
+    if (!cat || TASK_CATEGORIES.includes(cat) || customCategories.includes(cat)) return;
+    const updated = [...customCategories, cat];
+    setCustomCategories(updated);
+    saveCustomCategories(updated);
+    setNewCatInput('');
+    setTaskCategory(cat);
+  };
+
+  const deleteCustomCategory = (cat: string) => {
+    const updated = customCategories.filter((c) => c !== cat);
+    setCustomCategories(updated);
+    saveCustomCategories(updated);
+    if (taskCategory === cat) setTaskCategory('');
+  };
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = Array.from(e.clipboardData.items);
@@ -104,6 +144,7 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
 
   if (!isOpen) return null;
 
+  const allCategories = [...DEFAULT_TASK_CATEGORIES, ...customCategories, '기타'];
   const resolvedCategory = taskCategory === '기타' ? taskCategoryCustom.trim() : taskCategory;
   const selectedCluster = clusters.find((c) => c.id === clusterId);
 
@@ -176,7 +217,18 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>작업 분류 *</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm font-medium">작업 분류 *</label>
+                <button
+                  type="button"
+                  onClick={() => setShowCatManage((v) => !v)}
+                  className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  title="분류 관리"
+                >
+                  <Settings2 className="w-3 h-3" />
+                  관리
+                </button>
+              </div>
               <div className="flex gap-2">
                 <select
                   value={taskCategory}
@@ -185,7 +237,7 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
                   required={taskCategory !== '기타'}
                 >
                   <option value="">— 선택 —</option>
-                  {TASK_CATEGORIES.map((cat) => (
+                  {allCategories.map((cat) => (
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
                 </select>
@@ -200,6 +252,51 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
                   />
                 )}
               </div>
+              {showCatManage && (
+                <div className="mt-2 p-3 bg-muted/20 border border-border rounded-lg space-y-2">
+                  {customCategories.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground font-medium">사용자 분류</p>
+                      {customCategories.map((cat) => (
+                        <div key={cat} className="flex items-center justify-between py-0.5">
+                          <span className="text-xs text-foreground/80">{cat}</span>
+                          <button
+                            type="button"
+                            onClick={() => deleteCustomCategory(cat)}
+                            className="text-xs text-muted-foreground hover:text-red-400 transition-colors px-1"
+                            title="삭제"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={newCatInput}
+                      onChange={(e) => setNewCatInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addCustomCategory();
+                        }
+                      }}
+                      placeholder="새 분류명 입력"
+                      className="flex-1 px-2 py-1 text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={addCustomCategory}
+                      className="flex items-center gap-0.5 px-2 py-1 text-xs bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                      추가
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             <div>
               <label className={labelClass}>우선순위 *</label>

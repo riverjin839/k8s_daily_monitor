@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Download, Pencil, Trash2, ClipboardList, Search, X, ImagePlus } from 'lucide-react';
+import { Plus, Download, Pencil, Trash2, ClipboardList, Search, X, ImagePlus, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
 import { IssueModal, IssueDetailModal } from '@/components/issues';
 import { saveIssueImages } from '@/lib/issueImages';
 import { useIssues, useCreateIssue, useUpdateIssue, useDeleteIssue } from '@/hooks/useIssues';
@@ -29,6 +29,45 @@ const STATUS_DOT: Record<string, string> = {
   unresolved: 'bg-amber-500',
 };
 
+type IssueSortKey = 'status' | 'assignee' | 'clusterName' | 'issueArea' | 'occurredAt' | 'resolvedAt';
+
+function SortTh({
+  label,
+  col,
+  sortKey,
+  sortDir,
+  onSort,
+  className,
+}: {
+  label: string;
+  col: IssueSortKey;
+  sortKey: IssueSortKey | '';
+  sortDir: 'asc' | 'desc';
+  onSort: (col: IssueSortKey) => void;
+  className?: string;
+}) {
+  const isActive = sortKey === col;
+  return (
+    <th
+      onClick={() => onSort(col)}
+      className={`px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap cursor-pointer select-none group hover:text-foreground transition-colors ${className ?? ''}`}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {isActive ? (
+          sortDir === 'asc' ? (
+            <ChevronUp className="w-3 h-3 text-primary" />
+          ) : (
+            <ChevronDown className="w-3 h-3 text-primary" />
+          )
+        ) : (
+          <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-40 transition-opacity" />
+        )}
+      </span>
+    </th>
+  );
+}
+
 export function IssueBoardPage() {
   const [showModal, setShowModal] = useState(false);
   const [editIssue, setEditIssue] = useState<Issue | null>(null);
@@ -38,6 +77,8 @@ export function IssueBoardPage() {
   const [filterArea, setFilterArea] = useState('');
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
+  const [sortKey, setSortKey] = useState<IssueSortKey | ''>('');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const { clusters } = useClusterStore();
   useClusters();
@@ -52,6 +93,34 @@ export function IssueBoardPage() {
 
   const { data, isLoading } = useIssues(filters);
   const issues = data?.data ?? [];
+
+  const handleSort = (col: IssueSortKey) => {
+    if (sortKey === col) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(col);
+      setSortDir('asc');
+    }
+  };
+
+  const sortedIssues = [...issues].sort((a, b) => {
+    if (!sortKey) return 0;
+    let cmp = 0;
+    if (sortKey === 'status') {
+      cmp = (a.resolvedAt ? 1 : 0) - (b.resolvedAt ? 1 : 0);
+    } else if (sortKey === 'assignee') {
+      cmp = a.assignee.localeCompare(b.assignee);
+    } else if (sortKey === 'clusterName') {
+      cmp = (a.clusterName ?? '').localeCompare(b.clusterName ?? '');
+    } else if (sortKey === 'issueArea') {
+      cmp = a.issueArea.localeCompare(b.issueArea);
+    } else if (sortKey === 'occurredAt') {
+      cmp = a.occurredAt.localeCompare(b.occurredAt);
+    } else if (sortKey === 'resolvedAt') {
+      cmp = (a.resolvedAt ?? '').localeCompare(b.resolvedAt ?? '');
+    }
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
 
   const createIssue = useCreateIssue();
   const updateIssue = useUpdateIssue();
@@ -264,20 +333,20 @@ export function IssueBoardPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">상태</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">담당자</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">대상 클러스터</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">이슈 부분</th>
+                    <SortTh label="상태" col="status" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="담당자" col="assignee" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="대상 클러스터" col="clusterName" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="이슈 부분" col="issueArea" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">이슈 내용</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">조치 내용</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">발생일</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">조치일</th>
+                    <SortTh label="발생일" col="occurredAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="조치일" col="resolvedAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">비고</th>
                     <th className="px-4 py-3 text-center font-medium text-muted-foreground whitespace-nowrap">작업</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {issues.map((issue) => {
+                  {sortedIssues.map((issue) => {
                     const isResolved = !!issue.resolvedAt;
                     const hasImages = hasLocalImages(issue.id);
                     return (

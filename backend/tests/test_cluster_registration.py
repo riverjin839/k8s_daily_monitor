@@ -133,6 +133,17 @@ def test_create_cluster_registers_default_addons_and_saves_kubeconfig(monkeypatc
     monkeypatch.setattr(clusters_router, "_verify_cluster_connectivity", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(clusters_router, "_save_kubeconfig_content", lambda _cid, _content: "/tmp/saved.yaml")
 
+    health_checker_calls = []
+
+    class FakeHealthChecker:
+        def __init__(self, _db):
+            pass
+
+        def run_check(self, cluster_id):
+            health_checker_calls.append(cluster_id)
+
+    monkeypatch.setattr(clusters_router, "HealthChecker", FakeHealthChecker)
+
     db = MagicMock()
     db.query.return_value.filter.return_value.first.return_value = None
 
@@ -160,6 +171,7 @@ def test_create_cluster_registers_default_addons_and_saves_kubeconfig(monkeypatc
     added_objects = [call.args[0] for call in db.add.call_args_list]
     addon_objects = [obj for obj in added_objects if isinstance(obj, Addon)]
     assert len(addon_objects) == len(clusters_router.DEFAULT_ADDONS)
+    assert len(health_checker_calls) == 1
 
 
 def test_create_cluster_rejects_duplicate_name():

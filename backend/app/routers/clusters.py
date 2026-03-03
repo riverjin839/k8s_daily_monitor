@@ -15,6 +15,7 @@ from app.models import Cluster, Addon
 from app.models.daily_check import DailyCheckLog, CheckSchedule
 from app.models.issue import Issue
 from app.models.task import Task
+from app.services.health_checker import HealthChecker
 from app.schemas import (
     ClusterCreate,
     ClusterUpdate,
@@ -210,6 +211,10 @@ def create_cluster(cluster_data: ClusterCreate, db: Session = Depends(get_db)):
         db.add(Addon(cluster_id=cluster.id, **addon_config))
 
     db.commit()
+
+    # 등록 직후 1회 점검을 수행해 초기 상태(healthy 기본값) 오표시를 방지
+    HealthChecker(db).run_check(cluster.id)
+
     db.refresh(cluster)
     return cluster
 

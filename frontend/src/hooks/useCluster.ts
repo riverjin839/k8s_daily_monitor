@@ -161,6 +161,33 @@ export function useCreateAddon() {
   });
 }
 
+export function useUpdateAddon() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Addon> }) =>
+      healthApi.updateAddon(id, data),
+    onSuccess: (_, variables) => {
+      const clusterId = variables.data.clusterId;
+      if (clusterId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.addons(clusterId) });
+      }
+    },
+  });
+}
+
+export function useDeleteAddon() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ addonId }: { addonId: string; clusterId: string }) =>
+      healthApi.deleteAddon(addonId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.addons(variables.clusterId) });
+    },
+  });
+}
+
 // Health Check
 export function useHealthCheck() {
   const queryClient = useQueryClient();

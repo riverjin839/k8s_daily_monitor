@@ -98,6 +98,7 @@ export const healthApi = {
       responseType: 'blob',
     }),
   createAddon: (data: Partial<Addon>) => api.post<ApiResponse<Addon>>('/health/addons', data),
+  updateAddon: (addonId: string, data: Partial<Addon>) => api.put<ApiResponse<Addon>>(`/health/addons/${addonId}`, data),
   deleteAddon: (addonId: string) => api.delete(`/health/addons/${addonId}`),
 };
 

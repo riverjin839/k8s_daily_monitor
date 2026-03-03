@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models import Cluster, Addon, CheckLog, StatusEnum, Playbook
 from app.schemas import (
     AddonCreate,
+    AddonUpdate,
     AddonResponse,
     AddonListResponse,
     ClusterResponse,
@@ -122,6 +123,39 @@ def delete_addon(addon_id: UUID, db: Session = Depends(get_db)):
     db.delete(addon)
     db.commit()
     return None
+
+
+@router.put("/addons/{addon_id}", response_model=AddonResponse)
+def update_addon(addon_id: UUID, addon_data: AddonUpdate, db: Session = Depends(get_db)):
+    """애드온 수정"""
+    addon = db.query(Addon).filter(Addon.id == addon_id).first()
+    if not addon:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Addon not found"
+        )
+
+    update_data = addon_data.model_dump(exclude_unset=True)
+
+    new_name = update_data.get("name")
+    if new_name and new_name != addon.name:
+        existing = db.query(Addon).filter(
+            Addon.cluster_id == addon.cluster_id,
+            Addon.name == new_name,
+            Addon.id != addon.id,
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Addon '{new_name}' already exists for this cluster"
+            )
+
+    for key, value in update_data.items():
+        setattr(addon, key, value)
+
+    db.commit()
+    db.refresh(addon)
+    return addon
 
 
 @router.get("/summary", response_model=SummaryStatsResponse)

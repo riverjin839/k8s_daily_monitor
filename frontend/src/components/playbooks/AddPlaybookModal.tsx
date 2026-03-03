@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
+import { Playbook } from '@/types';
 
 interface AddPlaybookModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface AddPlaybookModalProps {
   }) => void;
   clusters: { id: string; name: string }[];
   defaultClusterId?: string;
+  initialData?: Playbook | null;
 }
 
 export function AddPlaybookModal({
@@ -22,13 +24,23 @@ export function AddPlaybookModal({
   onSubmit,
   clusters,
   defaultClusterId,
+  initialData,
 }: AddPlaybookModalProps) {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [playbookPath, setPlaybookPath] = useState('');
-  const [inventoryPath, setInventoryPath] = useState('');
-  const [tags, setTags] = useState('');
-  const [clusterId, setClusterId] = useState(defaultClusterId || clusters[0]?.id || '');
+  const [name, setName] = useState(initialData?.name ?? '');
+  const [description, setDescription] = useState(initialData?.description ?? '');
+  const [playbookPath, setPlaybookPath] = useState(initialData?.playbookPath ?? '');
+  const [inventoryPath, setInventoryPath] = useState(initialData?.inventoryPath ?? '');
+  const [tags, setTags] = useState(initialData?.tags ?? '');
+  const [clusterId, setClusterId] = useState(initialData?.clusterId ?? defaultClusterId ?? clusters[0]?.id ?? '');
+
+  useEffect(() => {
+    setName(initialData?.name ?? '');
+    setDescription(initialData?.description ?? '');
+    setPlaybookPath(initialData?.playbookPath ?? '');
+    setInventoryPath(initialData?.inventoryPath ?? '');
+    setTags(initialData?.tags ?? '');
+    setClusterId(initialData?.clusterId ?? defaultClusterId ?? clusters[0]?.id ?? '');
+  }, [initialData, defaultClusterId, clusters]);
 
   if (!isOpen) return null;
 
@@ -50,7 +62,7 @@ export function AddPlaybookModal({
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-card border border-border rounded-xl p-6 w-full max-w-lg shadow-xl">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Register Playbook</h2>
+          <h2 className="text-lg font-semibold">{initialData ? 'Edit Playbook' : 'Register Playbook'}</h2>
           <button onClick={onClose} className="p-1 hover:bg-secondary rounded-md">
             <X className="w-5 h-5" />
           </button>
@@ -149,7 +161,7 @@ export function AddPlaybookModal({
               type="submit"
               className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
             >
-              Register
+              {initialData ? 'Save' : 'Register'}
             </button>
           </div>
         </form>

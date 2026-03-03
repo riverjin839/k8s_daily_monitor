@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models import Cluster, Addon, CheckLog, StatusEnum, Playbook
 from app.schemas import (
     AddonCreate,
+    AddonUpdate,
     AddonResponse,
     AddonListResponse,
     ClusterResponse,
@@ -55,6 +56,49 @@ def run_health_check(
         "addons_updated": len(addon_list),
     }
 
+
+
+
+@router.post("/check/{cluster_id}/addons/{addon_id}")
+def run_single_addon_check(
+    cluster_id: UUID,
+    addon_id: UUID,
+    db: Session = Depends(get_db),
+):
+    """특정 addon 헬스 체크 실행"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cluster not found"
+        )
+
+    addon = db.query(Addon).filter(Addon.id == addon_id, Addon.cluster_id == cluster_id).first()
+    if not addon:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Addon not found"
+        )
+
+    checker = HealthChecker(db)
+    result = checker.run_single_addon_check(cluster_id, addon_id)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Addon not found"
+        )
+
+    db.refresh(addon)
+
+    return {
+        "message": "Addon check completed",
+        "cluster_id": str(cluster_id),
+        "addon_id": str(addon_id),
+        "status": result.status.value if hasattr(result.status, "value") else str(result.status),
+        "response_time": result.response_time,
+        "log": result.message,
+        "details": addon.details or {},
+    }
 
 @router.get("/status/{cluster_id}", response_model=ClusterResponse)
 def get_cluster_status(cluster_id: UUID, db: Session = Depends(get_db)):
@@ -122,6 +166,39 @@ def delete_addon(addon_id: UUID, db: Session = Depends(get_db)):
     db.delete(addon)
     db.commit()
     return None
+
+
+@router.put("/addons/{addon_id}", response_model=AddonResponse)
+def update_addon(addon_id: UUID, addon_data: AddonUpdate, db: Session = Depends(get_db)):
+    """애드온 수정"""
+    addon = db.query(Addon).filter(Addon.id == addon_id).first()
+    if not addon:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Addon not found"
+        )
+
+    update_data = addon_data.model_dump(exclude_unset=True)
+
+    new_name = update_data.get("name")
+    if new_name and new_name != addon.name:
+        existing = db.query(Addon).filter(
+            Addon.cluster_id == addon.cluster_id,
+            Addon.name == new_name,
+            Addon.id != addon.id,
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Addon '{new_name}' already exists for this cluster"
+            )
+
+    for key, value in update_data.items():
+        setattr(addon, key, value)
+
+    db.commit()
+    db.refresh(addon)
+    return addon
 
 
 @router.get("/summary", response_model=SummaryStatsResponse)

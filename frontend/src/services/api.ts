@@ -89,6 +89,8 @@ export const clustersApi = {
 // Health API
 export const healthApi = {
   runCheck: (clusterId: string) => api.post<ApiResponse<void>>(`/health/check/${clusterId}`),
+  runAddonCheck: (clusterId: string, addonId: string) =>
+    api.post<ApiResponse<void>>(`/health/check/${clusterId}/addons/${addonId}`),
   getStatus: (clusterId: string) => api.get<ApiResponse<Cluster>>(`/health/status/${clusterId}`),
   getAddons: (clusterId: string) => api.get<ApiResponse<Addon[]>>(`/health/addons/${clusterId}`),
   getSummary: () => api.get<ApiResponse<SummaryStats>>('/health/summary'),
@@ -98,6 +100,7 @@ export const healthApi = {
       responseType: 'blob',
     }),
   createAddon: (data: Partial<Addon>) => api.post<ApiResponse<Addon>>('/health/addons', data),
+  updateAddon: (addonId: string, data: Partial<Addon>) => api.put<ApiResponse<Addon>>(`/health/addons/${addonId}`, data),
   deleteAddon: (addonId: string) => api.delete(`/health/addons/${addonId}`),
 };
 

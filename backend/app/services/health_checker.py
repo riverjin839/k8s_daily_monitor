@@ -28,8 +28,7 @@ class HealthChecker:
             addon.status = result.status
             addon.response_time = result.response_time
             addon.last_check = datetime.utcnow()
-            if result.details:
-                addon.details = result.details
+            addon.details = {**(result.details or {}), "last_message": result.message}
 
             # 로그 기록
             log = CheckLog(
@@ -58,6 +57,47 @@ class HealthChecker:
         )
         self.db.add(cluster_log)
         self.db.commit()
+
+
+    def run_single_addon_check(self, cluster_id: UUID, addon_id: UUID) -> CheckResult | None:
+        """특정 addon 하나만 헬스 체크 실행"""
+        cluster = self.db.query(Cluster).filter(Cluster.id == cluster_id).first()
+        if not cluster:
+            return None
+
+        addon = self.db.query(Addon).filter(Addon.id == addon_id, Addon.cluster_id == cluster_id).first()
+        if not addon:
+            return None
+
+        result = self._dispatch(cluster, addon)
+        addon.status = result.status
+        addon.response_time = result.response_time
+        addon.last_check = datetime.utcnow()
+        addon.details = {**(result.details or {}), "last_message": result.message}
+
+        log = CheckLog(
+            cluster_id=cluster_id,
+            addon_id=addon.id,
+            status=result.status,
+            message=result.message,
+            raw_output={"response_time": result.response_time, **(result.details or {})},
+        )
+        self.db.add(log)
+
+        # 클러스터 전체 상태 재계산
+        addons = self.db.query(Addon).filter(Addon.cluster_id == cluster_id).all()
+        overall_status = StatusEnum.healthy
+        for a in addons:
+            if a.status == StatusEnum.critical:
+                overall_status = StatusEnum.critical
+                break
+            if a.status == StatusEnum.warning:
+                overall_status = StatusEnum.warning
+
+        cluster.status = overall_status
+        cluster.updated_at = datetime.utcnow()
+        self.db.commit()
+        return result
 
     def _dispatch(self, cluster: Cluster, addon: Addon) -> CheckResult:
         """addon.type에 맞는 Checker를 찾아 실행 (Strategy Pattern)."""
@@ -102,7 +142,7 @@ class HealthChecker:
             output = result.stdout.strip().split("\n")[-1] if result.stdout else ""
             if "PLAY RECAP" in output:
                 output = "Check completed"
-            details = {"result": output} if output else None
+            details = {"result": output, "command": " ".join(["ansible-playbook", playbook_path, "-i", f"{settings.ansible_inventory_dir}/clusters.yml", "-e", f"target_cluster={cluster.name}", "-e", f"api_endpoint={cluster.api_endpoint}"])} if output else {"command": " ".join(["ansible-playbook", playbook_path, "-i", f"{settings.ansible_inventory_dir}/clusters.yml", "-e", f"target_cluster={cluster.name}", "-e", f"api_endpoint={cluster.api_endpoint}"])}
 
             if result.returncode == 0:
                 msg = output or f"{addon.name} check passed"
@@ -128,7 +168,7 @@ class HealthChecker:
                 response = client.get(url)
             elapsed = int((datetime.utcnow() - start).total_seconds() * 1000)
 
-            details = {"endpoint": endpoint, "status_code": response.status_code}
+            details = {"endpoint": endpoint, "url": url, "status_code": response.status_code}
 
             if response.status_code == 200:
                 if elapsed > 3000:

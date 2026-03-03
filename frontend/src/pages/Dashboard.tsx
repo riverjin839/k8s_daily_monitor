@@ -15,7 +15,7 @@ import {
 import { PlaybookCard, AddPlaybookModal } from '@/components/playbooks';
 import { useClusterStore } from '@/stores/clusterStore';
 import { usePlaybookStore } from '@/stores/playbookStore';
-import { useClusters, useSummary, useAddons, useLogs, useHealthCheck, useCreateAddon, useDeleteAddon } from '@/hooks/useCluster';
+import { useClusters, useSummary, useAddons, useLogs, useHealthCheck, useCreateAddon, useDeleteAddon, useAddonHealthCheck } from '@/hooks/useCluster';
 import { useDashboardPlaybooks, useRunPlaybook, useDeletePlaybook, useToggleDashboard, useUpdatePlaybook } from '@/hooks/usePlaybook';
 import { useMetricCards, useMetricResults, useDeleteMetricCard } from '@/hooks/useMetricCards';
 import { healthApi } from '@/services/api';
@@ -46,6 +46,7 @@ export function Dashboard() {
   const healthCheck = useHealthCheck();
   const createAddon = useCreateAddon();
   const deleteAddon = useDeleteAddon();
+  const addonHealthCheck = useAddonHealthCheck();
 
   // Dashboard playbooks
   const { data: dashboardPlaybooks = [] } = useDashboardPlaybooks(activeClusterId);
@@ -208,6 +209,9 @@ export function Dashboard() {
               if (confirm(`Delete check "${addon.name}"?`)) {
                 deleteAddon.mutate({ addonId: addon.id, clusterId: addon.clusterId });
               }
+            }}
+            onRunAddon={(addon) => {
+              addonHealthCheck.mutate({ clusterId: addon.clusterId, addonId: addon.id });
             }}
           />
         </section>

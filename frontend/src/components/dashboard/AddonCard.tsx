@@ -1,5 +1,5 @@
 import { Addon } from '@/types';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Play, Trash2 } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 import { formatRelativeTime } from '@/lib/utils';
 
@@ -8,6 +8,7 @@ interface AddonCardProps {
   onClick?: () => void;
   onEdit?: (addon: Addon) => void;
   onDelete?: (addon: Addon) => void;
+  onRun?: (addon: Addon) => void;
 }
 
 // ── Detail type definitions ────────────────────────────
@@ -311,11 +312,19 @@ function AddonDetails({ addon }: { addon: Addon }) {
 
 // ── Main card ──────────────────────────────────────────
 
-export function AddonCard({ addon, onClick, onEdit, onDelete }: AddonCardProps) {
+export function AddonCard({ addon, onClick, onEdit, onDelete, onRun }: AddonCardProps) {
+  const command = String(addon.details?.command ?? addon.details?.url ?? "").trim();
+  const lastMessage = String(addon.details?.lastMessage ?? addon.details?.last_message ?? "").trim();
+  const hoverDetail = [
+    command ? `명령/요청: ${command}` : "",
+    lastMessage ? `최근 로그: ${lastMessage}` : "",
+  ].filter(Boolean).join("\n");
+
   return (
     <div
       className="bg-card border border-border rounded-xl p-5 hover:border-muted-foreground/30 transition-all cursor-pointer hover:-translate-y-0.5"
       onClick={onClick}
+      title={hoverDetail || undefined}
     >
       <div className="flex items-start justify-between mb-4 gap-2">
         <div className="w-11 h-11 rounded-lg bg-secondary flex items-center justify-center text-xl shrink-0">
@@ -323,6 +332,18 @@ export function AddonCard({ addon, onClick, onEdit, onDelete }: AddonCardProps) 
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <StatusBadge status={addon.status} />
+          {onRun && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRun(addon);
+              }}
+              className="p-1.5 rounded-md hover:bg-emerald-500/10 text-emerald-400 transition-colors"
+              title="Run this check"
+            >
+              <Play className="w-4 h-4" />
+            </button>
+          )}
           {onEdit && (
             <button
               onClick={(e) => {
@@ -379,9 +400,10 @@ interface AddonGridProps {
   onAddDefaultAddons?: () => void;
   onEditAddon?: (addon: Addon) => void;
   onDeleteAddon?: (addon: Addon) => void;
+  onRunAddon?: (addon: Addon) => void;
 }
 
-export function AddonGrid({ addons, isLoading, onAddonClick, onAddDefaultAddons, onEditAddon, onDeleteAddon }: AddonGridProps) {
+export function AddonGrid({ addons, isLoading, onAddonClick, onAddDefaultAddons, onEditAddon, onDeleteAddon, onRunAddon }: AddonGridProps) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -418,6 +440,7 @@ export function AddonGrid({ addons, isLoading, onAddonClick, onAddDefaultAddons,
             onClick={() => onAddonClick?.(addon)}
             onEdit={onEditAddon}
             onDelete={onDeleteAddon}
+            onRun={onRunAddon}
           />
         ))}
       </div>

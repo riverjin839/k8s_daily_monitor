@@ -217,6 +217,24 @@ export function useHealthCheck() {
   });
 }
 
+
+export function useAddonHealthCheck() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ clusterId, addonId }: { clusterId: string; addonId: string }) =>
+      healthApi.runAddonCheck(clusterId, addonId),
+    onSuccess: async (_, { clusterId }) => {
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: queryKeys.addons(clusterId) }),
+        queryClient.refetchQueries({ queryKey: queryKeys.cluster(clusterId) }),
+        queryClient.refetchQueries({ queryKey: queryKeys.summary }),
+        queryClient.refetchQueries({ queryKey: queryKeys.logs() }),
+      ]);
+    },
+  });
+}
+
 // Logs
 export function useLogs(clusterId?: string) {
   const { setLogs } = useClusterStore();

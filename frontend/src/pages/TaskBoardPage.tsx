@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus } from 'lucide-react';
-import { TaskModal, TaskDetailModal } from '@/components/tasks';
+import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, CalendarDays, List } from 'lucide-react';
+import { TaskModal, TaskDetailModal, TaskCalendar } from '@/components/tasks';
 import { saveTaskImages } from '@/lib/taskImages';
 import { useTasks, useCreateTask, useUpdateTask, useDeleteTask } from '@/hooks/useTasks';
 import { useClusters } from '@/hooks/useCluster';
@@ -30,7 +30,10 @@ const PRIORITY_STYLES: Record<string, { dot: string; label: string; text: string
   low: { dot: 'bg-slate-400', label: '낮음', text: 'text-slate-400' },
 };
 
+type ViewMode = 'table' | 'calendar';
+
 export function TaskBoardPage() {
+  const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [showModal, setShowModal] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -156,7 +159,33 @@ export function TaskBoardPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {tasks.length > 0 && (
+            {/* View mode toggle */}
+            <div className="flex items-center bg-secondary rounded-lg p-0.5 border border-border">
+              <button
+                onClick={() => setViewMode('table')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  viewMode === 'table'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <List className="w-3.5 h-3.5" />
+                목록
+              </button>
+              <button
+                onClick={() => setViewMode('calendar')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  viewMode === 'calendar'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <CalendarDays className="w-3.5 h-3.5" />
+                달력
+              </button>
+            </div>
+
+            {viewMode === 'table' && tasks.length > 0 && (
               <button
                 onClick={handleExportCsv}
                 className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-2"
@@ -247,8 +276,20 @@ export function TaskBoardPage() {
           </div>
         </div>
 
-        {/* Table */}
-        {isLoading ? (
+        {/* Table / Calendar view */}
+        {viewMode === 'calendar' ? (
+          <div className="bg-card border border-border rounded-xl p-6">
+            {isLoading ? (
+              <div className="grid grid-cols-7 gap-0">
+                {[...Array(35)].map((_, i) => (
+                  <div key={i} className="h-[88px] border border-border animate-pulse bg-muted/20" />
+                ))}
+              </div>
+            ) : (
+              <TaskCalendar tasks={tasks} onTaskClick={setSelectedTask} />
+            )}
+          </div>
+        ) : isLoading ? (
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             {[...Array(5)].map((_, i) => (
               <div key={i} className="h-14 border-b border-border last:border-b-0 animate-pulse bg-muted/30" />

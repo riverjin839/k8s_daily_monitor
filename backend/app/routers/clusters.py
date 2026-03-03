@@ -1,7 +1,10 @@
 import os
+import tempfile
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
+from kubernetes import client as k8s_client, config as k8s_config
+from kubernetes.client import ApiException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from uuid import UUID
@@ -20,6 +23,7 @@ from app.schemas import (
 )
 
 _CONNECT_TIMEOUT = 5  # seconds
+_K8S_AUTH_TIMEOUT = 5  # seconds
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -87,6 +91,42 @@ def _verify_cluster_connectivity(api_endpoint: str, kubeconfig_path: str | None)
             detail=f"클러스터 연결 검증 실패: {str(exc)[:200]}",
         )
 
+    # 3) kubeconfig 로 인증 가능한지 확인 (제공된 경우)
+    if kubeconfig_path:
+        _verify_kubeconfig_auth(api_endpoint, kubeconfig_path)
+
+
+def _verify_kubeconfig_auth(api_endpoint: str, kubeconfig_path: str) -> None:
+    """kubeconfig 인증/권한 유효성 검증."""
+    try:
+        api_client = k8s_config.new_client_from_config(config_file=kubeconfig_path)
+        kubeconfig_host = (api_client.configuration.host or "").rstrip("/")
+        normalized_api_endpoint = api_endpoint.rstrip("/")
+        if kubeconfig_host and kubeconfig_host != normalized_api_endpoint:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    "kubeconfig 서버 주소와 API Endpoint가 일치하지 않습니다. "
+                    f"kubeconfig: '{kubeconfig_host}', API Endpoint: '{normalized_api_endpoint}'"
+                ),
+            )
+
+        v1 = k8s_client.CoreV1Api(api_client)
+        v1.list_namespace(limit=1, _request_timeout=_K8S_AUTH_TIMEOUT)
+    except HTTPException:
+        raise
+    except ApiException as exc:
+        if exc.status in (401, 403):
+            detail = "kubeconfig 인증에 실패했습니다. 토큰/인증서 또는 권한을 확인하세요."
+        else:
+            detail = f"kubeconfig 검증 실패 (HTTP {exc.status}): {exc.reason}"
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"kubeconfig 검증 실패: {str(exc)[:200]}",
+        )
+
 
 # ── 클러스터 생성 시 자동 등록할 기본 애드온 ─────────────────────────────────
 DEFAULT_ADDONS = [
@@ -138,14 +178,23 @@ def create_cluster(cluster_data: ClusterCreate, db: Session = Depends(get_db)):
             detail="Cluster with this name already exists",
         )
 
-    # kubeconfig_content → 임시 경로에 저장해 kubeconfig_path 로 활용
-    # (실제 파일 저장은 cluster_id 확정 후에 하므로, 먼저 객체 생성)
+    # kubeconfig_content 는 임시 파일에 저장 후 검증에 활용
     payload = cluster_data.model_dump(exclude={"kubeconfig_content"})
     content = cluster_data.kubeconfig_content
-
-    # 연결 검증 (kubeconfig_path 는 content 저장 전 단계이므로 None 으로 전달)
     effective_path = payload.get("kubeconfig_path")
-    _verify_cluster_connectivity(cluster_data.api_endpoint, effective_path)
+
+    temp_kubeconfig_path = None
+    if content and content.strip():
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as temp_file:
+            temp_file.write(content.strip())
+            temp_kubeconfig_path = temp_file.name
+        effective_path = temp_kubeconfig_path
+
+    try:
+        _verify_cluster_connectivity(cluster_data.api_endpoint, effective_path)
+    finally:
+        if temp_kubeconfig_path and os.path.exists(temp_kubeconfig_path):
+            os.remove(temp_kubeconfig_path)
 
     cluster = Cluster(**payload)
     db.add(cluster)

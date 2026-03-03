@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, CalendarDays, List } from 'lucide-react';
+import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
 import { TaskModal, TaskDetailModal, TaskCalendar } from '@/components/tasks';
 import { saveTaskImages } from '@/lib/taskImages';
 import { useTasks, useCreateTask, useUpdateTask, useDeleteTask } from '@/hooks/useTasks';
@@ -32,6 +32,47 @@ const PRIORITY_STYLES: Record<string, { dot: string; label: string; text: string
 
 type ViewMode = 'table' | 'calendar';
 
+type TaskSortKey = 'status' | 'priority' | 'assignee' | 'clusterName' | 'taskCategory' | 'scheduledAt' | 'completedAt';
+
+const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
+
+function SortTh({
+  label,
+  col,
+  sortKey,
+  sortDir,
+  onSort,
+  className,
+}: {
+  label: string;
+  col: TaskSortKey;
+  sortKey: TaskSortKey | '';
+  sortDir: 'asc' | 'desc';
+  onSort: (col: TaskSortKey) => void;
+  className?: string;
+}) {
+  const isActive = sortKey === col;
+  return (
+    <th
+      onClick={() => onSort(col)}
+      className={`px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap cursor-pointer select-none group hover:text-foreground transition-colors ${className ?? ''}`}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {isActive ? (
+          sortDir === 'asc' ? (
+            <ChevronUp className="w-3 h-3 text-primary" />
+          ) : (
+            <ChevronDown className="w-3 h-3 text-primary" />
+          )
+        ) : (
+          <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-40 transition-opacity" />
+        )}
+      </span>
+    </th>
+  );
+}
+
 export function TaskBoardPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [showModal, setShowModal] = useState(false);
@@ -43,6 +84,8 @@ export function TaskBoardPage() {
   const [filterPriority, setFilterPriority] = useState('');
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
+  const [sortKey, setSortKey] = useState<TaskSortKey | ''>('');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const { clusters } = useClusterStore();
   useClusters();
@@ -58,6 +101,36 @@ export function TaskBoardPage() {
 
   const { data, isLoading } = useTasks(filters);
   const tasks = data?.data ?? [];
+
+  const handleSort = (col: TaskSortKey) => {
+    if (sortKey === col) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(col);
+      setSortDir('asc');
+    }
+  };
+
+  const sortedTasks = [...tasks].sort((a, b) => {
+    if (!sortKey) return 0;
+    let cmp = 0;
+    if (sortKey === 'status') {
+      cmp = (a.completedAt ? 1 : 0) - (b.completedAt ? 1 : 0);
+    } else if (sortKey === 'priority') {
+      cmp = (PRIORITY_ORDER[a.priority] ?? 1) - (PRIORITY_ORDER[b.priority] ?? 1);
+    } else if (sortKey === 'assignee') {
+      cmp = a.assignee.localeCompare(b.assignee);
+    } else if (sortKey === 'clusterName') {
+      cmp = (a.clusterName ?? '').localeCompare(b.clusterName ?? '');
+    } else if (sortKey === 'taskCategory') {
+      cmp = a.taskCategory.localeCompare(b.taskCategory);
+    } else if (sortKey === 'scheduledAt') {
+      cmp = a.scheduledAt.localeCompare(b.scheduledAt);
+    } else if (sortKey === 'completedAt') {
+      cmp = (a.completedAt ?? '').localeCompare(b.completedAt ?? '');
+    }
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
 
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
@@ -316,21 +389,21 @@ export function TaskBoardPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">상태</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">우선순위</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">담당자</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">대상 클러스터</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">작업 분류</th>
+                    <SortTh label="상태" col="status" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="우선순위" col="priority" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="담당자" col="assignee" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="대상 클러스터" col="clusterName" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="작업 분류" col="taskCategory" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">작업 내용</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">작업 결과</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">예정일</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">완료일</th>
+                    <SortTh label="예정일" col="scheduledAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="완료일" col="completedAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">비고</th>
                     <th className="px-4 py-3 text-center font-medium text-muted-foreground whitespace-nowrap">작업</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {tasks.map((task) => {
+                  {sortedTasks.map((task) => {
                     const isCompleted = !!task.completedAt;
                     const pStyle = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium;
                     const hasImages = hasLocalImages(task.id);

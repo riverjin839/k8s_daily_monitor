@@ -1,4 +1,4 @@
-import { Play, Trash2, Clock, Loader2, LayoutDashboard } from 'lucide-react';
+import { Play, Trash2, Clock, Loader2, LayoutDashboard, Pencil } from 'lucide-react';
 import { Playbook } from '@/types';
 
 interface PlaybookCardProps {
@@ -6,6 +6,7 @@ interface PlaybookCardProps {
   isRunning: boolean;
   onRun: () => void;
   onDelete: () => void;
+  onEdit?: () => void;
   onToggleDashboard?: () => void;
 }
 
@@ -28,7 +29,7 @@ function formatTimeAgo(dateStr?: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onToggleDashboard }: PlaybookCardProps) {
+export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onToggleDashboard }: PlaybookCardProps) {
   const effectiveStatus = isRunning ? 'running' : playbook.status;
   const config = statusConfig[effectiveStatus] || statusConfig.unknown;
   const result = playbook.lastResult;
@@ -109,6 +110,14 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onToggleDas
             ) : (
               <Play className="w-4 h-4" />
             )}
+          </button>
+          <button
+            onClick={onEdit}
+            disabled={isRunning || !onEdit}
+            className="p-1.5 rounded-md hover:bg-primary/10 text-primary transition-colors disabled:opacity-50"
+            title="Edit playbook"
+          >
+            <Pencil className="w-4 h-4" />
           </button>
           <button
             onClick={onDelete}

@@ -12,20 +12,23 @@ import {
   AddMetricCardModal,
   KubeconfigEditModal,
 } from '@/components/dashboard';
-import { PlaybookCard } from '@/components/playbooks';
+import { PlaybookCard, AddPlaybookModal } from '@/components/playbooks';
 import { useClusterStore } from '@/stores/clusterStore';
 import { usePlaybookStore } from '@/stores/playbookStore';
-import { useClusters, useSummary, useAddons, useLogs, useHealthCheck, useCreateAddon } from '@/hooks/useCluster';
-import { useDashboardPlaybooks, useRunPlaybook, useDeletePlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
+import { useClusters, useSummary, useAddons, useLogs, useHealthCheck, useCreateAddon, useDeleteAddon } from '@/hooks/useCluster';
+import { useDashboardPlaybooks, useRunPlaybook, useDeletePlaybook, useToggleDashboard, useUpdatePlaybook } from '@/hooks/usePlaybook';
 import { useMetricCards, useMetricResults, useDeleteMetricCard } from '@/hooks/useMetricCards';
 import { healthApi } from '@/services/api';
-import { MetricCard } from '@/types';
+import { Addon, MetricCard, Playbook } from '@/types';
 
 export function Dashboard() {
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
   const [showAddCluster, setShowAddCluster] = useState(false);
   const [showAddAddon, setShowAddAddon] = useState(false);
+  const [editingAddon, setEditingAddon] = useState<Addon | null>(null);
   const [showAddMetric, setShowAddMetric] = useState(false);
+  const [showPlaybookModal, setShowPlaybookModal] = useState(false);
+  const [editingPlaybook, setEditingPlaybook] = useState<Playbook | null>(null);
   const [showKubeconfig, setShowKubeconfig] = useState(false);
   const [editingMetricCard, setEditingMetricCard] = useState<MetricCard | null>(null);
   const { clusters, summary, addons, logs, isChecking, lastCheckTime } = useClusterStore();
@@ -42,12 +45,14 @@ export function Dashboard() {
   // Health Check mutation
   const healthCheck = useHealthCheck();
   const createAddon = useCreateAddon();
+  const deleteAddon = useDeleteAddon();
 
   // Dashboard playbooks
   const { data: dashboardPlaybooks = [] } = useDashboardPlaybooks(activeClusterId);
   const { runningIds } = usePlaybookStore();
   const runPlaybook = useRunPlaybook();
   const deletePlaybook = useDeletePlaybook();
+  const updatePlaybook = useUpdatePlaybook();
   const toggleDashboard = useToggleDashboard();
 
   // PromQL Metric Cards
@@ -195,6 +200,15 @@ export function Dashboard() {
             addons={currentAddons}
             isLoading={clustersLoading || addonsLoading}
             onAddDefaultAddons={clusters.length > 0 && missingAddons.length > 0 ? handleAddDefaultAddons : undefined}
+            onEditAddon={(addon) => {
+              setEditingAddon(addon);
+              setShowAddAddon(true);
+            }}
+            onDeleteAddon={(addon) => {
+              if (confirm(`Delete check "${addon.name}"?`)) {
+                deleteAddon.mutate({ addonId: addon.id, clusterId: addon.clusterId });
+              }
+            }}
           />
         </section>
 
@@ -254,6 +268,10 @@ export function Dashboard() {
                     }
                   }}
                   onToggleDashboard={() => toggleDashboard.mutate(playbook.id)}
+                  onEdit={() => {
+                    setEditingPlaybook(playbook);
+                    setShowPlaybookModal(true);
+                  }}
                 />
               ))}
             </div>
@@ -278,9 +296,14 @@ export function Dashboard() {
       {/* Add Addon Modal */}
       <AddAddonModal
         isOpen={showAddAddon}
-        onClose={() => setShowAddAddon(false)}
+        onClose={() => {
+          setShowAddAddon(false);
+          setEditingAddon(null);
+        }}
         clusterId={activeClusterId}
+        editingAddon={editingAddon}
       />
+
 
       {/* Add Metric Card Modal */}
       <AddMetricCardModal
@@ -301,6 +324,34 @@ export function Dashboard() {
           onClose={() => setShowKubeconfig(false)}
         />
       )}
+
+      {/* Playbook Edit Modal */}
+      <AddPlaybookModal
+        isOpen={showPlaybookModal}
+        onClose={() => {
+          setShowPlaybookModal(false);
+          setEditingPlaybook(null);
+        }}
+        onSubmit={(data) => {
+          if (!editingPlaybook) return;
+          updatePlaybook.mutate({
+            id: editingPlaybook.id,
+            data: {
+              name: data.name,
+              description: data.description || undefined,
+              playbookPath: data.playbookPath,
+              inventoryPath: data.inventoryPath || undefined,
+              tags: data.tags || undefined,
+              clusterId: data.clusterId,
+            },
+          });
+          setShowPlaybookModal(false);
+          setEditingPlaybook(null);
+        }}
+        clusters={clusters}
+        defaultClusterId={activeClusterId}
+        initialData={editingPlaybook}
+      />
     </div>
   );
 }

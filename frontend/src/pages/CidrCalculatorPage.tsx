@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { Calculator, Copy, Check, Plus, Trash2 } from 'lucide-react';
+import { Calculator, Copy, Check, Plus, Trash2, ExternalLink } from 'lucide-react';
+import { useClusters } from '@/hooks/useCluster';
+import { useClusterStore } from '@/stores/clusterStore';
+import { clustersApi } from '@/services/api';
 
 // ── Pure CIDR logic ───────────────────────────────────────────────────────────
 
@@ -160,6 +163,26 @@ export function CidrCalculatorPage() {
   const [subnets, setSubnets] = useState<string[]>([]);
   const [divideError, setDivideError] = useState('');
 
+  // Apply CIDR to cluster
+  const { clusters } = useClusterStore();
+  useClusters();
+  const [applyClusterId, setApplyClusterId] = useState('');
+  const [applyStatus, setApplyStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+
+  const handleApplyToCluster = async () => {
+    if (!applyClusterId || !info) return;
+    setApplyStatus('loading');
+    try {
+      const networkCidr = `${info.network}/${info.prefix}`;
+      await clustersApi.update(applyClusterId, { cidr: networkCidr } as Record<string, unknown>);
+      setApplyStatus('success');
+      setTimeout(() => setApplyStatus('idle'), 3000);
+    } catch {
+      setApplyStatus('error');
+      setTimeout(() => setApplyStatus('idle'), 3000);
+    }
+  };
+
   // Multi-CIDR comparator
   const [entries, setEntries] = useState<SubnetEntry[]>([
     { id: genId(), cidr: '10.0.0.0/8', label: 'Cluster A' },
@@ -277,6 +300,48 @@ export function CidrCalculatorPage() {
                     <span>/32 (host)</span>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Apply CIDR to Cluster */}
+            {info && clusters.length > 0 && (
+              <div className="bg-card border border-border rounded-xl p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <ExternalLink className="w-4 h-4 text-primary" />
+                  <h2 className="text-base font-semibold">클러스터에 적용</h2>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  계산된 Network CIDR({info.network}/{info.prefix})을 클러스터 관리 정보에 저장합니다.
+                </p>
+                <div className="flex gap-2">
+                  <select
+                    value={applyClusterId}
+                    onChange={(e) => { setApplyClusterId(e.target.value); setApplyStatus('idle'); }}
+                    className="flex-1 px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  >
+                    <option value="">— 클러스터 선택 —</option>
+                    {clusters.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}{c.cidr ? ` (현재: ${c.cidr})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleApplyToCluster}
+                    disabled={!applyClusterId || applyStatus === 'loading'}
+                    className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {applyStatus === 'loading' ? '적용 중...' : '적용'}
+                  </button>
+                </div>
+                {applyStatus === 'success' && (
+                  <p className="mt-2 text-xs text-emerald-400 flex items-center gap-1">
+                    <Check className="w-3 h-3" /> 클러스터 CIDR이 저장되었습니다.
+                  </p>
+                )}
+                {applyStatus === 'error' && (
+                  <p className="mt-2 text-xs text-red-400">저장에 실패했습니다. 다시 시도해주세요.</p>
+                )}
               </div>
             )}
 

@@ -13,8 +13,12 @@ import {
   Pencil,
   Check,
   X,
+  Moon,
+  Sun,
+  Monitor,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
+import { useThemeStore, type Theme } from '@/stores/themeStore';
 
 const NAV_ITEMS: Array<{ to: string; defaultLabel: string; icon: ComponentType<{ className?: string }> }> = [
   { to: '/', defaultLabel: 'Dashboard', icon: LayoutDashboard },
@@ -30,7 +34,12 @@ const NAV_ITEMS: Array<{ to: string; defaultLabel: string; icon: ComponentType<{
 
 const DEFAULT_TITLE = 'K8s Daily Monitor';
 
+const THEME_CYCLE: Record<Theme, Theme> = { dark: 'light', light: 'system', system: 'dark' };
+const THEME_ICON: Record<Theme, typeof Moon> = { dark: Moon, light: Sun, system: Monitor };
+const THEME_LABEL: Record<Theme, string> = { dark: '다크', light: '라이트', system: '시스템' };
+
 export function Sidebar() {
+  const { theme, setTheme } = useThemeStore();
   const location = useLocation();
   const { data: settings } = useUiSettings();
   const updateSettings = useUpdateUiSettings();
@@ -185,8 +194,17 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="px-4 py-3 border-t border-border">
-        <p className="text-xs text-muted-foreground text-center">K8s Daily Monitor</p>
+      <div className="px-4 py-3 border-t border-border flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground truncate">K8s Daily Monitor</p>
+        <button
+          onClick={() => setTheme(THEME_CYCLE[theme])}
+          className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+          title={`테마: ${THEME_LABEL[theme]} (클릭하여 변경)`}
+        >
+          {theme === 'dark' && <Moon className="w-3.5 h-3.5" />}
+          {theme === 'light' && <Sun className="w-3.5 h-3.5" />}
+          {theme === 'system' && <Monitor className="w-3.5 h-3.5" />}
+        </button>
       </div>
     </aside>
   );

@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 @layer base {
+  /* ── Dark theme (default) ─────────────────────────────────────────────── */
   :root {
     --background: 0 0% 4%;
     --foreground: 0 0% 98%;
@@ -25,6 +26,30 @@
     --ring: 217 91% 60%;
     --radius: 0.75rem;
   }
+
+  /* ── Light theme ──────────────────────────────────────────────────────── */
+  html.light {
+    --background: 0 0% 97%;
+    --foreground: 0 0% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+    --primary: 217 91% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 92%;
+    --secondary-foreground: 0 0% 10%;
+    --muted: 0 0% 92%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 0% 92%;
+    --accent-foreground: 0 0% 10%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 83%;
+    --input: 0 0% 83%;
+    --ring: 217 91% 50%;
+    --radius: 0.75rem;
+  }
 }
 
 @layer base {
@@ -37,7 +62,7 @@
   }
 }
 
-/* Scrollbar */
+/* ── Scrollbar ─────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -56,7 +81,7 @@
   background: hsl(var(--muted-foreground) / 0.5);
 }
 
-/* Animation */
+/* ── Animation ─────────────────────────────────────────────────────────────── */
 @keyframes pulse-slow {
   0%, 100% {
     opacity: 1;
@@ -70,13 +95,13 @@
   animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Date input calendar icon fix for dark backgrounds */
-input[type="date"]::-webkit-calendar-picker-indicator {
+/* ── Date input calendar icon (dark mode only) ─────────────────────────────── */
+html:not(.light) input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0.8);
   opacity: 0.7;
   cursor: pointer;
 }
 
-input[type="date"]::-webkit-calendar-picker-indicator:hover {
+html:not(.light) input[type="date"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }

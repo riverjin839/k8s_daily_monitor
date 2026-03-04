@@ -20,6 +20,7 @@ from app.routers import (
     promql_router,
     tasks_router,
     ui_settings_router,
+    workflows_router,
 )
 
 
@@ -196,6 +197,7 @@ app.include_router(issues_router, prefix="/api/v1")
 app.include_router(tasks_router, prefix="/api/v1")
 app.include_router(ui_settings_router, prefix="/api/v1")
 app.include_router(node_labels_router, prefix="/api/v1")
+app.include_router(workflows_router, prefix="/api/v1")
 
 
 @app.get("/")

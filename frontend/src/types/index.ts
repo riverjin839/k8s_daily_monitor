@@ -248,6 +248,75 @@ export interface UiSettings {
   navLabels: Record<string, string>;
 }
 
+// Workflow Board
+export interface WorkflowStep {
+  id: string;
+  workflowId: string;
+  title: string;
+  description?: string;
+  completed: boolean;
+  posX: number;
+  posY: number;
+  orderIndex: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkflowEdge {
+  id: string;
+  workflowId: string;
+  sourceStepId: string;
+  targetStepId: string;
+  createdAt: string;
+}
+
+export interface Workflow {
+  id: string;
+  title: string;
+  description?: string;
+  steps: WorkflowStep[];
+  edges: WorkflowEdge[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkflowListResponse {
+  data: Workflow[];
+}
+
+export interface WorkflowCreate {
+  title: string;
+  description?: string;
+}
+
+export interface WorkflowUpdate {
+  title?: string;
+  description?: string;
+}
+
+export interface WorkflowStepCreate {
+  title: string;
+  description?: string;
+  completed?: boolean;
+  posX?: number;
+  posY?: number;
+  orderIndex?: number;
+}
+
+export interface WorkflowStepUpdate {
+  title?: string;
+  description?: string;
+  completed?: boolean;
+  posX?: number;
+  posY?: number;
+  orderIndex?: number;
+}
+
+export interface WorkflowEdgeCreate {
+  sourceStepId: string;
+  targetStepId: string;
+}
+
 export interface ClusterLink {
   id: string;
   label: string;

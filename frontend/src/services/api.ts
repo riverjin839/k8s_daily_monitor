@@ -271,4 +271,24 @@ export const nodeLabelsApi = {
     ),
 };
 
+
+// Workflows API
+export const workflowsApi = {
+  getAll: () => api.get<{ data: import('@/types').Workflow[] }>('/workflows'),
+  getById: (id: string) => api.get<import('@/types').Workflow>(`/workflows/${id}`),
+  create: (data: import('@/types').WorkflowCreate) => api.post<import('@/types').Workflow>('/workflows', data),
+  update: (id: string, data: import('@/types').WorkflowUpdate) => api.put<import('@/types').Workflow>(`/workflows/${id}`, data),
+  delete: (id: string) => api.delete(`/workflows/${id}`),
+  createStep: (workflowId: string, data: import('@/types').WorkflowStepCreate) =>
+    api.post<import('@/types').WorkflowStep>(`/workflows/${workflowId}/steps`, data),
+  updateStep: (workflowId: string, stepId: string, data: import('@/types').WorkflowStepUpdate) =>
+    api.put<import('@/types').WorkflowStep>(`/workflows/${workflowId}/steps/${stepId}`, data),
+  deleteStep: (workflowId: string, stepId: string) =>
+    api.delete(`/workflows/${workflowId}/steps/${stepId}`),
+  createEdge: (workflowId: string, data: import('@/types').WorkflowEdgeCreate) =>
+    api.post<import('@/types').WorkflowEdge>(`/workflows/${workflowId}/edges`, data),
+  deleteEdge: (workflowId: string, edgeId: string) =>
+    api.delete(`/workflows/${workflowId}/edges/${edgeId}`),
+};
+
 export default api;

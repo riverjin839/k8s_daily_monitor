@@ -7,6 +7,7 @@ from app.models.metric_card import MetricCard
 from app.models.issue import Issue
 from app.models.task import Task
 from app.models.app_setting import AppSetting
+from app.models.workflow import Workflow, WorkflowStep, WorkflowEdge
 
 __all__ = [
     "Cluster",
@@ -21,4 +22,7 @@ __all__ = [
     "Issue",
     "Task",
     "AppSetting",
+    "Workflow",
+    "WorkflowStep",
+    "WorkflowEdge",
 ]

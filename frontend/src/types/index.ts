@@ -169,6 +169,7 @@ export interface Issue {
   issueArea: string;
   issueContent: string;
   actionContent?: string;
+  detailContent?: string;
   occurredAt: string;   // ISO date "YYYY-MM-DD"
   resolvedAt?: string;  // ISO date "YYYY-MM-DD"
   remarks?: string;
@@ -188,6 +189,7 @@ export interface IssueCreate {
   issueArea: string;
   issueContent: string;
   actionContent?: string;
+  detailContent?: string;
   occurredAt: string;
   resolvedAt?: string;
   remarks?: string;

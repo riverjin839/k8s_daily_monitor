@@ -58,6 +58,11 @@ def _run_migrations():
             if col_name not in columns:
                 with engine.begin() as conn:
                     conn.execute(text(f"ALTER TABLE clusters ADD COLUMN {col_name} {col_type}"))
+    if "issues" in inspector.get_table_names():
+        issue_cols = [col["name"] for col in inspector.get_columns("issues")]
+        if "detail_content" not in issue_cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE issues ADD COLUMN detail_content TEXT"))
     if "workflow_steps" in inspector.get_table_names():
         wf_step_cols = [col["name"] for col in inspector.get_columns("workflow_steps")]
         for col_name, col_type, default in [

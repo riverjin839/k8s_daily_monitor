@@ -28,6 +28,8 @@ class Cluster(Base):
     max_pod = Column(Integer, nullable=True)              # Node당 최대 Pod 수
     cilium_config = Column(Text, nullable=True)           # 주요 Cilium 설정
     cidr = Column(String(255), nullable=True)             # CIDR 대역
+    first_host = Column(String(100), nullable=True)       # 첫 번째 호스트 IP
+    last_host = Column(String(100), nullable=True)        # 마지막 호스트 IP
     description = Column(Text, nullable=True)             # 정보/설명
     node_count = Column(Integer, nullable=True)           # 노드 수
     hostname = Column(String(255), nullable=True)         # 호스트명

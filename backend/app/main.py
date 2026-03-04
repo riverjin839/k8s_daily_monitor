@@ -47,6 +47,8 @@ def _run_migrations():
             ("max_pod", "INTEGER"),
             ("cilium_config", "TEXT"),
             ("cidr", "VARCHAR(255)"),
+            ("first_host", "VARCHAR(100)"),
+            ("last_host", "VARCHAR(100)"),
             ("description", "TEXT"),
             ("node_count", "INTEGER"),
             ("hostname", "VARCHAR(255)"),

@@ -1,8 +1,12 @@
 import { useState } from 'react';
-import { Plus, Download, Pencil, Trash2, ClipboardList, Search, X, ImagePlus, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
+import { Plus, Download, Pencil, Trash2, ClipboardList, Search, X, ImagePlus, ChevronUp, ChevronDown, ArrowUpDown, GripVertical } from 'lucide-react';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { IssueModal, IssueDetailModal } from '@/components/issues';
 import { saveIssueImages } from '@/lib/issueImages';
 import { useIssues, useCreateIssue, useUpdateIssue, useDeleteIssue } from '@/hooks/useIssues';
+import { useLocalOrder } from '@/hooks/useLocalOrder';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { issuesApi } from '@/services/api';
@@ -68,6 +72,25 @@ function SortTh({
   );
 }
 
+function SortableIssueRow({
+  id, isDragDisabled, children,
+}: { id: string; isDragDisabled: boolean; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: isDragDisabled });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  return (
+    <tr ref={setNodeRef} style={style} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
+      <td className="px-2 py-3 w-7">
+        {!isDragDisabled && (
+          <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground p-0.5 rounded">
+            <GripVertical className="w-4 h-4" />
+          </button>
+        )}
+      </td>
+      {children}
+    </tr>
+  );
+}
+
 export function IssueBoardPage() {
   const [showModal, setShowModal] = useState(false);
   const [editIssue, setEditIssue] = useState<Issue | null>(null);
@@ -94,6 +117,9 @@ export function IssueBoardPage() {
   const { data, isLoading } = useIssues(filters);
   const issues = data?.data ?? [];
 
+  const { orderedItems: dndIssues, handleDragEnd: dndHandleDragEnd } = useLocalOrder(issues, 'k8s:order:issues');
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
   const handleSort = (col: IssueSortKey) => {
     if (sortKey === col) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -103,8 +129,8 @@ export function IssueBoardPage() {
     }
   };
 
-  const sortedIssues = [...issues].sort((a, b) => {
-    if (!sortKey) return 0;
+  const sortedIssues = sortKey
+    ? [...issues].sort((a, b) => {
     let cmp = 0;
     if (sortKey === 'status') {
       cmp = (a.resolvedAt ? 1 : 0) - (b.resolvedAt ? 1 : 0);
@@ -119,8 +145,9 @@ export function IssueBoardPage() {
     } else if (sortKey === 'resolvedAt') {
       cmp = (a.resolvedAt ?? '').localeCompare(b.resolvedAt ?? '');
     }
-    return sortDir === 'asc' ? cmp : -cmp;
-  });
+      return sortDir === 'asc' ? cmp : -cmp;
+    })
+    : dndIssues;
 
   const createIssue = useCreateIssue();
   const updateIssue = useUpdateIssue();
@@ -333,6 +360,7 @@ export function IssueBoardPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
+                    <th className="w-7" />
                     <SortTh label="상태" col="status" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="담당자" col="assignee" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="대상 클러스터" col="clusterName" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
@@ -345,17 +373,15 @@ export function IssueBoardPage() {
                     <th className="px-4 py-3 text-center font-medium text-muted-foreground whitespace-nowrap">작업</th>
                   </tr>
                 </thead>
-                <tbody>
+                <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={(e: DragEndEvent) => { if (e.over) dndHandleDragEnd(String(e.active.id), String(e.over.id)); }}>
+                  <SortableContext items={sortedIssues.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                  <tbody>
                   {sortedIssues.map((issue) => {
                     const isResolved = !!issue.resolvedAt;
                     const hasImages = hasLocalImages(issue.id);
                     return (
-                      <tr
-                        key={issue.id}
-                        className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer"
-                        onClick={() => setSelectedIssue(issue)}
-                      >
-                        <td className="px-4 py-3">
+                      <SortableIssueRow key={issue.id} id={issue.id} isDragDisabled={!!sortKey}>
+                        <td className="px-4 py-3 cursor-pointer" onClick={() => setSelectedIssue(issue)}>
                           <span className="flex items-center gap-1.5">
                             <span
                               className={`w-2 h-2 rounded-full flex-shrink-0 ${
@@ -371,16 +397,16 @@ export function IssueBoardPage() {
                             </span>
                           </span>
                         </td>
-                        <td className="px-4 py-3 font-medium whitespace-nowrap">{issue.assignee}</td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                        <td className="px-4 py-3 font-medium whitespace-nowrap cursor-pointer" onClick={() => setSelectedIssue(issue)}>{issue.assignee}</td>
+                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap cursor-pointer" onClick={() => setSelectedIssue(issue)}>
                           {issue.clusterName || '-'}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 cursor-pointer" onClick={() => setSelectedIssue(issue)}>
                           <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
                             {issue.issueArea}
                           </span>
                         </td>
-                        <td className="px-4 py-3 max-w-xs">
+                        <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => setSelectedIssue(issue)}>
                           <div className="flex items-start gap-1.5">
                             <p className="line-clamp-2 text-foreground/90">{issue.issueContent}</p>
                             {hasImages && (
@@ -388,18 +414,18 @@ export function IssueBoardPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 max-w-xs">
+                        <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => setSelectedIssue(issue)}>
                           <p className="line-clamp-2 text-muted-foreground">
                             {issue.actionContent || '-'}
                           </p>
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs">
+                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedIssue(issue)}>
                           {formatDate(issue.occurredAt)}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs">
+                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedIssue(issue)}>
                           {formatDate(issue.resolvedAt)}
                         </td>
-                        <td className="px-4 py-3 max-w-[120px]">
+                        <td className="px-4 py-3 max-w-[120px] cursor-pointer" onClick={() => setSelectedIssue(issue)}>
                           <p className="line-clamp-2 text-muted-foreground text-xs">
                             {issue.remarks || '-'}
                           </p>
@@ -422,10 +448,12 @@ export function IssueBoardPage() {
                             </button>
                           </div>
                         </td>
-                      </tr>
+                      </SortableIssueRow>
                     );
                   })}
                 </tbody>
+                </SortableContext>
+                </DndContext>
               </table>
             </div>
           </div>

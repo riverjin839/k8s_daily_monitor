@@ -1,8 +1,12 @@
 import { useState } from 'react';
-import { Server, Pencil, Trash2, X, ChevronDown, ChevronUp, ArrowUpDown } from 'lucide-react';
+import { Server, Pencil, Trash2, X, ChevronDown, ChevronUp, ArrowUpDown, GripVertical } from 'lucide-react';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Cluster, ClusterManageUpdate } from '@/types';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
+import { useLocalOrder } from '@/hooks/useLocalOrder';
 import { clustersApi } from '@/services/api';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -62,6 +66,8 @@ function ClusterMetaModal({ isOpen, onClose, cluster, onSaved }: ClusterMetaModa
   const [nodeCount, setNodeCount] = useState<string>(cluster.nodeCount?.toString() ?? '');
   const [maxPod, setMaxPod] = useState<string>(cluster.maxPod?.toString() ?? '');
   const [cidr, setCidr] = useState(cluster.cidr ?? '');
+  const [firstHost, setFirstHost] = useState(cluster.firstHost ?? '');
+  const [lastHost, setLastHost] = useState(cluster.lastHost ?? '');
   const [hostname, setHostname] = useState(cluster.hostname ?? '');
   const [ciliumConfig, setCiliumConfig] = useState(cluster.ciliumConfig ?? '');
   const [description, setDescription] = useState(cluster.description ?? '');
@@ -81,6 +87,8 @@ function ClusterMetaModal({ isOpen, onClose, cluster, onSaved }: ClusterMetaModa
         nodeCount: nodeCount ? Number(nodeCount) : undefined,
         maxPod: maxPod ? Number(maxPod) : undefined,
         cidr: cidr.trim() || undefined,
+        firstHost: firstHost.trim() || undefined,
+        lastHost: lastHost.trim() || undefined,
         hostname: hostname.trim() || undefined,
         ciliumConfig: ciliumConfig.trim() || undefined,
         description: description.trim() || undefined,
@@ -146,6 +154,16 @@ function ClusterMetaModal({ isOpen, onClose, cluster, onSaved }: ClusterMetaModa
                 <label className={labelClass}>CIDR</label>
                 <input type="text" value={cidr} onChange={(e) => setCidr(e.target.value)}
                   placeholder="예: 10.0.0.0/16, 192.168.1.0/24" className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>First Host</label>
+                <input type="text" value={firstHost} onChange={(e) => setFirstHost(e.target.value)}
+                  placeholder="예: 10.0.0.1" className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Last Host</label>
+                <input type="text" value={lastHost} onChange={(e) => setLastHost(e.target.value)}
+                  placeholder="예: 10.0.255.254" className={inputClass} />
               </div>
             </div>
           </div>
@@ -215,6 +233,8 @@ function ClusterDetailModal({ cluster, onClose, onEdit }: {
     { label: '노드 수', value: cluster.nodeCount },
     { label: 'Max Pod', value: cluster.maxPod },
     { label: 'CIDR', value: cluster.cidr },
+    { label: 'First Host', value: cluster.firstHost },
+    { label: 'Last Host', value: cluster.lastHost },
     { label: '등록일', value: cluster.createdAt?.slice(0, 10) },
   ];
 
@@ -269,6 +289,25 @@ function ClusterDetailModal({ cluster, onClose, onEdit }: {
   );
 }
 
+function SortableClusterRow({
+  id, isDragDisabled, children,
+}: { id: string; isDragDisabled: boolean; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: isDragDisabled });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  return (
+    <tr ref={setNodeRef} style={style} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
+      <td className="px-2 py-3 w-7">
+        {!isDragDisabled && (
+          <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground p-0.5 rounded">
+            <GripVertical className="w-4 h-4" />
+          </button>
+        )}
+      </td>
+      {children}
+    </tr>
+  );
+}
+
 // ── 메인 페이지 ───────────────────────────────────────────────────────────────
 export function ClusterManagePage() {
   const { clusters } = useClusterStore();
@@ -281,13 +320,17 @@ export function ClusterManagePage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const { orderedItems: dndClusters, handleDragEnd: dndHandleDragEnd } = useLocalOrder(clusters, 'k8s:order:clusters');
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
   const handleSort = (col: SortKey) => {
     if (sortKey === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else { setSortKey(col); setSortDir('asc'); }
   };
 
   const STATUS_ORDER: Record<string, number> = { critical: 0, warning: 1, healthy: 2 };
-  const sortedClusters = [...clusters].sort((a, b) => {
+  const baseClusters = sortKey ? clusters : dndClusters;
+  const sortedClusters = [...baseClusters].sort((a, b) => {
     if (!sortKey) return 0;
     let cmp = 0;
     if (sortKey === 'name') cmp = a.name.localeCompare(b.name);
@@ -355,6 +398,7 @@ export function ClusterManagePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
+                    <th className="w-7" />
                     <SortTh label="클러스터명" col="name" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="상태" col="status" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="운영레벨" col="operationLevel" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
@@ -362,38 +406,40 @@ export function ClusterManagePage() {
                     <SortTh label="노드 수" col="nodeCount" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">Max Pod</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">CIDR</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">First Host</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">Last Host</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">호스트명</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">정보</th>
                     <th className="px-4 py-3 text-center font-medium text-muted-foreground whitespace-nowrap">작업</th>
                   </tr>
                 </thead>
-                <tbody>
+                <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={(e: DragEndEvent) => { if (e.over) dndHandleDragEnd(String(e.active.id), String(e.over.id)); }}>
+                  <SortableContext items={sortedClusters.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                  <tbody>
                   {sortedClusters.map((cluster) => (
-                    <tr
-                      key={cluster.id}
-                      className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer"
-                      onClick={() => setDetailCluster(cluster)}
-                    >
-                      <td className="px-4 py-3 font-medium whitespace-nowrap">{cluster.name}</td>
-                      <td className="px-4 py-3">
+                    <SortableClusterRow key={cluster.id} id={cluster.id} isDragDisabled={!!sortKey}>
+                      <td className="px-4 py-3 font-medium whitespace-nowrap cursor-pointer" onClick={() => setDetailCluster(cluster)}>{cluster.name}</td>
+                      <td className="px-4 py-3 cursor-pointer" onClick={() => setDetailCluster(cluster)}>
                         <span className="flex items-center gap-1.5">
                           <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[cluster.status] ?? 'bg-slate-400'}`} />
                           <span className="text-xs">{STATUS_LABEL[cluster.status] ?? cluster.status}</span>
                         </span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 cursor-pointer" onClick={() => setDetailCluster(cluster)}>
                         {cluster.operationLevel ? (
                           <span className={`text-xs px-2 py-0.5 rounded-full border ${LEVEL_BADGE[cluster.operationLevel] ?? 'bg-muted text-muted-foreground border-border'}`}>
                             {OPERATION_LEVELS.find((l) => l.value === cluster.operationLevel)?.label ?? cluster.operationLevel}
                           </span>
                         ) : <span className="text-muted-foreground text-xs">-</span>}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">{cluster.region || '-'}</td>
-                      <td className="px-4 py-3 text-center font-mono text-xs">{cluster.nodeCount ?? '-'}</td>
-                      <td className="px-4 py-3 text-center font-mono text-xs">{cluster.maxPod ?? '-'}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{cluster.cidr || '-'}</td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground max-w-[180px] truncate">{cluster.hostname || '-'}</td>
-                      <td className="px-4 py-3 max-w-[160px]">
+                      <td className="px-4 py-3 text-muted-foreground cursor-pointer" onClick={() => setDetailCluster(cluster)}>{cluster.region || '-'}</td>
+                      <td className="px-4 py-3 text-center font-mono text-xs cursor-pointer" onClick={() => setDetailCluster(cluster)}>{cluster.nodeCount ?? '-'}</td>
+                      <td className="px-4 py-3 text-center font-mono text-xs cursor-pointer" onClick={() => setDetailCluster(cluster)}>{cluster.maxPod ?? '-'}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground cursor-pointer" onClick={() => setDetailCluster(cluster)}>{cluster.cidr || '-'}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground cursor-pointer" onClick={() => setDetailCluster(cluster)}>{cluster.firstHost || '-'}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground cursor-pointer" onClick={() => setDetailCluster(cluster)}>{cluster.lastHost || '-'}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground max-w-[180px] truncate cursor-pointer" onClick={() => setDetailCluster(cluster)}>{cluster.hostname || '-'}</td>
+                      <td className="px-4 py-3 max-w-[160px] cursor-pointer" onClick={() => setDetailCluster(cluster)}>
                         <p className="line-clamp-2 text-xs text-muted-foreground">{cluster.description || '-'}</p>
                       </td>
                       <td className="px-4 py-3">
@@ -415,9 +461,11 @@ export function ClusterManagePage() {
                           </button>
                         </div>
                       </td>
-                    </tr>
+                    </SortableClusterRow>
                   ))}
-                </tbody>
+                  </tbody>
+                  </SortableContext>
+                </DndContext>
               </table>
             </div>
           </div>

@@ -1,15 +1,39 @@
 import { useState, useMemo } from 'react';
 import { Plus, Play, BookOpen, Download, ArrowUpDown } from 'lucide-react';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { PlaybookCard, AddPlaybookModal } from '@/components/playbooks';
 import { usePlaybooks, useCreatePlaybook, useUpdatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
 import { playbooksApi } from '@/services/api';
 import { usePlaybookStore } from '@/stores/playbookStore';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
+import { useLocalOrder } from '@/hooks/useLocalOrder';
 import { Playbook } from '@/types';
 
 type PlaybookSortKey = 'name' | 'status' | 'lastRunAt';
 const STATUS_ORDER: Record<string, number> = { critical: 0, warning: 1, healthy: 2, unknown: 3 };
+
+function SortablePlaybookCard({ playbook, isRunning, onRun, onEdit, onDelete, onToggleDashboard }: {
+  playbook: Playbook; isRunning: boolean;
+  onRun: () => void; onEdit: () => void; onDelete: () => void; onToggleDashboard: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: playbook.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  return (
+    <div ref={setNodeRef} style={style} className="relative group/card">
+      <button
+        {...attributes} {...listeners}
+        className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-all"
+        title="드래그하여 순서 변경"
+      >
+        ⠿
+      </button>
+      <PlaybookCard playbook={playbook} isRunning={isRunning} onRun={onRun} onEdit={onEdit} onDelete={onDelete} onToggleDashboard={onToggleDashboard} />
+    </div>
+  );
+}
 
 export function PlaybooksPage() {
   const [showAdd, setShowAdd] = useState(false);
@@ -31,12 +55,13 @@ export function PlaybooksPage() {
   const runPlaybook = useRunPlaybook();
   const toggleDashboard = useToggleDashboard();
 
+  const basePlaybooks = activeClusterId ? playbooks.filter((p) => p.clusterId === activeClusterId) : playbooks;
+  const { orderedItems: dndPlaybooks, handleDragEnd: dndHandleDragEnd } = useLocalOrder(basePlaybooks, `k8s:order:playbooks:${activeClusterId}`);
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
   // 현재 클러스터의 playbooks만 필터
   const filteredPlaybooks = useMemo(() => {
-    const base = activeClusterId
-      ? playbooks.filter((p) => p.clusterId === activeClusterId)
-      : playbooks;
-    return [...base].sort((a, b) => {
+    const sorted = [...dndPlaybooks].sort((a, b) => {
       let cmp = 0;
       if (sortKey === 'name') {
         cmp = a.name.localeCompare(b.name);
@@ -47,7 +72,8 @@ export function PlaybooksPage() {
       }
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [playbooks, activeClusterId, sortKey, sortDir]);
+    return sorted;
+  }, [dndPlaybooks, sortKey, sortDir]);
 
   const handleCreate = (data: {
     name: string;
@@ -243,23 +269,27 @@ export function PlaybooksPage() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredPlaybooks.map((playbook) => (
-            <PlaybookCard
-              key={playbook.id}
-              playbook={playbook}
-              isRunning={runningIds.has(playbook.id)}
-              onRun={() => runPlaybook.mutate(playbook.id)}
-              onEdit={() => handleOpenEdit(playbook)}
-              onDelete={() => {
-                if (confirm(`Delete playbook "${playbook.name}"?`)) {
-                  deletePlaybook.mutate(playbook.id);
-                }
-              }}
-              onToggleDashboard={() => toggleDashboard.mutate(playbook.id)}
-            />
-          ))}
-        </div>
+        <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={(e: DragEndEvent) => { if (e.over) dndHandleDragEnd(String(e.active.id), String(e.over.id)); }}>
+          <SortableContext items={filteredPlaybooks.map((p) => p.id)} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredPlaybooks.map((playbook) => (
+                <SortablePlaybookCard
+                  key={playbook.id}
+                  playbook={playbook}
+                  isRunning={runningIds.has(playbook.id)}
+                  onRun={() => runPlaybook.mutate(playbook.id)}
+                  onEdit={() => handleOpenEdit(playbook)}
+                  onDelete={() => {
+                    if (confirm(`Delete playbook "${playbook.name}"?`)) {
+                      deletePlaybook.mutate(playbook.id);
+                    }
+                  }}
+                  onToggleDashboard={() => toggleDashboard.mutate(playbook.id)}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       {/* Modal (add / edit) */}

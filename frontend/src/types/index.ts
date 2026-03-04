@@ -14,6 +14,8 @@ export interface Cluster {
   maxPod?: number;
   ciliumConfig?: string;
   cidr?: string;
+  firstHost?: string;
+  lastHost?: string;
   description?: string;
   nodeCount?: number;
   hostname?: string;
@@ -27,6 +29,8 @@ export interface ClusterManageUpdate {
   maxPod?: number;
   ciliumConfig?: string;
   cidr?: string;
+  firstHost?: string;
+  lastHost?: string;
   description?: string;
   nodeCount?: number;
   hostname?: string;

@@ -174,7 +174,11 @@ export function CidrCalculatorPage() {
     setApplyStatus('loading');
     try {
       const networkCidr = `${info.network}/${info.prefix}`;
-      await clustersApi.update(applyClusterId, { cidr: networkCidr } as Record<string, unknown>);
+      await clustersApi.update(applyClusterId, {
+        cidr: networkCidr,
+        first_host: info.firstHost,
+        last_host: info.lastHost,
+      } as Record<string, unknown>);
       setApplyStatus('success');
       setTimeout(() => setApplyStatus('idle'), 3000);
     } catch {

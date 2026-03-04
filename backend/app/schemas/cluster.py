@@ -21,6 +21,8 @@ class ClusterBase(BaseModel):
     max_pod: Optional[int] = None
     cilium_config: Optional[str] = None
     cidr: Optional[str] = None
+    first_host: Optional[str] = None
+    last_host: Optional[str] = None
     description: Optional[str] = None
     node_count: Optional[int] = None
     hostname: Optional[str] = None
@@ -41,6 +43,8 @@ class ClusterUpdate(BaseModel):
     max_pod: Optional[int] = None
     cilium_config: Optional[str] = None
     cidr: Optional[str] = None
+    first_host: Optional[str] = None
+    last_host: Optional[str] = None
     description: Optional[str] = None
     node_count: Optional[int] = None
     hostname: Optional[str] = None

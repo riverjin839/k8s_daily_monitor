@@ -1,11 +1,15 @@
 import { useState } from 'react';
-import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
+import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, GripVertical } from 'lucide-react';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { TaskModal, TaskDetailModal, TaskCalendar } from '@/components/tasks';
 import { saveTaskImages } from '@/lib/taskImages';
 import { useTasks, useCreateTask, useUpdateTask, useDeleteTask } from '@/hooks/useTasks';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { tasksApi } from '@/services/api';
+import { useLocalOrder } from '@/hooks/useLocalOrder';
 import { Task, TaskCreate, TaskUpdate } from '@/types';
 
 function formatDate(dateStr?: string | null): string {
@@ -73,6 +77,25 @@ function SortTh({
   );
 }
 
+function SortableTaskRow({
+  id, isDragDisabled, children,
+}: { id: string; isDragDisabled: boolean; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: isDragDisabled });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  return (
+    <tr ref={setNodeRef} style={style} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
+      <td className="px-2 py-3 w-7">
+        {!isDragDisabled && (
+          <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground p-0.5 rounded">
+            <GripVertical className="w-4 h-4" />
+          </button>
+        )}
+      </td>
+      {children}
+    </tr>
+  );
+}
+
 export function TaskBoardPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [showModal, setShowModal] = useState(false);
@@ -102,6 +125,9 @@ export function TaskBoardPage() {
   const { data, isLoading } = useTasks(filters);
   const tasks = data?.data ?? [];
 
+  const { orderedItems: dndTasks, handleDragEnd: dndHandleDragEnd } = useLocalOrder(tasks, 'k8s:order:tasks');
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
   const handleSort = (col: TaskSortKey) => {
     if (sortKey === col) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -111,26 +137,28 @@ export function TaskBoardPage() {
     }
   };
 
-  const sortedTasks = [...tasks].sort((a, b) => {
-    if (!sortKey) return 0;
-    let cmp = 0;
-    if (sortKey === 'status') {
-      cmp = (a.completedAt ? 1 : 0) - (b.completedAt ? 1 : 0);
-    } else if (sortKey === 'priority') {
-      cmp = (PRIORITY_ORDER[a.priority] ?? 1) - (PRIORITY_ORDER[b.priority] ?? 1);
-    } else if (sortKey === 'assignee') {
-      cmp = a.assignee.localeCompare(b.assignee);
-    } else if (sortKey === 'clusterName') {
-      cmp = (a.clusterName ?? '').localeCompare(b.clusterName ?? '');
-    } else if (sortKey === 'taskCategory') {
-      cmp = a.taskCategory.localeCompare(b.taskCategory);
-    } else if (sortKey === 'scheduledAt') {
-      cmp = a.scheduledAt.localeCompare(b.scheduledAt);
-    } else if (sortKey === 'completedAt') {
-      cmp = (a.completedAt ?? '').localeCompare(b.completedAt ?? '');
-    }
-    return sortDir === 'asc' ? cmp : -cmp;
-  });
+  // Column sort overrides DnD order; when no sort active, use DnD order
+  const sortedTasks = sortKey
+    ? [...tasks].sort((a, b) => {
+        let cmp = 0;
+        if (sortKey === 'status') {
+          cmp = (a.completedAt ? 1 : 0) - (b.completedAt ? 1 : 0);
+        } else if (sortKey === 'priority') {
+          cmp = (PRIORITY_ORDER[a.priority] ?? 1) - (PRIORITY_ORDER[b.priority] ?? 1);
+        } else if (sortKey === 'assignee') {
+          cmp = a.assignee.localeCompare(b.assignee);
+        } else if (sortKey === 'clusterName') {
+          cmp = (a.clusterName ?? '').localeCompare(b.clusterName ?? '');
+        } else if (sortKey === 'taskCategory') {
+          cmp = a.taskCategory.localeCompare(b.taskCategory);
+        } else if (sortKey === 'scheduledAt') {
+          cmp = a.scheduledAt.localeCompare(b.scheduledAt);
+        } else if (sortKey === 'completedAt') {
+          cmp = (a.completedAt ?? '').localeCompare(b.completedAt ?? '');
+        }
+        return sortDir === 'asc' ? cmp : -cmp;
+      })
+    : dndTasks;
 
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
@@ -389,6 +417,7 @@ export function TaskBoardPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
+                    <th className="w-7" />
                     <SortTh label="상태" col="status" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="우선순위" col="priority" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="담당자" col="assignee" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
@@ -402,18 +431,16 @@ export function TaskBoardPage() {
                     <th className="px-4 py-3 text-center font-medium text-muted-foreground whitespace-nowrap">작업</th>
                   </tr>
                 </thead>
-                <tbody>
+                <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={(e: DragEndEvent) => { if (e.over) dndHandleDragEnd(String(e.active.id), String(e.over.id)); }}>
+                  <SortableContext items={sortedTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+                  <tbody>
                   {sortedTasks.map((task) => {
                     const isCompleted = !!task.completedAt;
                     const pStyle = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium;
                     const hasImages = hasLocalImages(task.id);
                     return (
-                      <tr
-                        key={task.id}
-                        className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer"
-                        onClick={() => setSelectedTask(task)}
-                      >
-                        <td className="px-4 py-3">
+                      <SortableTaskRow key={task.id} id={task.id} isDragDisabled={!!sortKey}>
+                        <td className="px-4 py-3 cursor-pointer" onClick={() => setSelectedTask(task)}>
                           <span className="flex items-center gap-1.5">
                             <span
                               className={`w-2 h-2 rounded-full flex-shrink-0 ${
@@ -429,22 +456,22 @@ export function TaskBoardPage() {
                             </span>
                           </span>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 cursor-pointer" onClick={() => setSelectedTask(task)}>
                           <span className="flex items-center gap-1.5">
                             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${pStyle.dot}`} />
                             <span className={`text-xs font-medium ${pStyle.text}`}>{pStyle.label}</span>
                           </span>
                         </td>
-                        <td className="px-4 py-3 font-medium whitespace-nowrap">{task.assignee}</td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                        <td className="px-4 py-3 font-medium whitespace-nowrap cursor-pointer" onClick={() => setSelectedTask(task)}>{task.assignee}</td>
+                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap cursor-pointer" onClick={() => setSelectedTask(task)}>
                           {task.clusterName || '-'}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 cursor-pointer" onClick={() => setSelectedTask(task)}>
                           <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
                             {task.taskCategory}
                           </span>
                         </td>
-                        <td className="px-4 py-3 max-w-xs">
+                        <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => setSelectedTask(task)}>
                           <div className="flex items-start gap-1.5">
                             <p className="line-clamp-2 text-foreground/90">{task.taskContent}</p>
                             {hasImages && (
@@ -452,18 +479,18 @@ export function TaskBoardPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 max-w-xs">
+                        <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => setSelectedTask(task)}>
                           <p className="line-clamp-2 text-muted-foreground">
                             {task.resultContent || '-'}
                           </p>
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs">
+                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedTask(task)}>
                           {formatDate(task.scheduledAt)}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs">
+                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedTask(task)}>
                           {formatDate(task.completedAt)}
                         </td>
-                        <td className="px-4 py-3 max-w-[120px]">
+                        <td className="px-4 py-3 max-w-[120px] cursor-pointer" onClick={() => setSelectedTask(task)}>
                           <p className="line-clamp-2 text-muted-foreground text-xs">
                             {task.remarks || '-'}
                           </p>
@@ -486,10 +513,12 @@ export function TaskBoardPage() {
                             </button>
                           </div>
                         </td>
-                      </tr>
+                      </SortableTaskRow>
                     );
                   })}
                 </tbody>
+                </SortableContext>
+                </DndContext>
               </table>
             </div>
           </div>

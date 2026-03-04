@@ -21,7 +21,10 @@ export function useClusters() {
     queryKey: queryKeys.clusters,
     queryFn: async () => {
       const { data } = await clustersApi.getAll();
-      const clusters = data?.data ?? [];
+      // createdAt 기준 정렬로 리페치 시 순서 고정 (run check 후 순서 변경 방지)
+      const clusters = (data?.data ?? []).sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      );
       setClusters(clusters);
       return clusters;
     },

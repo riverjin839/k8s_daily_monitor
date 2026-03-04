@@ -15,6 +15,15 @@ class ClusterBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     api_endpoint: str = Field(..., min_length=1, max_length=255)
     kubeconfig_path: Optional[str] = None
+    # 클러스터 관리 메타데이터 (optional)
+    region: Optional[str] = None
+    operation_level: Optional[str] = None
+    max_pod: Optional[int] = None
+    cilium_config: Optional[str] = None
+    cidr: Optional[str] = None
+    description: Optional[str] = None
+    node_count: Optional[int] = None
+    hostname: Optional[str] = None
 
 
 class ClusterCreate(ClusterBase):
@@ -27,6 +36,14 @@ class ClusterUpdate(BaseModel):
     api_endpoint: Optional[str] = Field(None, min_length=1, max_length=255)
     kubeconfig_path: Optional[str] = None
     status: Optional[StatusEnum] = None
+    region: Optional[str] = None
+    operation_level: Optional[str] = None
+    max_pod: Optional[int] = None
+    cilium_config: Optional[str] = None
+    cidr: Optional[str] = None
+    description: Optional[str] = None
+    node_count: Optional[int] = None
+    hostname: Optional[str] = None
 
 
 class ClusterResponse(ClusterBase):

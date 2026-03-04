@@ -39,6 +39,22 @@ def _run_migrations():
         if "show_on_dashboard" not in columns:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE playbooks ADD COLUMN show_on_dashboard BOOLEAN DEFAULT FALSE"))
+    if "clusters" in inspector.get_table_names():
+        columns = [col["name"] for col in inspector.get_columns("clusters")]
+        new_cluster_cols = [
+            ("region", "VARCHAR(100)"),
+            ("operation_level", "VARCHAR(50)"),
+            ("max_pod", "INTEGER"),
+            ("cilium_config", "TEXT"),
+            ("cidr", "VARCHAR(255)"),
+            ("description", "TEXT"),
+            ("node_count", "INTEGER"),
+            ("hostname", "VARCHAR(255)"),
+        ]
+        for col_name, col_type in new_cluster_cols:
+            if col_name not in columns:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE clusters ADD COLUMN {col_name} {col_type}"))
 
 
 def _seed_default_metric_cards():

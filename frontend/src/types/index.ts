@@ -8,8 +8,28 @@ export interface Cluster {
   apiEndpoint: string;
   kubeconfigPath: string;
   status: Status;
+  // 클러스터 관리 메타데이터
+  region?: string;
+  operationLevel?: string;
+  maxPod?: number;
+  ciliumConfig?: string;
+  cidr?: string;
+  description?: string;
+  nodeCount?: number;
+  hostname?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ClusterManageUpdate {
+  region?: string;
+  operationLevel?: string;
+  maxPod?: number;
+  ciliumConfig?: string;
+  cidr?: string;
+  description?: string;
+  nodeCount?: number;
+  hostname?: string;
 }
 
 // Addon

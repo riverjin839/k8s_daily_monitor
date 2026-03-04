@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Enum
+from sqlalchemy import Column, String, DateTime, Enum, Integer, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -21,6 +21,17 @@ class Cluster(Base):
     api_endpoint = Column(String(255), nullable=False)
     kubeconfig_path = Column(String(255), nullable=True)
     status = Column(Enum(StatusEnum), default=StatusEnum.healthy)
+
+    # 클러스터 관리 메타데이터
+    region = Column(String(100), nullable=True)           # 지역
+    operation_level = Column(String(50), nullable=True)   # 운영레벨 (production/staging/dev/test)
+    max_pod = Column(Integer, nullable=True)              # Node당 최대 Pod 수
+    cilium_config = Column(Text, nullable=True)           # 주요 Cilium 설정
+    cidr = Column(String(255), nullable=True)             # CIDR 대역
+    description = Column(Text, nullable=True)             # 정보/설명
+    node_count = Column(Integer, nullable=True)           # 노드 수
+    hostname = Column(String(255), nullable=True)         # 호스트명
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -1,0 +1,81 @@
+from pydantic import BaseModel, Field
+from datetime import datetime
+from uuid import UUID
+from typing import Optional, List
+
+
+class WorkflowStepCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    completed: bool = False
+    pos_x: float = 100.0
+    pos_y: float = 100.0
+    order_index: int = 0
+
+
+class WorkflowStepUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    completed: Optional[bool] = None
+    pos_x: Optional[float] = None
+    pos_y: Optional[float] = None
+    order_index: Optional[int] = None
+
+
+class WorkflowStepResponse(BaseModel):
+    id: UUID
+    workflow_id: UUID
+    title: str
+    description: Optional[str] = None
+    completed: bool
+    pos_x: float
+    pos_y: float
+    order_index: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class WorkflowEdgeCreate(BaseModel):
+    source_step_id: UUID
+    target_step_id: UUID
+
+
+class WorkflowEdgeResponse(BaseModel):
+    id: UUID
+    workflow_id: UUID
+    source_step_id: UUID
+    target_step_id: UUID
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class WorkflowCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+
+
+class WorkflowUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = None
+
+
+class WorkflowResponse(BaseModel):
+    id: UUID
+    title: str
+    description: Optional[str] = None
+    steps: List[WorkflowStepResponse] = []
+    edges: List[WorkflowEdgeResponse] = []
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class WorkflowListResponse(BaseModel):
+    data: List[WorkflowResponse]

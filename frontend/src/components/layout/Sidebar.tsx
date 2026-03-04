@@ -10,6 +10,7 @@ import {
   Tags,
   Calculator,
   Server,
+  GitFork,
   Pencil,
   Check,
   X,
@@ -29,6 +30,7 @@ const NAV_ITEMS: Array<{ to: string; defaultLabel: string; icon: ComponentType<{
   { to: '/links', defaultLabel: '클러스터 링크', icon: Link2 },
   { to: '/node-labels', defaultLabel: '노드 라벨', icon: Tags },
   { to: '/cidr', defaultLabel: 'CIDR 계산기', icon: Calculator },
+  { to: '/workflow', defaultLabel: '워크플로우', icon: GitFork },
   { to: '/settings', defaultLabel: 'Settings', icon: Settings },
 ];
 

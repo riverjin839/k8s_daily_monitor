@@ -8,6 +8,7 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { ClusterLinksPage } from '@/pages/ClusterLinksPage';
 import { NodeLabelsPage } from '@/pages/NodeLabelsPage';
 import { CidrCalculatorPage } from '@/pages/CidrCalculatorPage';
+import { ClusterManagePage } from '@/pages/ClusterManagePage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar } from '@/components/layout';
 
@@ -35,6 +36,7 @@ function App() {
               <Route path="/links" element={<ClusterLinksPage />} />
               <Route path="/node-labels" element={<NodeLabelsPage />} />
               <Route path="/cidr" element={<CidrCalculatorPage />} />
+              <Route path="/cluster-manage" element={<ClusterManagePage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

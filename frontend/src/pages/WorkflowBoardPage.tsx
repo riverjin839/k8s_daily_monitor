@@ -90,7 +90,17 @@ function computeAutoLayout(
   return out;
 }
 
-// ─── component ────────────────────────────────────────────────────────────────
+// ─── port SVG colors (type → hex) ────────────────────────────────────────────
+const PORT_R = 6;
+const TYPE_SVG_COLOR: Record<string, { fill: string; stroke: string }> = {
+  trigger:      { fill: '#a78bfa', stroke: '#7c3aed' },
+  action:       { fill: '#60a5fa', stroke: '#2563eb' },
+  condition:    { fill: '#fbbf24', stroke: '#d97706' },
+  wait:         { fill: '#22d3ee', stroke: '#0891b2' },
+  notification: { fill: '#34d399', stroke: '#059669' },
+};
+
+
 export function WorkflowBoardPage() {
   // selection / mode
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -590,34 +600,63 @@ export function WorkflowBoardPage() {
                     left: 0,
                   }}
                 >
-                  {/* SVG edges */}
+                  {/* SVG: ports + edges (ports first so arrowheads render on top) */}
                   <svg
-                    className="absolute inset-0 pointer-events-none"
+                    className="absolute inset-0"
                     width={CANVAS_W}
                     height={CANVAS_H}
-                    style={{ overflow: 'visible' }}
+                    style={{ overflow: 'visible', pointerEvents: 'none' }}
                   >
                     <defs>
-                      <marker id="wf-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-                        <polygon points="0 0, 8 3, 0 6" fill="hsl(var(--muted-foreground))" opacity="0.7" />
+                      {/* refX=8 → arrowhead TIP lands exactly at path endpoint (port center) */}
+                      <marker id="wf-arrow" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+                        <polygon points="0 0, 8 4, 0 8" fill="hsl(var(--muted-foreground))" opacity="0.75" />
                       </marker>
-                      <marker id="wf-arrow-red" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-                        <polygon points="0 0, 8 3, 0 6" fill="rgb(248 113 113)" />
+                      <marker id="wf-arrow-del" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+                        <polygon points="0 0, 8 4, 0 8" fill="rgb(248 113 113)" />
                       </marker>
                     </defs>
 
+                    {/* ── 1. Port circles (rendered first → behind arrowheads) ── */}
+                    {selectedWf.steps.map((step) => {
+                      const pos = getPos(step);
+                      const cy = pos.y + CARD_H / 2;
+                      const tc = TYPE_SVG_COLOR[step.stepType] ?? TYPE_SVG_COLOR.action;
+                      const hasOut = selectedWf.edges.some((e) => e.sourceStepId === step.id);
+                      const hasIn  = selectedWf.edges.some((e) => e.targetStepId === step.id);
+                      return (
+                        <g key={`port-${step.id}`} style={{ pointerEvents: 'none' }}>
+                          {/* left port — incoming */}
+                          <circle
+                            cx={pos.x} cy={cy} r={PORT_R}
+                            fill={hasIn ? tc.fill : 'hsl(var(--card))'}
+                            stroke={hasIn ? tc.stroke : 'hsl(var(--border))'}
+                            strokeWidth={2}
+                          />
+                          {/* right port — outgoing */}
+                          <circle
+                            cx={pos.x + CARD_W} cy={cy} r={PORT_R}
+                            fill={hasOut ? tc.fill : 'hsl(var(--card))'}
+                            stroke={hasOut ? tc.stroke : 'hsl(var(--border))'}
+                            strokeWidth={2}
+                          />
+                        </g>
+                      );
+                    })}
+
+                    {/* ── 2. Edges (rendered after ports → arrowheads on top of port dots) ── */}
                     {selectedWf.edges.map((edge) => {
                       const src = selectedWf.steps.find((s) => s.id === edge.sourceStepId);
                       const tgt = selectedWf.steps.find((s) => s.id === edge.targetStepId);
                       if (!src || !tgt) return null;
                       const sp = getPos(src);
                       const tp = getPos(tgt);
-                      // port: right-center → left-center
+                      // path: right-port-center → left-port-center
                       const sx = sp.x + CARD_W;
                       const sy = sp.y + CARD_H / 2;
                       const tx = tp.x;
                       const ty = tp.y + CARD_H / 2;
-                      const path = bezierPath(sx, sy, tx, ty);
+                      const d = bezierPath(sx, sy, tx, ty);
                       return (
                         <g
                           key={edge.id}
@@ -625,22 +664,24 @@ export function WorkflowBoardPage() {
                           style={{ pointerEvents: 'all', cursor: 'pointer' }}
                           onClick={() => deleteEdge.mutate({ wfId: selectedWf.id, edgeId: edge.id })}
                         >
-                          <path d={path} stroke="transparent" strokeWidth={14} fill="none" />
+                          {/* wide invisible hit area */}
+                          <path d={d} stroke="transparent" strokeWidth={16} fill="none" />
+                          {/* visible edge */}
                           <path
-                            d={path}
+                            d={d}
                             stroke="hsl(var(--muted-foreground))"
-                            strokeOpacity={0.6}
+                            strokeOpacity={0.55}
                             strokeWidth={1.8}
                             fill="none"
                             markerEnd="url(#wf-arrow)"
-                            className="group-hover/edge:stroke-red-400 transition-colors"
+                            className="group-hover/edge:stroke-red-400 group-hover/edge:opacity-100 transition-colors"
                             style={{ pointerEvents: 'none' }}
                           />
                         </g>
                       );
                     })}
 
-                    {/* Source highlight ring in connect mode */}
+                    {/* ── 3. Connect-mode source ring ── */}
                     {connectMode && connectingFrom && (() => {
                       const src = selectedWf.steps.find((s) => s.id === connectingFrom);
                       if (!src) return null;
@@ -878,21 +919,6 @@ export function WorkflowBoardPage() {
                           ) : null}
                         </div>
 
-                        {/* Port indicators */}
-                        {!connectMode && (
-                          <>
-                            {/* left port */}
-                            <div
-                              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full border-2 border-border bg-card"
-                              style={{ pointerEvents: 'none' }}
-                            />
-                            {/* right port */}
-                            <div
-                              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-2.5 h-2.5 rounded-full border-2 border-border bg-card"
-                              style={{ pointerEvents: 'none' }}
-                            />
-                          </>
-                        )}
                       </div>
                     );
                   })}

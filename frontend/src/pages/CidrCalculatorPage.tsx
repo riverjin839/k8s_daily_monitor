@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calculator, Copy, Check, Plus, Trash2, ExternalLink } from 'lucide-react';
+import { Calculator, Copy, Check, Plus, Trash2, ExternalLink, AlertTriangle } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { clustersApi } from '@/services/api';
@@ -96,6 +96,17 @@ function divideSubnets(cidr: string, count: number): string[] {
     result.push(`${numToIp((base + i * step) >>> 0)}/${newPrefix}`);
   }
   return result;
+}
+
+function cidrsOverlap(cidr1: string, cidr2: string): boolean {
+  const r1 = parseCidr(cidr1);
+  const r2 = parseCidr(cidr2);
+  if (!r1 || !r2) return false;
+  const start1 = ipToNum(r1.network);
+  const end1 = ipToNum(r1.broadcast);
+  const start2 = ipToNum(r2.network);
+  const end2 = ipToNum(r2.broadcast);
+  return start1 <= end2 && start2 <= end1;
 }
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
@@ -304,6 +315,30 @@ export function CidrCalculatorPage() {
                     <span>/32 (host)</span>
                   </div>
                 </div>
+                {clusters.length > 0 && (() => {
+                  const currentCidr = `${info.network}/${info.prefix}`;
+                  const overlapping = clusters.filter((c) => Boolean(c.cidr) && cidrsOverlap(currentCidr, c.cidr as string));
+                  if (overlapping.length === 0) return null;
+                  return (
+                    <div className="px-6 pb-5">
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                        <p className="text-xs font-semibold text-amber-400 flex items-center gap-1.5 mb-2">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          클러스터 CIDR 겹침 — {overlapping.length}개 클러스터와 주소 범위 충돌
+                        </p>
+                        <div className="space-y-1">
+                          {overlapping.map((c) => (
+                            <div key={c.id} className="flex items-center gap-2 text-xs">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
+                              <span className="font-medium">{c.name}</span>
+                              <span className="text-muted-foreground font-mono">{c.cidr}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -346,6 +381,28 @@ export function CidrCalculatorPage() {
                 {applyStatus === 'error' && (
                   <p className="mt-2 text-xs text-red-400">저장에 실패했습니다. 다시 시도해주세요.</p>
                 )}
+                {info && applyClusterId && (() => {
+                  const currentCidr = `${info.network}/${info.prefix}`;
+                  const conflicting = clusters.filter(
+                    (c) => c.id !== applyClusterId && Boolean(c.cidr) && cidrsOverlap(currentCidr, c.cidr as string),
+                  );
+                  if (conflicting.length === 0) return null;
+                  return (
+                    <div className="mt-2 p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                      <p className="text-xs font-semibold text-amber-400 flex items-center gap-1.5 mb-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        다른 클러스터 CIDR과 겹침
+                      </p>
+                      {conflicting.map((c) => (
+                        <div key={c.id} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
+                          <span className="font-medium text-foreground">{c.name}</span>
+                          <span className="font-mono">{c.cidr}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -445,14 +502,17 @@ export function CidrCalculatorPage() {
                     <th className="text-left py-2 text-muted-foreground font-medium pr-3">Label</th>
                     <th className="text-left py-2 text-muted-foreground font-medium pr-3">Network</th>
                     <th className="text-left py-2 text-muted-foreground font-medium pr-3">Mask</th>
-                    <th className="text-right py-2 text-muted-foreground font-medium">Usable Hosts</th>
+                    <th className="text-right py-2 text-muted-foreground font-medium pr-3">Usable Hosts</th>
+                    <th className="text-left py-2 text-muted-foreground font-medium">겹침</th>
                   </tr>
                 </thead>
                 <tbody>
                   {entries.map((entry) => {
                     const ei = parseCidr(entry.cidr);
+                    const overlappingEntries = entries.filter((e) => e.id !== entry.id && cidrsOverlap(entry.cidr, e.cidr));
+                    const hasOverlap = overlappingEntries.length > 0;
                     return (
-                      <tr key={entry.id} className="border-b border-border/50 last:border-b-0 hover:bg-muted/10">
+                      <tr key={entry.id} className={`border-b border-border/50 last:border-b-0 hover:bg-muted/10 ${hasOverlap ? 'bg-amber-500/5' : ''}`}>
                         <td className="py-2 pr-3 font-medium">{entry.label || '—'}</td>
                         <td className="py-2 pr-3 font-mono text-muted-foreground">
                           {ei ? `${ei.network}/${ei.prefix}` : <span className="text-red-400">invalid</span>}
@@ -460,8 +520,22 @@ export function CidrCalculatorPage() {
                         <td className="py-2 pr-3 font-mono text-muted-foreground">
                           {ei ? ei.mask : '—'}
                         </td>
-                        <td className="py-2 text-right font-mono text-primary">
+                        <td className="py-2 pr-3 text-right font-mono text-primary">
                           {ei ? formatHosts(ei.usableHosts) : '—'}
+                        </td>
+                        <td className="py-2">
+                          {hasOverlap ? (
+                            <div className="flex flex-wrap gap-1">
+                              {overlappingEntries.map((e) => (
+                                <span key={e.id} className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                  <AlertTriangle className="w-2.5 h-2.5" />
+                                  {e.label || e.cidr}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground/40">—</span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -469,6 +543,42 @@ export function CidrCalculatorPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Registered cluster CIDR overlap check */}
+            {clusters.length > 0 && (() => {
+              const conflicts: { entryLabel: string; clusterName: string; clusterCidr: string }[] = [];
+              for (const entry of entries) {
+                for (const cluster of clusters) {
+                  if (cluster.cidr && cidrsOverlap(entry.cidr, cluster.cidr)) {
+                    conflicts.push({
+                      entryLabel: entry.label || entry.cidr,
+                      clusterName: cluster.name,
+                      clusterCidr: cluster.cidr,
+                    });
+                  }
+                }
+              }
+              if (conflicts.length === 0) return null;
+              return (
+                <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                  <p className="text-xs font-semibold text-amber-400 flex items-center gap-1.5 mb-2">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    등록 클러스터 CIDR 겹침
+                  </p>
+                  <div className="space-y-1">
+                    {conflicts.map((c, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
+                        <span className="font-medium">{c.entryLabel}</span>
+                        <span className="text-muted-foreground">↔</span>
+                        <span className="font-medium text-foreground">{c.clusterName}</span>
+                        <span className="text-muted-foreground font-mono">{c.clusterCidr}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Quick reference */}
             <div className="mt-6 pt-5 border-t border-border">

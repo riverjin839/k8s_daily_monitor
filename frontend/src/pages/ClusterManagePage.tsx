@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Server, Pencil, Trash2, X, ChevronDown, ChevronUp, ArrowUpDown, GripVertical } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Server, Pencil, Trash2, X, ChevronDown, ChevronUp, ArrowUpDown, GripVertical, AlertTriangle } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -26,6 +26,40 @@ const LEVEL_BADGE: Record<string, string> = {
   test:       'bg-slate-500/15 text-slate-400 border-slate-500/30',
   dr:         'bg-purple-500/15 text-purple-400 border-purple-500/30',
 };
+
+// ── CIDR Overlap Utilities ────────────────────────────────────────────────────
+function cidrIpToNum(ip: string): number {
+  return ip.split('.').reduce((acc, octet) => (acc << 8) | parseInt(octet, 10), 0) >>> 0;
+}
+
+function parseCidrRange(cidr: string): { start: number; end: number } | null {
+  const match = cidr.trim().match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(\d{1,2})$/);
+  if (!match) return null;
+  const prefix = parseInt(match[2], 10);
+  if (prefix < 0 || prefix > 32) return null;
+  const octets = match[1].split('.').map(Number);
+  if (octets.some((o) => o < 0 || o > 255)) return null;
+  const ipNum = cidrIpToNum(match[1]);
+  const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
+  const networkNum = (ipNum & mask) >>> 0;
+  const broadcastNum = (networkNum | (~mask >>> 0)) >>> 0;
+  return { start: networkNum, end: broadcastNum };
+}
+
+function cidrsOverlap(cidr1: string, cidr2: string): boolean {
+  const r1 = parseCidrRange(cidr1);
+  const r2 = parseCidrRange(cidr2);
+  if (!r1 || !r2) return false;
+  return r1.start <= r2.end && r2.start <= r1.end;
+}
+
+const OVERLAP_COLORS = [
+  { bg: 'bg-orange-500/10', text: 'text-orange-300', border: 'border-orange-500/40', dot: 'bg-orange-400' },
+  { bg: 'bg-pink-500/10', text: 'text-pink-300', border: 'border-pink-500/40', dot: 'bg-pink-400' },
+  { bg: 'bg-cyan-500/10', text: 'text-cyan-300', border: 'border-cyan-500/40', dot: 'bg-cyan-400' },
+  { bg: 'bg-yellow-500/10', text: 'text-yellow-300', border: 'border-yellow-500/40', dot: 'bg-yellow-400' },
+  { bg: 'bg-violet-500/10', text: 'text-violet-300', border: 'border-violet-500/40', dot: 'bg-violet-400' },
+];
 
 // ── 정렬 ─────────────────────────────────────────────────────────────────────
 type SortKey = 'name' | 'status' | 'operationLevel' | 'region' | 'nodeCount';
@@ -221,8 +255,8 @@ function ClusterMetaModal({ isOpen, onClose, cluster, onSaved }: ClusterMetaModa
 }
 
 // ── 상세 정보 모달 ────────────────────────────────────────────────────────────
-function ClusterDetailModal({ cluster, onClose, onEdit }: {
-  cluster: Cluster; onClose: () => void; onEdit: () => void;
+function ClusterDetailModal({ cluster, onClose, onEdit, allClusters }: {
+  cluster: Cluster; onClose: () => void; onEdit: () => void; allClusters: Cluster[];
 }) {
   const rows: { label: string; value: string | number | undefined | null }[] = [
     { label: 'API Endpoint', value: cluster.apiEndpoint },
@@ -258,6 +292,32 @@ function ClusterDetailModal({ cluster, onClose, onEdit }: {
             </div>
           ))}
         </dl>
+
+        {(() => {
+          if (!cluster.cidr) return null;
+          const clusterCidr = cluster.cidr;
+          const overlapping = allClusters.filter(
+            (c) => c.id !== cluster.id && Boolean(c.cidr) && cidrsOverlap(clusterCidr, c.cidr as string),
+          );
+          if (overlapping.length === 0) return null;
+          return (
+            <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+              <p className="text-xs font-semibold text-amber-400 flex items-center gap-1.5 mb-2">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                CIDR 겹침 감지 — {overlapping.length}개 클러스터와 주소 범위 충돌
+              </p>
+              <div className="space-y-1">
+                {overlapping.map((c) => (
+                  <div key={c.id} className="flex items-center gap-2 text-xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
+                    <span className="font-medium text-foreground">{c.name}</span>
+                    <span className="text-muted-foreground font-mono">{c.cidr}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {(cluster.ciliumConfig || cluster.description) && (
           <div className="mt-4 space-y-3">
@@ -358,6 +418,46 @@ export function ClusterManagePage() {
     queryClient.invalidateQueries({ queryKey: ['clusters'] });
   };
 
+  // CIDR 겹침 그룹 계산: 같은 그룹 번호 = 같은 색상
+  const cidrOverlapGroups = useMemo(() => {
+    const withCidr = clusters.filter((c) => Boolean(c.cidr?.trim()));
+    if (withCidr.length < 2) return new Map<string, number>();
+
+    const adj = new Map<string, string[]>();
+    for (const c of withCidr) adj.set(c.id, []);
+    for (let i = 0; i < withCidr.length; i++) {
+      for (let j = i + 1; j < withCidr.length; j++) {
+        const ci = withCidr[i].cidr;
+        const cj = withCidr[j].cidr;
+        if (ci && cj && cidrsOverlap(ci, cj)) {
+          adj.get(withCidr[i].id)!.push(withCidr[j].id);
+          adj.get(withCidr[j].id)!.push(withCidr[i].id);
+        }
+      }
+    }
+
+    const groupMap = new Map<string, number>();
+    const visited = new Set<string>();
+    let groupIdx = 0;
+    for (const c of withCidr) {
+      if (visited.has(c.id) || (adj.get(c.id)?.length ?? 0) === 0) continue;
+      const queue = [c.id];
+      visited.add(c.id);
+      while (queue.length > 0) {
+        const id = queue.shift()!;
+        groupMap.set(id, groupIdx);
+        for (const neighbor of adj.get(id) ?? []) {
+          if (!visited.has(neighbor)) {
+            visited.add(neighbor);
+            queue.push(neighbor);
+          }
+        }
+      }
+      groupIdx++;
+    }
+    return groupMap;
+  }, [clusters]);
+
   const STATUS_DOT: Record<string, string> = {
     healthy: 'bg-emerald-500',
     warning: 'bg-amber-500',
@@ -435,7 +535,23 @@ export function ClusterManagePage() {
                       <td className="px-4 py-3 text-muted-foreground cursor-pointer" onClick={() => setDetailCluster(cluster)}>{cluster.region || '-'}</td>
                       <td className="px-4 py-3 text-center font-mono text-xs cursor-pointer" onClick={() => setDetailCluster(cluster)}>{cluster.nodeCount ?? '-'}</td>
                       <td className="px-4 py-3 text-center font-mono text-xs cursor-pointer" onClick={() => setDetailCluster(cluster)}>{cluster.maxPod ?? '-'}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground cursor-pointer" onClick={() => setDetailCluster(cluster)}>{cluster.cidr || '-'}</td>
+                      <td className="px-4 py-3 font-mono text-xs cursor-pointer" onClick={() => setDetailCluster(cluster)}>
+                        {(() => {
+                          const groupIdx = cidrOverlapGroups.get(cluster.id);
+                          const oc = groupIdx !== undefined ? OVERLAP_COLORS[groupIdx % OVERLAP_COLORS.length] : null;
+                          return cluster.cidr ? (
+                            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded ${oc ? `${oc.bg} ${oc.border} border` : ''}`}>
+                              <span className={oc ? oc.text : 'text-muted-foreground'}>{cluster.cidr}</span>
+                              {oc && (
+                                <span className={`inline-flex items-center gap-0.5 text-[10px] ${oc.text}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${oc.dot}`} />
+                                  겹침
+                                </span>
+                              )}
+                            </span>
+                          ) : <span className="text-muted-foreground">-</span>;
+                        })()}
+                      </td>
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground cursor-pointer" onClick={() => setDetailCluster(cluster)}>{cluster.firstHost || '-'}</td>
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground cursor-pointer" onClick={() => setDetailCluster(cluster)}>{cluster.lastHost || '-'}</td>
                       <td className="px-4 py-3 text-xs text-muted-foreground max-w-[180px] truncate cursor-pointer" onClick={() => setDetailCluster(cluster)}>{cluster.hostname || '-'}</td>
@@ -493,6 +609,7 @@ export function ClusterManagePage() {
           cluster={detailCluster}
           onClose={() => setDetailCluster(null)}
           onEdit={() => { setEditCluster(detailCluster); setDetailCluster(null); }}
+          allClusters={clusters}
         />
       )}
     </div>

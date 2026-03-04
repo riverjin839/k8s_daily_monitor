@@ -35,7 +35,6 @@ const NAV_ITEMS: Array<{ to: string; defaultLabel: string; icon: ComponentType<{
 const DEFAULT_TITLE = 'K8s Daily Monitor';
 
 const THEME_CYCLE: Record<Theme, Theme> = { dark: 'light', light: 'system', system: 'dark' };
-const THEME_ICON: Record<Theme, typeof Moon> = { dark: Moon, light: Sun, system: Monitor };
 const THEME_LABEL: Record<Theme, string> = { dark: '다크', light: '라이트', system: '시스템' };
 
 export function Sidebar() {

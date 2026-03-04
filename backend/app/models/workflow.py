@@ -35,6 +35,8 @@ class WorkflowStep(Base):
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
     completed = Column(Boolean, default=False)
+    step_type = Column(String(50), default='action', nullable=False)
+    status = Column(String(20), default='idle', nullable=False)
     pos_x = Column(Float, default=100.0)
     pos_y = Column(Float, default=100.0)
     order_index = Column(Integer, default=0)

@@ -8,6 +8,8 @@ class WorkflowStepCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     completed: bool = False
+    step_type: str = 'action'
+    status: str = 'idle'
     pos_x: float = 100.0
     pos_y: float = 100.0
     order_index: int = 0
@@ -17,6 +19,8 @@ class WorkflowStepUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     completed: Optional[bool] = None
+    step_type: Optional[str] = None
+    status: Optional[str] = None
     pos_x: Optional[float] = None
     pos_y: Optional[float] = None
     order_index: Optional[int] = None
@@ -28,6 +32,8 @@ class WorkflowStepResponse(BaseModel):
     title: str
     description: Optional[str] = None
     completed: bool
+    step_type: str
+    status: str
     pos_x: float
     pos_y: float
     order_index: int

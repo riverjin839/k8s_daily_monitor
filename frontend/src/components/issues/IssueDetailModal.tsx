@@ -79,6 +79,15 @@ export function IssueDetailModal({ issue, onClose, onEdit }: IssueDetailModalPro
             </div>
           )}
 
+          {issue.detailContent && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1">상세 내용</p>
+              <p className="text-sm whitespace-pre-wrap break-words bg-secondary/30 rounded-lg px-3 py-2.5">
+                {issue.detailContent}
+              </p>
+            </div>
+          )}
+
           <Field label="비고" value={issue.remarks} />
 
           {/* Images */}

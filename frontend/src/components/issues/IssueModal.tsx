@@ -37,6 +37,7 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
   const [issueAreaCustom, setIssueAreaCustom] = useState('');
   const [issueContent, setIssueContent] = useState('');
   const [actionContent, setActionContent] = useState('');
+  const [detailContent, setDetailContent] = useState('');
   const [occurredAt, setOccurredAt] = useState(today());
   const [resolvedAt, setResolvedAt] = useState('');
   const [remarks, setRemarks] = useState('');
@@ -54,6 +55,7 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
       setIssueAreaCustom(predefined ? '' : editIssue.issueArea);
       setIssueContent(editIssue.issueContent);
       setActionContent(editIssue.actionContent ?? '');
+      setDetailContent(editIssue.detailContent ?? '');
       setOccurredAt(editIssue.occurredAt);
       setResolvedAt(editIssue.resolvedAt ?? '');
       setRemarks(editIssue.remarks ?? '');
@@ -65,6 +67,7 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
       setIssueAreaCustom('');
       setIssueContent('');
       setActionContent('');
+      setDetailContent('');
       setOccurredAt(today());
       setResolvedAt('');
       setRemarks('');
@@ -113,6 +116,7 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
         issueArea: resolvedIssueArea,
         issueContent: issueContent.trim(),
         actionContent: actionContent.trim() || undefined,
+        detailContent: detailContent.trim() || undefined,
         occurredAt,
         resolvedAt: resolvedAt || undefined,
         remarks: remarks.trim() || undefined,
@@ -236,6 +240,18 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
               onPaste={handlePaste}
               placeholder="취한 조치를 기술하세요 (선택 사항)"
               rows={3}
+              className={`${inputClass} resize-none`}
+            />
+          </div>
+
+          {/* 상세 내용 */}
+          <div>
+            <label className={labelClass}>상세 내용</label>
+            <textarea
+              value={detailContent}
+              onChange={(e) => setDetailContent(e.target.value)}
+              placeholder="추가적인 상세 내용, 로그, 재현 방법 등을 기술하세요 (선택 사항)"
+              rows={4}
               className={`${inputClass} resize-none`}
             />
           </div>

@@ -11,6 +11,7 @@ class IssueBase(BaseModel):
     issue_area: str = Field(..., min_length=1, max_length=100)
     issue_content: str = Field(..., min_length=1)
     action_content: Optional[str] = None
+    detail_content: Optional[str] = None
     occurred_at: date
     resolved_at: Optional[date] = None
     remarks: Optional[str] = None
@@ -27,6 +28,7 @@ class IssueUpdate(BaseModel):
     issue_area: Optional[str] = Field(None, min_length=1, max_length=100)
     issue_content: Optional[str] = Field(None, min_length=1)
     action_content: Optional[str] = None
+    detail_content: Optional[str] = None
     occurred_at: Optional[date] = None
     resolved_at: Optional[date] = None
     remarks: Optional[str] = None

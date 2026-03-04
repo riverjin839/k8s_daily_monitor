@@ -191,7 +191,7 @@ export interface IssueCreate {
   actionContent?: string;
   detailContent?: string;
   occurredAt: string;
-  resolvedAt?: string;
+  resolvedAt?: string | null;
   remarks?: string;
 }
 
@@ -227,7 +227,7 @@ export interface TaskCreate {
   taskContent: string;
   resultContent?: string;
   scheduledAt: string;
-  completedAt?: string;
+  completedAt?: string | null;
   priority: string;
   remarks?: string;
 }

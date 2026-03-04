@@ -118,7 +118,7 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
         actionContent: actionContent.trim() || undefined,
         detailContent: detailContent.trim() || undefined,
         occurredAt,
-        resolvedAt: resolvedAt || undefined,
+        resolvedAt: resolvedAt || null,
         remarks: remarks.trim() || undefined,
       },
       images,

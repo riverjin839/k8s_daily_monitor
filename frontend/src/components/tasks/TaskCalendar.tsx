@@ -76,7 +76,7 @@ export function TaskCalendar({ tasks, onTaskClick }: TaskCalendarProps) {
     const endStr = task.completedAt?.slice(0, 10) || startStr;
     const isMultiDay = endStr > startStr;
 
-    let curr = new Date(startStr + 'T00:00:00');
+    const curr = new Date(startStr + 'T00:00:00');
     const endDate = new Date(endStr + 'T00:00:00');
     while (curr <= endDate) {
       const key = curr.toISOString().slice(0, 10);

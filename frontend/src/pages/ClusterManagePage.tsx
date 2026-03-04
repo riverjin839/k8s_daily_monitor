@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Server, Plus, Pencil, Trash2, X, ChevronDown, ChevronUp, ArrowUpDown } from 'lucide-react';
+import { Server, Pencil, Trash2, X, ChevronDown, ChevronUp, ArrowUpDown } from 'lucide-react';
 import { Cluster, ClusterManageUpdate } from '@/types';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';

@@ -249,12 +249,17 @@ export interface UiSettings {
 }
 
 // Workflow Board
+export type WorkflowStepType = 'trigger' | 'action' | 'condition' | 'wait' | 'notification';
+export type WorkflowStepStatus = 'idle' | 'running' | 'success' | 'failed' | 'skipped';
+
 export interface WorkflowStep {
   id: string;
   workflowId: string;
   title: string;
   description?: string;
   completed: boolean;
+  stepType: WorkflowStepType;
+  status: WorkflowStepStatus;
   posX: number;
   posY: number;
   orderIndex: number;
@@ -298,6 +303,8 @@ export interface WorkflowStepCreate {
   title: string;
   description?: string;
   completed?: boolean;
+  stepType?: WorkflowStepType;
+  status?: WorkflowStepStatus;
   posX?: number;
   posY?: number;
   orderIndex?: number;
@@ -307,6 +314,8 @@ export interface WorkflowStepUpdate {
   title?: string;
   description?: string;
   completed?: boolean;
+  stepType?: WorkflowStepType;
+  status?: WorkflowStepStatus;
   posX?: number;
   posY?: number;
   orderIndex?: number;

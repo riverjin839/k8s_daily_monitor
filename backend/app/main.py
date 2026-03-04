@@ -58,6 +58,17 @@ def _run_migrations():
             if col_name not in columns:
                 with engine.begin() as conn:
                     conn.execute(text(f"ALTER TABLE clusters ADD COLUMN {col_name} {col_type}"))
+    if "workflow_steps" in inspector.get_table_names():
+        wf_step_cols = [col["name"] for col in inspector.get_columns("workflow_steps")]
+        for col_name, col_type, default in [
+            ("step_type", "VARCHAR(50)", "'action'"),
+            ("status", "VARCHAR(20)", "'idle'"),
+        ]:
+            if col_name not in wf_step_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE workflow_steps ADD COLUMN {col_name} {col_type} NOT NULL DEFAULT {default}"
+                    ))
 
 
 def _seed_default_metric_cards():

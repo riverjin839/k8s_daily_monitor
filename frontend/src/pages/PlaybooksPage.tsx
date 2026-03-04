@@ -1,17 +1,19 @@
 import { useState, useMemo } from 'react';
 import { Plus, Play, BookOpen, Download, ArrowUpDown } from 'lucide-react';
 import { PlaybookCard, AddPlaybookModal } from '@/components/playbooks';
-import { usePlaybooks, useCreatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
+import { usePlaybooks, useCreatePlaybook, useUpdatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
 import { playbooksApi } from '@/services/api';
 import { usePlaybookStore } from '@/stores/playbookStore';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
+import { Playbook } from '@/types';
 
 type PlaybookSortKey = 'name' | 'status' | 'lastRunAt';
 const STATUS_ORDER: Record<string, number> = { critical: 0, warning: 1, healthy: 2, unknown: 3 };
 
 export function PlaybooksPage() {
   const [showAdd, setShowAdd] = useState(false);
+  const [editPlaybook, setEditPlaybook] = useState<Playbook | null>(null);
   const [selectedClusterId, setSelectedClusterId] = useState<string>('');
   const [sortKey, setSortKey] = useState<PlaybookSortKey>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -24,6 +26,7 @@ export function PlaybooksPage() {
   const { playbooks, runningIds } = usePlaybookStore();
 
   const createPlaybook = useCreatePlaybook();
+  const updatePlaybook = useUpdatePlaybook();
   const deletePlaybook = useDeletePlaybook();
   const runPlaybook = useRunPlaybook();
   const toggleDashboard = useToggleDashboard();
@@ -62,6 +65,39 @@ export function PlaybooksPage() {
       tags: data.tags || undefined,
       clusterId: data.clusterId,
     });
+  };
+
+  const handleUpdate = (data: {
+    name: string;
+    description: string;
+    playbookPath: string;
+    inventoryPath: string;
+    tags: string;
+    clusterId: string;
+  }) => {
+    if (!editPlaybook) return;
+    updatePlaybook.mutate({
+      id: editPlaybook.id,
+      data: {
+        name: data.name,
+        description: data.description || undefined,
+        playbookPath: data.playbookPath,
+        inventoryPath: data.inventoryPath || undefined,
+        tags: data.tags || undefined,
+        clusterId: data.clusterId,
+      },
+    });
+    setEditPlaybook(null);
+  };
+
+  const handleOpenEdit = (playbook: Playbook) => {
+    setEditPlaybook(playbook);
+    setShowAdd(true);
+  };
+
+  const handleModalClose = () => {
+    setShowAdd(false);
+    setEditPlaybook(null);
   };
 
   const handleRunAll = () => {
@@ -179,7 +215,7 @@ export function PlaybooksPage() {
           )}
 
           <button
-            onClick={() => setShowAdd(true)}
+            onClick={() => { setEditPlaybook(null); setShowAdd(true); }}
             className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
@@ -200,7 +236,7 @@ export function PlaybooksPage() {
           <BookOpen className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
           <p className="text-muted-foreground mb-4">No playbooks registered yet</p>
           <button
-            onClick={() => setShowAdd(true)}
+            onClick={() => { setEditPlaybook(null); setShowAdd(true); }}
             className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
           >
             + Register your first playbook
@@ -214,6 +250,7 @@ export function PlaybooksPage() {
               playbook={playbook}
               isRunning={runningIds.has(playbook.id)}
               onRun={() => runPlaybook.mutate(playbook.id)}
+              onEdit={() => handleOpenEdit(playbook)}
               onDelete={() => {
                 if (confirm(`Delete playbook "${playbook.name}"?`)) {
                   deletePlaybook.mutate(playbook.id);
@@ -225,13 +262,14 @@ export function PlaybooksPage() {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Modal (add / edit) */}
       <AddPlaybookModal
         isOpen={showAdd}
-        onClose={() => setShowAdd(false)}
-        onSubmit={handleCreate}
+        onClose={handleModalClose}
+        onSubmit={editPlaybook ? handleUpdate : handleCreate}
         clusters={clusters}
         defaultClusterId={activeClusterId}
+        initialData={editPlaybook}
       />
       </main>
     </div>

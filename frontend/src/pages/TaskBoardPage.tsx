@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, GripVertical } from 'lucide-react';
+import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, GripVertical, Clock } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -15,6 +15,13 @@ import { Task, TaskCreate, TaskUpdate } from '@/types';
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '-';
   return dateStr.slice(0, 10);
+}
+
+function formatDateTime(dateStr?: string | null): string {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function hasLocalImages(id: string): boolean {
@@ -109,6 +116,7 @@ export function TaskBoardPage() {
   const [filterTo, setFilterTo] = useState('');
   const [sortKey, setSortKey] = useState<TaskSortKey | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [showTime, setShowTime] = useState(false);
 
   const { clusters } = useClusterStore();
   useClusters();
@@ -260,6 +268,19 @@ export function TaskBoardPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowTime((v) => !v)}
+              className={`px-3 py-2 text-sm font-medium border rounded-lg transition-colors flex items-center gap-1.5 ${
+                showTime
+                  ? 'bg-primary/10 text-primary border-primary/30'
+                  : 'bg-secondary hover:bg-secondary/80 border-border text-muted-foreground hover:text-foreground'
+              }`}
+              title="등록 시간 표시 on/off"
+            >
+              <Clock className="w-4 h-4" />
+              시간 표시
+            </button>
+
             {/* View mode toggle */}
             <div className="flex items-center bg-secondary rounded-lg p-0.5 border border-border">
               <button
@@ -428,6 +449,7 @@ export function TaskBoardPage() {
                     <SortTh label="예정일" col="scheduledAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="완료일" col="completedAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">비고</th>
+                    {showTime && <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">등록일시</th>}
                     <th className="px-4 py-3 text-center font-medium text-muted-foreground whitespace-nowrap">작업</th>
                   </tr>
                 </thead>
@@ -495,6 +517,11 @@ export function TaskBoardPage() {
                             {task.remarks || '-'}
                           </p>
                         </td>
+                        {showTime && (
+                          <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedTask(task)}>
+                            {formatDateTime(task.createdAt)}
+                          </td>
+                        )}
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-center gap-1">
                             <button

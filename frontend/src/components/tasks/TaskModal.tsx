@@ -161,7 +161,7 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
         taskContent: taskContent.trim(),
         resultContent: resultContent.trim() || undefined,
         scheduledAt,
-        completedAt: completedAt || undefined,
+        completedAt: completedAt || null,
         priority,
         remarks: remarks.trim() || undefined,
       },

@@ -255,3 +255,26 @@ jobs:
         run: |
           echo "Production deployment completed successfully!"
           echo "Image tags: ${{ github.sha }}"
+
+  cleanup-old-images:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+
+    steps:
+      - name: 오래된 Backend 이미지 청소
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: '${{ github.event.repository.name }}/backend'
+          package-type: 'container'
+          min-versions-to-keep: 5
+          delete-only-untagged-versions: 'true'
+
+      - name: 오래된 Frontend 이미지 청소
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: '${{ github.event.repository.name }}/frontend'
+          package-type: 'container'
+          min-versions-to-keep: 5
+          delete-only-untagged-versions: 'true'

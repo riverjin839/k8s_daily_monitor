@@ -520,11 +520,11 @@ export function WorkGuidePage() {
         {allGuides.length > 0 && (
           <div className="grid grid-cols-3 gap-4 mb-6">
             {[
-              { label: '활성', count: statsActive,   ...STATUS_CFG.active   },
-              { label: '초안', count: statsDraft,    ...STATUS_CFG.draft    },
-              { label: '보관', count: statsArchived, ...STATUS_CFG.archived },
-            ].map(({ label, count, bg, text, border }) => (
-              <div key={label} className={`rounded-xl border px-4 py-3 flex items-center justify-between ${bg} ${border}`}>
+              { key: '활성', count: statsActive,   ...STATUS_CFG.active   },
+              { key: '초안', count: statsDraft,    ...STATUS_CFG.draft    },
+              { key: '보관', count: statsArchived, ...STATUS_CFG.archived },
+            ].map(({ key, count, bg, text, border, label }) => (
+              <div key={key} className={`rounded-xl border px-4 py-3 flex items-center justify-between ${bg} ${border}`}>
                 <span className={`text-sm font-medium ${text}`}>{label}</span>
                 <span className={`text-2xl font-bold ${text}`}>{count}</span>
               </div>

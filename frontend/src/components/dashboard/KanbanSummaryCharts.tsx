@@ -2,7 +2,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend,
 } from 'recharts';
 import type { Task, Issue } from '@/types';
-import { classifyTask } from '@/components/tasks/TaskKanban';
+import { classifyTask } from '@/components/tasks/taskKanbanUtils';
 
 // ── 색상 ──────────────────────────────────────────────────────────────────────
 const TASK_COLORS: Record<string, string> = {

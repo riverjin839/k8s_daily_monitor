@@ -1,5 +1,6 @@
 import { Pencil, Trash2, CalendarDays, User, Server, AlertTriangle } from 'lucide-react';
 import type { Task } from '@/types';
+import { type TaskKanbanColumn, classifyTask } from './taskKanbanUtils';
 
 // ── 헬퍼 ──────────────────────────────────────────────────────────────────────
 const PRIORITY_CFG: Record<string, { dot: string; text: string; label: string }> = {
@@ -9,20 +10,6 @@ const PRIORITY_CFG: Record<string, { dot: string; text: string; label: string }>
 };
 
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
-
-function todayMidnight(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-export type TaskKanbanColumn = 'scheduled' | 'delayed' | 'completed';
-
-export function classifyTask(task: Task): TaskKanbanColumn {
-  if (task.completedAt) return 'completed';
-  if (new Date(task.scheduledAt) < todayMidnight()) return 'delayed';
-  return 'scheduled';
-}
 
 function sortTasks(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {

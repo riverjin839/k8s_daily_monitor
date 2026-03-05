@@ -27,12 +27,25 @@ class Cluster(Base):
     operation_level = Column(String(50), nullable=True)   # 운영레벨 (production/staging/dev/test)
     max_pod = Column(Integer, nullable=True)              # Node당 최대 Pod 수
     cilium_config = Column(Text, nullable=True)           # 주요 Cilium 설정
-    cidr = Column(String(255), nullable=True)             # CIDR 대역
-    first_host = Column(String(100), nullable=True)       # 첫 번째 호스트 IP
-    last_host = Column(String(100), nullable=True)        # 마지막 호스트 IP
+    cidr = Column(String(255), nullable=True)             # Node CIDR 대역
+    first_host = Column(String(100), nullable=True)       # Node 첫 번째 호스트 IP
+    last_host = Column(String(100), nullable=True)        # Node 마지막 호스트 IP
     description = Column(Text, nullable=True)             # 정보/설명
     node_count = Column(Integer, nullable=True)           # 노드 수
     hostname = Column(String(255), nullable=True)         # 호스트명
+    # Pod CIDR 대역
+    pod_cidr = Column(String(255), nullable=True)
+    pod_first_host = Column(String(100), nullable=True)
+    pod_last_host = Column(String(100), nullable=True)
+    # Service CIDR 대역
+    svc_cidr = Column(String(255), nullable=True)
+    svc_first_host = Column(String(100), nullable=True)
+    svc_last_host = Column(String(100), nullable=True)
+    # NIC 정보 (ifconfig: bond0, bond1)
+    bond0_ip = Column(String(100), nullable=True)
+    bond0_mac = Column(String(50), nullable=True)
+    bond1_ip = Column(String(100), nullable=True)
+    bond1_mac = Column(String(50), nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

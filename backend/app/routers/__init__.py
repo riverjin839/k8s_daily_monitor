@@ -11,6 +11,7 @@ from app.routers.tasks import router as tasks_router
 from app.routers.ui_settings import router as ui_settings_router
 from app.routers.node_labels import router as node_labels_router
 from app.routers.workflows import router as workflows_router
+from app.routers.work_guide import router as work_guide_router
 
 __all__ = [
     "clusters_router",
@@ -26,4 +27,5 @@ __all__ = [
     "ui_settings_router",
     "node_labels_router",
     "workflows_router",
+    "work_guide_router",
 ]

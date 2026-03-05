@@ -8,6 +8,7 @@ from app.models.issue import Issue
 from app.models.task import Task
 from app.models.app_setting import AppSetting
 from app.models.workflow import Workflow, WorkflowStep, WorkflowEdge
+from app.models.work_guide import WorkGuide
 
 __all__ = [
     "Cluster",
@@ -25,4 +26,5 @@ __all__ = [
     "Workflow",
     "WorkflowStep",
     "WorkflowEdge",
+    "WorkGuide",
 ]

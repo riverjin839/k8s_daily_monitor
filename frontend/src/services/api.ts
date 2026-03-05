@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate, TaskStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate, TaskStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate } from '@/types';
 
 // snake_case → camelCase 변환 (Backend는 snake_case, Frontend는 camelCase)
 function toCamelCase(str: string): string {
@@ -325,6 +325,24 @@ export const opsNotesApi = {
   create: (data: OpsNoteCreate) => api.post<OpsNote>('/ops-notes', data),
   update: (id: string, data: OpsNoteUpdate) => api.put<OpsNote>(`/ops-notes/${id}`, data),
   delete: (id: string) => api.delete(`/ops-notes/${id}`),
+};
+
+// Mind Map API
+export const mindmapApi = {
+  list: () => api.get<MindMapListItem[]>('/mindmaps/'),
+  get: (id: string) => api.get<MindMap>(`/mindmaps/${id}`),
+  create: (data: MindMapCreate) => api.post<MindMap>('/mindmaps/', data),
+  update: (id: string, data: MindMapUpdate) => api.put<MindMap>(`/mindmaps/${id}`, data),
+  delete: (id: string) => api.delete(`/mindmaps/${id}`),
+  // nodes
+  createNode: (mapId: string, data: MindMapNodeCreate) =>
+    api.post<MindMapNode>(`/mindmaps/${mapId}/nodes`, data),
+  updateNode: (mapId: string, nodeId: string, data: MindMapNodeUpdate) =>
+    api.put<MindMapNode>(`/mindmaps/${mapId}/nodes/${nodeId}`, data),
+  deleteNode: (mapId: string, nodeId: string) =>
+    api.delete(`/mindmaps/${mapId}/nodes/${nodeId}`),
+  bulkUpdatePositions: (mapId: string, updates: { id: string; x: number; y: number }[]) =>
+    api.patch<MindMapNode[]>(`/mindmaps/${mapId}/nodes/positions`, updates),
 };
 
 export default api;

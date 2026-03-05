@@ -12,6 +12,7 @@ import { ClusterManagePage } from '@/pages/ClusterManagePage';
 import { WorkflowBoardPage } from '@/pages/WorkflowBoardPage';
 import { WorkGuidePage } from '@/pages/WorkGuidePage';
 import { OpsNotesPage } from '@/pages/OpsNotesPage';
+import { MindMapPage } from '@/pages/MindMapPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar } from '@/components/layout';
 
@@ -44,6 +45,7 @@ function App() {
               <Route path="/workflow" element={<WorkflowBoardPage />} />
               <Route path="/work-guides" element={<WorkGuidePage />} />
               <Route path="/ops-notes" element={<OpsNotesPage />} />
+              <Route path="/mindmap" element={<MindMapPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>

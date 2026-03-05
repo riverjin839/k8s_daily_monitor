@@ -13,9 +13,23 @@ export interface Cluster {
   operationLevel?: string;
   maxPod?: number;
   ciliumConfig?: string;
+  // Node CIDR
   cidr?: string;
   firstHost?: string;
   lastHost?: string;
+  // Pod CIDR
+  podCidr?: string;
+  podFirstHost?: string;
+  podLastHost?: string;
+  // Service CIDR
+  svcCidr?: string;
+  svcFirstHost?: string;
+  svcLastHost?: string;
+  // NIC (bond0, bond1)
+  bond0Ip?: string;
+  bond0Mac?: string;
+  bond1Ip?: string;
+  bond1Mac?: string;
   description?: string;
   nodeCount?: number;
   hostname?: string;
@@ -31,6 +45,16 @@ export interface ClusterManageUpdate {
   cidr?: string;
   firstHost?: string;
   lastHost?: string;
+  podCidr?: string;
+  podFirstHost?: string;
+  podLastHost?: string;
+  svcCidr?: string;
+  svcFirstHost?: string;
+  svcLastHost?: string;
+  bond0Ip?: string;
+  bond0Mac?: string;
+  bond1Ip?: string;
+  bond1Mac?: string;
   description?: string;
   nodeCount?: number;
   hostname?: string;
@@ -433,4 +457,73 @@ export interface OpsNoteUpdate extends Partial<OpsNoteCreate> {}
 export interface OpsNoteListResponse {
   data: OpsNote[];
   total: number;
+}
+
+// Mind Map
+export interface MindMapNode {
+  id: string;
+  mindmapId: string;
+  parentId?: string | null;
+  label: string;
+  note?: string;
+  color?: string;
+  x?: number;
+  y?: number;
+  collapsed: boolean;
+  sortOrder: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  extra?: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MindMap {
+  id: string;
+  title: string;
+  description?: string;
+  nodes: MindMapNode[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MindMapListItem {
+  id: string;
+  title: string;
+  description?: string;
+  nodeCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MindMapCreate {
+  title: string;
+  description?: string;
+}
+
+export interface MindMapUpdate {
+  title?: string;
+  description?: string;
+}
+
+export interface MindMapNodeCreate {
+  mindmapId: string;
+  parentId?: string | null;
+  label: string;
+  note?: string;
+  color?: string;
+  x?: number;
+  y?: number;
+  collapsed?: boolean;
+  sortOrder?: number;
+}
+
+export interface MindMapNodeUpdate {
+  label?: string;
+  note?: string;
+  color?: string;
+  x?: number;
+  y?: number;
+  collapsed?: boolean;
+  sortOrder?: number;
+  parentId?: string | null;
 }

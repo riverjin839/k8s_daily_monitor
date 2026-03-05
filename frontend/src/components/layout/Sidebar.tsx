@@ -19,6 +19,7 @@ import {
   Moon,
   Sun,
   Monitor,
+  Map,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
@@ -34,6 +35,7 @@ const NAV_ITEMS: Array<{ to: string; defaultLabel: string; icon: ComponentType<{
   { to: '/cidr', defaultLabel: 'CIDR 계산기', icon: Calculator },
   { to: '/work-guides', defaultLabel: '작업 가이드', icon: BookMarked },
   { to: '/ops-notes', defaultLabel: '업무 게시판', icon: Layers },
+  { to: '/mindmap', defaultLabel: '마인드맵', icon: Map },
   { to: '/workflow', defaultLabel: '워크플로우', icon: GitFork },
   { to: '/settings', defaultLabel: 'Settings', icon: Settings },
 ];

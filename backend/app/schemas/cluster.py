@@ -20,9 +20,23 @@ class ClusterBase(BaseModel):
     operation_level: Optional[str] = None
     max_pod: Optional[int] = None
     cilium_config: Optional[str] = None
+    # Node CIDR
     cidr: Optional[str] = None
     first_host: Optional[str] = None
     last_host: Optional[str] = None
+    # Pod CIDR
+    pod_cidr: Optional[str] = None
+    pod_first_host: Optional[str] = None
+    pod_last_host: Optional[str] = None
+    # Service CIDR
+    svc_cidr: Optional[str] = None
+    svc_first_host: Optional[str] = None
+    svc_last_host: Optional[str] = None
+    # NIC (bond0, bond1)
+    bond0_ip: Optional[str] = None
+    bond0_mac: Optional[str] = None
+    bond1_ip: Optional[str] = None
+    bond1_mac: Optional[str] = None
     description: Optional[str] = None
     node_count: Optional[int] = None
     hostname: Optional[str] = None
@@ -45,6 +59,16 @@ class ClusterUpdate(BaseModel):
     cidr: Optional[str] = None
     first_host: Optional[str] = None
     last_host: Optional[str] = None
+    pod_cidr: Optional[str] = None
+    pod_first_host: Optional[str] = None
+    pod_last_host: Optional[str] = None
+    svc_cidr: Optional[str] = None
+    svc_first_host: Optional[str] = None
+    svc_last_host: Optional[str] = None
+    bond0_ip: Optional[str] = None
+    bond0_mac: Optional[str] = None
+    bond1_ip: Optional[str] = None
+    bond1_mac: Optional[str] = None
     description: Optional[str] = None
     node_count: Optional[int] = None
     hostname: Optional[str] = None

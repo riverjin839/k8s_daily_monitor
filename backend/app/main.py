@@ -23,6 +23,7 @@ from app.routers import (
     workflows_router,
     work_guide_router,
     ops_note_router,
+    mindmap_router,
 )
 
 
@@ -55,6 +56,16 @@ def _run_migrations():
             ("description", "TEXT"),
             ("node_count", "INTEGER"),
             ("hostname", "VARCHAR(255)"),
+            ("pod_cidr", "VARCHAR(255)"),
+            ("pod_first_host", "VARCHAR(100)"),
+            ("pod_last_host", "VARCHAR(100)"),
+            ("svc_cidr", "VARCHAR(255)"),
+            ("svc_first_host", "VARCHAR(100)"),
+            ("svc_last_host", "VARCHAR(100)"),
+            ("bond0_ip", "VARCHAR(100)"),
+            ("bond0_mac", "VARCHAR(50)"),
+            ("bond1_ip", "VARCHAR(100)"),
+            ("bond1_mac", "VARCHAR(50)"),
         ]
         for col_name, col_type in new_cluster_cols:
             if col_name not in columns:
@@ -261,6 +272,7 @@ app.include_router(node_labels_router, prefix="/api/v1")
 app.include_router(workflows_router, prefix="/api/v1")
 app.include_router(work_guide_router, prefix="/api/v1")
 app.include_router(ops_note_router, prefix="/api/v1")
+app.include_router(mindmap_router, prefix="/api/v1")
 
 
 @app.get("/")

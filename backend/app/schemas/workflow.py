@@ -13,6 +13,8 @@ class WorkflowStepCreate(BaseModel):
     pos_x: float = 100.0
     pos_y: float = 100.0
     order_index: int = 0
+    reference_type: Optional[str] = None
+    reference_id: Optional[str] = None
 
 
 class WorkflowStepUpdate(BaseModel):
@@ -24,6 +26,8 @@ class WorkflowStepUpdate(BaseModel):
     pos_x: Optional[float] = None
     pos_y: Optional[float] = None
     order_index: Optional[int] = None
+    reference_type: Optional[str] = None
+    reference_id: Optional[str] = None
 
 
 class WorkflowStepResponse(BaseModel):
@@ -37,6 +41,8 @@ class WorkflowStepResponse(BaseModel):
     pos_x: float
     pos_y: float
     order_index: int
+    reference_type: Optional[str] = None
+    reference_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

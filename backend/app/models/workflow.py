@@ -40,6 +40,9 @@ class WorkflowStep(Base):
     pos_x = Column(Float, default=100.0)
     pos_y = Column(Float, default=100.0)
     order_index = Column(Integer, default=0)
+    # 다른 게시판 항목과의 연계 (워크플로 노드 연결)
+    reference_type = Column(String(50), nullable=True)   # cluster / playbook / issue / task / work_guide / metric_card
+    reference_id = Column(String(100), nullable=True)    # 참조 항목의 UUID
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

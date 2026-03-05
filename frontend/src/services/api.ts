@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate, UiSettings, ClusterLinksPayload } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse } from '@/types';
 
 // snake_case → camelCase 변환 (Backend는 snake_case, Frontend는 camelCase)
 function toCamelCase(str: string): string {
@@ -289,6 +289,24 @@ export const workflowsApi = {
     api.post<import('@/types').WorkflowEdge>(`/workflows/${workflowId}/edges`, data),
   deleteEdge: (workflowId: string, edgeId: string) =>
     api.delete(`/workflows/${workflowId}/edges/${edgeId}`),
+};
+
+// Work Guides API
+export const workGuidesApi = {
+  getAll: (params?: { category?: string; status?: string; priority?: string }) =>
+    api.get<WorkGuideListResponse>('/work-guides', {
+      params: params
+        ? Object.fromEntries(
+            Object.entries(params)
+              .filter(([, v]) => v !== undefined && v !== '')
+              .map(([k, v]) => [toSnakeCase(k === 'status' ? 'guide_status' : k), v])
+          )
+        : undefined,
+    }),
+  getById: (id: string) => api.get<WorkGuide>(`/work-guides/${id}`),
+  create: (data: WorkGuideCreate) => api.post<WorkGuide>('/work-guides', data),
+  update: (id: string, data: WorkGuideUpdate) => api.put<WorkGuide>(`/work-guides/${id}`, data),
+  delete: (id: string) => api.delete(`/work-guides/${id}`),
 };
 
 export default api;

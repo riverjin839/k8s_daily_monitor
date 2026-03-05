@@ -21,6 +21,7 @@ from app.routers import (
     tasks_router,
     ui_settings_router,
     workflows_router,
+    work_guide_router,
 )
 
 
@@ -74,6 +75,11 @@ def _run_migrations():
                     conn.execute(text(
                         f"ALTER TABLE workflow_steps ADD COLUMN {col_name} {col_type} NOT NULL DEFAULT {default}"
                     ))
+        # 워크플로 노드 연계 컬럼
+        for col_name, col_type in [("reference_type", "VARCHAR(50)"), ("reference_id", "VARCHAR(100)")]:
+            if col_name not in wf_step_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE workflow_steps ADD COLUMN {col_name} {col_type}"))
 
 
 def _seed_default_metric_cards():
@@ -214,6 +220,7 @@ app.include_router(tasks_router, prefix="/api/v1")
 app.include_router(ui_settings_router, prefix="/api/v1")
 app.include_router(node_labels_router, prefix="/api/v1")
 app.include_router(workflows_router, prefix="/api/v1")
+app.include_router(work_guide_router, prefix="/api/v1")
 
 
 @app.get("/")

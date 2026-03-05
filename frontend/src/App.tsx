@@ -10,6 +10,7 @@ import { NodeLabelsPage } from '@/pages/NodeLabelsPage';
 import { CidrCalculatorPage } from '@/pages/CidrCalculatorPage';
 import { ClusterManagePage } from '@/pages/ClusterManagePage';
 import { WorkflowBoardPage } from '@/pages/WorkflowBoardPage';
+import { WorkGuidePage } from '@/pages/WorkGuidePage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar } from '@/components/layout';
 
@@ -40,6 +41,7 @@ function App() {
               <Route path="/cluster-manage" element={<ClusterManagePage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/workflow" element={<WorkflowBoardPage />} />
+              <Route path="/work-guides" element={<WorkGuidePage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>

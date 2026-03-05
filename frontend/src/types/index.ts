@@ -265,6 +265,8 @@ export interface WorkflowStep {
   posX: number;
   posY: number;
   orderIndex: number;
+  referenceType?: string;  // cluster / playbook / issue / task / work_guide / metric_card
+  referenceId?: string;    // 참조 항목의 UUID
   createdAt: string;
   updatedAt: string;
 }
@@ -310,6 +312,8 @@ export interface WorkflowStepCreate {
   posX?: number;
   posY?: number;
   orderIndex?: number;
+  referenceType?: string;
+  referenceId?: string;
 }
 
 export interface WorkflowStepUpdate {
@@ -321,11 +325,43 @@ export interface WorkflowStepUpdate {
   posX?: number;
   posY?: number;
   orderIndex?: number;
+  referenceType?: string;
+  referenceId?: string;
 }
 
 export interface WorkflowEdgeCreate {
   sourceStepId: string;
   targetStepId: string;
+}
+
+// Work Guide Board
+export interface WorkGuide {
+  id: string;
+  title: string;
+  content?: string;
+  category?: string;   // 배포 / 트러블슈팅 / 모니터링 / 보안 / 기타
+  priority: string;    // high / medium / low
+  tags?: string;       // 쉼표 구분
+  status: string;      // draft / active / archived
+  author?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkGuideCreate {
+  title: string;
+  content?: string;
+  category?: string;
+  priority?: string;
+  tags?: string;
+  status?: string;
+  author?: string;
+}
+
+export interface WorkGuideUpdate extends Partial<WorkGuideCreate> {}
+
+export interface WorkGuideListResponse {
+  data: WorkGuide[];
 }
 
 export interface ClusterLink {

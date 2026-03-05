@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   GitFork, Plus, Trash2, Check, X, ChevronRight,
   Pencil, Zap, Play, GitBranch, Clock, Bell,
-  ZoomIn, ZoomOut, Maximize2, LayoutGrid,
+  ZoomIn, ZoomOut, Maximize2, LayoutGrid, Link2,
 } from 'lucide-react';
 import { workflowsApi } from '@/services/api';
 import type {
@@ -51,6 +51,16 @@ const TYPE_SVG_COLOR: Record<string, { fill: string; stroke: string }> = {
   condition:    { fill: '#fbbf24', stroke: '#d97706' },
   wait:         { fill: '#22d3ee', stroke: '#0891b2' },
   notification: { fill: '#34d399', stroke: '#059669' },
+};
+
+// ─── reference type labels ────────────────────────────────────────────────────
+const REFERENCE_TYPE_LABELS: Record<string, string> = {
+  cluster:     '클러스터',
+  playbook:    '플레이북',
+  issue:       '이슈',
+  task:        '작업',
+  work_guide:  '작업 가이드',
+  metric_card: '메트릭 카드',
 };
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -133,6 +143,8 @@ export function WorkflowBoardPage() {
   const [editingStep, setEditingStep] = useState<string | null>(null);
   const [stepTitle, setStepTitle] = useState('');
   const [stepDesc, setStepDesc] = useState('');
+  const [stepRefType, setStepRefType] = useState('');
+  const [stepRefId, setStepRefId] = useState('');
 
   // dropdowns
   const [typeMenuStep, setTypeMenuStep] = useState<string | null>(null);
@@ -333,6 +345,8 @@ export function WorkflowBoardPage() {
     setEditingStep(step.id);
     setStepTitle(step.title);
     setStepDesc(step.description ?? '');
+    setStepRefType(step.referenceType ?? '');
+    setStepRefId(step.referenceId ?? '');
   };
 
   const saveEditStep = () => {
@@ -340,7 +354,12 @@ export function WorkflowBoardPage() {
     updateStep.mutate({
       wfId: selectedWf.id,
       stepId: editingStep,
-      stepData: { title: stepTitle.trim() || '단계', description: stepDesc || undefined },
+      stepData: {
+        title: stepTitle.trim() || '단계',
+        description: stepDesc || undefined,
+        referenceType: stepRefType || undefined,
+        referenceId: stepRefType && stepRefId.trim() ? stepRefId.trim() : undefined,
+      },
     });
     setEditingStep(null);
   };
@@ -819,6 +838,28 @@ export function WorkflowBoardPage() {
                                 rows={2}
                                 className="w-full text-xs bg-background border border-border rounded px-2 py-1 focus:outline-none focus:border-primary resize-none"
                               />
+                              {/* 연계 항목 선택 */}
+                              <div className="mt-1.5 space-y-1" onClick={(e) => e.stopPropagation()}>
+                                <select
+                                  value={stepRefType}
+                                  onChange={(e) => { setStepRefType(e.target.value); if (!e.target.value) setStepRefId(''); }}
+                                  className="w-full text-[11px] bg-background border border-border rounded px-2 py-1 focus:outline-none focus:border-primary text-muted-foreground"
+                                >
+                                  <option value="">— 연계 항목 없음 —</option>
+                                  {Object.entries(REFERENCE_TYPE_LABELS).map(([k, v]) => (
+                                    <option key={k} value={k}>{v}</option>
+                                  ))}
+                                </select>
+                                {stepRefType && (
+                                  <input
+                                    type="text"
+                                    value={stepRefId}
+                                    onChange={(e) => setStepRefId(e.target.value)}
+                                    placeholder="항목 ID (UUID)"
+                                    className="w-full text-[11px] bg-background border border-border rounded px-2 py-1 focus:outline-none focus:border-primary font-mono"
+                                  />
+                                )}
+                              </div>
                               <div className="flex gap-1 mt-1.5">
                                 <button onClick={(e) => { e.stopPropagation(); saveEditStep(); }}
                                   className="flex-1 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors">
@@ -842,6 +883,15 @@ export function WorkflowBoardPage() {
                               onClick={(e) => { e.stopPropagation(); startEditStep(step); }}>
                               내용 입력...
                             </p>
+                          )}
+                          {/* 연계 항목 배지 (편집 모드 아닐 때) */}
+                          {!isEditing && step.referenceType && (
+                            <div className="mt-1.5 pt-1.5 border-t border-border/50 flex items-center gap-1">
+                              <Link2 className="w-2.5 h-2.5 text-primary/60 flex-shrink-0" />
+                              <span className="text-[10px] text-primary/70 font-medium">
+                                {REFERENCE_TYPE_LABELS[step.referenceType] ?? step.referenceType}
+                              </span>
+                            </div>
                           )}
                         </div>
 

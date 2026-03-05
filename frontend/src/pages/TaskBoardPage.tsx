@@ -4,13 +4,14 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type D
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { TaskModal, TaskDetailModal, TaskCalendar, TaskKanban } from '@/components/tasks';
+import { MODULE_CONFIG } from '@/components/tasks/taskKanbanUtils';
 import { saveTaskImages } from '@/lib/taskImages';
 import { useTasks, useCreateTask, useUpdateTask, useDeleteTask } from '@/hooks/useTasks';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { tasksApi } from '@/services/api';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
-import { Task, TaskCreate, TaskUpdate } from '@/types';
+import { Task, TaskCreate, TaskUpdate, TaskModule } from '@/types';
 
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '-';
@@ -43,7 +44,7 @@ const PRIORITY_STYLES: Record<string, { dot: string; label: string; text: string
 
 type ViewMode = 'table' | 'calendar' | 'kanban';
 
-type TaskSortKey = 'status' | 'priority' | 'assignee' | 'clusterName' | 'taskCategory' | 'scheduledAt' | 'completedAt';
+type TaskSortKey = 'kanbanStatus' | 'priority' | 'assignee' | 'clusterName' | 'taskCategory' | 'scheduledAt' | 'completedAt';
 
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
@@ -114,6 +115,7 @@ export function TaskBoardPage() {
   const [filterPriority, setFilterPriority] = useState('');
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
+  const [filterModule, setFilterModule] = useState<TaskModule | ''>('');
   const [sortKey, setSortKey] = useState<TaskSortKey | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [showDatetime, setShowDatetime] = useState(false);
@@ -126,6 +128,7 @@ export function TaskBoardPage() {
     assignee: filterAssignee || undefined,
     taskCategory: filterCategory || undefined,
     priority: filterPriority || undefined,
+    module: filterModule || undefined,
     scheduledFrom: filterFrom || undefined,
     scheduledTo: filterTo || undefined,
   };
@@ -149,8 +152,9 @@ export function TaskBoardPage() {
   const sortedTasks = sortKey
     ? [...tasks].sort((a, b) => {
         let cmp = 0;
-        if (sortKey === 'status') {
-          cmp = (a.completedAt ? 1 : 0) - (b.completedAt ? 1 : 0);
+        if (sortKey === 'kanbanStatus') {
+          const ORDER: Record<string, number> = { backlog: 0, todo: 1, in_progress: 2, review_test: 3, done: 4 };
+          cmp = (ORDER[a.kanbanStatus ?? 'todo'] ?? 1) - (ORDER[b.kanbanStatus ?? 'todo'] ?? 1);
         } else if (sortKey === 'priority') {
           cmp = (PRIORITY_ORDER[a.priority] ?? 1) - (PRIORITY_ORDER[b.priority] ?? 1);
         } else if (sortKey === 'assignee') {
@@ -231,14 +235,15 @@ export function TaskBoardPage() {
     setFilterAssignee('');
     setFilterCategory('');
     setFilterPriority('');
+    setFilterModule('');
     setFilterFrom('');
     setFilterTo('');
   };
 
-  const hasFilters = filterClusterId || filterAssignee || filterCategory || filterPriority || filterFrom || filterTo;
+  const hasFilters = filterClusterId || filterAssignee || filterCategory || filterPriority || filterModule || filterFrom || filterTo;
 
-  const pendingCount = tasks.filter((t) => !t.completedAt).length;
-  const completedCount = tasks.filter((t) => t.completedAt).length;
+  const inProgressCount = tasks.filter((t) => t.kanbanStatus === 'in_progress').length;
+  const doneCount = tasks.filter((t) => t.kanbanStatus === 'done').length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -253,14 +258,19 @@ export function TaskBoardPage() {
                 <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
                   전체 {tasks.length}
                 </span>
-                {pendingCount > 0 && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                    진행중 {pendingCount}
+                {inProgressCount > 0 && (
+                  <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                    inProgressCount >= 2
+                      ? 'bg-red-500/15 text-red-400 border-red-500/30'
+                      : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                  }`}>
+                    WIP {inProgressCount}/2
+                    {inProgressCount >= 2 && ' ⚠'}
                   </span>
                 )}
-                {completedCount > 0 && (
+                {doneCount > 0 && (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                    완료 {completedCount}
+                    Done {doneCount}
                   </span>
                 )}
               </div>
@@ -337,6 +347,33 @@ export function TaskBoardPage() {
               작업 등록
             </button>
           </div>
+        </div>
+
+        {/* 모듈 뷰 탭 */}
+        <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+          <button
+            onClick={() => setFilterModule('')}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+              filterModule === ''
+                ? 'bg-primary/10 text-primary border-primary/30'
+                : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            전체 흐름
+          </button>
+          {(Object.entries(MODULE_CONFIG) as [TaskModule, { label: string; cls: string }][]).map(([key, cfg]) => (
+            <button
+              key={key}
+              onClick={() => setFilterModule(filterModule === key ? '' : key)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                filterModule === key
+                  ? `${cfg.cls} border-current`
+                  : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {cfg.label}
+            </button>
+          ))}
         </div>
 
         {/* Filter Bar */}
@@ -470,7 +507,7 @@ export function TaskBoardPage() {
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
                     <th className="w-7" />
-                    <SortTh label="상태" col="status" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="상태" col="kanbanStatus" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="우선순위" col="priority" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="담당자" col="assignee" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="대상 클러스터" col="clusterName" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
@@ -487,24 +524,28 @@ export function TaskBoardPage() {
                   <SortableContext items={sortedTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
                   <tbody>
                   {sortedTasks.map((task) => {
-                    const isCompleted = !!task.completedAt;
                     const pStyle = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium;
                     const hasImages = hasLocalImages(task.id);
+                    const ks = task.kanbanStatus ?? 'todo';
+                    const KS_DOT: Record<string, string> = {
+                      backlog: 'bg-slate-400', todo: 'bg-blue-400', in_progress: 'bg-amber-400',
+                      review_test: 'bg-purple-400', done: 'bg-emerald-400',
+                    };
+                    const KS_TEXT: Record<string, string> = {
+                      backlog: 'text-slate-400', todo: 'text-blue-400', in_progress: 'text-amber-400',
+                      review_test: 'text-purple-400', done: 'text-emerald-400',
+                    };
+                    const KS_LABEL: Record<string, string> = {
+                      backlog: 'Backlog', todo: 'To Do', in_progress: 'In Progress',
+                      review_test: 'Review', done: 'Done',
+                    };
                     return (
                       <SortableTaskRow key={task.id} id={task.id} isDragDisabled={!!sortKey}>
                         <td className="px-4 py-3 cursor-pointer" onClick={() => setSelectedTask(task)}>
                           <span className="flex items-center gap-1.5">
-                            <span
-                              className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                                isCompleted ? 'bg-emerald-500' : 'bg-amber-500'
-                              }`}
-                            />
-                            <span
-                              className={`text-xs font-medium ${
-                                isCompleted ? 'text-emerald-400' : 'text-amber-400'
-                              }`}
-                            >
-                              {isCompleted ? '완료' : '진행중'}
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${KS_DOT[ks] ?? 'bg-slate-400'}`} />
+                            <span className={`text-xs font-medium whitespace-nowrap ${KS_TEXT[ks] ?? 'text-slate-400'}`}>
+                              {KS_LABEL[ks] ?? ks}
                             </span>
                           </span>
                         </td>

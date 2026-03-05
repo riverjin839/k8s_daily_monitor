@@ -198,6 +198,10 @@ export interface IssueCreate {
 export interface IssueUpdate extends Partial<IssueCreate> {}
 
 // Task Board
+export type KanbanStatus = 'backlog' | 'todo' | 'in_progress' | 'review_test' | 'done';
+export type TaskModule = 'k8s' | 'keycloak' | 'nexus' | 'cilium' | 'argocd' | 'jenkins' | 'backend' | 'frontend' | 'monitoring' | 'infra';
+export type TaskTypeLabel = 'feature' | 'bug' | 'chore' | 'docs' | 'security';
+
 export interface Task {
   id: string;
   assignee: string;
@@ -210,6 +214,12 @@ export interface Task {
   completedAt?: string;
   priority: 'high' | 'medium' | 'low';
   remarks?: string;
+  // 칸반 보드 필드
+  kanbanStatus: KanbanStatus;
+  module?: TaskModule;
+  typeLabel?: TaskTypeLabel;
+  effortHours?: number;
+  doneCondition?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -217,6 +227,11 @@ export interface Task {
 export interface TaskListResponse {
   data: Task[];
   total: number;
+}
+
+export interface TaskStatusResponse {
+  data: Task;
+  wipWarning: boolean;
 }
 
 export interface TaskCreate {
@@ -230,6 +245,11 @@ export interface TaskCreate {
   completedAt?: string | null;
   priority: string;
   remarks?: string;
+  kanbanStatus?: KanbanStatus;
+  module?: TaskModule;
+  typeLabel?: TaskTypeLabel;
+  effortHours?: number;
+  doneCondition?: string;
 }
 
 export interface TaskUpdate extends Partial<TaskCreate> {}

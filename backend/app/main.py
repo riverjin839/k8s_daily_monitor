@@ -81,7 +81,7 @@ def _run_migrations():
             if col_name not in wf_step_cols:
                 with engine.begin() as conn:
                     conn.execute(text(f"ALTER TABLE workflow_steps ADD COLUMN {col_name} {col_type}"))
-    # tasks: Date → DateTime 마이그레이션
+    # tasks: Date → DateTime 마이그레이션 + 칸반 보드 필드 추가
     if "tasks" in inspector.get_table_names():
         task_col_map = {col["name"]: col["type"].__class__.__name__ for col in inspector.get_columns("tasks")}
         for col_name in ("scheduled_at", "completed_at"):
@@ -91,6 +91,24 @@ def _run_migrations():
                         f"ALTER TABLE tasks ALTER COLUMN {col_name} TYPE TIMESTAMP WITHOUT TIME ZONE "
                         f"USING {col_name}::TIMESTAMP WITHOUT TIME ZONE"
                     ))
+        # 칸반 보드 신규 컬럼
+        task_cols = list(task_col_map.keys())
+        kanban_status_is_new = "kanban_status" not in task_cols
+        new_task_kanban_cols = [
+            ("kanban_status", "VARCHAR(20) NOT NULL DEFAULT 'todo'"),
+            ("module", "VARCHAR(50)"),
+            ("type_label", "VARCHAR(20)"),
+            ("effort_hours", "INTEGER"),
+            ("done_condition", "TEXT"),
+        ]
+        for col_name, col_type in new_task_kanban_cols:
+            if col_name not in task_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_type}"))
+        # 기존 completed_at 있는 레코드 → done 으로 동기화 (최초 마이그레이션 1회만)
+        if kanban_status_is_new:
+            with engine.begin() as conn:
+                conn.execute(text("UPDATE tasks SET kanban_status = 'done' WHERE completed_at IS NOT NULL"))
     # issues: Date → DateTime 마이그레이션
     if "issues" in inspector.get_table_names():
         issue_col_map = {col["name"]: col["type"].__class__.__name__ for col in inspector.get_columns("issues")}

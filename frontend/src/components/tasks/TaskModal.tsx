@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, ImagePlus, Trash2, Settings2, Plus } from 'lucide-react';
-import { Task, TaskCreate } from '@/types';
+import { Task, TaskCreate, KanbanStatus, TaskModule, TaskTypeLabel } from '@/types';
+import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from './taskKanbanUtils';
 import { loadTaskImages } from '@/lib/taskImages';
 
 interface TaskModalProps {
@@ -48,6 +49,10 @@ const PRIORITIES = [
   { value: 'low', label: '낮음' },
 ];
 
+const KANBAN_STATUS_OPTIONS: KanbanStatus[] = ['backlog', 'todo', 'in_progress', 'review_test', 'done'];
+const MODULE_OPTIONS = Object.entries(MODULE_CONFIG) as [TaskModule, { label: string; cls: string }][];
+const TYPE_OPTIONS = Object.entries(TYPE_LABEL_CONFIG) as [TaskTypeLabel, { label: string; cls: string }][];
+
 function todayDatetimeLocal(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -77,6 +82,12 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
   const [customCategories, setCustomCategories] = useState<string[]>(loadCustomCategories);
   const [showCatManage, setShowCatManage] = useState(false);
   const [newCatInput, setNewCatInput] = useState('');
+  // 칸반 보드 필드
+  const [kanbanStatus, setKanbanStatus] = useState<KanbanStatus>('todo');
+  const [module, setModule] = useState<TaskModule | ''>('');
+  const [typeLabel, setTypeLabel] = useState<TaskTypeLabel | ''>('');
+  const [effortHours, setEffortHours] = useState('');
+  const [doneCondition, setDoneCondition] = useState('');
 
   useEffect(() => {
     const allKnownCategories = [...TASK_CATEGORIES, ...loadCustomCategories()];
@@ -93,6 +104,11 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
       setPriority(editTask.priority);
       setRemarks(editTask.remarks ?? '');
       setImages(loadTaskImages(editTask.id));
+      setKanbanStatus(editTask.kanbanStatus ?? 'todo');
+      setModule((editTask.module ?? '') as TaskModule | '');
+      setTypeLabel((editTask.typeLabel ?? '') as TaskTypeLabel | '');
+      setEffortHours(editTask.effortHours ? String(editTask.effortHours) : '');
+      setDoneCondition(editTask.doneCondition ?? '');
     } else {
       setAssignee('');
       setClusterId('');
@@ -105,6 +121,11 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
       setPriority('medium');
       setRemarks('');
       setImages([]);
+      setKanbanStatus('todo');
+      setModule('');
+      setTypeLabel('');
+      setEffortHours('');
+      setDoneCondition('');
     }
     setCustomCategories(loadCustomCategories());
     setShowCatManage(false);
@@ -174,6 +195,11 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
         completedAt: completedAt || null,
         priority,
         remarks: remarks.trim() || undefined,
+        kanbanStatus,
+        module: module || undefined,
+        typeLabel: typeLabel || undefined,
+        effortHours: effortHours ? parseInt(effortHours, 10) : undefined,
+        doneCondition: doneCondition.trim() || undefined,
       },
       images,
     );
@@ -408,6 +434,76 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
                 type="datetime-local"
                 value={completedAt}
                 onChange={(e) => setCompletedAt(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          {/* 칸반 보드 필드 ─────────────────────────────────── */}
+          <div className="border-t border-border pt-4">
+            <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">칸반 보드</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>보드 상태</label>
+                <select
+                  value={kanbanStatus}
+                  onChange={(e) => setKanbanStatus(e.target.value as KanbanStatus)}
+                  className={inputClass}
+                >
+                  {KANBAN_STATUS_OPTIONS.map((s) => (
+                    <option key={s} value={s}>{KANBAN_STATUS_LABEL[s]}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>모듈</label>
+                <select
+                  value={module}
+                  onChange={(e) => setModule(e.target.value as TaskModule | '')}
+                  className={inputClass}
+                >
+                  <option value="">— 선택 안 함 —</option>
+                  {MODULE_OPTIONS.map(([key, cfg]) => (
+                    <option key={key} value={key}>{cfg.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>유형 (type)</label>
+                <select
+                  value={typeLabel}
+                  onChange={(e) => setTypeLabel(e.target.value as TaskTypeLabel | '')}
+                  className={inputClass}
+                >
+                  <option value="">— 선택 안 함 —</option>
+                  {TYPE_OPTIONS.map(([key, cfg]) => (
+                    <option key={key} value={key}>{cfg.label} ({key})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>예상 소요 시간 (h)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={999}
+                  value={effortHours}
+                  onChange={(e) => setEffortHours(e.target.value)}
+                  placeholder="예: 4"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+            <div className="mt-3">
+              <label className={labelClass}>
+                완료 조건
+                <span className="ml-1.5 text-xs text-muted-foreground font-normal">(Done 이동 기준)</span>
+              </label>
+              <input
+                type="text"
+                value={doneCondition}
+                onChange={(e) => setDoneCondition(e.target.value)}
+                placeholder="예: docker pull 캐시 동작 확인"
                 className={inputClass}
               />
             </div>

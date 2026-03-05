@@ -1,6 +1,6 @@
 import csv
 import io
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -10,9 +10,18 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Cluster
 from app.models.task import Task
-from app.schemas.task import TaskCreate, TaskUpdate, TaskResponse, TaskListResponse
+from app.schemas.task import (
+    TaskCreate,
+    TaskUpdate,
+    TaskResponse,
+    TaskListResponse,
+    TaskStatusPatch,
+    TaskStatusResponse,
+)
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+WIP_LIMIT = 2
 
 
 @router.get("", response_model=TaskListResponse)
@@ -21,12 +30,14 @@ def list_tasks(
     assignee: str | None = Query(default=None),
     task_category: str | None = Query(default=None),
     priority: str | None = Query(default=None),
+    kanban_status: str | None = Query(default=None),
+    module: str | None = Query(default=None),
     scheduled_from: date | None = Query(default=None),
     scheduled_to: date | None = Query(default=None),
     completed: bool | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    """작업 목록 조회 (필터: 클러스터, 담당자, 분류, 우선순위, 예정일 범위, 완료 여부)"""
+    """작업 목록 조회 (필터: 클러스터, 담당자, 분류, 우선순위, 칸반상태, 모듈, 예정일 범위, 완료 여부)"""
     query = db.query(Task)
     if cluster_id:
         query = query.filter(Task.cluster_id == cluster_id)
@@ -36,6 +47,10 @@ def list_tasks(
         query = query.filter(Task.task_category.ilike(f"%{task_category}%"))
     if priority:
         query = query.filter(Task.priority == priority)
+    if kanban_status:
+        query = query.filter(Task.kanban_status == kanban_status)
+    if module:
+        query = query.filter(Task.module == module)
     if scheduled_from:
         query = query.filter(Task.scheduled_at >= scheduled_from)
     if scheduled_to:
@@ -55,6 +70,8 @@ def export_csv(
     assignee: str | None = Query(default=None),
     task_category: str | None = Query(default=None),
     priority: str | None = Query(default=None),
+    kanban_status: str | None = Query(default=None),
+    module: str | None = Query(default=None),
     scheduled_from: date | None = Query(default=None),
     scheduled_to: date | None = Query(default=None),
     db: Session = Depends(get_db),
@@ -69,6 +86,10 @@ def export_csv(
         query = query.filter(Task.task_category.ilike(f"%{task_category}%"))
     if priority:
         query = query.filter(Task.priority == priority)
+    if kanban_status:
+        query = query.filter(Task.kanban_status == kanban_status)
+    if module:
+        query = query.filter(Task.module == module)
     if scheduled_from:
         query = query.filter(Task.scheduled_at >= scheduled_from)
     if scheduled_to:
@@ -81,10 +102,15 @@ def export_csv(
     writer.writerow([
         "담당자",
         "대상 클러스터",
+        "모듈",
         "작업 분류",
+        "유형",
         "작업 내용",
+        "완료 조건",
         "작업 결과",
         "우선순위",
+        "칸반 상태",
+        "예상 시간(h)",
         "작업 예정일",
         "작업 완료일",
         "비고",
@@ -94,10 +120,15 @@ def export_csv(
         writer.writerow([
             task.assignee,
             task.cluster_name or "",
+            task.module or "",
             task.task_category,
+            task.type_label or "",
             task.task_content,
+            task.done_condition or "",
             task.result_content or "",
             task.priority,
+            task.kanban_status,
+            task.effort_hours or "",
             task.scheduled_at.isoformat() if task.scheduled_at else "",
             task.completed_at.isoformat() if task.completed_at else "",
             task.remarks or "",
@@ -165,6 +196,34 @@ def update_task(task_id: UUID, payload: TaskUpdate, db: Session = Depends(get_db
     db.commit()
     db.refresh(task)
     return task
+
+
+@router.patch("/{task_id}/status", response_model=TaskStatusResponse)
+def patch_task_status(task_id: UUID, payload: TaskStatusPatch, db: Session = Depends(get_db)):
+    """칸반 컬럼 이동 — WIP 초과 시 wip_warning: true 반환 (이동은 허용)"""
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    wip_warning = False
+    if payload.kanban_status == "in_progress":
+        wip_count = (
+            db.query(Task)
+            .filter(Task.kanban_status == "in_progress", Task.id != task_id)
+            .count()
+        )
+        if wip_count >= WIP_LIMIT:
+            wip_warning = True
+
+    task.kanban_status = payload.kanban_status
+
+    # done 으로 이동 시 completed_at 자동 기록 (미설정인 경우만)
+    if payload.kanban_status == "done" and not task.completed_at:
+        task.completed_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(task)
+    return TaskStatusResponse(data=task, wip_warning=wip_warning)
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)

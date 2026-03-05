@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, DateTime, Integer, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -20,6 +20,12 @@ class Task(Base):
     completed_at = Column(DateTime, nullable=True)               # 작업 완료일시
     priority = Column(String(20), nullable=False, default="medium")  # high / medium / low
     remarks = Column(Text, nullable=True)                        # 비고
+    # 칸반 보드 필드
+    kanban_status = Column(String(20), nullable=False, default="todo")  # backlog/todo/in_progress/review_test/done
+    module = Column(String(50), nullable=True)    # k8s/keycloak/nexus/cilium/argocd/jenkins/backend/frontend/monitoring/infra
+    type_label = Column(String(20), nullable=True)  # feature/bug/chore/docs/security
+    effort_hours = Column(Integer, nullable=True)   # 예상 소요 시간 (h)
+    done_condition = Column(Text, nullable=True)    # 완료 조건
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

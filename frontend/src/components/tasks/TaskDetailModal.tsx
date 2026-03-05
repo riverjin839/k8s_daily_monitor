@@ -1,6 +1,7 @@
 import { X, ImagePlus } from 'lucide-react';
 import { Task } from '@/types';
 import { loadTaskImages } from '@/lib/taskImages';
+import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from './taskKanbanUtils';
 
 interface TaskDetailModalProps {
   task: Task;
@@ -28,6 +29,9 @@ export function TaskDetailModal({ task, onClose, onEdit }: TaskDetailModalProps)
   const images = loadTaskImages(task.id);
   const isCompleted = !!task.completedAt;
   const pStyle = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium;
+  const moduleCfg = task.module ? MODULE_CONFIG[task.module] : null;
+  const typeCfg = task.typeLabel ? TYPE_LABEL_CONFIG[task.typeLabel] : null;
+  const kanbanLabel = KANBAN_STATUS_LABEL[task.kanbanStatus ?? 'todo'];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -35,11 +39,28 @@ export function TaskDetailModal({ task, onClose, onEdit }: TaskDetailModalProps)
       <div className="relative bg-card border border-border rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <div className="flex items-center gap-3">
-            <span className={`flex items-center gap-1.5 text-sm font-medium ${isCompleted ? 'text-emerald-400' : 'text-amber-400'}`}>
-              <span className={`w-2 h-2 rounded-full ${isCompleted ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-              {isCompleted ? '완료' : '진행중'}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* 칸반 상태 */}
+            <span className={`flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full border ${
+              isCompleted
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+              {kanbanLabel}
             </span>
+            {/* 모듈 배지 */}
+            {moduleCfg && (
+              <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${moduleCfg.cls}`}>
+                {moduleCfg.label}
+              </span>
+            )}
+            {/* 유형 배지 */}
+            {typeCfg && (
+              <span className={`text-xs px-2 py-0.5 rounded-full ${typeCfg.cls}`}>
+                {typeCfg.label}
+              </span>
+            )}
             <span className={`flex items-center gap-1.5 text-xs font-medium ${pStyle.text}`}>
               <span className={`w-2 h-2 rounded-full ${pStyle.dot}`} />
               {pStyle.label}
@@ -47,6 +68,9 @@ export function TaskDetailModal({ task, onClose, onEdit }: TaskDetailModalProps)
             <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary border border-primary/20">
               {task.taskCategory}
             </span>
+            {task.effortHours && (
+              <span className="text-xs text-muted-foreground">{task.effortHours}h</span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -86,6 +110,15 @@ export function TaskDetailModal({ task, onClose, onEdit }: TaskDetailModalProps)
               <p className="text-xs font-medium text-muted-foreground mb-1">작업 결과</p>
               <p className="text-sm whitespace-pre-wrap break-words bg-secondary/30 rounded-lg px-3 py-2.5">
                 {task.resultContent}
+              </p>
+            </div>
+          )}
+
+          {task.doneCondition && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1">완료 조건</p>
+              <p className="text-sm text-foreground/80 bg-emerald-500/5 border border-emerald-500/20 rounded-lg px-3 py-2">
+                ✓ {task.doneCondition}
               </p>
             </div>
           )}

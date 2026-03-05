@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { tasksApi } from '@/services/api';
-import { TaskCreate, TaskUpdate } from '@/types';
+import { TaskCreate, TaskUpdate, KanbanStatus } from '@/types';
 
 export const taskKeys = {
   all: ['tasks'] as const,
@@ -13,6 +13,8 @@ interface TaskFilters {
   assignee?: string;
   taskCategory?: string;
   priority?: string;
+  kanbanStatus?: string;
+  module?: string;
   scheduledFrom?: string;
   scheduledTo?: string;
   completed?: boolean;
@@ -57,6 +59,18 @@ export function useDeleteTask() {
 
   return useMutation({
     mutationFn: (id: string) => tasksApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.all });
+    },
+  });
+}
+
+export function usePatchTaskStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, kanbanStatus }: { id: string; kanbanStatus: KanbanStatus }) =>
+      tasksApi.patchStatus(id, kanbanStatus),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.all });
     },

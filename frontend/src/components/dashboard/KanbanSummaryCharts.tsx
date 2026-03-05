@@ -2,13 +2,14 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend,
 } from 'recharts';
 import type { Task, Issue } from '@/types';
-import { classifyTask } from '@/components/tasks/taskKanbanUtils';
 
 // ── 색상 ──────────────────────────────────────────────────────────────────────
 const TASK_COLORS: Record<string, string> = {
-  '예정': '#f59e0b',
-  '지연': '#ef4444',
-  '완료': '#10b981',
+  'Backlog':        '#6b7280',
+  'To Do':          '#3b82f6',
+  'In Progress':    '#f59e0b',
+  'Review & Test':  '#8b5cf6',
+  'Done':           '#10b981',
 };
 
 const ISSUE_COLORS: Record<string, string> = {
@@ -59,11 +60,13 @@ export function KanbanSummaryCharts({ tasks, issues, isLoading, selectedClusterI
   const filteredTasks  = selectedClusterId ? tasks.filter((t) => t.clusterId === selectedClusterId)  : tasks;
   const filteredIssues = selectedClusterId ? issues.filter((i) => i.clusterId === selectedClusterId) : issues;
 
-  // 집계
+  // 집계 (5컬럼 칸반 기준)
   const taskCounts = {
-    '예정': filteredTasks.filter((t) => classifyTask(t) === 'scheduled').length,
-    '지연': filteredTasks.filter((t) => classifyTask(t) === 'delayed').length,
-    '완료': filteredTasks.filter((t) => classifyTask(t) === 'completed').length,
+    'Backlog':       filteredTasks.filter((t) => (t.kanbanStatus ?? 'todo') === 'backlog').length,
+    'To Do':         filteredTasks.filter((t) => (t.kanbanStatus ?? 'todo') === 'todo').length,
+    'In Progress':   filteredTasks.filter((t) => (t.kanbanStatus ?? 'todo') === 'in_progress').length,
+    'Review & Test': filteredTasks.filter((t) => (t.kanbanStatus ?? 'todo') === 'review_test').length,
+    'Done':          filteredTasks.filter((t) => (t.kanbanStatus ?? 'todo') === 'done').length,
   };
 
   const issueCounts = {

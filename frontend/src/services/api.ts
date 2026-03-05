@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate, TaskStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse } from '@/types';
 
 // snake_case → camelCase 변환 (Backend는 snake_case, Frontend는 camelCase)
 function toCamelCase(str: string): string {
@@ -213,6 +213,8 @@ export const tasksApi = {
     assignee?: string;
     taskCategory?: string;
     priority?: string;
+    kanbanStatus?: string;
+    module?: string;
     scheduledFrom?: string;
     scheduledTo?: string;
     completed?: boolean;
@@ -229,12 +231,16 @@ export const tasksApi = {
   getById: (id: string) => api.get<Task>(`/tasks/${id}`),
   create: (data: TaskCreate) => api.post<Task>('/tasks', data),
   update: (id: string, data: TaskUpdate) => api.put<Task>(`/tasks/${id}`, data),
+  patchStatus: (id: string, kanbanStatus: KanbanStatus) =>
+    api.patch<TaskStatusResponse>(`/tasks/${id}/status`, { kanban_status: kanbanStatus }),
   delete: (id: string) => api.delete(`/tasks/${id}`),
   exportCsv: (params?: {
     clusterId?: string;
     assignee?: string;
     taskCategory?: string;
     priority?: string;
+    kanbanStatus?: string;
+    module?: string;
     scheduledFrom?: string;
     scheduledTo?: string;
   }) =>

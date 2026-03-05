@@ -109,7 +109,7 @@ export function IssueBoardPage() {
   const [filterTo, setFilterTo] = useState('');
   const [sortKey, setSortKey] = useState<IssueSortKey | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const [showTime, setShowTime] = useState(false);
+  const [showDatetime, setShowDatetime] = useState(false);
 
   const { clusters } = useClusterStore();
   useClusters();
@@ -257,13 +257,13 @@ export function IssueBoardPage() {
 
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setShowTime((v) => !v)}
+              onClick={() => setShowDatetime((v) => !v)}
               className={`px-3 py-2 text-sm font-medium border rounded-lg transition-colors flex items-center gap-1.5 ${
-                showTime
+                showDatetime
                   ? 'bg-primary/10 text-primary border-primary/30'
                   : 'bg-secondary hover:bg-secondary/80 border-border text-muted-foreground hover:text-foreground'
               }`}
-              title="등록 시간 표시 on/off"
+              title="발생일/조치일 시간 표시 on/off"
             >
               <Clock className="w-4 h-4" />
               시간 표시
@@ -390,7 +390,6 @@ export function IssueBoardPage() {
                     <SortTh label="발생일" col="occurredAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="조치일" col="resolvedAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">비고</th>
-                    {showTime && <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">등록일시</th>}
                     <th className="px-4 py-3 text-center font-medium text-muted-foreground whitespace-nowrap">작업</th>
                   </tr>
                 </thead>
@@ -441,21 +440,16 @@ export function IssueBoardPage() {
                           </p>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedIssue(issue)}>
-                          {formatDate(issue.occurredAt)}
+                          {showDatetime ? formatDateTime(issue.occurredAt) : formatDate(issue.occurredAt)}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedIssue(issue)}>
-                          {formatDate(issue.resolvedAt)}
+                          {showDatetime ? formatDateTime(issue.resolvedAt) : formatDate(issue.resolvedAt)}
                         </td>
                         <td className="px-4 py-3 max-w-[120px] cursor-pointer" onClick={() => setSelectedIssue(issue)}>
                           <p className="line-clamp-2 text-muted-foreground text-xs">
                             {issue.remarks || '-'}
                           </p>
                         </td>
-                        {showTime && (
-                          <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedIssue(issue)}>
-                            {formatDateTime(issue.createdAt)}
-                          </td>
-                        )}
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-center gap-1">
                             <button

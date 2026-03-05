@@ -22,6 +22,7 @@ from app.routers import (
     ui_settings_router,
     workflows_router,
     work_guide_router,
+    ops_note_router,
 )
 
 
@@ -80,6 +81,26 @@ def _run_migrations():
             if col_name not in wf_step_cols:
                 with engine.begin() as conn:
                     conn.execute(text(f"ALTER TABLE workflow_steps ADD COLUMN {col_name} {col_type}"))
+    # tasks: Date → DateTime 마이그레이션
+    if "tasks" in inspector.get_table_names():
+        task_col_map = {col["name"]: col["type"].__class__.__name__ for col in inspector.get_columns("tasks")}
+        for col_name in ("scheduled_at", "completed_at"):
+            if col_name in task_col_map and task_col_map[col_name].upper() == "DATE":
+                with engine.begin() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE tasks ALTER COLUMN {col_name} TYPE TIMESTAMP WITHOUT TIME ZONE "
+                        f"USING {col_name}::TIMESTAMP WITHOUT TIME ZONE"
+                    ))
+    # issues: Date → DateTime 마이그레이션
+    if "issues" in inspector.get_table_names():
+        issue_col_map = {col["name"]: col["type"].__class__.__name__ for col in inspector.get_columns("issues")}
+        for col_name in ("occurred_at", "resolved_at"):
+            if col_name in issue_col_map and issue_col_map[col_name].upper() == "DATE":
+                with engine.begin() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE issues ALTER COLUMN {col_name} TYPE TIMESTAMP WITHOUT TIME ZONE "
+                        f"USING {col_name}::TIMESTAMP WITHOUT TIME ZONE"
+                    ))
 
 
 def _seed_default_metric_cards():
@@ -221,6 +242,7 @@ app.include_router(ui_settings_router, prefix="/api/v1")
 app.include_router(node_labels_router, prefix="/api/v1")
 app.include_router(workflows_router, prefix="/api/v1")
 app.include_router(work_guide_router, prefix="/api/v1")
+app.include_router(ops_note_router, prefix="/api/v1")
 
 
 @app.get("/")

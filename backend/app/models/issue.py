@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Text, Date, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -17,8 +17,8 @@ class Issue(Base):
     issue_content = Column(Text, nullable=False)                 # 이슈 내용
     action_content = Column(Text, nullable=True)                 # 조치 내용
     detail_content = Column(Text, nullable=True)                 # 상세 내용
-    occurred_at = Column(Date, nullable=False)                   # 이슈 발생일
-    resolved_at = Column(Date, nullable=True)                    # 이슈 조치일
+    occurred_at = Column(DateTime, nullable=False)               # 이슈 발생일시
+    resolved_at = Column(DateTime, nullable=True)                # 이슈 조치일시
     remarks = Column(Text, nullable=True)                        # 비고
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

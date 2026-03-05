@@ -11,6 +11,7 @@ import { CidrCalculatorPage } from '@/pages/CidrCalculatorPage';
 import { ClusterManagePage } from '@/pages/ClusterManagePage';
 import { WorkflowBoardPage } from '@/pages/WorkflowBoardPage';
 import { WorkGuidePage } from '@/pages/WorkGuidePage';
+import { OpsNotesPage } from '@/pages/OpsNotesPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar } from '@/components/layout';
 
@@ -42,6 +43,7 @@ function App() {
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/workflow" element={<WorkflowBoardPage />} />
               <Route path="/work-guides" element={<WorkGuidePage />} />
+              <Route path="/ops-notes" element={<OpsNotesPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>

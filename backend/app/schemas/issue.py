@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 from pydantic import BaseModel, Field
@@ -12,8 +12,8 @@ class IssueBase(BaseModel):
     issue_content: str = Field(..., min_length=1)
     action_content: Optional[str] = None
     detail_content: Optional[str] = None
-    occurred_at: date
-    resolved_at: Optional[date] = None
+    occurred_at: datetime
+    resolved_at: Optional[datetime] = None
     remarks: Optional[str] = None
 
 
@@ -29,8 +29,8 @@ class IssueUpdate(BaseModel):
     issue_content: Optional[str] = Field(None, min_length=1)
     action_content: Optional[str] = None
     detail_content: Optional[str] = None
-    occurred_at: Optional[date] = None
-    resolved_at: Optional[date] = None
+    occurred_at: Optional[datetime] = None
+    resolved_at: Optional[datetime] = None
     remarks: Optional[str] = None
 
 

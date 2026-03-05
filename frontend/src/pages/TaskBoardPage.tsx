@@ -116,7 +116,7 @@ export function TaskBoardPage() {
   const [filterTo, setFilterTo] = useState('');
   const [sortKey, setSortKey] = useState<TaskSortKey | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const [showTime, setShowTime] = useState(false);
+  const [showDatetime, setShowDatetime] = useState(false);
 
   const { clusters } = useClusterStore();
   useClusters();
@@ -269,13 +269,13 @@ export function TaskBoardPage() {
 
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setShowTime((v) => !v)}
+              onClick={() => setShowDatetime((v) => !v)}
               className={`px-3 py-2 text-sm font-medium border rounded-lg transition-colors flex items-center gap-1.5 ${
-                showTime
+                showDatetime
                   ? 'bg-primary/10 text-primary border-primary/30'
                   : 'bg-secondary hover:bg-secondary/80 border-border text-muted-foreground hover:text-foreground'
               }`}
-              title="등록 시간 표시 on/off"
+              title="예정일/완료일 시간 표시 on/off"
             >
               <Clock className="w-4 h-4" />
               시간 표시
@@ -449,7 +449,6 @@ export function TaskBoardPage() {
                     <SortTh label="예정일" col="scheduledAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="완료일" col="completedAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">비고</th>
-                    {showTime && <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">등록일시</th>}
                     <th className="px-4 py-3 text-center font-medium text-muted-foreground whitespace-nowrap">작업</th>
                   </tr>
                 </thead>
@@ -507,21 +506,16 @@ export function TaskBoardPage() {
                           </p>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedTask(task)}>
-                          {formatDate(task.scheduledAt)}
+                          {showDatetime ? formatDateTime(task.scheduledAt) : formatDate(task.scheduledAt)}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedTask(task)}>
-                          {formatDate(task.completedAt)}
+                          {showDatetime ? formatDateTime(task.completedAt) : formatDate(task.completedAt)}
                         </td>
                         <td className="px-4 py-3 max-w-[120px] cursor-pointer" onClick={() => setSelectedTask(task)}>
                           <p className="line-clamp-2 text-muted-foreground text-xs">
                             {task.remarks || '-'}
                           </p>
                         </td>
-                        {showTime && (
-                          <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedTask(task)}>
-                            {formatDateTime(task.createdAt)}
-                          </td>
-                        )}
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-center gap-1">
                             <button

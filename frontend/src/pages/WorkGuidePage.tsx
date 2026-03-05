@@ -3,7 +3,7 @@ import {
   BookMarked, Plus, Pencil, Trash2, X, Search, GitFork, Tag,
   ChevronDown, ChevronUp, AlertCircle, CheckCircle, FileText, Archive,
 } from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { workGuidesApi, workflowsApi } from '@/services/api';
 import type { WorkGuide, WorkGuideCreate, WorkGuideUpdate } from '@/types';
 
@@ -457,7 +457,7 @@ export function WorkGuidePage() {
     queryFn: () => workGuidesApi.getAll().then((r) => r.data),
     staleTime: 1000 * 30,
   });
-  const allGuides = data?.data ?? [];
+  const allGuides = useMemo(() => data?.data ?? [], [data]);
 
   const guides = useMemo(() => {
     let list = allGuides;

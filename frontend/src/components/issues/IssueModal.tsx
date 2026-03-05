@@ -26,8 +26,18 @@ const ISSUE_AREAS = [
   '기타',
 ];
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
+function todayDatetimeLocal(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function toDatetimeLocal(dateStr?: string | null): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr.slice(0, 16);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: IssueModalProps) {
@@ -38,7 +48,7 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
   const [issueContent, setIssueContent] = useState('');
   const [actionContent, setActionContent] = useState('');
   const [detailContent, setDetailContent] = useState('');
-  const [occurredAt, setOccurredAt] = useState(today());
+  const [occurredAt, setOccurredAt] = useState(todayDatetimeLocal());
   const [resolvedAt, setResolvedAt] = useState('');
   const [remarks, setRemarks] = useState('');
   const [images, setImages] = useState<string[]>([]);
@@ -56,8 +66,8 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
       setIssueContent(editIssue.issueContent);
       setActionContent(editIssue.actionContent ?? '');
       setDetailContent(editIssue.detailContent ?? '');
-      setOccurredAt(editIssue.occurredAt);
-      setResolvedAt(editIssue.resolvedAt ?? '');
+      setOccurredAt(toDatetimeLocal(editIssue.occurredAt));
+      setResolvedAt(toDatetimeLocal(editIssue.resolvedAt));
       setRemarks(editIssue.remarks ?? '');
       setImages(loadIssueImages(editIssue.id));
     } else {
@@ -68,7 +78,7 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
       setIssueContent('');
       setActionContent('');
       setDetailContent('');
-      setOccurredAt(today());
+      setOccurredAt(todayDatetimeLocal());
       setResolvedAt('');
       setRemarks('');
       setImages([]);
@@ -291,11 +301,11 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
           )}
 
           <div className="grid grid-cols-2 gap-4">
-            {/* 이슈 발생일 */}
+            {/* 이슈 발생일시 */}
             <div>
-              <label className={labelClass}>이슈 발생일 *</label>
+              <label className={labelClass}>이슈 발생일시 *</label>
               <input
-                type="date"
+                type="datetime-local"
                 value={occurredAt}
                 onChange={(e) => setOccurredAt(e.target.value)}
                 className={inputClass}
@@ -303,11 +313,11 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
               />
             </div>
 
-            {/* 이슈 조치일 */}
+            {/* 이슈 조치일시 */}
             <div>
-              <label className={labelClass}>이슈 조치일</label>
+              <label className={labelClass}>이슈 조치일시</label>
               <input
-                type="date"
+                type="datetime-local"
                 value={resolvedAt}
                 onChange={(e) => setResolvedAt(e.target.value)}
                 className={inputClass}

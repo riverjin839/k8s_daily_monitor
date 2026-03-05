@@ -12,6 +12,7 @@ import {
   Server,
   GitFork,
   BookMarked,
+  Layers,
   Pencil,
   Check,
   X,
@@ -32,6 +33,7 @@ const NAV_ITEMS: Array<{ to: string; defaultLabel: string; icon: ComponentType<{
   { to: '/node-labels', defaultLabel: '노드 라벨', icon: Tags },
   { to: '/cidr', defaultLabel: 'CIDR 계산기', icon: Calculator },
   { to: '/work-guides', defaultLabel: '작업 가이드', icon: BookMarked },
+  { to: '/ops-notes', defaultLabel: '업무 게시판', icon: Layers },
   { to: '/workflow', defaultLabel: '워크플로우', icon: GitFork },
   { to: '/settings', defaultLabel: 'Settings', icon: Settings },
 ];

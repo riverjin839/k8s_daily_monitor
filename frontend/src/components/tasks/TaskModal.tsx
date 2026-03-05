@@ -48,8 +48,18 @@ const PRIORITIES = [
   { value: 'low', label: '낮음' },
 ];
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
+function todayDatetimeLocal(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function toDatetimeLocal(dateStr?: string | null): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr.slice(0, 16);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: TaskModalProps) {
@@ -59,7 +69,7 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
   const [taskCategoryCustom, setTaskCategoryCustom] = useState('');
   const [taskContent, setTaskContent] = useState('');
   const [resultContent, setResultContent] = useState('');
-  const [scheduledAt, setScheduledAt] = useState(today());
+  const [scheduledAt, setScheduledAt] = useState(todayDatetimeLocal());
   const [completedAt, setCompletedAt] = useState('');
   const [priority, setPriority] = useState('medium');
   const [remarks, setRemarks] = useState('');
@@ -78,8 +88,8 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
       setTaskCategoryCustom(predefined ? '' : editTask.taskCategory);
       setTaskContent(editTask.taskContent);
       setResultContent(editTask.resultContent ?? '');
-      setScheduledAt(editTask.scheduledAt);
-      setCompletedAt(editTask.completedAt ?? '');
+      setScheduledAt(toDatetimeLocal(editTask.scheduledAt));
+      setCompletedAt(toDatetimeLocal(editTask.completedAt));
       setPriority(editTask.priority);
       setRemarks(editTask.remarks ?? '');
       setImages(loadTaskImages(editTask.id));
@@ -90,7 +100,7 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
       setTaskCategoryCustom('');
       setTaskContent('');
       setResultContent('');
-      setScheduledAt(today());
+      setScheduledAt(todayDatetimeLocal());
       setCompletedAt('');
       setPriority('medium');
       setRemarks('');
@@ -383,9 +393,9 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>작업 예정일 *</label>
+              <label className={labelClass}>작업 예정일시 *</label>
               <input
-                type="date"
+                type="datetime-local"
                 value={scheduledAt}
                 onChange={(e) => setScheduledAt(e.target.value)}
                 className={inputClass}
@@ -393,9 +403,9 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
               />
             </div>
             <div>
-              <label className={labelClass}>작업 완료일</label>
+              <label className={labelClass}>작업 완료일시</label>
               <input
-                type="date"
+                type="datetime-local"
                 value={completedAt}
                 onChange={(e) => setCompletedAt(e.target.value)}
                 className={inputClass}

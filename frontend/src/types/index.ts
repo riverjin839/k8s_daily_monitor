@@ -381,3 +381,36 @@ export interface ClusterLinksPayload {
   commonLinks: ClusterLink[];
   clusterGroups: ClusterLinkGroup[];
 }
+
+// Ops Notes (업무 게시판)
+export type OpsNoteColor = 'yellow' | 'green' | 'blue' | 'pink' | 'purple';
+
+export interface OpsNote {
+  id: string;
+  service: string;
+  title: string;
+  content?: string;
+  backContent?: string;
+  color: OpsNoteColor;
+  author?: string;
+  pinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OpsNoteCreate {
+  service: string;
+  title: string;
+  content?: string;
+  backContent?: string;
+  color: OpsNoteColor;
+  author?: string;
+  pinned?: boolean;
+}
+
+export interface OpsNoteUpdate extends Partial<OpsNoteCreate> {}
+
+export interface OpsNoteListResponse {
+  data: OpsNote[];
+  total: number;
+}

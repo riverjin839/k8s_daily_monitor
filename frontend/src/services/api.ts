@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse } from '@/types';
 
 // snake_case → camelCase 변환 (Backend는 snake_case, Frontend는 camelCase)
 function toCamelCase(str: string): string {
@@ -307,6 +307,18 @@ export const workGuidesApi = {
   create: (data: WorkGuideCreate) => api.post<WorkGuide>('/work-guides', data),
   update: (id: string, data: WorkGuideUpdate) => api.put<WorkGuide>(`/work-guides/${id}`, data),
   delete: (id: string) => api.delete(`/work-guides/${id}`),
+};
+
+// Ops Notes API (업무 게시판)
+export const opsNotesApi = {
+  getAll: (service?: string) =>
+    api.get<OpsNoteListResponse>('/ops-notes', {
+      params: service ? { service } : undefined,
+    }),
+  getById: (id: string) => api.get<OpsNote>(`/ops-notes/${id}`),
+  create: (data: OpsNoteCreate) => api.post<OpsNote>('/ops-notes', data),
+  update: (id: string, data: OpsNoteUpdate) => api.put<OpsNote>(`/ops-notes/${id}`, data),
+  delete: (id: string) => api.delete(`/ops-notes/${id}`),
 };
 
 export default api;

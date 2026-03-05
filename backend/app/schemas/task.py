@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 from pydantic import BaseModel, Field
@@ -11,8 +11,8 @@ class TaskBase(BaseModel):
     task_category: str = Field(..., min_length=1, max_length=100)
     task_content: str = Field(..., min_length=1)
     result_content: Optional[str] = None
-    scheduled_at: date
-    completed_at: Optional[date] = None
+    scheduled_at: datetime
+    completed_at: Optional[datetime] = None
     priority: str = Field(default="medium", pattern="^(high|medium|low)$")
     remarks: Optional[str] = None
 
@@ -28,8 +28,8 @@ class TaskUpdate(BaseModel):
     task_category: Optional[str] = Field(None, min_length=1, max_length=100)
     task_content: Optional[str] = Field(None, min_length=1)
     result_content: Optional[str] = None
-    scheduled_at: Optional[date] = None
-    completed_at: Optional[date] = None
+    scheduled_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     priority: Optional[str] = Field(None, pattern="^(high|medium|low)$")
     remarks: Optional[str] = None
 

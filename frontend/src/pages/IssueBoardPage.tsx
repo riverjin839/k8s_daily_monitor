@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Plus, Download, Pencil, Trash2, ClipboardList, Search, X, ImagePlus, ChevronUp, ChevronDown, ArrowUpDown, GripVertical, Clock } from 'lucide-react';
+import { Plus, Download, Pencil, Trash2, ClipboardList, Search, X, ImagePlus, ChevronUp, ChevronDown, ArrowUpDown, GripVertical, Clock, Kanban, List } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { IssueModal, IssueDetailModal } from '@/components/issues';
+import { IssueModal, IssueDetailModal, IssueKanban } from '@/components/issues';
 import { saveIssueImages } from '@/lib/issueImages';
 import { useIssues, useCreateIssue, useUpdateIssue, useDeleteIssue } from '@/hooks/useIssues';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
@@ -110,6 +110,7 @@ export function IssueBoardPage() {
   const [sortKey, setSortKey] = useState<IssueSortKey | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [showDatetime, setShowDatetime] = useState(false);
+  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
 
   const { clusters } = useClusterStore();
   useClusters();
@@ -256,19 +257,47 @@ export function IssueBoardPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowDatetime((v) => !v)}
-              className={`px-3 py-2 text-sm font-medium border rounded-lg transition-colors flex items-center gap-1.5 ${
-                showDatetime
-                  ? 'bg-primary/10 text-primary border-primary/30'
-                  : 'bg-secondary hover:bg-secondary/80 border-border text-muted-foreground hover:text-foreground'
-              }`}
-              title="발생일/조치일 시간 표시 on/off"
-            >
-              <Clock className="w-4 h-4" />
-              시간 표시
-            </button>
-            {issues.length > 0 && (
+            {/* View mode toggle */}
+            <div className="flex items-center rounded-lg border border-border overflow-hidden">
+              <button
+                onClick={() => setViewMode('table')}
+                className={`px-3 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                  viewMode === 'table'
+                    ? 'bg-primary/10 text-primary'
+                    : 'bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground'
+                }`}
+                title="목록 보기"
+              >
+                <List className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('kanban')}
+                className={`px-3 py-2 text-sm font-medium border-l border-border transition-colors flex items-center gap-1.5 ${
+                  viewMode === 'kanban'
+                    ? 'bg-primary/10 text-primary'
+                    : 'bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground'
+                }`}
+                title="칸반 보기"
+              >
+                <Kanban className="w-4 h-4" />
+              </button>
+            </div>
+
+            {viewMode === 'table' && (
+              <button
+                onClick={() => setShowDatetime((v) => !v)}
+                className={`px-3 py-2 text-sm font-medium border rounded-lg transition-colors flex items-center gap-1.5 ${
+                  showDatetime
+                    ? 'bg-primary/10 text-primary border-primary/30'
+                    : 'bg-secondary hover:bg-secondary/80 border-border text-muted-foreground hover:text-foreground'
+                }`}
+                title="발생일/조치일 시간 표시 on/off"
+              >
+                <Clock className="w-4 h-4" />
+                시간 표시
+              </button>
+            )}
+            {issues.length > 0 && viewMode === 'table' && (
               <button
                 onClick={handleExportCsv}
                 className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-2"
@@ -352,8 +381,26 @@ export function IssueBoardPage() {
           </div>
         </div>
 
+        {/* Kanban view */}
+        {viewMode === 'kanban' && (
+          isLoading ? (
+            <div className="grid grid-cols-2 gap-4">
+              {[...Array(2)].map((_, i) => (
+                <div key={i} className="h-64 rounded-xl bg-muted/30 animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <IssueKanban
+              issues={sortedIssues}
+              onIssueClick={setSelectedIssue}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+            />
+          )
+        )}
+
         {/* Table */}
-        {isLoading ? (
+        {viewMode !== 'kanban' && (isLoading ? (
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             {[...Array(5)].map((_, i) => (
               <div key={i} className="h-14 border-b border-border last:border-b-0 animate-pulse bg-muted/30" />
@@ -477,7 +524,7 @@ export function IssueBoardPage() {
               </table>
             </div>
           </div>
-        )}
+        ))}
       </main>
 
       <IssueModal

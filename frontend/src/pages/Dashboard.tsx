@@ -11,6 +11,7 @@ import {
   MetricCardGrid,
   AddMetricCardModal,
   KubeconfigEditModal,
+  KanbanSummaryCharts,
 } from '@/components/dashboard';
 import { PlaybookCard, AddPlaybookModal } from '@/components/playbooks';
 import { useClusterStore } from '@/stores/clusterStore';
@@ -18,6 +19,8 @@ import { usePlaybookStore } from '@/stores/playbookStore';
 import { useClusters, useSummary, useAddons, useLogs, useHealthCheck, useCreateAddon, useDeleteAddon, useAddonHealthCheck } from '@/hooks/useCluster';
 import { useDashboardPlaybooks, useRunPlaybook, useDeletePlaybook, useToggleDashboard, useUpdatePlaybook } from '@/hooks/usePlaybook';
 import { useMetricCards, useMetricResults, useDeleteMetricCard } from '@/hooks/useMetricCards';
+import { useTasks } from '@/hooks/useTasks';
+import { useIssues } from '@/hooks/useIssues';
 import { healthApi } from '@/services/api';
 import { Addon, MetricCard, Playbook } from '@/types';
 
@@ -60,6 +63,12 @@ export function Dashboard() {
   const { data: metricCards = [], isLoading: metricsLoading } = useMetricCards();
   const { data: metricResults = [] } = useMetricResults();
   const deleteMetricCard = useDeleteMetricCard();
+
+  // Kanban summary data
+  const { data: tasksData, isLoading: tasksLoading } = useTasks();
+  const { data: issuesData, isLoading: issuesLoading } = useIssues();
+  const allTasks = tasksData?.data ?? [];
+  const allIssues = issuesData?.data ?? [];
 
   const handleRunCheck = async () => {
     if (selectedClusterId) {
@@ -281,6 +290,19 @@ export function Dashboard() {
             </div>
           </section>
         )}
+
+        {/* Kanban Summary Charts */}
+        <section className="mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-lg font-semibold">작업 / 이슈 현황</h2>
+          </div>
+          <KanbanSummaryCharts
+            tasks={allTasks}
+            issues={allIssues}
+            isLoading={tasksLoading || issuesLoading}
+            selectedClusterId={selectedClusterId}
+          />
+        </section>
 
         {/* History Log */}
         <HistoryLog

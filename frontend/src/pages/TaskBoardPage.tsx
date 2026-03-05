@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, GripVertical, Clock } from 'lucide-react';
+import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, GripVertical, Clock, Kanban } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { TaskModal, TaskDetailModal, TaskCalendar } from '@/components/tasks';
+import { TaskModal, TaskDetailModal, TaskCalendar, TaskKanban } from '@/components/tasks';
 import { saveTaskImages } from '@/lib/taskImages';
 import { useTasks, useCreateTask, useUpdateTask, useDeleteTask } from '@/hooks/useTasks';
 import { useClusters } from '@/hooks/useCluster';
@@ -41,7 +41,7 @@ const PRIORITY_STYLES: Record<string, { dot: string; label: string; text: string
   low: { dot: 'bg-slate-400', label: '낮음', text: 'text-slate-400' },
 };
 
-type ViewMode = 'table' | 'calendar';
+type ViewMode = 'table' | 'calendar' | 'kanban';
 
 type TaskSortKey = 'status' | 'priority' | 'assignee' | 'clusterName' | 'taskCategory' | 'scheduledAt' | 'completedAt';
 
@@ -268,18 +268,20 @@ export function TaskBoardPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowDatetime((v) => !v)}
-              className={`px-3 py-2 text-sm font-medium border rounded-lg transition-colors flex items-center gap-1.5 ${
-                showDatetime
-                  ? 'bg-primary/10 text-primary border-primary/30'
-                  : 'bg-secondary hover:bg-secondary/80 border-border text-muted-foreground hover:text-foreground'
-              }`}
-              title="예정일/완료일 시간 표시 on/off"
-            >
-              <Clock className="w-4 h-4" />
-              시간 표시
-            </button>
+            {viewMode === 'table' && (
+              <button
+                onClick={() => setShowDatetime((v) => !v)}
+                className={`px-3 py-2 text-sm font-medium border rounded-lg transition-colors flex items-center gap-1.5 ${
+                  showDatetime
+                    ? 'bg-primary/10 text-primary border-primary/30'
+                    : 'bg-secondary hover:bg-secondary/80 border-border text-muted-foreground hover:text-foreground'
+                }`}
+                title="예정일/완료일 시간 표시 on/off"
+              >
+                <Clock className="w-4 h-4" />
+                시간 표시
+              </button>
+            )}
 
             {/* View mode toggle */}
             <div className="flex items-center bg-secondary rounded-lg p-0.5 border border-border">
@@ -305,9 +307,20 @@ export function TaskBoardPage() {
                 <CalendarDays className="w-3.5 h-3.5" />
                 달력
               </button>
+              <button
+                onClick={() => setViewMode('kanban')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  viewMode === 'kanban'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Kanban className="w-3.5 h-3.5" />
+                칸반
+              </button>
             </div>
 
-            {viewMode === 'table' && tasks.length > 0 && (
+            {viewMode !== 'calendar' && tasks.length > 0 && (
               <button
                 onClick={handleExportCsv}
                 className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-2"
@@ -398,8 +411,26 @@ export function TaskBoardPage() {
           </div>
         </div>
 
+        {/* Kanban view */}
+        {viewMode === 'kanban' && (
+          isLoading ? (
+            <div className="grid grid-cols-3 gap-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="h-64 rounded-xl bg-muted/30 animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <TaskKanban
+              tasks={sortedTasks}
+              onTaskClick={setSelectedTask}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+            />
+          )
+        )}
+
         {/* Table / Calendar view */}
-        {viewMode === 'calendar' ? (
+        {viewMode !== 'kanban' && (viewMode === 'calendar' ? (
           <div className="bg-card border border-border rounded-xl p-6">
             {isLoading ? (
               <div className="grid grid-cols-7 gap-0">
@@ -543,7 +574,7 @@ export function TaskBoardPage() {
               </table>
             </div>
           </div>
-        )}
+        ))}
       </main>
 
       <TaskModal

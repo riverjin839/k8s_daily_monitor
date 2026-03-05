@@ -15,6 +15,12 @@ class TaskBase(BaseModel):
     completed_at: Optional[datetime] = None
     priority: str = Field(default="medium", pattern="^(high|medium|low)$")
     remarks: Optional[str] = None
+    # 칸반 보드 필드
+    kanban_status: str = Field(default="todo", pattern="^(backlog|todo|in_progress|review_test|done)$")
+    module: Optional[str] = Field(None, pattern="^(k8s|keycloak|nexus|cilium|argocd|jenkins|backend|frontend|monitoring|infra)$")
+    type_label: Optional[str] = Field(None, pattern="^(feature|bug|chore|docs|security)$")
+    effort_hours: Optional[int] = Field(None, ge=1, le=999)
+    done_condition: Optional[str] = None
 
 
 class TaskCreate(TaskBase):
@@ -32,6 +38,16 @@ class TaskUpdate(BaseModel):
     completed_at: Optional[datetime] = None
     priority: Optional[str] = Field(None, pattern="^(high|medium|low)$")
     remarks: Optional[str] = None
+    kanban_status: Optional[str] = Field(None, pattern="^(backlog|todo|in_progress|review_test|done)$")
+    module: Optional[str] = Field(None, pattern="^(k8s|keycloak|nexus|cilium|argocd|jenkins|backend|frontend|monitoring|infra)$")
+    type_label: Optional[str] = Field(None, pattern="^(feature|bug|chore|docs|security)$")
+    effort_hours: Optional[int] = Field(None, ge=1, le=999)
+    done_condition: Optional[str] = None
+
+
+class TaskStatusPatch(BaseModel):
+    """칸반 컬럼 이동 전용 스키마 (PATCH /tasks/{id}/status)"""
+    kanban_status: str = Field(..., pattern="^(backlog|todo|in_progress|review_test|done)$")
 
 
 class TaskResponse(TaskBase):
@@ -41,6 +57,12 @@ class TaskResponse(TaskBase):
 
     class Config:
         from_attributes = True
+
+
+class TaskStatusResponse(BaseModel):
+    """칸반 상태 변경 응답 — WIP 초과 경고 포함"""
+    data: TaskResponse
+    wip_warning: bool = False
 
 
 class TaskListResponse(BaseModel):

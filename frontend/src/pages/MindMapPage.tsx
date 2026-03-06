@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  Map, Plus, Trash2, X, Check, Edit2, ChevronRight, ZoomIn, ZoomOut,
+  Map as MapIcon, Plus, Trash2, X, Check, Edit2, ChevronRight, ZoomIn, ZoomOut,
   Maximize2, GitBranch,
 } from 'lucide-react';
 import {
@@ -23,8 +23,8 @@ const NODE_COLORS = [
 
 // ── Radial auto-layout ───────────────────────────────────────────────────────
 function buildNodeTree(nodes: MindMapNode[]) {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const children = new Map<string | null, MindMapNode[]>();
+  const byId = new globalThis.Map(nodes.map((n): [string, MindMapNode] => [n.id, n]));
+  const children = new globalThis.Map<string | null, MindMapNode[]>();
   for (const n of nodes) {
     const pid = n.parentId ?? null;
     if (!children.has(pid)) children.set(pid, []);
@@ -33,17 +33,19 @@ function buildNodeTree(nodes: MindMapNode[]) {
   return { byId, children };
 }
 
-function radialLayout(nodes: MindMapNode[], cx = 600, cy = 400): Map<string, { x: number; y: number }> {
-  const positions = new Map<string, { x: number; y: number }>();
+type PosMap = globalThis.Map<string, { x: number; y: number }>;
+
+function radialLayout(nodes: MindMapNode[], cx = 600, cy = 400): PosMap {
+  const positions: PosMap = new globalThis.Map<string, { x: number; y: number }>();
   const { children } = buildNodeTree(nodes);
   const roots = children.get(null) ?? [];
 
   function placeChildren(parentId: string | null, parentX: number, parentY: number, startAngle: number, endAngle: number, depth: number) {
-    const kids = (children.get(parentId) ?? []).sort((a, b) => a.sortOrder - b.sortOrder);
+    const kids = (children.get(parentId) ?? []).sort((a: MindMapNode, b: MindMapNode) => a.sortOrder - b.sortOrder);
     if (kids.length === 0) return;
     const angleStep = (endAngle - startAngle) / kids.length;
     const radius = 120 + depth * 80;
-    kids.forEach((kid, i) => {
+    kids.forEach((kid: MindMapNode, i: number) => {
       const angle = startAngle + angleStep * i + angleStep / 2;
       const x = parentX + radius * Math.cos(angle);
       const y = parentY + radius * Math.sin(angle);
@@ -56,7 +58,7 @@ function radialLayout(nodes: MindMapNode[], cx = 600, cy = 400): Map<string, { x
     positions.set(roots[0].id, { x: cx, y: cy });
     placeChildren(roots[0].id, cx, cy, 0, 2 * Math.PI, 1);
   } else {
-    roots.forEach((root, i) => {
+    roots.forEach((root: MindMapNode, i: number) => {
       const angle = (2 * Math.PI * i) / roots.length;
       const rx = cx + 200 * Math.cos(angle);
       const ry = cy + 200 * Math.sin(angle);
@@ -167,7 +169,7 @@ function MindMapCanvas({ mindmap, onNodeSelect, selectedNodeId, onAddChild, onEd
   const panStart = useRef({ x: 0, y: 0 });
   const panOrigin = useRef({ x: 0, y: 0 });
   const [dragNodeId, setDragNodeId] = useState<string | null>(null);
-  const [nodePositions, setNodePositions] = useState<Map<string, { x: number; y: number }>>(new Map());
+  const [nodePositions, setNodePositions] = useState<PosMap>(new globalThis.Map<string, { x: number; y: number }>());
   const bulkUpdate = useBulkUpdatePositions(mindmap.id);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -178,7 +180,9 @@ function MindMapCanvas({ mindmap, onNodeSelect, selectedNodeId, onAddChild, onEd
   useEffect(() => {
     const hasSavedPositions = nodes.some((n) => n.x !== null && n.x !== undefined);
     if (hasSavedPositions) {
-      const map = new Map(nodes.map((n) => [n.id, { x: n.x ?? 0, y: n.y ?? 0 }]));
+      const map = new globalThis.Map<string, { x: number; y: number }>(
+        nodes.map((n): [string, { x: number; y: number }] => [n.id, { x: n.x ?? 0, y: n.y ?? 0 }])
+      );
       setNodePositions(map);
     } else if (nodes.length > 0) {
       setNodePositions(radialLayout(nodes));
@@ -189,7 +193,7 @@ function MindMapCanvas({ mindmap, onNodeSelect, selectedNodeId, onAddChild, onEd
     if (nodes.length === 0) return;
     const newPositions = radialLayout(nodes);
     setNodePositions(newPositions);
-    const updates = Array.from(newPositions.entries()).map(([id, pos]) => ({ id, ...pos }));
+    const updates = Array.from(newPositions.entries()).map(([id, pos]: [string, { x: number; y: number }]) => ({ id, ...pos }));
     bulkUpdate.mutate(updates);
   };
 
@@ -218,7 +222,7 @@ function MindMapCanvas({ mindmap, onNodeSelect, selectedNodeId, onAddChild, onEd
       // save positions debounced
       if (saveTimeout.current) clearTimeout(saveTimeout.current);
       saveTimeout.current = setTimeout(() => {
-        const updates = Array.from(nodePositions.entries()).map(([id, pos]) => ({ id, ...pos }));
+        const updates = Array.from(nodePositions.entries()).map(([id, pos]: [string, { x: number; y: number }]) => ({ id, ...pos }));
         bulkUpdate.mutate(updates);
       }, 800);
     }
@@ -241,7 +245,7 @@ function MindMapCanvas({ mindmap, onNodeSelect, selectedNodeId, onAddChild, onEd
     const rect = svgRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left - pan.x) / zoom;
     const y = (e.clientY - rect.top - pan.y) / zoom;
-    setNodePositions((prev) => new Map(prev).set(dragNodeId, { x, y }));
+    setNodePositions((prev) => new globalThis.Map(prev).set(dragNodeId, { x, y }));
   }, [dragNodeId, pan, zoom]);
 
   const getPos = (nodeId: string) => nodePositions.get(nodeId) ?? { x: 400, y: 300 };
@@ -487,7 +491,7 @@ export function MindMapPage() {
       <aside className="w-60 flex-shrink-0 border-r border-border bg-card flex flex-col">
         <div className="px-4 py-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Map className="w-4 h-4 text-primary" />
+            <MapIcon className="w-4 h-4 text-primary" />
             <span className="text-sm font-semibold">마인드맵</span>
           </div>
           <button
@@ -523,7 +527,7 @@ export function MindMapPage() {
             <p className="text-xs text-muted-foreground text-center py-6">로딩 중...</p>
           ) : maps.length === 0 ? (
             <div className="text-center py-8 px-4">
-              <Map className="w-8 h-8 mx-auto mb-2 text-muted-foreground/30" />
+              <MapIcon className="w-8 h-8 mx-auto mb-2 text-muted-foreground/30" />
               <p className="text-xs text-muted-foreground">마인드맵이 없습니다.</p>
               <button onClick={() => setShowCreateMap(true)} className="mt-2 text-xs text-primary">
                 + 새로 만들기
@@ -600,7 +604,7 @@ export function MindMapPage() {
             currentMap.nodes.length === 0 ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center">
-                  <Map className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+                  <MapIcon className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
                   <p className="text-sm text-muted-foreground mb-2">노드가 없습니다.</p>
                   <button
                     onClick={handleAddRootNode}
@@ -623,7 +627,7 @@ export function MindMapPage() {
           ) : (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center">
-                <Map className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+                <MapIcon className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
                 <p className="text-sm text-muted-foreground">좌측에서 마인드맵을 선택하세요</p>
               </div>
             </div>

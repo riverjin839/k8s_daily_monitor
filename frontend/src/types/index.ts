@@ -378,9 +378,10 @@ export interface WorkflowEdgeCreate {
   targetStepId: string;
 }
 
-// Work Guide Board
+// Work Guide Board (Confluence-style)
 export interface WorkGuide {
   id: string;
+  parentId?: string | null;
   title: string;
   content?: string;
   category?: string;   // 배포 / 트러블슈팅 / 모니터링 / 보안 / 기타
@@ -388,6 +389,7 @@ export interface WorkGuide {
   tags?: string;       // 쉼표 구분
   status: string;      // draft / active / archived
   author?: string;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -400,6 +402,8 @@ export interface WorkGuideCreate {
   tags?: string;
   status?: string;
   author?: string;
+  parentId?: string | null;
+  sortOrder?: number;
 }
 
 export interface WorkGuideUpdate extends Partial<WorkGuideCreate> {}

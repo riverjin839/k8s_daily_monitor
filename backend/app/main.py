@@ -132,6 +132,18 @@ def _run_migrations():
                     ))
 
 
+    # work_guides: 계층 구조 + 정렬 컬럼 추가
+    if "work_guides" in inspector.get_table_names():
+        wg_cols = [col["name"] for col in inspector.get_columns("work_guides")]
+        for col_name, col_type in [
+            ("parent_id", "UUID"),
+            ("sort_order", "INTEGER NOT NULL DEFAULT 0"),
+        ]:
+            if col_name not in wg_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE work_guides ADD COLUMN {col_name} {col_type}"))
+
+
 def _seed_default_metric_cards():
     """Seed default PromQL metric cards if the table is empty."""
     from app.models.metric_card import MetricCard

@@ -12,6 +12,8 @@ class WorkGuideCreate(BaseModel):
     tags: Optional[str] = None
     status: str = 'draft'
     author: Optional[str] = None
+    parent_id: Optional[UUID] = None
+    sort_order: int = 0
 
 
 class WorkGuideUpdate(BaseModel):
@@ -22,10 +24,13 @@ class WorkGuideUpdate(BaseModel):
     tags: Optional[str] = None
     status: Optional[str] = None
     author: Optional[str] = None
+    parent_id: Optional[UUID] = None
+    sort_order: Optional[int] = None
 
 
 class WorkGuideResponse(BaseModel):
     id: UUID
+    parent_id: Optional[UUID] = None
     title: str
     content: Optional[str] = None
     category: Optional[str] = None
@@ -33,6 +38,7 @@ class WorkGuideResponse(BaseModel):
     tags: Optional[str] = None
     status: str
     author: Optional[str] = None
+    sort_order: int = 0
     created_at: datetime
     updated_at: datetime
 

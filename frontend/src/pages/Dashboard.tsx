@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, BookOpen, Plus, Activity, RefreshCw } from 'lucide-react';
+import { Download, BookOpen, Plus, Activity, RefreshCw, CheckCircle, AlertTriangle, XCircle, Server } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils';
 import {
   SummaryStats,
@@ -22,7 +22,116 @@ import { useMetricCards, useMetricResults, useDeleteMetricCard } from '@/hooks/u
 import { useTasks } from '@/hooks/useTasks';
 import { useIssues } from '@/hooks/useIssues';
 import { healthApi } from '@/services/api';
-import { Addon, MetricCard, Playbook } from '@/types';
+import { Addon, Cluster, MetricCard, Playbook } from '@/types';
+
+// ── Cluster Overview Grid (shown when All tab is selected) ─────────────────────
+interface ClusterOverviewGridProps {
+  clusters: Cluster[];
+  addons: Record<string, Addon[]>;
+  onSelectCluster: (id: string) => void;
+}
+
+function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverviewGridProps) {
+  if (clusters.length === 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground text-sm">
+        등록된 클러스터가 없습니다. 클러스터를 추가하세요.
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      {clusters.map((cluster) => {
+        const clusterAddons = addons[cluster.id] ?? [];
+        const healthy  = clusterAddons.filter((a) => a.status === 'healthy').length;
+        const warning  = clusterAddons.filter((a) => a.status === 'warning').length;
+        const critical = clusterAddons.filter((a) => a.status === 'critical').length;
+        const total    = clusterAddons.length;
+
+        const statusColor = {
+          healthy:  { border: 'border-emerald-500/40', bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-400' },
+          warning:  { border: 'border-yellow-500/40',  bg: 'bg-yellow-500/10',  text: 'text-yellow-400',  dot: 'bg-yellow-400'  },
+          critical: { border: 'border-red-500/40',     bg: 'bg-red-500/10',     text: 'text-red-400',     dot: 'bg-red-400'     },
+        }[cluster.status] ?? { border: 'border-border', bg: 'bg-muted/20', text: 'text-muted-foreground', dot: 'bg-slate-400' };
+
+        return (
+          <button
+            key={cluster.id}
+            onClick={() => onSelectCluster(cluster.id)}
+            className={`bg-card border rounded-xl p-5 text-left hover:shadow-md transition-all group ${statusColor.border} hover:border-primary/40`}
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${statusColor.bg}`}>
+                  <Server className={`w-4 h-4 ${statusColor.text}`} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors">
+                    {cluster.name}
+                  </p>
+                  {cluster.region && (
+                    <p className="text-xs text-muted-foreground truncate">{cluster.region}</p>
+                  )}
+                </div>
+              </div>
+              <span className={`flex-shrink-0 w-2.5 h-2.5 rounded-full mt-1 ${statusColor.dot}`} />
+            </div>
+
+            {/* Status label */}
+            <div className={`text-xs font-medium px-2 py-1 rounded-full inline-flex items-center gap-1.5 mb-4 ${statusColor.bg} ${statusColor.text}`}>
+              {cluster.status === 'healthy'  && <CheckCircle className="w-3 h-3" />}
+              {cluster.status === 'warning'  && <AlertTriangle className="w-3 h-3" />}
+              {cluster.status === 'critical' && <XCircle className="w-3 h-3" />}
+              {cluster.status === 'healthy' ? '정상' : cluster.status === 'warning' ? '경고' : '위험'}
+            </div>
+
+            {/* Check counts */}
+            {total > 0 ? (
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">전체 점검</span>
+                  <span className="font-medium">{total}</span>
+                </div>
+                <div className="flex gap-2">
+                  <div className="flex items-center gap-1 text-xs text-emerald-400">
+                    <CheckCircle className="w-3 h-3" />
+                    <span>{healthy}</span>
+                  </div>
+                  {warning > 0 && (
+                    <div className="flex items-center gap-1 text-xs text-yellow-400">
+                      <AlertTriangle className="w-3 h-3" />
+                      <span>{warning}</span>
+                    </div>
+                  )}
+                  {critical > 0 && (
+                    <div className="flex items-center gap-1 text-xs text-red-400">
+                      <XCircle className="w-3 h-3" />
+                      <span>{critical}</span>
+                    </div>
+                  )}
+                </div>
+                {/* Progress bar */}
+                <div className="h-1.5 rounded-full bg-secondary overflow-hidden flex gap-px">
+                  {healthy  > 0 && <div className="bg-emerald-500 rounded-full" style={{ width: `${(healthy / total) * 100}%` }} />}
+                  {warning  > 0 && <div className="bg-yellow-500 rounded-full"  style={{ width: `${(warning / total) * 100}%` }} />}
+                  {critical > 0 && <div className="bg-red-500 rounded-full"     style={{ width: `${(critical / total) * 100}%` }} />}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">점검 항목 없음</p>
+            )}
+
+            {cluster.nodeCount != null && (
+              <p className="text-xs text-muted-foreground mt-3">노드 {cluster.nodeCount}개</p>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export function Dashboard() {
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
@@ -206,23 +315,31 @@ export function Dashboard() {
             />
           </div>
 
-          <AddonGrid
-            addons={currentAddons}
-            isLoading={clustersLoading || addonsLoading}
-            onAddDefaultAddons={clusters.length > 0 && missingAddons.length > 0 ? handleAddDefaultAddons : undefined}
-            onEditAddon={(addon) => {
-              setEditingAddon(addon);
-              setShowAddAddon(true);
-            }}
-            onDeleteAddon={(addon) => {
-              if (confirm(`Delete check "${addon.name}"?`)) {
-                deleteAddon.mutate({ addonId: addon.id, clusterId: addon.clusterId });
-              }
-            }}
-            onRunAddon={(addon) => {
-              addonHealthCheck.mutate({ clusterId: addon.clusterId, addonId: addon.id });
-            }}
-          />
+          {selectedClusterId === null ? (
+            <ClusterOverviewGrid
+              clusters={clusters}
+              addons={addons}
+              onSelectCluster={setSelectedClusterId}
+            />
+          ) : (
+            <AddonGrid
+              addons={currentAddons}
+              isLoading={clustersLoading || addonsLoading}
+              onAddDefaultAddons={clusters.length > 0 && missingAddons.length > 0 ? handleAddDefaultAddons : undefined}
+              onEditAddon={(addon) => {
+                setEditingAddon(addon);
+                setShowAddAddon(true);
+              }}
+              onDeleteAddon={(addon) => {
+                if (confirm(`Delete check "${addon.name}"?`)) {
+                  deleteAddon.mutate({ addonId: addon.id, clusterId: addon.clusterId });
+                }
+              }}
+              onRunAddon={(addon) => {
+                addonHealthCheck.mutate({ clusterId: addon.clusterId, addonId: addon.id });
+              }}
+            />
+          )}
         </section>
 
         {/* Prometheus Insights (PromQL Metric Cards) */}

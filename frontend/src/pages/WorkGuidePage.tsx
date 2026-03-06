@@ -1,45 +1,188 @@
 import { useState, useMemo } from 'react';
 import {
-  BookMarked, Plus, Pencil, Trash2, X, Search, GitFork, Tag,
-  ChevronDown, ChevronUp, AlertCircle, CheckCircle, FileText, Archive,
+  BookMarked, Plus, Pencil, Trash2, X, GitFork,
+  ChevronRight, ChevronDown, FolderOpen, Folder,
+  FileText, CheckCircle, Archive, AlertCircle, Eye,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { workGuidesApi, workflowsApi } from '@/services/api';
 import type { WorkGuide, WorkGuideCreate, WorkGuideUpdate } from '@/types';
 
-// ── 상수 ─────────────────────────────────────────────────────────────────────
+// ── Markdown renderer ─────────────────────────────────────────────────────────
+function renderMarkdown(text: string): string {
+  let html = text
+    // Code blocks (must be first)
+    .replace(
+      /```(\w*)\n?([\s\S]*?)```/g,
+      '<pre class="bg-muted/40 border border-border rounded-lg p-4 overflow-x-auto text-sm my-4 font-mono"><code>$2</code></pre>',
+    )
+    // Headings
+    .replace(/^### (.+)$/gm, '<h3 class="text-base font-semibold mt-5 mb-2">$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2 class="text-lg font-bold mt-6 mb-3 pb-1 border-b border-border">$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1 class="text-2xl font-bold mt-6 mb-4 pb-2 border-b border-border">$1</h1>')
+    // Blockquotes
+    .replace(/^> (.+)$/gm, '<blockquote class="border-l-4 border-primary/40 pl-4 text-muted-foreground italic my-3">$1</blockquote>')
+    // Horizontal rule
+    .replace(/^---$/gm, '<hr class="border-border my-5" />')
+    // Bold + Italic
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // Inline code
+    .replace(
+      /`([^`]+)`/g,
+      '<code class="bg-muted/60 px-1.5 py-0.5 rounded text-sm font-mono text-primary">$1</code>',
+    )
+    // Links
+    .replace(
+      /\[([^\]]+)\]\(([^)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener" class="text-primary underline hover:text-primary/80">$1</a>',
+    )
+    // List items
+    .replace(/^\s*[-*] (.+)$/gm, '<li class="ml-5 list-disc">$1</li>')
+    .replace(/^\s*\d+\. (.+)$/gm, '<li class="ml-5 list-decimal">$1</li>');
+
+  // Wrap consecutive <li> in <ul>
+  html = html.replace(/(<li[^>]*>[\s\S]*?<\/li>\n?)+/g, (m) => `<ul class="my-3 space-y-1">${m}</ul>`);
+
+  // Paragraphs: plain text lines not already wrapped
+  html = html.replace(/^(?!<[a-z/])(.+)$/gm, '<p class="mb-2 leading-relaxed">$1</p>');
+
+  return html;
+}
+
+function MarkdownView({ content }: { content: string }) {
+  if (!content) return <p className="text-muted-foreground italic text-sm">내용이 없습니다.</p>;
+  return (
+    <div
+      className="text-sm text-foreground/90 leading-relaxed space-y-1"
+      dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
+    />
+  );
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
 const CATEGORIES = ['배포', '트러블슈팅', '모니터링', '보안', '기타'];
 
-const PRIORITY_CFG: Record<string, { label: string; dot: string; text: string; bg: string; border: string }> = {
-  high:   { label: '높음', dot: 'bg-red-400',    text: 'text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/30' },
-  medium: { label: '보통', dot: 'bg-blue-400',   text: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/30' },
-  low:    { label: '낮음', dot: 'bg-slate-400',  text: 'text-slate-400',  bg: 'bg-slate-500/10',  border: 'border-slate-500/30' },
+const STATUS_CFG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
+  draft:    { label: '초안', icon: <FileText className="w-3 h-3" />,    cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30' },
+  active:   { label: '활성', icon: <CheckCircle className="w-3 h-3" />, cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' },
+  archived: { label: '보관', icon: <Archive className="w-3 h-3" />,     cls: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/30' },
 };
 
-const STATUS_CFG: Record<string, { label: string; icon: React.ReactNode; bg: string; text: string; border: string }> = {
-  draft:    { label: '초안', icon: <FileText className="w-3 h-3" />,    bg: 'bg-slate-500/10',   text: 'text-slate-400',   border: 'border-slate-500/30' },
-  active:   { label: '활성', icon: <CheckCircle className="w-3 h-3" />, bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/30' },
-  archived: { label: '보관', icon: <Archive className="w-3 h-3" />,     bg: 'bg-zinc-500/10',    text: 'text-zinc-400',    border: 'border-zinc-500/30' },
-};
-
-const CATEGORY_COLORS: Record<string, string> = {
-  '배포':       'bg-violet-500/10 text-violet-400 border-violet-500/30',
-  '트러블슈팅': 'bg-orange-500/10 text-orange-400 border-orange-500/30',
-  '모니터링':   'bg-cyan-500/10   text-cyan-400   border-cyan-500/30',
-  '보안':       'bg-red-500/10    text-red-400    border-red-500/30',
-  '기타':       'bg-slate-500/10  text-slate-400  border-slate-500/30',
+const PRIORITY_DOT: Record<string, { dot: string; cls: string; label: string }> = {
+  high:   { dot: 'bg-red-400',   cls: 'text-red-400',   label: '높음' },
+  medium: { dot: 'bg-blue-400',  cls: 'text-blue-400',  label: '보통' },
+  low:    { dot: 'bg-slate-400', cls: 'text-slate-400', label: '낮음' },
 };
 
 const REF_TYPE = 'work_guide';
 
-// ── 가이드 폼 모달 ────────────────────────────────────────────────────────────
-interface GuideFormModalProps {
-  initial?: WorkGuide | null;
-  onClose: () => void;
-  onSaved: () => void;
+// ── Tree node ─────────────────────────────────────────────────────────────────
+interface TreeNodeProps {
+  guide: WorkGuide;
+  childGuides: WorkGuide[];
+  allGuides: WorkGuide[];
+  depth: number;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
 }
 
-function GuideFormModal({ initial, onClose, onSaved }: GuideFormModalProps) {
+function TreeNode({ guide, childGuides, allGuides, depth, selectedId, onSelect }: TreeNodeProps) {
+  const [expanded, setExpanded] = useState(true);
+  const hasChildren = childGuides.length > 0;
+  const isSelected = selectedId === guide.id;
+  const sc = STATUS_CFG[guide.status] ?? STATUS_CFG.draft;
+
+  return (
+    <div>
+      <div
+        className={`flex items-center gap-1 py-1.5 pr-2 rounded-lg cursor-pointer transition-colors text-sm ${
+          isSelected
+            ? 'bg-primary/10 text-primary'
+            : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+        }`}
+        style={{ paddingLeft: `${8 + depth * 16}px` }}
+        onClick={() => onSelect(guide.id)}
+      >
+        {hasChildren ? (
+          <span
+            className="p-0.5 rounded flex-shrink-0"
+            onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+          >
+            {expanded
+              ? <ChevronDown className="w-3.5 h-3.5" />
+              : <ChevronRight className="w-3.5 h-3.5" />}
+          </span>
+        ) : (
+          <span className="w-5 flex-shrink-0" />
+        )}
+        {hasChildren
+          ? (expanded
+              ? <FolderOpen className="w-3.5 h-3.5 flex-shrink-0 text-primary/60" />
+              : <Folder className="w-3.5 h-3.5 flex-shrink-0 text-primary/60" />)
+          : <FileText className="w-3.5 h-3.5 flex-shrink-0" />}
+        <span className="flex-1 min-w-0 truncate">{guide.title}</span>
+        <span className={`inline-flex items-center text-[10px] px-1 py-0.5 rounded-full border flex-shrink-0 ${sc.cls}`}>
+          {sc.icon}
+        </span>
+      </div>
+
+      {expanded && hasChildren && (
+        <div>
+          {childGuides.map((child) => (
+            <TreeNode
+              key={child.id}
+              guide={child}
+              childGuides={allGuides.filter((g) => g.parentId === child.id)}
+              allGuides={allGuides}
+              depth={depth + 1}
+              selectedId={selectedId}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Breadcrumb ────────────────────────────────────────────────────────────────
+function Breadcrumb({ guide, allGuides, onSelect }: { guide: WorkGuide; allGuides: WorkGuide[]; onSelect: (id: string) => void }) {
+  const ancestors: WorkGuide[] = [];
+  let cur: WorkGuide | undefined = guide;
+  while (cur?.parentId) {
+    const parent = allGuides.find((g) => g.id === cur!.parentId);
+    if (!parent) break;
+    ancestors.unshift(parent);
+    cur = parent;
+  }
+  if (ancestors.length === 0) return null;
+  return (
+    <div className="flex items-center gap-1 text-xs text-muted-foreground mb-4 flex-wrap">
+      {ancestors.map((a) => (
+        <span key={a.id} className="flex items-center gap-1">
+          <button onClick={() => onSelect(a.id)} className="hover:text-primary transition-colors truncate max-w-[140px]">
+            {a.title}
+          </button>
+          <ChevronRight className="w-3 h-3 flex-shrink-0" />
+        </span>
+      ))}
+      <span className="text-foreground font-medium truncate max-w-[200px]">{guide.title}</span>
+    </div>
+  );
+}
+
+// ── Guide form modal ──────────────────────────────────────────────────────────
+interface GuideFormModalProps {
+  initial?: WorkGuide | null;
+  allGuides: WorkGuide[];
+  defaultParentId?: string | null;
+  onClose: () => void;
+  onSaved: (id?: string) => void;
+}
+
+function GuideFormModal({ initial, allGuides, defaultParentId, onClose, onSaved }: GuideFormModalProps) {
   const qc = useQueryClient();
   const isEdit = Boolean(initial);
 
@@ -50,10 +193,19 @@ function GuideFormModal({ initial, onClose, onSaved }: GuideFormModalProps) {
   const [tags, setTags]         = useState(initial?.tags ?? '');
   const [status, setStatus]     = useState(initial?.status ?? 'draft');
   const [author, setAuthor]     = useState(initial?.author ?? '');
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState('');
+  const [parentId, setParentId] = useState<string>(
+    initial?.parentId ?? defaultParentId ?? '',
+  );
+  const [tab, setTab]   = useState<'write' | 'preview'>('write');
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['work-guides'] });
+  const getDescendantIds = (id: string): string[] => {
+    const kids = allGuides.filter((g) => g.parentId === id);
+    return [id, ...kids.flatMap((k) => getDescendantIds(k.id))];
+  };
+  const excludeIds = isEdit && initial ? new Set(getDescendantIds(initial.id)) : new Set<string>();
+  const parentOptions = allGuides.filter((g) => !excludeIds.has(g.id));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,14 +220,18 @@ function GuideFormModal({ initial, onClose, onSaved }: GuideFormModalProps) {
         tags: tags.trim() || undefined,
         status,
         author: author.trim() || undefined,
+        parentId: parentId || null,
       };
       if (isEdit && initial) {
         await workGuidesApi.update(initial.id, payload as WorkGuideUpdate);
+        await qc.invalidateQueries({ queryKey: ['work-guides'] });
+        onSaved(initial.id);
       } else {
-        await workGuidesApi.create(payload);
+        const res = await workGuidesApi.create(payload);
+        await qc.invalidateQueries({ queryKey: ['work-guides'] });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onSaved((res.data as any)?.id ?? (res.data as any)?.data?.id);
       }
-      invalidate();
-      onSaved();
       onClose();
     } catch {
       setError('저장에 실패했습니다.');
@@ -90,10 +246,12 @@ function GuideFormModal({ initial, onClose, onSaved }: GuideFormModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-xl p-6 w-full max-w-2xl shadow-xl max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-card border border-border rounded-xl p-6 w-full max-w-3xl shadow-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold">{isEdit ? '가이드 수정' : '새 작업 가이드'}</h2>
-          <button onClick={onClose} className="p-1 hover:bg-secondary rounded-md"><X className="w-5 h-5" /></button>
+          <h2 className="text-lg font-semibold">{isEdit ? '페이지 수정' : '새 페이지'}</h2>
+          <button onClick={onClose} className="p-1 hover:bg-secondary rounded-md">
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {error && (
@@ -105,8 +263,24 @@ function GuideFormModal({ initial, onClose, onSaved }: GuideFormModalProps) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className={labelCls}>제목 *</label>
-            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
-              placeholder="가이드 제목" className={inputCls} />
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="페이지 제목"
+              className={inputCls}
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className={labelCls}>상위 페이지</label>
+            <select value={parentId} onChange={(e) => setParentId(e.target.value)} className={inputCls}>
+              <option value="">— 최상위 페이지 —</option>
+              {parentOptions.map((g) => (
+                <option key={g.id} value={g.id}>{g.title}</option>
+              ))}
+            </select>
           </div>
 
           <div className="grid grid-cols-3 gap-4">
@@ -149,10 +323,38 @@ function GuideFormModal({ initial, onClose, onSaved }: GuideFormModalProps) {
           </div>
 
           <div>
-            <label className={labelCls}>내용</label>
-            <textarea value={content} onChange={(e) => setContent(e.target.value)}
-              placeholder="가이드 내용, 단계별 절차, 주의사항 등을 입력하세요..."
-              rows={10} className={`${inputCls} resize-y font-mono text-xs leading-relaxed`} />
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium">내용 (Markdown)</label>
+              <div className="flex items-center gap-1 bg-secondary/50 rounded-lg p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setTab('write')}
+                  className={`px-3 py-1 text-xs rounded-md transition-colors ${tab === 'write' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  작성
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTab('preview')}
+                  className={`px-3 py-1 text-xs rounded-md transition-colors flex items-center gap-1 ${tab === 'preview' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  <Eye className="w-3 h-3" />미리보기
+                </button>
+              </div>
+            </div>
+            {tab === 'write' ? (
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder={'# 페이지 제목\n\n내용을 Markdown으로 작성하세요.\n\n## 섹션\n- 항목 1\n- 항목 2\n\n```bash\nkubectl get pods\n```'}
+                rows={14}
+                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-y font-mono leading-relaxed"
+              />
+            ) : (
+              <div className="min-h-[260px] p-4 bg-background border border-border rounded-lg overflow-y-auto">
+                <MarkdownView content={content} />
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-3 pt-1">
@@ -171,7 +373,7 @@ function GuideFormModal({ initial, onClose, onSaved }: GuideFormModalProps) {
   );
 }
 
-// ── 워크플로에 추가 모달 ───────────────────────────────────────────────────────
+// ── Add to workflow modal ─────────────────────────────────────────────────────
 interface AddToWorkflowModalProps {
   guide: WorkGuide;
   onClose: () => void;
@@ -221,14 +423,13 @@ function AddToWorkflowModal({ guide, onClose }: AddToWorkflowModalProps) {
             <GitFork className="w-4 h-4 text-primary" />
             <h2 className="text-sm font-semibold">워크플로에 노드로 추가</h2>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-secondary rounded-md"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="p-1 hover:bg-secondary rounded-md">
+            <X className="w-4 h-4" />
+          </button>
         </div>
-
         <p className="text-xs text-muted-foreground mb-4 bg-secondary/50 rounded-lg p-2.5 border border-border">
-          <span className="font-medium text-foreground">{guide.title}</span>
-          {' '}가이드를 워크플로 노드로 연결합니다.
+          <span className="font-medium text-foreground">{guide.title}</span>{' '}가이드를 워크플로 노드로 연결합니다.
         </p>
-
         {done ? (
           <div className="flex items-center gap-2 text-sm text-emerald-400 py-2">
             <CheckCircle className="w-4 h-4" /> 워크플로에 추가되었습니다!
@@ -239,7 +440,7 @@ function AddToWorkflowModal({ guide, onClose }: AddToWorkflowModalProps) {
             <div className="mb-4">
               <label className="block text-sm font-medium mb-1.5">워크플로 선택</label>
               {workflows.length === 0 ? (
-                <p className="text-xs text-muted-foreground">등록된 워크플로가 없습니다. 워크플로 페이지에서 먼저 생성하세요.</p>
+                <p className="text-xs text-muted-foreground">등록된 워크플로가 없습니다.</p>
               ) : (
                 <select
                   value={selectedWfId}
@@ -271,373 +472,249 @@ function AddToWorkflowModal({ guide, onClose }: AddToWorkflowModalProps) {
   );
 }
 
-// ── 가이드 카드 ───────────────────────────────────────────────────────────────
-interface GuideCardProps {
+// ── Page view (full content area) ─────────────────────────────────────────────
+interface PageViewProps {
   guide: WorkGuide;
-  onEdit: (g: WorkGuide) => void;
-  onDelete: (g: WorkGuide) => void;
-  onAddToWorkflow: (g: WorkGuide) => void;
-  onDetail: (g: WorkGuide) => void;
+  allGuides: WorkGuide[];
+  onSelect: (id: string) => void;
+  onEdit: () => void;
+  onAddChild: () => void;
+  onAddToWorkflow: () => void;
+  onDelete: () => void;
 }
 
-function GuideCard({ guide, onEdit, onDelete, onAddToWorkflow, onDetail }: GuideCardProps) {
-  const pc = PRIORITY_CFG[guide.priority] ?? PRIORITY_CFG.medium;
-  const sc = STATUS_CFG[guide.status]     ?? STATUS_CFG.draft;
-  const cc = guide.category ? (CATEGORY_COLORS[guide.category] ?? CATEGORY_COLORS['기타']) : null;
+function PageView({ guide, allGuides, onSelect, onEdit, onAddChild, onAddToWorkflow, onDelete }: PageViewProps) {
+  const sc = STATUS_CFG[guide.status] ?? STATUS_CFG.draft;
+  const pc = PRIORITY_DOT[guide.priority] ?? PRIORITY_DOT.medium;
   const tagList = guide.tags ? guide.tags.split(',').map((t) => t.trim()).filter(Boolean) : [];
+  const childPages = allGuides.filter((g) => g.parentId === guide.id);
 
   return (
-    <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-3 hover:border-primary/30 transition-colors group">
-      {/* top badges */}
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {guide.category && cc && (
-          <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${cc}`}>
-            {guide.category}
-          </span>
-        )}
-        <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${pc.bg} ${pc.text} ${pc.border}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${pc.dot}`} />
-          {pc.label}
-        </span>
-        <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${sc.bg} ${sc.text} ${sc.border}`}>
-          {sc.icon}{sc.label}
-        </span>
-      </div>
+    <div className="flex-1 overflow-y-auto">
+      <div className="max-w-4xl mx-auto px-10 py-8">
+        <Breadcrumb guide={guide} allGuides={allGuides} onSelect={onSelect} />
 
-      {/* title */}
-      <div
-        className="cursor-pointer group/title"
-        onClick={() => onDetail(guide)}
-      >
-        <h3 className="text-sm font-semibold leading-snug group-hover/title:text-primary transition-colors line-clamp-2">
-          {guide.title}
-        </h3>
-      </div>
-
-      {/* content preview */}
-      {guide.content && (
-        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3 cursor-pointer"
-          onClick={() => onDetail(guide)}>
-          {guide.content}
-        </p>
-      )}
-
-      {/* tags */}
-      {tagList.length > 0 && (
-        <div className="flex items-center gap-1 flex-wrap">
-          {tagList.slice(0, 5).map((t) => (
-            <span key={t} className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
-              <Tag className="w-2.5 h-2.5" />{t}
-            </span>
-          ))}
-          {tagList.length > 5 && (
-            <span className="text-[10px] text-muted-foreground/60">+{tagList.length - 5}</span>
-          )}
-        </div>
-      )}
-
-      {/* footer */}
-      <div className="flex items-center justify-between pt-1 border-t border-border/50 mt-auto">
-        <div className="text-[10px] text-muted-foreground/60">
-          {guide.author && <span className="mr-2">✍ {guide.author}</span>}
-          {guide.createdAt?.slice(0, 10)}
-        </div>
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={() => onAddToWorkflow(guide)}
-            className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
-            title="워크플로에 추가"
-          >
-            <GitFork className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => onEdit(guide)}
-            className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-            title="수정"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => onDelete(guide)}
-            className="p-1.5 rounded-md hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
-            title="삭제"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── 상세 모달 ─────────────────────────────────────────────────────────────────
-function GuideDetailModal({ guide, onClose, onEdit }: { guide: WorkGuide; onClose: () => void; onEdit: () => void }) {
-  const pc = PRIORITY_CFG[guide.priority] ?? PRIORITY_CFG.medium;
-  const sc = STATUS_CFG[guide.status]     ?? STATUS_CFG.draft;
-  const cc = guide.category ? (CATEGORY_COLORS[guide.category] ?? CATEGORY_COLORS['기타']) : null;
-  const tagList = guide.tags ? guide.tags.split(',').map((t) => t.trim()).filter(Boolean) : [];
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-xl p-6 w-full max-w-2xl shadow-xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="flex items-start justify-between gap-4 mb-5">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap mb-2">
-              {guide.category && cc && (
-                <span className={`inline-flex text-[11px] px-2 py-0.5 rounded-full border ${cc}`}>{guide.category}</span>
+            <h1 className="text-2xl font-bold leading-tight mb-3">{guide.title}</h1>
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              {guide.category && (
+                <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                  {guide.category}
+                </span>
               )}
-              <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${pc.bg} ${pc.text} ${pc.border}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${pc.dot}`} />{pc.label}
-              </span>
-              <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${sc.bg} ${sc.text} ${sc.border}`}>
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${sc.cls}`}>
                 {sc.icon}{sc.label}
               </span>
+              <span className={`font-medium ${pc.cls}`}>
+                <span className={`inline-block w-1.5 h-1.5 rounded-full ${pc.dot} mr-1`} />
+                {pc.label}
+              </span>
+              {guide.author && <span className="text-muted-foreground">✍ {guide.author}</span>}
+              <span className="text-muted-foreground">{guide.updatedAt?.slice(0, 10)}</span>
             </div>
-            <h2 className="text-lg font-bold leading-snug">{guide.title}</h2>
-            {(guide.author || guide.createdAt) && (
-              <p className="text-xs text-muted-foreground mt-1">
-                {guide.author && <span className="mr-2">작성자: {guide.author}</span>}
-                등록: {guide.createdAt?.slice(0, 10)}
-              </p>
-            )}
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-secondary rounded-md flex-shrink-0">
-            <X className="w-5 h-5" />
-          </button>
+
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button onClick={onAddToWorkflow}
+              className="p-2 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+              title="워크플로에 추가">
+              <GitFork className="w-4 h-4" />
+            </button>
+            <button onClick={onAddChild}
+              className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+              title="하위 페이지 추가">
+              <Plus className="w-4 h-4" />
+            </button>
+            <button onClick={onEdit}
+              className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+              title="수정">
+              <Pencil className="w-4 h-4" />
+            </button>
+            <button onClick={onDelete}
+              className="p-2 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
+              title="삭제">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {tagList.length > 0 && (
-          <div className="flex items-center gap-1 flex-wrap mb-4">
+          <div className="flex items-center gap-1.5 flex-wrap mb-5">
             {tagList.map((t) => (
-              <span key={t} className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
-                <Tag className="w-2.5 h-2.5" />{t}
-              </span>
+              <span key={t} className="text-xs px-2 py-0.5 rounded bg-secondary text-muted-foreground">#{t}</span>
             ))}
           </div>
         )}
 
-        {guide.content ? (
-          <pre className="text-sm text-foreground/90 whitespace-pre-wrap font-sans leading-relaxed bg-muted/20 rounded-lg p-4 border border-border/50">
-            {guide.content}
-          </pre>
-        ) : (
-          <p className="text-sm text-muted-foreground italic">내용이 없습니다.</p>
-        )}
-
-        <div className="flex justify-end mt-5">
-          <button onClick={onEdit}
-            className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2">
-            <Pencil className="w-4 h-4" /> 수정
-          </button>
+        <div className="min-h-[120px]">
+          <MarkdownView content={guide.content ?? ''} />
         </div>
+
+        {childPages.length > 0 && (
+          <div className="mt-10 pt-6 border-t border-border">
+            <h2 className="text-sm font-semibold text-muted-foreground mb-3">하위 페이지 ({childPages.length})</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {childPages.map((child) => {
+                const csc = STATUS_CFG[child.status] ?? STATUS_CFG.draft;
+                return (
+                  <button key={child.id} onClick={() => onSelect(child.id)}
+                    className="flex items-center gap-2 p-3 bg-secondary/40 hover:bg-secondary rounded-lg text-left transition-colors group">
+                    <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <span className="flex-1 text-sm font-medium group-hover:text-primary transition-colors truncate">
+                      {child.title}
+                    </span>
+                    <span className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border flex-shrink-0 ${csc.cls}`}>
+                      {csc.icon}{csc.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// ── 메인 페이지 ───────────────────────────────────────────────────────────────
+// ── Main page ─────────────────────────────────────────────────────────────────
 export function WorkGuidePage() {
   const qc = useQueryClient();
 
-  const [filterCategory, setFilterCategory] = useState('');
-  const [filterStatus, setFilterStatus]     = useState('');
-  const [filterPriority, setFilterPriority] = useState('');
-  const [search, setSearch]                 = useState('');
-  const [sortDir, setSortDir]               = useState<'desc' | 'asc'>('desc');
-
-  const [showForm, setShowForm]             = useState(false);
-  const [editGuide, setEditGuide]           = useState<WorkGuide | null>(null);
-  const [detailGuide, setDetailGuide]       = useState<WorkGuide | null>(null);
-  const [addToWfGuide, setAddToWfGuide]     = useState<WorkGuide | null>(null);
-  const [deletingId, setDeletingId]         = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showForm, setShowForm]     = useState(false);
+  const [editGuide, setEditGuide]   = useState<WorkGuide | null>(null);
+  const [addChildOf, setAddChildOf] = useState<string | null>(null);
+  const [addToWf, setAddToWf]       = useState<WorkGuide | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['work-guides'],
     queryFn: () => workGuidesApi.getAll().then((r) => r.data),
     staleTime: 1000 * 30,
   });
-  const allGuides = useMemo(() => data?.data ?? [], [data]);
 
-  const guides = useMemo(() => {
-    let list = allGuides;
-    if (filterCategory) list = list.filter((g) => g.category === filterCategory);
-    if (filterStatus)   list = list.filter((g) => g.status === filterStatus);
-    if (filterPriority) list = list.filter((g) => g.priority === filterPriority);
-    if (search.trim())  list = list.filter((g) =>
-      g.title.toLowerCase().includes(search.toLowerCase()) ||
-      g.content?.toLowerCase().includes(search.toLowerCase()) ||
-      g.tags?.toLowerCase().includes(search.toLowerCase()) ||
-      g.author?.toLowerCase().includes(search.toLowerCase())
-    );
-    return [...list].sort((a, b) => {
-      const cmp = a.createdAt.localeCompare(b.createdAt);
-      return sortDir === 'desc' ? -cmp : cmp;
-    });
-  }, [allGuides, filterCategory, filterStatus, filterPriority, search, sortDir]);
+  const allGuides = useMemo(
+    () => (data?.data ?? []).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
+    [data],
+  );
+
+  const selectedGuide = allGuides.find((g) => g.id === selectedId) ?? null;
+  const rootGuides = allGuides.filter((g) => !g.parentId);
 
   const handleDelete = async (guide: WorkGuide) => {
-    if (!confirm(`"${guide.title}" 가이드를 삭제하시겠습니까?`)) return;
-    setDeletingId(guide.id);
+    if (!confirm(`"${guide.title}" 페이지를 삭제하시겠습니까?`)) return;
     try {
       await workGuidesApi.delete(guide.id);
       qc.invalidateQueries({ queryKey: ['work-guides'] });
+      if (selectedId === guide.id) setSelectedId(null);
     } catch {
       alert('삭제에 실패했습니다.');
-    } finally {
-      setDeletingId(null);
     }
   };
 
-  const statsActive   = allGuides.filter((g) => g.status === 'active').length;
-  const statsDraft    = allGuides.filter((g) => g.status === 'draft').length;
-  const statsArchived = allGuides.filter((g) => g.status === 'archived').length;
+  const openNewForm = () => {
+    setEditGuide(null);
+    setAddChildOf(null);
+    setShowForm(true);
+  };
+
+  const openChildForm = (parentId: string) => {
+    setEditGuide(null);
+    setAddChildOf(parentId);
+    setShowForm(true);
+  };
 
   return (
-    <div className="min-h-screen bg-background">
-      <main className="max-w-[1600px] mx-auto px-8 py-8">
-
-        {/* Page Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <BookMarked className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">작업 가이드</h1>
-            {allGuides.length > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
-                전체 {allGuides.length}
-              </span>
-            )}
+    <div className="flex bg-background" style={{ height: '100vh' }}>
+      {/* Sidebar tree */}
+      <aside className="w-64 flex-shrink-0 border-r border-border bg-card flex flex-col overflow-hidden">
+        <div className="px-4 py-4 border-b border-border flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <BookMarked className="w-4 h-4 text-primary" />
+            <span className="text-sm font-semibold">작업 가이드</span>
           </div>
           <button
-            onClick={() => { setEditGuide(null); setShowForm(true); }}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
+            onClick={openNewForm}
+            className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-primary transition-colors"
+            title="새 페이지"
           >
-            <Plus className="w-4 h-4" /> 새 가이드
+            <Plus className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Stats */}
-        {allGuides.length > 0 && (
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            {[
-              { key: '활성', count: statsActive,   ...STATUS_CFG.active   },
-              { key: '초안', count: statsDraft,    ...STATUS_CFG.draft    },
-              { key: '보관', count: statsArchived, ...STATUS_CFG.archived },
-            ].map(({ key, count, bg, text, border, label }) => (
-              <div key={key} className={`rounded-xl border px-4 py-3 flex items-center justify-between ${bg} ${border}`}>
-                <span className={`text-sm font-medium ${text}`}>{label}</span>
-                <span className={`text-2xl font-bold ${text}`}>{count}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Filters */}
-        <div className="flex items-center gap-2 mb-5 flex-wrap">
-          <div className="relative flex-1 min-w-[200px] max-w-[300px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="제목, 내용, 태그 검색..."
-              className="w-full pl-9 pr-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
-          <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
-            className="px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none">
-            <option value="">전체 카테고리</option>
-            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}
-            className="px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none">
-            <option value="">전체 우선순위</option>
-            <option value="high">높음</option>
-            <option value="medium">보통</option>
-            <option value="low">낮음</option>
-          </select>
-          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none">
-            <option value="">전체 상태</option>
-            <option value="active">활성</option>
-            <option value="draft">초안</option>
-            <option value="archived">보관</option>
-          </select>
-          <button
-            onClick={() => setSortDir((d) => d === 'desc' ? 'asc' : 'desc')}
-            className="flex items-center gap-1 px-3 py-2 text-sm bg-background border border-border rounded-lg hover:bg-secondary transition-colors"
-            title="등록일 정렬"
-          >
-            {sortDir === 'desc' ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
-            등록일
-          </button>
-          {(filterCategory || filterStatus || filterPriority || search) && (
-            <button
-              onClick={() => { setFilterCategory(''); setFilterStatus(''); setFilterPriority(''); setSearch(''); }}
-              className="flex items-center gap-1 px-2 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="w-3 h-3" /> 필터 초기화
-            </button>
+        <div className="flex-1 overflow-y-auto py-2 px-2">
+          {isLoading ? (
+            <div className="text-xs text-muted-foreground text-center py-6">불러오는 중...</div>
+          ) : rootGuides.length === 0 ? (
+            <div className="text-xs text-muted-foreground text-center py-6">
+              페이지가 없습니다
+            </div>
+          ) : (
+            rootGuides.map((guide) => (
+              <TreeNode
+                key={guide.id}
+                guide={guide}
+                childGuides={allGuides.filter((g) => g.parentId === guide.id)}
+                allGuides={allGuides}
+                depth={0}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+              />
+            ))
           )}
         </div>
 
-        {/* Content */}
-        {isLoading ? (
-          <div className="text-center py-20 text-muted-foreground text-sm">불러오는 중...</div>
-        ) : guides.length === 0 ? (
-          <div className="text-center py-20">
-            <BookMarked className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-            <p className="text-muted-foreground">
-              {allGuides.length === 0 ? '등록된 작업 가이드가 없습니다.' : '검색 결과가 없습니다.'}
-            </p>
-            {allGuides.length === 0 && (
-              <button onClick={() => setShowForm(true)}
-                className="mt-4 inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors">
-                <Plus className="w-4 h-4" /> 첫 번째 가이드 만들기
-              </button>
-            )}
-          </div>
+        <div className="px-3 py-2 border-t border-border flex-shrink-0">
+          <p className="text-[10px] text-muted-foreground">전체 {allGuides.length}개 페이지</p>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {selectedGuide ? (
+          <PageView
+            guide={selectedGuide}
+            allGuides={allGuides}
+            onSelect={setSelectedId}
+            onEdit={() => { setEditGuide(selectedGuide); setAddChildOf(null); setShowForm(true); }}
+            onAddChild={() => openChildForm(selectedGuide.id)}
+            onAddToWorkflow={() => setAddToWf(selectedGuide)}
+            onDelete={() => handleDelete(selectedGuide)}
+          />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {guides.map((guide) => (
-              <div key={guide.id} className={deletingId === guide.id ? 'opacity-40 pointer-events-none' : ''}>
-                <GuideCard
-                  guide={guide}
-                  onEdit={(g) => { setEditGuide(g); setShowForm(true); }}
-                  onDelete={handleDelete}
-                  onAddToWorkflow={(g) => setAddToWfGuide(g)}
-                  onDetail={(g) => setDetailGuide(g)}
-                />
-              </div>
-            ))}
+          <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
+            <BookMarked className="w-16 h-16 text-muted-foreground/20 mb-4" />
+            <h2 className="text-xl font-semibold mb-2">작업 가이드</h2>
+            <p className="text-muted-foreground mb-6 max-w-md text-sm leading-relaxed">
+              운영 절차, 배포 가이드, 트러블슈팅 등 팀의 지식을 계층적으로 관리하세요.
+              왼쪽 트리에서 페이지를 선택하거나 새 페이지를 만드세요.
+            </p>
+            <button
+              onClick={openNewForm}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors text-sm"
+            >
+              <Plus className="w-4 h-4" /> 첫 번째 페이지 만들기
+            </button>
           </div>
         )}
-
       </main>
 
-      {/* 가이드 폼 모달 */}
+      {/* Modals */}
       {showForm && (
         <GuideFormModal
           initial={editGuide}
-          onClose={() => { setShowForm(false); setEditGuide(null); }}
-          onSaved={() => {}}
+          allGuides={allGuides}
+          defaultParentId={addChildOf}
+          onClose={() => { setShowForm(false); setEditGuide(null); setAddChildOf(null); }}
+          onSaved={(newId) => { if (newId) setSelectedId(newId); }}
         />
       )}
 
-      {/* 상세 모달 */}
-      {detailGuide && !showForm && (
-        <GuideDetailModal
-          guide={detailGuide}
-          onClose={() => setDetailGuide(null)}
-          onEdit={() => { setEditGuide(detailGuide); setDetailGuide(null); setShowForm(true); }}
-        />
-      )}
-
-      {/* 워크플로에 추가 모달 */}
-      {addToWfGuide && (
+      {addToWf && (
         <AddToWorkflowModal
-          guide={addToWfGuide}
-          onClose={() => setAddToWfGuide(null)}
+          guide={addToWf}
+          onClose={() => setAddToWf(null)}
         />
       )}
     </div>

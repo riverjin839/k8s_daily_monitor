@@ -284,6 +284,11 @@ function MindMapCanvas({ mindmap, onNodeSelect, selectedNodeId, onAddChild, onEd
         onMouseUp={handleSvgMouseUp}
         onMouseLeave={handleSvgMouseUp}
         onWheel={handleWheel}
+        onClick={(e) => {
+          // Clear selection only when clicking the SVG background (rect or svg itself)
+          const tag = (e.target as SVGElement).tagName;
+          if (tag === 'svg' || tag === 'rect') onNodeSelect(null);
+        }}
       >
         <rect x="0" y="0" width="100%" height="100%" fill="transparent" />
         <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
@@ -318,6 +323,7 @@ function MindMapCanvas({ mindmap, onNodeSelect, selectedNodeId, onAddChild, onEd
               <g key={node.id}
                 transform={`translate(${pos.x - nodeW / 2},${pos.y - nodeH / 2})`}
                 onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
+                onClick={(e) => e.stopPropagation()}
                 style={{ cursor: 'pointer' }}
               >
                 <rect
@@ -598,7 +604,6 @@ export function MindMapPage() {
         <div
           className="flex-1 bg-background/50 relative overflow-hidden"
           style={{ backgroundImage: 'radial-gradient(circle, rgba(99,102,241,0.06) 1px, transparent 1px)', backgroundSize: '24px 24px' }}
-          onClick={() => setSelectedNodeId(null)}
         >
           {currentMap ? (
             currentMap.nodes.length === 0 ? (

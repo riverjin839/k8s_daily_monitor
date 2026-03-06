@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Text, DateTime
+from sqlalchemy import Column, String, Text, DateTime, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from app.database import Base
 
@@ -9,6 +9,7 @@ class WorkGuide(Base):
     __tablename__ = "work_guides"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    parent_id = Column(UUID(as_uuid=True), nullable=True)  # 상위 페이지 (계층 구조)
     title = Column(String(200), nullable=False)
     content = Column(Text, nullable=True)
     category = Column(String(50), nullable=True)   # 배포, 트러블슈팅, 모니터링, 보안, 기타
@@ -16,6 +17,7 @@ class WorkGuide(Base):
     tags = Column(String(500), nullable=True)        # 쉼표 구분
     status = Column(String(20), default='draft')     # draft / active / archived
     author = Column(String(100), nullable=True)
+    sort_order = Column(Integer, default=0)          # 동일 레벨 내 정렬 순서
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

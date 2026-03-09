@@ -21,7 +21,7 @@ const NODE_COLORS = [
   { label: '핑크', value: '#ec4899' },
 ];
 
-// ── Radial auto-layout ───────────────────────────────────────────────────────
+// ── Tree helpers ──────────────────────────────────────────────────────────────
 function buildNodeTree(nodes: MindMapNode[]) {
   const byId = new globalThis.Map(nodes.map((n): [string, MindMapNode] => [n.id, n]));
   const children = new globalThis.Map<string | null, MindMapNode[]>();
@@ -35,38 +35,96 @@ function buildNodeTree(nodes: MindMapNode[]) {
 
 type PosMap = globalThis.Map<string, { x: number; y: number }>;
 
-function radialLayout(nodes: MindMapNode[], cx = 600, cy = 400): PosMap {
+// ── Standard mind-map layout ─────────────────────────────────────────────────
+const NODE_W_ROOT = 120;
+const NODE_H_ROOT = 40;
+const NODE_W      = 100;
+const NODE_H      = 32;
+const H_GAP       = 150;   // horizontal distance between level centers
+const V_GAP       = 24;    // vertical gap between sibling subtrees
+
+/** Total vertical space occupied by a subtree (including gaps). */
+function subtreeHeight(
+  nodeId: string,
+  childMap: globalThis.Map<string | null, MindMapNode[]>,
+): number {
+  const kids = childMap.get(nodeId) ?? [];
+  if (kids.length === 0) return NODE_H + V_GAP;
+  return kids.reduce((sum, k) => sum + subtreeHeight(k.id, childMap), 0);
+}
+
+/** Recursively place a branch in one direction (dir: 1=right, -1=left). */
+function placeBranch(
+  nodeId: string,
+  parentX: number,
+  centerY: number,
+  dir: 1 | -1,
+  childMap: globalThis.Map<string | null, MindMapNode[]>,
+  positions: PosMap,
+) {
+  const kids = (childMap.get(nodeId) ?? []).sort(
+    (a: MindMapNode, b: MindMapNode) => a.sortOrder - b.sortOrder,
+  );
+  if (kids.length === 0) return;
+
+  const totalH = kids.reduce((s, k) => s + subtreeHeight(k.id, childMap), 0) - V_GAP;
+  let y = centerY - totalH / 2;
+  const childX = parentX + dir * H_GAP;
+
+  for (const kid of kids) {
+    const kh = subtreeHeight(kid.id, childMap);
+    const ky = y + (kh - V_GAP) / 2;
+    positions.set(kid.id, { x: childX, y: ky });
+    placeBranch(kid.id, childX, ky, dir, childMap, positions);
+    y += kh;
+  }
+}
+
+function mindmapLayout(nodes: MindMapNode[], cx = 600, cy = 400): PosMap {
   const positions: PosMap = new globalThis.Map<string, { x: number; y: number }>();
   const { children } = buildNodeTree(nodes);
-  const roots = children.get(null) ?? [];
+  const roots = (children.get(null) ?? []).sort(
+    (a: MindMapNode, b: MindMapNode) => a.sortOrder - b.sortOrder,
+  );
+  if (roots.length === 0) return positions;
 
-  function placeChildren(parentId: string | null, parentX: number, parentY: number, startAngle: number, endAngle: number, depth: number) {
-    const kids = (children.get(parentId) ?? []).sort((a: MindMapNode, b: MindMapNode) => a.sortOrder - b.sortOrder);
-    if (kids.length === 0) return;
-    const angleStep = (endAngle - startAngle) / kids.length;
-    const radius = 120 + depth * 80;
-    kids.forEach((kid: MindMapNode, i: number) => {
-      const angle = startAngle + angleStep * i + angleStep / 2;
-      const x = parentX + radius * Math.cos(angle);
-      const y = parentY + radius * Math.sin(angle);
-      positions.set(kid.id, { x, y });
-      placeChildren(kid.id, x, y, angle - angleStep / 2, angle + angleStep / 2, depth + 1);
-    });
-  }
+  const placeRoot = (root: MindMapNode, rootCx: number, rootCy: number) => {
+    positions.set(root.id, { x: rootCx, y: rootCy });
+    const kids = (children.get(root.id) ?? []).sort(
+      (a: MindMapNode, b: MindMapNode) => a.sortOrder - b.sortOrder,
+    );
+    const half      = Math.ceil(kids.length / 2);
+    const rightKids = kids.slice(0, half);
+    const leftKids  = kids.slice(half);
+
+    const placeSide = (sideKids: MindMapNode[], dir: 1 | -1) => {
+      if (sideKids.length === 0) return;
+      const totalH =
+        sideKids.reduce((s, k) => s + subtreeHeight(k.id, children), 0) - V_GAP;
+      let y = rootCy - totalH / 2;
+      for (const kid of sideKids) {
+        const kh = subtreeHeight(kid.id, children);
+        const ky = y + (kh - V_GAP) / 2;
+        positions.set(kid.id, { x: rootCx + dir * H_GAP, y: ky });
+        placeBranch(kid.id, rootCx + dir * H_GAP, ky, dir, children, positions);
+        y += kh;
+      }
+    };
+    placeSide(rightKids, 1);
+    placeSide(leftKids, -1);
+  };
 
   if (roots.length === 1) {
-    positions.set(roots[0].id, { x: cx, y: cy });
-    placeChildren(roots[0].id, cx, cy, 0, 2 * Math.PI, 1);
+    placeRoot(roots[0], cx, cy);
   } else {
-    roots.forEach((root: MindMapNode, i: number) => {
-      const angle = (2 * Math.PI * i) / roots.length;
-      const rx = cx + 200 * Math.cos(angle);
-      const ry = cy + 200 * Math.sin(angle);
-      positions.set(root.id, { x: rx, y: ry });
-      placeChildren(root.id, rx, ry, angle - Math.PI / roots.length, angle + Math.PI / roots.length, 1);
-    });
+    const rowH    = (NODE_H_ROOT + V_GAP);
+    const totalH  = roots.length * rowH - V_GAP;
+    let ry = cy - totalH / 2;
+    for (const root of roots) {
+      placeRoot(root, cx, ry + NODE_H_ROOT / 2);
+      ry += rowH;
+    }
   }
-
   return positions;
 }
 
@@ -176,22 +234,26 @@ function MindMapCanvas({ mindmap, onNodeSelect, selectedNodeId, onAddChild, onEd
   const nodes = mindmap.nodes;
   const { children: childMap } = buildNodeTree(nodes);
 
-  // Initialize positions from DB or compute radial layout
+  // Initialize / update positions using standard mind-map layout.
+  // Nodes that already have DB-saved x/y keep those positions;
+  // newly added nodes (no x/y yet) get a computed position.
   useEffect(() => {
-    const hasSavedPositions = nodes.some((n) => n.x !== null && n.x !== undefined);
-    if (hasSavedPositions) {
-      const map = new globalThis.Map<string, { x: number; y: number }>(
-        nodes.map((n): [string, { x: number; y: number }] => [n.id, { x: n.x ?? 0, y: n.y ?? 0 }])
-      );
-      setNodePositions(map);
-    } else if (nodes.length > 0) {
-      setNodePositions(radialLayout(nodes));
+    if (nodes.length === 0) { setNodePositions(new globalThis.Map()); return; }
+    const layout = mindmapLayout(nodes);
+    const map = new globalThis.Map<string, { x: number; y: number }>();
+    for (const n of nodes) {
+      if (n.x != null && n.y != null) {
+        map.set(n.id, { x: n.x, y: n.y });
+      } else {
+        map.set(n.id, layout.get(n.id) ?? { x: 600, y: 400 });
+      }
     }
+    setNodePositions(map);
   }, [nodes]);
 
   const handleAutoLayout = () => {
     if (nodes.length === 0) return;
-    const newPositions = radialLayout(nodes);
+    const newPositions = mindmapLayout(nodes);
     setNodePositions(newPositions);
     const updates = Array.from(newPositions.entries()).map(([id, pos]: [string, { x: number; y: number }]) => ({ id, ...pos }));
     bulkUpdate.mutate(updates);
@@ -292,19 +354,28 @@ function MindMapCanvas({ mindmap, onNodeSelect, selectedNodeId, onAddChild, onEd
       >
         <rect x="0" y="0" width="100%" height="100%" fill="transparent" />
         <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
-          {/* Edges */}
+          {/* Edges — curved bezier from parent's side to child's side */}
           {nodes.map((node) => {
             if (!node.parentId) return null;
-            const from = getPos(node.parentId);
-            const to = getPos(node.id);
+            const from  = getPos(node.parentId);
+            const to    = getPos(node.id);
+            const isPRt = rootIds.has(node.parentId);
+            const pw    = isPRt ? NODE_W_ROOT : NODE_W;
+            const cw    = NODE_W;
+            // child is right of parent → exit parent's right, enter child's left
+            const goRight = to.x >= from.x;
+            const x1  = goRight ? from.x + pw / 2 : from.x - pw / 2;
+            const x2  = goRight ? to.x   - cw / 2 : to.x   + cw / 2;
+            const mid = (x1 + x2) / 2;
+            const d   = `M ${x1} ${from.y} C ${mid} ${from.y} ${mid} ${to.y} ${x2} ${to.y}`;
             return (
-              <line
+              <path
                 key={`edge-${node.id}`}
-                x1={from.x} y1={from.y}
-                x2={to.x} y2={to.y}
-                stroke="rgba(99,102,241,0.35)"
+                d={d}
+                fill="none"
+                stroke="rgba(99,102,241,0.40)"
                 strokeWidth={1.5}
-                strokeDasharray={rootIds.has(node.parentId) ? '' : ''}
+                strokeLinecap="round"
               />
             );
           })}
@@ -316,8 +387,8 @@ function MindMapCanvas({ mindmap, onNodeSelect, selectedNodeId, onAddChild, onEd
             const isSelected = selectedNodeId === node.id;
             const color = nodeColor(node, isRoot);
             const kids = childMap.get(node.id) ?? [];
-            const nodeW = isRoot ? 120 : 100;
-            const nodeH = isRoot ? 40 : 32;
+            const nodeW = isRoot ? NODE_W_ROOT : NODE_W;
+            const nodeH = isRoot ? NODE_H_ROOT : NODE_H;
 
             return (
               <g key={node.id}

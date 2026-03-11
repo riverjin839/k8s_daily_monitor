@@ -11,6 +11,7 @@ class StatusEnum(str, enum.Enum):
     healthy = "healthy"
     warning = "warning"
     critical = "critical"
+    pending = "pending"
 
 
 class Cluster(Base):

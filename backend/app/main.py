@@ -132,6 +132,13 @@ def _run_migrations():
                     ))
 
 
+    # clusters: statusenum 에 'pending' 값 추가 (PostgreSQL enum 확장)
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TYPE statusenum ADD VALUE IF NOT EXISTS 'pending'"))
+    except Exception:
+        pass  # 이미 존재하거나 enum 이름이 다를 경우 무시
+
     # work_guides: 계층 구조 + 정렬 컬럼 추가
     if "work_guides" in inspector.get_table_names():
         wg_cols = [col["name"] for col in inspector.get_columns("work_guides")]

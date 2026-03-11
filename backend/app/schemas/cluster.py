@@ -9,6 +9,7 @@ class StatusEnum(str, Enum):
     healthy = "healthy"
     warning = "warning"
     critical = "critical"
+    pending = "pending"
 
 
 class ClusterBase(BaseModel):
@@ -45,6 +46,8 @@ class ClusterBase(BaseModel):
 class ClusterCreate(ClusterBase):
     # kubeconfig YAML 원문 (직접 입력 / 파일 업로드 시 사용, DB에 저장하지 않음)
     kubeconfig_content: Optional[str] = None
+    # 연결 검증 생략 여부 (네트워크 미연결 환경에서 임시 등록 시 사용)
+    skip_connectivity_check: bool = False
 
 
 class ClusterUpdate(BaseModel):

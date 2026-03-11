@@ -11,6 +11,7 @@ const statusLabels: Record<Status, string> = {
   healthy: 'Healthy',
   warning: 'Warning',
   critical: 'Critical',
+  pending: '임시등록',
 };
 
 export function StatusBadge({ status, size = 'md', showLabel = true }: StatusBadgeProps) {
@@ -51,6 +52,7 @@ export function StatusDot({ status, size = 'md', pulse = false }: StatusDotProps
     healthy: 'bg-status-healthy',
     warning: 'bg-status-warning',
     critical: 'bg-status-critical',
+    pending: 'bg-slate-400',
   };
 
   return (

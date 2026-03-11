@@ -76,7 +76,7 @@ api.interceptors.response.use(
 export const clustersApi = {
   getAll: () => api.get<ApiResponse<Cluster[]>>('/clusters'),
   getById: (id: string) => api.get<ApiResponse<Cluster>>(`/clusters/${id}`),
-  create: (data: Partial<Cluster> & { kubeconfigContent?: string }) =>
+  create: (data: Partial<Cluster> & { kubeconfigContent?: string; skipConnectivityCheck?: boolean }) =>
     api.post<ApiResponse<Cluster>>('/clusters', data),
   update: (id: string, data: Partial<Cluster>) => api.put<ApiResponse<Cluster>>(`/clusters/${id}`, data),
   delete: (id: string) => api.delete(`/clusters/${id}`),
@@ -204,6 +204,24 @@ export const issuesApi = {
         : undefined,
       responseType: 'blob',
     }),
+};
+
+// Today Tasks Summary (ToDoToday Board)
+export interface TodayTaskGroup {
+  assignee: string;
+  todayTasks: Task[];
+  inProgressTasks: Task[];
+}
+
+export interface TodayTasksSummary {
+  date: string;
+  totalToday: number;
+  totalInProgress: number;
+  groups: TodayTaskGroup[];
+}
+
+export const todayTasksApi = {
+  getSummary: () => api.get<TodayTasksSummary>('/tasks/today/summary'),
 };
 
 // Tasks API

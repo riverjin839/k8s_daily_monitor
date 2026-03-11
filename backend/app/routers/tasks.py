@@ -146,6 +146,97 @@ def export_csv(
     )
 
 
+@router.get("/today/summary")
+def get_today_tasks(db: Session = Depends(get_db)):
+    """
+    오늘 할일 게시판 데이터:
+    - 오늘 예정된 작업 (scheduled_at = 오늘)
+    - 진행 중인 작업 (kanban_status = in_progress)
+    담당자별로 그룹화해서 반환.
+    """
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start.replace(hour=23, minute=59, second=59)
+
+    # 오늘 예정 작업 (완료 안 된 것)
+    today_tasks = (
+        db.query(Task)
+        .filter(
+            Task.scheduled_at >= today_start,
+            Task.scheduled_at <= today_end,
+            Task.kanban_status != "done",
+        )
+        .order_by(Task.assignee, Task.priority)
+        .all()
+    )
+
+    # 진행 중 작업 (오늘 예정이 아닌 것 중 in_progress)
+    in_progress_tasks = (
+        db.query(Task)
+        .filter(
+            Task.kanban_status == "in_progress",
+            ~(
+                (Task.scheduled_at >= today_start) &
+                (Task.scheduled_at <= today_end)
+            ),
+        )
+        .order_by(Task.assignee, Task.priority)
+        .all()
+    )
+
+    # 담당자별 그룹화
+    assignee_map: dict[str, dict] = {}
+    for task in today_tasks:
+        key = task.assignee or "미지정"
+        if key not in assignee_map:
+            assignee_map[key] = {"assignee": key, "today_tasks": [], "in_progress_tasks": []}
+        assignee_map[key]["today_tasks"].append(task)
+
+    for task in in_progress_tasks:
+        key = task.assignee or "미지정"
+        if key not in assignee_map:
+            assignee_map[key] = {"assignee": key, "today_tasks": [], "in_progress_tasks": []}
+        assignee_map[key]["in_progress_tasks"].append(task)
+
+    # 직렬화
+    def serialize_task(t: Task) -> dict:
+        return {
+            "id": str(t.id),
+            "assignee": t.assignee,
+            "cluster_id": str(t.cluster_id) if t.cluster_id else None,
+            "cluster_name": t.cluster_name,
+            "task_category": t.task_category,
+            "task_content": t.task_content,
+            "result_content": t.result_content,
+            "scheduled_at": t.scheduled_at.isoformat() if t.scheduled_at else None,
+            "completed_at": t.completed_at.isoformat() if t.completed_at else None,
+            "priority": t.priority,
+            "remarks": t.remarks,
+            "kanban_status": t.kanban_status,
+            "module": t.module,
+            "type_label": t.type_label,
+            "effort_hours": t.effort_hours,
+            "done_condition": t.done_condition,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+            "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+        }
+
+    result = []
+    for key in sorted(assignee_map.keys()):
+        group = assignee_map[key]
+        result.append({
+            "assignee": group["assignee"],
+            "today_tasks": [serialize_task(t) for t in group["today_tasks"]],
+            "in_progress_tasks": [serialize_task(t) for t in group["in_progress_tasks"]],
+        })
+
+    return {
+        "date": today_start.date().isoformat(),
+        "total_today": len(today_tasks),
+        "total_in_progress": len(in_progress_tasks),
+        "groups": result,
+    }
+
+
 @router.get("/{task_id}", response_model=TaskResponse)
 def get_task(task_id: UUID, db: Session = Depends(get_db)):
     """작업 상세 조회"""

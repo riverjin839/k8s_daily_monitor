@@ -1,5 +1,5 @@
 // Status types
-export type Status = 'healthy' | 'warning' | 'critical';
+export type Status = 'healthy' | 'warning' | 'critical' | 'pending';
 
 // Cluster
 export interface Cluster {

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { X, AlertTriangle, Loader2, FolderOpen, FileText, Upload } from 'lucide-react';
+import { X, AlertTriangle, Loader2, FolderOpen, FileText, Upload, WifiOff } from 'lucide-react';
 import { useCreateCluster } from '@/hooks/useCluster';
 
 interface AddClusterModalProps {
@@ -23,6 +23,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
   const [kubeconfigMode, setKubeconfigMode] = useState<KubeconfigMode>('path');
   const [kubeconfigPath, setKubeconfigPath] = useState('');
   const [kubeconfigContent, setKubeconfigContent] = useState('');
+  const [skipConnectivity, setSkipConnectivity] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -49,6 +50,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
     setKubeconfigMode('path');
     setKubeconfigPath('');
     setKubeconfigContent('');
+    setSkipConnectivity(false);
     setError('');
     onClose();
   };
@@ -72,6 +74,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
         ...(kubeconfigMode === 'content' && kubeconfigContent.trim()
           ? { kubeconfigContent: kubeconfigContent.trim() }
           : {}),
+        skipConnectivityCheck: skipConnectivity,
       });
       handleClose();
     } catch (err: unknown) {
@@ -210,6 +213,33 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                 />
               </div>
             )}
+          </div>
+
+          {/* 임시 등록 옵션 */}
+          <div
+            onClick={() => !isVerifying && setSkipConnectivity(!skipConnectivity)}
+            className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
+              skipConnectivity
+                ? 'bg-amber-500/10 border-amber-500/30'
+                : 'bg-secondary border-border hover:border-border/80'
+            }`}
+          >
+            <div className={`mt-0.5 w-4 h-4 flex-shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
+              skipConnectivity ? 'bg-amber-500 border-amber-500' : 'border-muted-foreground/40'
+            }`}>
+              {skipConnectivity && <span className="text-white text-xs font-bold leading-none">✓</span>}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <WifiOff className={`w-3.5 h-3.5 flex-shrink-0 ${skipConnectivity ? 'text-amber-400' : 'text-muted-foreground'}`} />
+                <span className={`text-sm font-medium ${skipConnectivity ? 'text-amber-300' : 'text-muted-foreground'}`}>
+                  연결 불가 시 임시 등록 (Pending)
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground/70 mt-0.5">
+                네트워크가 연결되지 않은 클러스터를 임시 상태로 등록합니다. 나중에 연결 후 상태를 업데이트할 수 있습니다.
+              </p>
+            </div>
           </div>
 
           {/* 연결 검증 중 안내 */}

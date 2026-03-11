@@ -4,6 +4,7 @@ import { Dashboard } from '@/pages/Dashboard';
 import { PlaybooksPage } from '@/pages/PlaybooksPage';
 import { IssueBoardPage } from '@/pages/IssueBoardPage';
 import { TaskBoardPage } from '@/pages/TaskBoardPage';
+import { TodoTodayPage } from '@/pages/TodoTodayPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { ClusterLinksPage } from '@/pages/ClusterLinksPage';
 import { NodeLabelsPage } from '@/pages/NodeLabelsPage';
@@ -37,6 +38,7 @@ function App() {
               <Route path="/playbooks" element={<PlaybooksPage />} />
               <Route path="/issues" element={<IssueBoardPage />} />
               <Route path="/tasks" element={<TaskBoardPage />} />
+              <Route path="/todo-today" element={<TodoTodayPage />} />
               <Route path="/links" element={<ClusterLinksPage />} />
               <Route path="/node-labels" element={<NodeLabelsPage />} />
               <Route path="/cidr" element={<CidrCalculatorPage />} />

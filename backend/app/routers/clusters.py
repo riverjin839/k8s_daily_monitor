@@ -170,7 +170,7 @@ def get_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
 
 @router.post("", response_model=ClusterResponse, status_code=status.HTTP_201_CREATED)
 def create_cluster(cluster_data: ClusterCreate, db: Session = Depends(get_db)):
-    """클러스터 생성 (등록 전 연결 검증 포함)"""
+    """클러스터 생성 (등록 전 연결 검증 포함, skip_connectivity_check=True 시 임시 등록)"""
     # 중복 이름 체크
     existing = db.query(Cluster).filter(Cluster.name == cluster_data.name).first()
     if existing:
@@ -180,9 +180,13 @@ def create_cluster(cluster_data: ClusterCreate, db: Session = Depends(get_db)):
         )
 
     # kubeconfig_content 는 임시 파일에 저장 후 검증에 활용
-    payload = cluster_data.model_dump(exclude={"kubeconfig_content"})
+    payload = cluster_data.model_dump(exclude={"kubeconfig_content", "skip_connectivity_check"})
     content = cluster_data.kubeconfig_content
     effective_path = payload.get("kubeconfig_path")
+    skip_check = cluster_data.skip_connectivity_check
+
+    connectivity_failed = False
+    connectivity_error: str | None = None
 
     temp_kubeconfig_path = None
     if content and content.strip():
@@ -192,10 +196,23 @@ def create_cluster(cluster_data: ClusterCreate, db: Session = Depends(get_db)):
         effective_path = temp_kubeconfig_path
 
     try:
-        _verify_cluster_connectivity(cluster_data.api_endpoint, effective_path)
+        if skip_check:
+            # 연결 검증 생략 — 실패해도 임시(pending) 상태로 등록
+            try:
+                _verify_cluster_connectivity(cluster_data.api_endpoint, effective_path)
+            except HTTPException as exc:
+                connectivity_failed = True
+                connectivity_error = exc.detail
+        else:
+            _verify_cluster_connectivity(cluster_data.api_endpoint, effective_path)
     finally:
         if temp_kubeconfig_path and os.path.exists(temp_kubeconfig_path):
             os.remove(temp_kubeconfig_path)
+
+    # 연결 실패 시 pending 상태로 설정
+    if connectivity_failed:
+        from app.models.cluster import StatusEnum
+        payload["status"] = StatusEnum.pending
 
     cluster = Cluster(**payload)
     db.add(cluster)
@@ -212,8 +229,9 @@ def create_cluster(cluster_data: ClusterCreate, db: Session = Depends(get_db)):
 
     db.commit()
 
-    # 등록 직후 1회 점검을 수행해 초기 상태(healthy 기본값) 오표시를 방지
-    HealthChecker(db).run_check(cluster.id)
+    # pending 상태가 아닌 경우에만 초기 점검 수행
+    if not connectivity_failed:
+        HealthChecker(db).run_check(cluster.id)
 
     db.refresh(cluster)
     return cluster

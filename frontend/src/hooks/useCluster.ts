@@ -48,7 +48,7 @@ export function useCreateCluster() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: Partial<Cluster> & { kubeconfigContent?: string }) =>
+    mutationFn: (data: Partial<Cluster> & { kubeconfigContent?: string; skipConnectivityCheck?: boolean }) =>
       clustersApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.clusters });

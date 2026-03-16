@@ -2,6 +2,7 @@ import { X, ImagePlus } from 'lucide-react';
 import { Task } from '@/types';
 import { loadTaskImages } from '@/lib/taskImages';
 import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from './taskKanbanUtils';
+import { RichContent } from '@/components/editor';
 
 interface TaskDetailModalProps {
   task: Task;
@@ -100,17 +101,17 @@ export function TaskDetailModal({ task, onClose, onEdit }: TaskDetailModalProps)
           {/* Content */}
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-1">작업 내용</p>
-            <p className="text-sm whitespace-pre-wrap break-words bg-secondary/30 rounded-lg px-3 py-2.5">
-              {task.taskContent}
-            </p>
+            <div className="bg-secondary/30 rounded-lg px-3 py-2.5">
+              <RichContent content={task.taskContent} />
+            </div>
           </div>
 
           {task.resultContent && (
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-1">작업 결과</p>
-              <p className="text-sm whitespace-pre-wrap break-words bg-secondary/30 rounded-lg px-3 py-2.5">
-                {task.resultContent}
-              </p>
+              <div className="bg-secondary/30 rounded-lg px-3 py-2.5">
+                <RichContent content={task.resultContent} />
+              </div>
             </div>
           )}
 

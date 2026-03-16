@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import {
   Layers, Plus, Pencil, Trash2, X, Pin, PinOff, Search, RotateCcw,
 } from 'lucide-react';
+import { RichTextEditor, RichContent } from '@/components/editor';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsNotesApi } from '@/services/api';
 import type { OpsNote, OpsNoteCreate, OpsNoteColor, OpsNoteUpdate } from '@/types';
@@ -155,17 +156,23 @@ function NoteFormModal({ initial, defaultService, onClose, onSaved }: NoteFormMo
           {/* 앞면 내용 */}
           <div>
             <label className={labelCls}>앞면 내용</label>
-            <textarea value={content} onChange={(e) => setContent(e.target.value)}
+            <RichTextEditor
+              value={content}
+              onChange={setContent}
               placeholder="포스트잇 앞면에 표시될 내용"
-              rows={4} className={`${inputCls} resize-y`} />
+              minHeight="100px"
+            />
           </div>
 
           {/* 뒷면 내용 */}
           <div>
             <label className={labelCls}>뒷면 내용 <span className="text-muted-foreground font-normal text-xs">(클릭 시 전환)</span></label>
-            <textarea value={backContent} onChange={(e) => setBackContent(e.target.value)}
+            <RichTextEditor
+              value={backContent}
+              onChange={setBackContent}
               placeholder="포스트잇 뒷면 — 상세 내역, 히스토리 등"
-              rows={4} className={`${inputCls} resize-y`} />
+              minHeight="100px"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -261,7 +268,9 @@ function StickyNote({ note, onEdit, onDelete, onTogglePin }: StickyNoteProps) {
           <h3 className="text-sm font-bold leading-snug mb-2 line-clamp-2">{note.title}</h3>
 
           {note.content ? (
-            <p className="text-xs leading-relaxed line-clamp-6 flex-1 opacity-80 whitespace-pre-wrap">{note.content}</p>
+            <div className="text-xs leading-relaxed line-clamp-6 flex-1 opacity-80 overflow-hidden">
+              <RichContent content={note.content} />
+            </div>
           ) : (
             <p className="text-xs opacity-40 flex-1 italic">내용 없음</p>
           )}
@@ -305,9 +314,11 @@ function StickyNote({ note, onEdit, onDelete, onTogglePin }: StickyNoteProps) {
               <RotateCcw className="w-3 h-3" />
             </button>
           </div>
-          <pre className="text-xs leading-relaxed flex-1 whitespace-pre-wrap font-sans overflow-auto opacity-85">
-            {note.backContent || '(내용 없음)'}
-          </pre>
+          <div className="text-xs leading-relaxed flex-1 overflow-auto opacity-85">
+            {note.backContent
+              ? <RichContent content={note.backContent} />
+              : <span className="opacity-40 italic">(내용 없음)</span>}
+          </div>
         </div>
       </div>
 

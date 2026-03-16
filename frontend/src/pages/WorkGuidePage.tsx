@@ -2,64 +2,12 @@ import { useState, useMemo } from 'react';
 import {
   BookMarked, Plus, Pencil, Trash2, X, GitFork,
   ChevronRight, ChevronDown, FolderOpen, Folder,
-  FileText, CheckCircle, Archive, AlertCircle, Eye,
+  FileText, CheckCircle, Archive, AlertCircle,
 } from 'lucide-react';
+import { RichTextEditor, RichContent } from '@/components/editor';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { workGuidesApi, workflowsApi } from '@/services/api';
 import type { WorkGuide, WorkGuideCreate, WorkGuideUpdate } from '@/types';
-
-// ── Markdown renderer ─────────────────────────────────────────────────────────
-function renderMarkdown(text: string): string {
-  let html = text
-    // Code blocks (must be first)
-    .replace(
-      /```(\w*)\n?([\s\S]*?)```/g,
-      '<pre class="bg-muted/40 border border-border rounded-lg p-4 overflow-x-auto text-sm my-4 font-mono"><code>$2</code></pre>',
-    )
-    // Headings
-    .replace(/^### (.+)$/gm, '<h3 class="text-base font-semibold mt-5 mb-2">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 class="text-lg font-bold mt-6 mb-3 pb-1 border-b border-border">$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1 class="text-2xl font-bold mt-6 mb-4 pb-2 border-b border-border">$1</h1>')
-    // Blockquotes
-    .replace(/^> (.+)$/gm, '<blockquote class="border-l-4 border-primary/40 pl-4 text-muted-foreground italic my-3">$1</blockquote>')
-    // Horizontal rule
-    .replace(/^---$/gm, '<hr class="border-border my-5" />')
-    // Bold + Italic
-    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    // Inline code
-    .replace(
-      /`([^`]+)`/g,
-      '<code class="bg-muted/60 px-1.5 py-0.5 rounded text-sm font-mono text-primary">$1</code>',
-    )
-    // Links
-    .replace(
-      /\[([^\]]+)\]\(([^)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener" class="text-primary underline hover:text-primary/80">$1</a>',
-    )
-    // List items
-    .replace(/^\s*[-*] (.+)$/gm, '<li class="ml-5 list-disc">$1</li>')
-    .replace(/^\s*\d+\. (.+)$/gm, '<li class="ml-5 list-decimal">$1</li>');
-
-  // Wrap consecutive <li> in <ul>
-  html = html.replace(/(<li[^>]*>[\s\S]*?<\/li>\n?)+/g, (m) => `<ul class="my-3 space-y-1">${m}</ul>`);
-
-  // Paragraphs: plain text lines not already wrapped
-  html = html.replace(/^(?!<[a-z/])(.+)$/gm, '<p class="mb-2 leading-relaxed">$1</p>');
-
-  return html;
-}
-
-function MarkdownView({ content }: { content: string }) {
-  if (!content) return <p className="text-muted-foreground italic text-sm">내용이 없습니다.</p>;
-  return (
-    <div
-      className="text-sm text-foreground/90 leading-relaxed space-y-1"
-      dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
-    />
-  );
-}
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const CATEGORIES = ['배포', '트러블슈팅', '모니터링', '보안', '기타'];
@@ -196,7 +144,6 @@ function GuideFormModal({ initial, allGuides, defaultParentId, onClose, onSaved 
   const [parentId, setParentId] = useState<string>(
     initial?.parentId ?? defaultParentId ?? '',
   );
-  const [tab, setTab]   = useState<'write' | 'preview'>('write');
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
 
@@ -323,38 +270,13 @@ function GuideFormModal({ initial, allGuides, defaultParentId, onClose, onSaved 
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium">내용 (Markdown)</label>
-              <div className="flex items-center gap-1 bg-secondary/50 rounded-lg p-0.5">
-                <button
-                  type="button"
-                  onClick={() => setTab('write')}
-                  className={`px-3 py-1 text-xs rounded-md transition-colors ${tab === 'write' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  작성
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTab('preview')}
-                  className={`px-3 py-1 text-xs rounded-md transition-colors flex items-center gap-1 ${tab === 'preview' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  <Eye className="w-3 h-3" />미리보기
-                </button>
-              </div>
-            </div>
-            {tab === 'write' ? (
-              <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder={'# 페이지 제목\n\n내용을 Markdown으로 작성하세요.\n\n## 섹션\n- 항목 1\n- 항목 2\n\n```bash\nkubectl get pods\n```'}
-                rows={14}
-                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-y font-mono leading-relaxed"
-              />
-            ) : (
-              <div className="min-h-[260px] p-4 bg-background border border-border rounded-lg overflow-y-auto">
-                <MarkdownView content={content} />
-              </div>
-            )}
+            <label className="text-sm font-medium block mb-2">내용</label>
+            <RichTextEditor
+              value={content}
+              onChange={setContent}
+              placeholder="페이지 내용을 작성하세요. 서식 도구모음을 사용하여 Confluence처럼 편집할 수 있습니다."
+              minHeight="260px"
+            />
           </div>
 
           <div className="flex justify-end gap-3 pt-1">
@@ -548,7 +470,7 @@ function PageView({ guide, allGuides, onSelect, onEdit, onAddChild, onAddToWorkf
         )}
 
         <div className="min-h-[120px]">
-          <MarkdownView content={guide.content ?? ''} />
+          <RichContent content={guide.content ?? ''} />
         </div>
 
         {childPages.length > 0 && (

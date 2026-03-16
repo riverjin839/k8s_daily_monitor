@@ -1,0 +1,369 @@
+import { useEffect, useCallback, useRef } from 'react';
+import { useEditor, EditorContent, Editor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
+import Link from '@tiptap/extension-link';
+import Image from '@tiptap/extension-image';
+import Placeholder from '@tiptap/extension-placeholder';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableHeader } from '@tiptap/extension-table-header';
+import { TableCell } from '@tiptap/extension-table-cell';
+import TextAlign from '@tiptap/extension-text-align';
+import Highlight from '@tiptap/extension-highlight';
+import Color from '@tiptap/extension-color';
+import { TextStyle } from '@tiptap/extension-text-style';
+import {
+  Bold, Italic, Underline as UnderlineIcon, Strikethrough,
+  Heading1, Heading2, Heading3,
+  List, ListOrdered, CheckSquare,
+  Code, FileCode,
+  Quote, Minus, Link as LinkIcon, Image as ImageIcon,
+  Table as TableIcon, AlignLeft, AlignCenter, AlignRight,
+  Highlighter, Undo, Redo, Type,
+} from 'lucide-react';
+
+interface RichTextEditorProps {
+  value: string;
+  onChange: (html: string) => void;
+  placeholder?: string;
+  minHeight?: string;
+  onImagePaste?: (dataUrl: string) => void;
+}
+
+interface ToolbarButtonProps {
+  onClick: () => void;
+  active?: boolean;
+  title: string;
+  children: React.ReactNode;
+  disabled?: boolean;
+}
+
+function ToolbarButton({ onClick, active, title, children, disabled }: ToolbarButtonProps) {
+  return (
+    <button
+      type="button"
+      onMouseDown={(e) => {
+        e.preventDefault();
+        if (!disabled) onClick();
+      }}
+      title={title}
+      disabled={disabled}
+      className={`p-1.5 rounded transition-colors text-xs flex items-center justify-center ${
+        active
+          ? 'bg-primary/20 text-primary'
+          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+      } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Divider() {
+  return <div className="w-px h-5 bg-border mx-0.5 flex-shrink-0" />;
+}
+
+function Toolbar({ editor }: { editor: Editor }) {
+  const setLink = () => {
+    const previousUrl = editor.getAttributes('link').href as string | undefined;
+    const url = window.prompt('URL을 입력하세요:', previousUrl ?? 'https://');
+    if (url === null) return;
+    if (url === '') {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+      return;
+    }
+    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+  };
+
+  const insertTable = () => {
+    editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-border bg-muted/30">
+      {/* Undo / Redo */}
+      <ToolbarButton
+        onClick={() => editor.chain().focus().undo().run()}
+        disabled={!editor.can().undo()}
+        title="실행 취소 (Ctrl+Z)"
+      >
+        <Undo className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().redo().run()}
+        disabled={!editor.can().redo()}
+        title="다시 실행 (Ctrl+Y)"
+      >
+        <Redo className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <Divider />
+
+      {/* Headings */}
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+        active={editor.isActive('heading', { level: 1 })}
+        title="제목 1 (H1)"
+      >
+        <Heading1 className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+        active={editor.isActive('heading', { level: 2 })}
+        title="제목 2 (H2)"
+      >
+        <Heading2 className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+        active={editor.isActive('heading', { level: 3 })}
+        title="제목 3 (H3)"
+      >
+        <Heading3 className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().setParagraph().run()}
+        active={editor.isActive('paragraph')}
+        title="본문"
+      >
+        <Type className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <Divider />
+
+      {/* Text formatting */}
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleBold().run()}
+        active={editor.isActive('bold')}
+        title="굵게 (Ctrl+B)"
+      >
+        <Bold className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleItalic().run()}
+        active={editor.isActive('italic')}
+        title="기울임 (Ctrl+I)"
+      >
+        <Italic className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleUnderline().run()}
+        active={editor.isActive('underline')}
+        title="밑줄 (Ctrl+U)"
+      >
+        <UnderlineIcon className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleStrike().run()}
+        active={editor.isActive('strike')}
+        title="취소선"
+      >
+        <Strikethrough className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleHighlight().run()}
+        active={editor.isActive('highlight')}
+        title="형광펜"
+      >
+        <Highlighter className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <Divider />
+
+      {/* Alignment */}
+      <ToolbarButton
+        onClick={() => editor.chain().focus().setTextAlign('left').run()}
+        active={editor.isActive({ textAlign: 'left' })}
+        title="왼쪽 정렬"
+      >
+        <AlignLeft className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().setTextAlign('center').run()}
+        active={editor.isActive({ textAlign: 'center' })}
+        title="가운데 정렬"
+      >
+        <AlignCenter className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().setTextAlign('right').run()}
+        active={editor.isActive({ textAlign: 'right' })}
+        title="오른쪽 정렬"
+      >
+        <AlignRight className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <Divider />
+
+      {/* Lists */}
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleBulletList().run()}
+        active={editor.isActive('bulletList')}
+        title="글머리 기호 목록"
+      >
+        <List className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        active={editor.isActive('orderedList')}
+        title="번호 매기기 목록"
+      >
+        <ListOrdered className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleTaskList().run()}
+        active={editor.isActive('taskList')}
+        title="체크리스트"
+      >
+        <CheckSquare className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <Divider />
+
+      {/* Code */}
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleCode().run()}
+        active={editor.isActive('code')}
+        title="인라인 코드 (`)"
+      >
+        <Code className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+        active={editor.isActive('codeBlock')}
+        title="코드 블록"
+      >
+        <FileCode className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().toggleBlockquote().run()}
+        active={editor.isActive('blockquote')}
+        title="인용문"
+      >
+        <Quote className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <Divider />
+
+      {/* Extras */}
+      <ToolbarButton onClick={setLink} active={editor.isActive('link')} title="링크 삽입">
+        <LinkIcon className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => {
+          const url = window.prompt('이미지 URL을 입력하세요:');
+          if (url) editor.chain().focus().setImage({ src: url }).run();
+        }}
+        title="이미지 삽입"
+      >
+        <ImageIcon className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <ToolbarButton onClick={insertTable} title="표 삽입">
+        <TableIcon className="w-3.5 h-3.5" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => editor.chain().focus().setHorizontalRule().run()}
+        title="구분선"
+      >
+        <Minus className="w-3.5 h-3.5" />
+      </ToolbarButton>
+    </div>
+  );
+}
+
+export function RichTextEditor({
+  value,
+  onChange,
+  placeholder = '내용을 입력하세요...',
+  minHeight = '120px',
+  onImagePaste,
+}: RichTextEditorProps) {
+  const isUpdatingFromProp = useRef(false);
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+      }),
+      Underline,
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: { class: 'text-primary underline cursor-pointer hover:text-primary/80' },
+      }),
+      Image.configure({
+        HTMLAttributes: { class: 'max-w-full rounded-lg my-2' },
+      }),
+      Placeholder.configure({ placeholder }),
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      Highlight.configure({ multicolor: false }),
+      TextStyle,
+      Color,
+    ],
+    content: value || '',
+    onUpdate: ({ editor: ed }) => {
+      if (!isUpdatingFromProp.current) {
+        const html = ed.getHTML();
+        onChange(html === '<p></p>' ? '' : html);
+      }
+    },
+    editorProps: {
+      attributes: {
+        class: 'focus:outline-none',
+        style: `min-height: ${minHeight}; padding: 12px;`,
+      },
+    },
+  });
+
+  // Sync value from outside (edit mode)
+  useEffect(() => {
+    if (!editor) return;
+    const current = editor.getHTML();
+    const incoming = value || '';
+    if (current !== incoming && incoming !== (current === '<p></p>' ? '' : current)) {
+      isUpdatingFromProp.current = true;
+      editor.commands.setContent(incoming);
+      isUpdatingFromProp.current = false;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  // Image paste handler
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const items = Array.from(e.clipboardData.items);
+      const imageItems = items.filter((item) => item.type.startsWith('image/'));
+      if (imageItems.length === 0) return;
+
+      e.preventDefault();
+      imageItems.forEach((item) => {
+        const file = item.getAsFile();
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const dataUrl = ev.target?.result as string;
+          if (!dataUrl) return;
+          // Insert inline into editor
+          editor?.chain().focus().setImage({ src: dataUrl }).run();
+          // Also notify parent for separate attachment list if needed
+          onImagePaste?.(dataUrl);
+        };
+        reader.readAsDataURL(file);
+      });
+    },
+    [editor, onImagePaste],
+  );
+
+  if (!editor) return null;
+
+  return (
+    <div className="w-full border border-border rounded-lg overflow-hidden bg-background focus-within:ring-1 focus-within:ring-primary">
+      <Toolbar editor={editor} />
+      <div onPaste={handlePaste}>
+        <EditorContent editor={editor} />
+      </div>
+    </div>
+  );
+}

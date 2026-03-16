@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, ImagePlus, Trash2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 import { Issue, IssueCreate } from '@/types';
 import { loadIssueImages } from '@/lib/issueImages';
+import { RichTextEditor } from '@/components/editor';
 
 interface IssueModalProps {
   isOpen: boolean;
@@ -53,8 +54,6 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
   const [remarks, setRemarks] = useState('');
   const [images, setImages] = useState<string[]>([]);
 
-  const issueContentRef = useRef<HTMLTextAreaElement>(null);
-
   // Pre-fill when editing
   useEffect(() => {
     if (editIssue) {
@@ -85,28 +84,8 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
     }
   }, [editIssue, isOpen]);
 
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
-    const items = Array.from(e.clipboardData.items);
-    const imageItems = items.filter((item) => item.type.startsWith('image/'));
-    if (imageItems.length === 0) return;
-
-    e.preventDefault();
-    imageItems.forEach((item) => {
-      const file = item.getAsFile();
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const dataUrl = ev.target?.result as string;
-        if (dataUrl) {
-          setImages((prev) => [...prev, dataUrl]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
-  }, []);
-
-  const removeImage = (index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
+  const handleImagePaste = (dataUrl: string) => {
+    setImages((prev) => [...prev, dataUrl]);
   };
 
   if (!isOpen) return null;
@@ -116,7 +95,8 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!assignee.trim() || !resolvedIssueArea || !issueContent.trim() || !occurredAt) return;
+    const plainIssueContent = issueContent.replace(/<[^>]*>/g, '').trim();
+    if (!assignee.trim() || !resolvedIssueArea || !plainIssueContent || !occurredAt) return;
 
     onSubmit(
       {
@@ -124,9 +104,9 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
         clusterId: clusterId || undefined,
         clusterName: selectedCluster?.name,
         issueArea: resolvedIssueArea,
-        issueContent: issueContent.trim(),
-        actionContent: actionContent.trim() || undefined,
-        detailContent: detailContent.trim() || undefined,
+        issueContent,
+        actionContent: actionContent || undefined,
+        detailContent: detailContent || undefined,
         occurredAt,
         resolvedAt: resolvedAt || null,
         remarks: remarks.trim() || undefined,
@@ -218,87 +198,39 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
 
           {/* 이슈 내용 */}
           <div>
-            <label className={labelClass}>
-              이슈 내용 *
-              <span className="ml-2 text-xs text-muted-foreground font-normal">
-                (Ctrl+V 로 이미지 붙여넣기 가능)
-              </span>
-            </label>
-            <textarea
-              ref={issueContentRef}
+            <label className={labelClass}>이슈 내용 *</label>
+            <RichTextEditor
               value={issueContent}
-              onChange={(e) => setIssueContent(e.target.value)}
-              onPaste={handlePaste}
+              onChange={setIssueContent}
               placeholder="발생한 이슈를 상세히 기술하세요"
-              rows={4}
-              className={`${inputClass} resize-none`}
-              required
+              minHeight="120px"
+              onImagePaste={handleImagePaste}
             />
           </div>
 
           {/* 조치 내용 */}
           <div>
-            <label className={labelClass}>
-              조치 내용
-              <span className="ml-2 text-xs text-muted-foreground font-normal">
-                (Ctrl+V 로 이미지 붙여넣기 가능)
-              </span>
-            </label>
-            <textarea
+            <label className={labelClass}>조치 내용</label>
+            <RichTextEditor
               value={actionContent}
-              onChange={(e) => setActionContent(e.target.value)}
-              onPaste={handlePaste}
+              onChange={setActionContent}
               placeholder="취한 조치를 기술하세요 (선택 사항)"
-              rows={3}
-              className={`${inputClass} resize-none`}
+              minHeight="96px"
+              onImagePaste={handleImagePaste}
             />
           </div>
 
           {/* 상세 내용 */}
           <div>
             <label className={labelClass}>상세 내용</label>
-            <textarea
+            <RichTextEditor
               value={detailContent}
-              onChange={(e) => setDetailContent(e.target.value)}
+              onChange={setDetailContent}
               placeholder="추가적인 상세 내용, 로그, 재현 방법 등을 기술하세요 (선택 사항)"
-              rows={4}
-              className={`${inputClass} resize-none`}
+              minHeight="120px"
+              onImagePaste={handleImagePaste}
             />
           </div>
-
-          {/* Image Attachments Preview */}
-          {images.length > 0 ? (
-            <div>
-              <label className={`${labelClass} flex items-center gap-1`}>
-                <ImagePlus className="w-4 h-4" />
-                첨부 이미지 ({images.length}개)
-              </label>
-              <div className="flex flex-wrap gap-2 mt-1">
-                {images.map((src, idx) => (
-                  <div key={idx} className="relative group">
-                    <img
-                      src={src}
-                      alt={`첨부 이미지 ${idx + 1}`}
-                      className="w-24 h-24 object-cover rounded-lg border border-border cursor-pointer"
-                      onClick={() => window.open(src, '_blank')}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeImage(idx)}
-                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <ImagePlus className="w-3.5 h-3.5" />
-              내용란에 이미지를 붙여넣으면 자동으로 첨부됩니다
-            </p>
-          )}
 
           <div className="grid grid-cols-2 gap-4">
             {/* 이슈 발생일시 */}

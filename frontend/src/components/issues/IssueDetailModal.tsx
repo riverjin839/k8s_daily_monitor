@@ -1,6 +1,7 @@
 import { X, ImagePlus } from 'lucide-react';
 import { Issue } from '@/types';
 import { loadIssueImages } from '@/lib/issueImages';
+import { RichContent } from '@/components/editor';
 
 interface IssueDetailModalProps {
   issue: Issue;
@@ -65,26 +66,26 @@ export function IssueDetailModal({ issue, onClose, onEdit }: IssueDetailModalPro
           {/* Content */}
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-1">이슈 내용</p>
-            <p className="text-sm whitespace-pre-wrap break-words bg-secondary/30 rounded-lg px-3 py-2.5">
-              {issue.issueContent}
-            </p>
+            <div className="bg-secondary/30 rounded-lg px-3 py-2.5">
+              <RichContent content={issue.issueContent} />
+            </div>
           </div>
 
           {issue.actionContent && (
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-1">조치 내용</p>
-              <p className="text-sm whitespace-pre-wrap break-words bg-secondary/30 rounded-lg px-3 py-2.5">
-                {issue.actionContent}
-              </p>
+              <div className="bg-secondary/30 rounded-lg px-3 py-2.5">
+                <RichContent content={issue.actionContent} />
+              </div>
             </div>
           )}
 
           {issue.detailContent && (
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-1">상세 내용</p>
-              <p className="text-sm whitespace-pre-wrap break-words bg-secondary/30 rounded-lg px-3 py-2.5">
-                {issue.detailContent}
-              </p>
+              <div className="bg-secondary/30 rounded-lg px-3 py-2.5">
+                <RichContent content={issue.detailContent} />
+              </div>
             </div>
           )}
 

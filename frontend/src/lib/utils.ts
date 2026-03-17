@@ -6,6 +6,41 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * 폐쇄망(HTTP) 및 구형 브라우저 호환 UUID v4 생성
+ *
+ * 우선순위:
+ *   1. crypto.randomUUID()     — HTTPS + Chromium 92+ / Firefox 95+ / Safari 15.4+
+ *   2. crypto.getRandomValues() — HTTP 포함 대부분의 모던 브라우저 (보안 컨텍스트 불필요)
+ *   3. Math.random()            — 최후 폴백 (엔트로피 낮음, 고유성만 보장)
+ */
+export function generateUUID(): string {
+  // 1순위: 네이티브 randomUUID (보안 컨텍스트 필요)
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // 2순위: getRandomValues (HTTP에서도 동작)
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+    bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant RFC 4122
+    const hex = Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+    return [
+      hex.slice(0, 8),
+      hex.slice(8, 12),
+      hex.slice(12, 16),
+      hex.slice(16, 20),
+      hex.slice(20),
+    ].join('-');
+  }
+  // 3순위: Math.random 폴백
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
 export function getStatusColor(status: Status): string {
   switch (status) {
     case 'healthy':

@@ -3,6 +3,7 @@ import { X, Send, Bot, Loader2, WifiOff } from 'lucide-react';
 import { agentApi } from '@/services/api';
 import { useClusterStore } from '@/stores/clusterStore';
 import type { AgentChatResponse } from '@/types';
+import { generateUUID } from '@/lib/utils';
 
 interface ChatMessage {
   id: string;
@@ -67,7 +68,7 @@ export function AgentChat() {
   const addMessage = (role: ChatMessage['role'], content: string) => {
     setMessages((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), role, content, timestamp: new Date() },
+      { id: generateUUID(), role, content, timestamp: new Date() },
     ]);
   };
 

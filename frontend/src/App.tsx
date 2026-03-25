@@ -15,6 +15,7 @@ import { WorkGuidePage } from '@/pages/WorkGuidePage';
 import { OpsNotesPage } from '@/pages/OpsNotesPage';
 import { MindMapPage } from '@/pages/MindMapPage';
 import { WbsFlowPage } from '@/pages/WbsFlowPage';
+import { InfraTopologyPage } from '@/pages/InfraTopologyPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar } from '@/components/layout';
 
@@ -44,6 +45,7 @@ function App() {
               <Route path="/node-labels" element={<NodeLabelsPage />} />
               <Route path="/cidr" element={<CidrCalculatorPage />} />
               <Route path="/cluster-manage" element={<ClusterManagePage />} />
+              <Route path="/infra-topology" element={<InfraTopologyPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/workflow" element={<WorkflowBoardPage />} />
               <Route path="/work-guides" element={<WorkGuidePage />} />

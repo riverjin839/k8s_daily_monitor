@@ -22,6 +22,7 @@ import {
   Monitor,
   Map,
   BarChart3,
+  Network,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
@@ -33,6 +34,7 @@ const NAV_ITEMS: Array<{ to: string; defaultLabel: string; icon: ComponentType<{
   { to: '/tasks', defaultLabel: '작업 게시판', icon: ListTodo },
   { to: '/todo-today', defaultLabel: '오늘 할일', icon: CalendarCheck2 },
   { to: '/cluster-manage', defaultLabel: '클러스터 관리', icon: Server },
+  { to: '/infra-topology', defaultLabel: '인프라 토폴로지', icon: Network },
   { to: '/links', defaultLabel: '클러스터 링크', icon: Link2 },
   { to: '/node-labels', defaultLabel: '노드 라벨', icon: Tags },
   { to: '/cidr', defaultLabel: 'CIDR 계산기', icon: Calculator },

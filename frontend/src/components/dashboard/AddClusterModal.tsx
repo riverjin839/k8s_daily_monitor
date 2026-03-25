@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { X, AlertTriangle, Loader2, FolderOpen, FileText, Upload, WifiOff } from 'lucide-react';
+import { X, AlertTriangle, Loader2, FolderOpen, FileText, Upload, WifiOff, Clock } from 'lucide-react';
 import { useCreateCluster } from '@/hooks/useCluster';
 
 interface AddClusterModalProps {
@@ -59,8 +59,12 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
     e.preventDefault();
     setError('');
 
-    if (!name.trim() || !apiEndpoint.trim()) {
-      setError('클러스터 이름과 API Endpoint는 필수입니다.');
+    if (!name.trim()) {
+      setError('클러스터 이름은 필수입니다.');
+      return;
+    }
+    if (!skipConnectivity && !apiEndpoint.trim()) {
+      setError('API Endpoint를 입력하거나 임시 가등록 옵션을 선택하세요.');
       return;
     }
 
@@ -92,8 +96,15 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
       {/* Modal */}
       <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold">Add Cluster</h2>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold">클러스터 등록</h2>
+            {skipConnectivity && (
+              <span className="flex items-center gap-1 text-xs bg-amber-500/15 text-amber-400 border border-amber-500/25 px-2 py-0.5 rounded-full font-medium">
+                <Clock className="w-3 h-3" /> 임시 가등록 모드
+              </span>
+            )}
+          </div>
           <button
             onClick={handleClose}
             disabled={isVerifying}
@@ -102,6 +113,22 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Quick temporary registration shortcut */}
+        {!skipConnectivity && (
+          <div
+            onClick={() => setSkipConnectivity(true)}
+            className="flex items-center gap-2 px-3 py-2 mb-4 bg-amber-500/8 border border-amber-500/20 rounded-lg cursor-pointer hover:bg-amber-500/12 transition-colors group"
+          >
+            <WifiOff className="w-4 h-4 text-amber-400 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <span className="text-xs font-medium text-amber-300 group-hover:text-amber-200">
+                네트워크 없이 임시 가등록
+              </span>
+              <p className="text-[10px] text-muted-foreground/70">클릭하여 임시 가등록 모드로 전환 (API Endpoint 없이 등록 가능)</p>
+            </div>
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -123,19 +150,23 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
           {/* API Endpoint */}
           <div>
             <label className="block text-sm font-medium text-muted-foreground mb-1.5">
-              API Endpoint *
+              API Endpoint {skipConnectivity ? <span className="text-xs text-amber-400 font-normal">(임시 등록 시 선택사항)</span> : '*'}
             </label>
             <input
               type="text"
               value={apiEndpoint}
               onChange={(e) => setApiEndpoint(e.target.value)}
               disabled={isVerifying}
-              placeholder="e.g. https://127.0.0.1:6443"
-              className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary disabled:opacity-50"
+              placeholder={skipConnectivity ? 'e.g. https://192.168.1.100:6443 (미입력 시 나중에 입력)' : 'e.g. https://127.0.0.1:6443'}
+              className={`w-full px-3 py-2.5 bg-secondary border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary disabled:opacity-50 ${
+                skipConnectivity ? 'border-amber-500/30' : 'border-border'
+              }`}
             />
-            <p className="mt-1 text-xs text-muted-foreground">
-              kubectl config view --minify -o jsonpath='&#123;.clusters[0].cluster.server&#125;'
-            </p>
+            {!skipConnectivity && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                kubectl config view --minify -o jsonpath='&#123;.clusters[0].cluster.server&#125;'
+              </p>
+            )}
           </div>
 
           {/* Kubeconfig section */}
@@ -221,7 +252,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
             className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
               skipConnectivity
                 ? 'bg-amber-500/10 border-amber-500/30'
-                : 'bg-secondary border-border hover:border-border/80'
+                : 'bg-secondary border-border hover:border-amber-500/20'
             }`}
           >
             <div className={`mt-0.5 w-4 h-4 flex-shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
@@ -233,11 +264,11 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
               <div className="flex items-center gap-1.5">
                 <WifiOff className={`w-3.5 h-3.5 flex-shrink-0 ${skipConnectivity ? 'text-amber-400' : 'text-muted-foreground'}`} />
                 <span className={`text-sm font-medium ${skipConnectivity ? 'text-amber-300' : 'text-muted-foreground'}`}>
-                  연결 불가 시 임시 등록 (Pending)
+                  임시 가등록 — 연결 검증 생략 (Pending 상태)
                 </span>
               </div>
               <p className="text-xs text-muted-foreground/70 mt-0.5">
-                네트워크가 연결되지 않은 클러스터를 임시 상태로 등록합니다. 나중에 연결 후 상태를 업데이트할 수 있습니다.
+                네트워크 미연결 또는 구성 예정 클러스터를 임시 등록합니다. API Endpoint 없이도 등록 가능하며, 나중에 정보를 업데이트할 수 있습니다.
               </p>
             </div>
           </div>
@@ -271,10 +302,14 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
             <button
               type="submit"
               disabled={isVerifying}
-              className="px-5 py-2.5 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+              className={`px-5 py-2.5 text-sm font-medium text-primary-foreground rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2 ${
+                skipConnectivity
+                  ? 'bg-amber-500 hover:bg-amber-500/90'
+                  : 'bg-primary hover:bg-primary/90'
+              }`}
             >
               {isVerifying && <Loader2 className="w-4 h-4 animate-spin" />}
-              {isVerifying ? '연결 검증 중...' : 'Add Cluster'}
+              {isVerifying ? '처리 중...' : skipConnectivity ? '임시 가등록' : '클러스터 등록'}
             </button>
           </div>
         </form>

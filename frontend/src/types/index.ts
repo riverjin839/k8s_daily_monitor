@@ -519,6 +519,8 @@ export interface MindMapNodeCreate {
   y?: number;
   collapsed?: boolean;
   sortOrder?: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  extra?: Record<string, any>;
 }
 
 export interface MindMapNodeUpdate {
@@ -530,4 +532,6 @@ export interface MindMapNodeUpdate {
   collapsed?: boolean;
   sortOrder?: number;
   parentId?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  extra?: Record<string, any>;
 }

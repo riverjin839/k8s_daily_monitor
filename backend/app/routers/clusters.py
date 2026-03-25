@@ -196,15 +196,20 @@ def create_cluster(cluster_data: ClusterCreate, db: Session = Depends(get_db)):
         effective_path = temp_kubeconfig_path
 
     try:
-        if skip_check:
+        api_ep = (cluster_data.api_endpoint or '').strip()
+        if skip_check or not api_ep:
             # 연결 검증 생략 — 실패해도 임시(pending) 상태로 등록
-            try:
-                _verify_cluster_connectivity(cluster_data.api_endpoint, effective_path)
-            except HTTPException as exc:
+            if api_ep:
+                try:
+                    _verify_cluster_connectivity(api_ep, effective_path)
+                except HTTPException as exc:
+                    connectivity_failed = True
+                    connectivity_error = exc.detail
+            else:
                 connectivity_failed = True
-                connectivity_error = exc.detail
+                connectivity_error = "API Endpoint 미입력 — 임시(가등록) 상태"
         else:
-            _verify_cluster_connectivity(cluster_data.api_endpoint, effective_path)
+            _verify_cluster_connectivity(api_ep, effective_path)
     finally:
         if temp_kubeconfig_path and os.path.exists(temp_kubeconfig_path):
             os.remove(temp_kubeconfig_path)

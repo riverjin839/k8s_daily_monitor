@@ -14,7 +14,7 @@ class StatusEnum(str, Enum):
 
 class ClusterBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
-    api_endpoint: str = Field(..., min_length=1, max_length=255)
+    api_endpoint: str = Field('', max_length=255)
     kubeconfig_path: Optional[str] = None
     # 클러스터 관리 메타데이터 (optional)
     region: Optional[str] = None

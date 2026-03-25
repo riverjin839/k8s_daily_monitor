@@ -79,7 +79,7 @@ export function TaskCalendar({ tasks, onTaskClick }: TaskCalendarProps) {
     const curr = new Date(startStr + 'T00:00:00');
     const endDate = new Date(endStr + 'T00:00:00');
     while (curr <= endDate) {
-      const key = curr.toISOString().slice(0, 10);
+      const key = `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}-${String(curr.getDate()).padStart(2, '0')}`;
       if (!tasksByDate[key]) tasksByDate[key] = [];
       tasksByDate[key].push({
         task,

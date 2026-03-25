@@ -157,13 +157,12 @@ def get_today_tasks(db: Session = Depends(get_db)):
     today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start.replace(hour=23, minute=59, second=59)
 
-    # 오늘 예정 작업 (완료 안 된 것)
+    # 오늘 예정 작업 (완료 포함)
     today_tasks = (
         db.query(Task)
         .filter(
             Task.scheduled_at >= today_start,
             Task.scheduled_at <= today_end,
-            Task.kanban_status != "done",
         )
         .order_by(Task.assignee, Task.priority)
         .all()

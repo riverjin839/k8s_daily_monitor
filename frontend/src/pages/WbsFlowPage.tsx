@@ -10,7 +10,7 @@ import {
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function fmtDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 function addDays(d: Date, n: number): Date {
   const r = new Date(d);

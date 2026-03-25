@@ -150,8 +150,8 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
                 list="issue-assignee-list"
               />
               <datalist id="issue-assignee-list">
-                {registeredAssignees.map((name) => (
-                  <option key={name} value={name} />
+                {registeredAssignees.map((a) => (
+                  <option key={a.name} value={a.name} />
                 ))}
               </datalist>
             </div>

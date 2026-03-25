@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { assigneesApi } from '@/services/api';
+import type { Assignee } from '@/types';
 
 export function useAssignees() {
   return useQuery({
@@ -12,7 +13,7 @@ export function useAssignees() {
 export function useUpdateAssignees() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (assignees: string[]) => assigneesApi.update(assignees),
+    mutationFn: (assignees: Assignee[]) => assigneesApi.update(assignees),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['assignees'] }),
   });
 }

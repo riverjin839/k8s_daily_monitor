@@ -387,9 +387,9 @@ export const managementServersApi = {
 
 // Assignees API (담당자 관리)
 export const assigneesApi = {
-  getAll: () => api.get<{ data: string[] }>('/ui-settings/assignees'),
-  update: (assignees: string[]) =>
-    api.put<{ data: string[] }>('/ui-settings/assignees', { assignees }),
+  getAll: () => api.get<{ data: import('@/types').Assignee[] }>('/ui-settings/assignees'),
+  update: (assignees: import('@/types').Assignee[]) =>
+    api.put<{ data: import('@/types').Assignee[] }>('/ui-settings/assignees', { assignees }),
 };
 
 export default api;

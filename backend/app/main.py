@@ -24,6 +24,7 @@ from app.routers import (
     work_guide_router,
     ops_note_router,
     mindmap_router,
+    management_server_router,
 )
 
 
@@ -294,6 +295,7 @@ app.include_router(workflows_router, prefix="/api/v1")
 app.include_router(work_guide_router, prefix="/api/v1")
 app.include_router(ops_note_router, prefix="/api/v1")
 app.include_router(mindmap_router, prefix="/api/v1")
+app.include_router(management_server_router, prefix="/api/v1")
 
 
 @app.get("/")

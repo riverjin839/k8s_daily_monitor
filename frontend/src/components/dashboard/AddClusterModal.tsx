@@ -1,14 +1,85 @@
 import { useRef, useState } from 'react';
-import { X, AlertTriangle, Loader2, FolderOpen, FileText, Upload, WifiOff, Clock } from 'lucide-react';
+import {
+  X, AlertTriangle, Loader2, Upload, WifiOff,
+  ChevronRight, ChevronLeft, Check, Server,
+  Cloud, Box, Layers, Cpu, Zap, Globe,
+} from 'lucide-react';
 import { useCreateCluster } from '@/hooks/useCluster';
 
-interface AddClusterModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+// ── Provider / Environment Types ────────────────────────────────────────────
+interface ProviderOption {
+  id: string;
+  label: string;
+  sub: string;
+  icon: React.ReactNode;
+  color: string;
+  defaultPort: string;
 }
 
-type KubeconfigMode = 'path' | 'content';
+const PROVIDERS: ProviderOption[] = [
+  {
+    id: 'on-prem',
+    label: 'On-Premises',
+    sub: 'Bare metal / VM',
+    icon: <Server className="w-6 h-6" />,
+    color: 'border-blue-500/40 bg-blue-500/10 text-blue-400',
+    defaultPort: '6443',
+  },
+  {
+    id: 'aws-eks',
+    label: 'AWS EKS',
+    sub: 'Amazon Elastic K8s',
+    icon: <Cloud className="w-6 h-6" />,
+    color: 'border-orange-500/40 bg-orange-500/10 text-orange-400',
+    defaultPort: '443',
+  },
+  {
+    id: 'gcp-gke',
+    label: 'GCP GKE',
+    sub: 'Google Kubernetes Engine',
+    icon: <Globe className="w-6 h-6" />,
+    color: 'border-green-500/40 bg-green-500/10 text-green-400',
+    defaultPort: '443',
+  },
+  {
+    id: 'azure-aks',
+    label: 'Azure AKS',
+    sub: 'Azure Kubernetes Service',
+    icon: <Layers className="w-6 h-6" />,
+    color: 'border-sky-500/40 bg-sky-500/10 text-sky-400',
+    defaultPort: '443',
+  },
+  {
+    id: 'rancher',
+    label: 'Rancher',
+    sub: 'Rancher Managed',
+    icon: <Zap className="w-6 h-6" />,
+    color: 'border-cyan-500/40 bg-cyan-500/10 text-cyan-400',
+    defaultPort: '6443',
+  },
+  {
+    id: 'kind',
+    label: 'Kind / k3s',
+    sub: 'Local Dev Cluster',
+    icon: <Box className="w-6 h-6" />,
+    color: 'border-purple-500/40 bg-purple-500/10 text-purple-400',
+    defaultPort: '6443',
+  },
+  {
+    id: 'openshift',
+    label: 'OpenShift',
+    sub: 'Red Hat OpenShift',
+    icon: <Cpu className="w-6 h-6" />,
+    color: 'border-red-500/40 bg-red-500/10 text-red-400',
+    defaultPort: '6443',
+  },
+];
 
+// ── Steps ────────────────────────────────────────────────────────────────────
+const STEPS = ['환경 선택', '기본 정보', 'Kubeconfig'] as const;
+type Step = 0 | 1 | 2;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 function extractApiError(err: unknown): string {
   if (!err) return 'Failed to create cluster';
   const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
@@ -17,18 +88,27 @@ function extractApiError(err: unknown): string {
   return String(err);
 }
 
+// ── Modal ────────────────────────────────────────────────────────────────────
+interface AddClusterModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
 export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
+  const [step, setStep] = useState<Step>(0);
+  const [provider, setProvider] = useState<string>('on-prem');
   const [name, setName] = useState('');
   const [apiEndpoint, setApiEndpoint] = useState('');
-  const [kubeconfigMode, setKubeconfigMode] = useState<KubeconfigMode>('path');
-  const [kubeconfigPath, setKubeconfigPath] = useState('');
-  const [kubeconfigContent, setKubeconfigContent] = useState('');
+  const [region, setRegion] = useState('');
   const [skipConnectivity, setSkipConnectivity] = useState(false);
+  const [kubeconfigContent, setKubeconfigContent] = useState('');
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const createCluster = useCreateCluster();
-  const isVerifying = createCluster.isPending;
+  const isSubmitting = createCluster.isPending;
+
+  const selectedProvider = PROVIDERS.find(p => p.id === provider) ?? PROVIDERS[0];
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -39,45 +119,57 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
       if (typeof text === 'string') setKubeconfigContent(text);
     };
     reader.readAsText(file);
-    // reset so same file can be re-selected
     e.target.value = '';
   };
 
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (typeof ev.target?.result === 'string') setKubeconfigContent(ev.target.result);
+    };
+    reader.readAsText(file);
+  };
+
   const handleClose = () => {
-    if (isVerifying) return;
+    if (isSubmitting) return;
+    setStep(0);
+    setProvider('on-prem');
     setName('');
     setApiEndpoint('');
-    setKubeconfigMode('path');
-    setKubeconfigPath('');
-    setKubeconfigContent('');
+    setRegion('');
     setSkipConnectivity(false);
+    setKubeconfigContent('');
     setError('');
     onClose();
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const goNext = () => {
     setError('');
+    if (step === 1) {
+      if (!name.trim()) { setError('클러스터 이름은 필수입니다.'); return; }
+      if (!skipConnectivity && !apiEndpoint.trim()) { setError('API Endpoint를 입력하거나 임시 등록을 선택하세요.'); return; }
+    }
+    setStep((s) => Math.min(s + 1, 2) as Step);
+  };
 
-    if (!name.trim()) {
-      setError('클러스터 이름은 필수입니다.');
-      return;
-    }
-    if (!skipConnectivity && !apiEndpoint.trim()) {
-      setError('API Endpoint를 입력하거나 임시 가등록 옵션을 선택하세요.');
-      return;
-    }
+  const goPrev = () => {
+    setError('');
+    setStep((s) => Math.max(s - 1, 0) as Step);
+  };
+
+  const handleSubmit = async () => {
+    setError('');
+    if (!name.trim()) { setError('클러스터 이름은 필수입니다.'); return; }
 
     try {
       await createCluster.mutateAsync({
         name: name.trim(),
         apiEndpoint: apiEndpoint.trim(),
-        ...(kubeconfigMode === 'path' && kubeconfigPath.trim()
-          ? { kubeconfigPath: kubeconfigPath.trim() }
-          : {}),
-        ...(kubeconfigMode === 'content' && kubeconfigContent.trim()
-          ? { kubeconfigContent: kubeconfigContent.trim() }
-          : {}),
+        region: region.trim() || undefined,
+        ...(kubeconfigContent.trim() ? { kubeconfigContent: kubeconfigContent.trim() } : {}),
         skipConnectivityCheck: skipConnectivity,
       });
       handleClose();
@@ -90,229 +182,307 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60" onClick={handleClose} />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleClose} />
 
-      {/* Modal */}
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold">클러스터 등록</h2>
-            {skipConnectivity && (
-              <span className="flex items-center gap-1 text-xs bg-amber-500/15 text-amber-400 border border-amber-500/25 px-2 py-0.5 rounded-full font-medium">
-                <Clock className="w-3 h-3" /> 임시 가등록 모드
-              </span>
-            )}
+      <div className="relative bg-[hsl(var(--card))] border border-border rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden"
+           style={{ maxHeight: '90vh' }}>
+
+        {/* ── Top bar ── */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-secondary/30">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg border ${selectedProvider.color}`}>
+              {selectedProvider.icon}
+            </div>
+            <div>
+              <h2 className="text-base font-semibold">클러스터 등록</h2>
+              <p className="text-xs text-muted-foreground">{selectedProvider.label} — {STEPS[step]}</p>
+            </div>
           </div>
-          <button
-            onClick={handleClose}
-            disabled={isVerifying}
-            className="p-1.5 rounded-lg hover:bg-secondary transition-colors disabled:opacity-40"
-          >
+          <button onClick={handleClose} disabled={isSubmitting}
+            className="p-1.5 rounded-lg hover:bg-secondary transition-colors text-muted-foreground disabled:opacity-40">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Quick temporary registration shortcut */}
-        {!skipConnectivity && (
-          <div
-            onClick={() => setSkipConnectivity(true)}
-            className="flex items-center gap-2 px-3 py-2 mb-4 bg-amber-500/8 border border-amber-500/20 rounded-lg cursor-pointer hover:bg-amber-500/12 transition-colors group"
-          >
-            <WifiOff className="w-4 h-4 text-amber-400 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <span className="text-xs font-medium text-amber-300 group-hover:text-amber-200">
-                네트워크 없이 임시 가등록
-              </span>
-              <p className="text-[10px] text-muted-foreground/70">클릭하여 임시 가등록 모드로 전환 (API Endpoint 없이 등록 가능)</p>
-            </div>
+        {/* ── Step progress bar ── */}
+        <div className="px-6 pt-4 pb-0">
+          <div className="flex items-center gap-0">
+            {STEPS.map((label, idx) => (
+              <div key={label} className="flex items-center flex-1 last:flex-none">
+                <div className="flex items-center gap-2">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                    idx < step ? 'bg-primary text-primary-foreground'
+                    : idx === step ? 'bg-primary/20 border-2 border-primary text-primary'
+                    : 'bg-secondary text-muted-foreground'
+                  }`}>
+                    {idx < step ? <Check className="w-3 h-3" /> : idx + 1}
+                  </div>
+                  <span className={`text-xs font-medium ${idx === step ? 'text-foreground' : 'text-muted-foreground'}`}>
+                    {label}
+                  </span>
+                </div>
+                {idx < STEPS.length - 1 && (
+                  <div className={`flex-1 h-px mx-3 ${idx < step ? 'bg-primary' : 'bg-border'}`} />
+                )}
+              </div>
+            ))}
           </div>
-        )}
+        </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Cluster Name */}
-          <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1.5">
-              Cluster Name *
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={isVerifying}
-              placeholder="e.g. kind-dev, prod-cluster-01"
-              className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary disabled:opacity-50"
-            />
-          </div>
+        {/* ── Content ── */}
+        <div className="px-6 py-5 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 200px)' }}>
 
-          {/* API Endpoint */}
-          <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1.5">
-              API Endpoint {skipConnectivity ? <span className="text-xs text-amber-400 font-normal">(임시 등록 시 선택사항)</span> : '*'}
-            </label>
-            <input
-              type="text"
-              value={apiEndpoint}
-              onChange={(e) => setApiEndpoint(e.target.value)}
-              disabled={isVerifying}
-              placeholder={skipConnectivity ? 'e.g. https://192.168.1.100:6443 (미입력 시 나중에 입력)' : 'e.g. https://127.0.0.1:6443'}
-              className={`w-full px-3 py-2.5 bg-secondary border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary disabled:opacity-50 ${
-                skipConnectivity ? 'border-amber-500/30' : 'border-border'
-              }`}
-            />
-            {!skipConnectivity && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                kubectl config view --minify -o jsonpath='&#123;.clusters[0].cluster.server&#125;'
-              </p>
-            )}
-          </div>
-
-          {/* Kubeconfig section */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-muted-foreground">
-                Kubeconfig
-                <span className="ml-1 text-xs text-muted-foreground/60">(노드 라벨 기능 사용 시 필수)</span>
-              </label>
-              {/* Mode toggle */}
-              <div className="flex items-center gap-0.5 bg-secondary rounded-md p-0.5 text-xs">
-                <button
-                  type="button"
-                  disabled={isVerifying}
-                  onClick={() => setKubeconfigMode('path')}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded transition-colors disabled:opacity-50 ${
-                    kubeconfigMode === 'path'
-                      ? 'bg-card text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <FolderOpen className="w-3 h-3" />
-                  파일 경로
-                </button>
-                <button
-                  type="button"
-                  disabled={isVerifying}
-                  onClick={() => setKubeconfigMode('content')}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded transition-colors disabled:opacity-50 ${
-                    kubeconfigMode === 'content'
-                      ? 'bg-card text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <FileText className="w-3 h-3" />
-                  직접 입력
-                </button>
+          {/* Step 0: Provider selection */}
+          {step === 0 && (
+            <div>
+              <p className="text-sm text-muted-foreground mb-4">클러스터 환경을 선택하세요</p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                {PROVIDERS.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setProvider(p.id)}
+                    className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center ${
+                      provider === p.id
+                        ? `${p.color} shadow-lg scale-[1.02]`
+                        : 'border-border bg-card hover:border-primary/30 hover:bg-secondary/50'
+                    }`}
+                  >
+                    {provider === p.id && (
+                      <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                        <Check className="w-2.5 h-2.5 text-primary-foreground" />
+                      </div>
+                    )}
+                    <div className={provider === p.id ? '' : 'text-muted-foreground'}>
+                      {p.icon}
+                    </div>
+                    <div>
+                      <p className={`text-xs font-semibold ${provider === p.id ? '' : 'text-foreground'}`}>{p.label}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{p.sub}</p>
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
+          )}
 
-            {kubeconfigMode === 'path' ? (
-              <input
-                type="text"
-                value={kubeconfigPath}
-                onChange={(e) => setKubeconfigPath(e.target.value)}
-                disabled={isVerifying}
-                placeholder="e.g. /root/.kube/config"
-                className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary disabled:opacity-50"
-              />
-            ) : (
-              <div className="space-y-2">
+          {/* Step 1: Basic Info */}
+          {step === 1 && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                    Cluster Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={`e.g. ${selectedProvider.id}-prod-01`}
+                    autoFocus
+                    className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      API Endpoint {skipConnectivity ? '' : '*'}
+                    </label>
+                    {skipConnectivity && (
+                      <span className="text-[10px] bg-amber-500/15 text-amber-400 border border-amber-500/25 px-1.5 py-0.5 rounded-full">
+                        임시 등록 모드
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={apiEndpoint}
+                    onChange={(e) => setApiEndpoint(e.target.value)}
+                    placeholder={`https://your-cluster.example.com:${selectedProvider.defaultPort}`}
+                    className={`w-full px-3 py-2.5 bg-secondary border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary ${
+                      skipConnectivity ? 'border-amber-500/30' : 'border-border'
+                    }`}
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground font-mono">
+                    kubectl config view --minify -o jsonpath=&#39;&#123;.clusters[0].cluster.server&#125;&#39;
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                    Region
+                  </label>
+                  <input
+                    type="text"
+                    value={region}
+                    onChange={(e) => setRegion(e.target.value)}
+                    placeholder="e.g. ap-northeast-2, 서울"
+                    className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                  />
+                </div>
+
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={() => setSkipConnectivity(!skipConnectivity)}
+                    className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 transition-all text-sm font-medium ${
+                      skipConnectivity
+                        ? 'bg-amber-500/10 border-amber-500/40 text-amber-400'
+                        : 'bg-secondary border-border text-muted-foreground hover:border-amber-500/30 hover:text-amber-300'
+                    }`}
+                  >
+                    <WifiOff className="w-4 h-4 flex-shrink-0" />
+                    <span className="text-xs">임시 가등록</span>
+                    {skipConnectivity && <Check className="w-3.5 h-3.5 ml-auto" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Kubeconfig */}
+          {step === 2 && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Kubeconfig를 등록하면 노드 라벨, kubectl 기반 헬스체크 등 모든 기능을 사용할 수 있습니다.
+                <span className="ml-1 text-primary/70">(선택사항)</span>
+              </p>
+
+              {/* Drag & drop zone */}
+              <div
+                onDrop={handleDrop}
+                onDragOver={(e) => e.preventDefault()}
+                onClick={() => !kubeconfigContent && fileInputRef.current?.click()}
+                className={`relative border-2 border-dashed rounded-xl transition-all cursor-pointer ${
+                  kubeconfigContent
+                    ? 'border-primary/40 bg-primary/5'
+                    : 'border-border hover:border-primary/40 hover:bg-primary/5'
+                }`}
+              >
+                {kubeconfigContent ? (
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2 text-sm text-primary">
+                        <Check className="w-4 h-4" />
+                        <span>Kubeconfig 로드됨</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setKubeconfigContent(''); }}
+                        className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        제거
+                      </button>
+                    </div>
+                    <pre className="text-[10px] font-mono text-muted-foreground bg-secondary/50 rounded-lg p-3 max-h-40 overflow-auto">
+                      {kubeconfigContent.slice(0, 500)}{kubeconfigContent.length > 500 ? '\n...' : ''}
+                    </pre>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-10 gap-3 text-muted-foreground">
+                    <Upload className="w-8 h-8 opacity-40" />
+                    <div className="text-center">
+                      <p className="text-sm font-medium">드래그 &amp; 드롭 또는 클릭하여 업로드</p>
+                      <p className="text-xs mt-0.5 opacity-60">.yaml, .yml, .conf 파일</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Manual paste */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    또는 직접 붙여넣기
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Upload className="w-3 h-3" />
+                    파일 선택
+                  </button>
+                </div>
                 <textarea
                   value={kubeconfigContent}
                   onChange={(e) => setKubeconfigContent(e.target.value)}
-                  disabled={isVerifying}
-                  placeholder="kubeconfig YAML 내용을 붙여넣으세요..."
+                  placeholder="apiVersion: v1&#10;kind: Config&#10;clusters:&#10;  ..."
                   rows={6}
-                  className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-xs font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary disabled:opacity-50 resize-none"
-                />
-                <button
-                  type="button"
-                  disabled={isVerifying}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors disabled:opacity-50"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  파일에서 불러오기
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".yaml,.yml,.conf,.config"
-                  onChange={handleFileUpload}
-                  className="hidden"
+                  className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none"
                 />
               </div>
-            )}
-          </div>
 
-          {/* 임시 등록 옵션 */}
-          <div
-            onClick={() => !isVerifying && setSkipConnectivity(!skipConnectivity)}
-            className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
-              skipConnectivity
-                ? 'bg-amber-500/10 border-amber-500/30'
-                : 'bg-secondary border-border hover:border-amber-500/20'
-            }`}
-          >
-            <div className={`mt-0.5 w-4 h-4 flex-shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
-              skipConnectivity ? 'bg-amber-500 border-amber-500' : 'border-muted-foreground/40'
-            }`}>
-              {skipConnectivity && <span className="text-white text-xs font-bold leading-none">✓</span>}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <WifiOff className={`w-3.5 h-3.5 flex-shrink-0 ${skipConnectivity ? 'text-amber-400' : 'text-muted-foreground'}`} />
-                <span className={`text-sm font-medium ${skipConnectivity ? 'text-amber-300' : 'text-muted-foreground'}`}>
-                  임시 가등록 — 연결 검증 생략 (Pending 상태)
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground/70 mt-0.5">
-                네트워크 미연결 또는 구성 예정 클러스터를 임시 등록합니다. API Endpoint 없이도 등록 가능하며, 나중에 정보를 업데이트할 수 있습니다.
-              </p>
-            </div>
-          </div>
-
-          {/* 연결 검증 중 안내 */}
-          {isVerifying && (
-            <div className="flex items-center gap-2 px-3 py-2.5 bg-blue-500/10 border border-blue-500/20 rounded-lg text-sm text-blue-400">
-              <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
-              <span>클러스터 연결을 검증 중입니다... (최대 5초)</span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".yaml,.yml,.conf,.config"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
             </div>
           )}
 
           {/* Error */}
-          {error && !isVerifying && (
-            <div className="flex items-start gap-2 px-3 py-2.5 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+          {error && (
+            <div className="flex items-start gap-2 px-3 py-2.5 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive mt-4">
               <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
 
-          {/* Actions */}
-          <div className="flex justify-end gap-3 pt-2">
+          {/* Verifying */}
+          {isSubmitting && (
+            <div className="flex items-center gap-2 px-3 py-2.5 bg-blue-500/10 border border-blue-500/20 rounded-lg text-sm text-blue-400 mt-4">
+              <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
+              <span>클러스터 연결 검증 중... (최대 5초)</span>
+            </div>
+          )}
+        </div>
+
+        {/* ── Footer actions ── */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-secondary/20">
+          <button
+            type="button"
+            onClick={step === 0 ? handleClose : goPrev}
+            disabled={isSubmitting}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors disabled:opacity-40"
+          >
+            {step > 0 && <ChevronLeft className="w-4 h-4" />}
+            {step === 0 ? '취소' : '이전'}
+          </button>
+
+          <div className="flex items-center gap-1.5">
+            {STEPS.map((_, idx) => (
+              <div key={idx} className={`w-1.5 h-1.5 rounded-full transition-colors ${idx === step ? 'bg-primary' : 'bg-border'}`} />
+            ))}
+          </div>
+
+          {step < 2 ? (
             <button
               type="button"
-              onClick={handleClose}
-              disabled={isVerifying}
-              className="px-4 py-2.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors disabled:opacity-40"
+              onClick={goNext}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
             >
-              Cancel
+              다음
+              <ChevronRight className="w-4 h-4" />
             </button>
+          ) : (
             <button
-              type="submit"
-              disabled={isVerifying}
-              className={`px-5 py-2.5 text-sm font-medium text-primary-foreground rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2 ${
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className={`flex items-center gap-2 px-5 py-2 text-sm font-medium text-primary-foreground rounded-lg transition-colors disabled:opacity-50 ${
                 skipConnectivity
                   ? 'bg-amber-500 hover:bg-amber-500/90'
                   : 'bg-primary hover:bg-primary/90'
               }`}
             >
-              {isVerifying && <Loader2 className="w-4 h-4 animate-spin" />}
-              {isVerifying ? '처리 중...' : skipConnectivity ? '임시 가등록' : '클러스터 등록'}
+              {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+              {skipConnectivity ? '임시 가등록' : '클러스터 등록'}
             </button>
-          </div>
-        </form>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -232,8 +232,8 @@ export function WbsFlowPage() {
     queryKey: ['wbs-issues'],
     queryFn: () => issuesApi.getAll().then(r => r.data.data),
   });
-  const tasks: Task[] = taskRes ?? [];
-  const issues: Issue[] = issueRes ?? [];
+  const tasks: Task[] = useMemo(() => taskRes ?? [], [taskRes]);
+  const issues: Issue[] = useMemo(() => issueRes ?? [], [issueRes]);
 
   // ── date range ──
   const dayCount = viewMode === 'week' ? 7 : viewMode === 'twoWeek' ? 14 : 30;

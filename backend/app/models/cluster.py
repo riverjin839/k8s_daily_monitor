@@ -59,6 +59,7 @@ class Cluster(Base):
     playbooks = relationship("Playbook", back_populates="cluster", cascade="all, delete-orphan")
     issues = relationship("Issue", back_populates="cluster", foreign_keys="Issue.cluster_id")
     tasks = relationship("Task", back_populates="cluster", foreign_keys="Task.cluster_id")
+    infra_nodes = relationship("InfraNode", back_populates="cluster", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Cluster(name={self.name}, status={self.status})>"

@@ -15,6 +15,7 @@ from app.routers.work_guide import router as work_guide_router
 from app.routers.ops_note import router as ops_note_router
 from app.routers.mindmap import router as mindmap_router
 from app.routers.management_servers import router as management_server_router
+from app.routers.infra_nodes import router as infra_nodes_router
 
 __all__ = [
     "clusters_router",
@@ -34,4 +35,5 @@ __all__ = [
     "ops_note_router",
     "mindmap_router",
     "management_server_router",
+    "infra_nodes_router",
 ]

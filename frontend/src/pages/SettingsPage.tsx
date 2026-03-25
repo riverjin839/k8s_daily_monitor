@@ -338,7 +338,7 @@ export function SettingsPage() {
 
   const handleAddAssignee = () => {
     if (!addForm.name.trim()) return;
-    if (assignees.some(a => a.name === addForm.name.trim())) return;
+    if (assignees.some(a => (a.name || '') === addForm.name.trim())) return;
     updateAssignees.mutate([...assignees, { ...addForm, name: addForm.name.trim() }]);
     setAddForm({ name: '' });
     setShowAddRow(false);
@@ -811,9 +811,9 @@ export function SettingsPage() {
                         {isEditing ? cellInput('name', '이름', true) : (
                           <div className="flex items-center gap-2">
                             <span className="w-7 h-7 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
-                              {a.name.charAt(0).toUpperCase()}
+                              {(a.name || '?').charAt(0).toUpperCase()}
                             </span>
-                            <span className="font-medium">{a.name}</span>
+                            <span className="font-medium">{a.name || '(이름없음)'}</span>
                           </div>
                         )}
                       </td>

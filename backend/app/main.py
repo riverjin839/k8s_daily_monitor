@@ -25,6 +25,7 @@ from app.routers import (
     ops_note_router,
     mindmap_router,
     management_server_router,
+    infra_nodes_router,
 )
 
 
@@ -147,6 +148,29 @@ def _run_migrations():
             conn.execute(text("ALTER TYPE statusenum ADD VALUE IF NOT EXISTS 'pending'"))
     except Exception:
         pass  # 이미 존재하거나 enum 이름이 다를 경우 무시
+
+    # infra_nodes: 물리 서버 노드 테이블 생성
+    if "infra_nodes" not in inspector.get_table_names():
+        with engine.begin() as conn:
+            conn.execute(text('''
+                CREATE TABLE infra_nodes (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    cluster_id UUID NOT NULL REFERENCES clusters(id) ON DELETE CASCADE,
+                    hostname VARCHAR(255) NOT NULL,
+                    rack_name VARCHAR(100),
+                    ip_address VARCHAR(45),
+                    role VARCHAR(20) NOT NULL DEFAULT \'worker\',
+                    cpu_cores INTEGER,
+                    ram_gb INTEGER,
+                    disk_gb INTEGER,
+                    os_info VARCHAR(200),
+                    switch_name VARCHAR(100),
+                    notes TEXT,
+                    auto_synced BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            '''))
 
     # work_guides: 계층 구조 + 정렬 컬럼 추가
     if "work_guides" in inspector.get_table_names():
@@ -302,6 +326,7 @@ app.include_router(work_guide_router, prefix="/api/v1")
 app.include_router(ops_note_router, prefix="/api/v1")
 app.include_router(mindmap_router, prefix="/api/v1")
 app.include_router(management_server_router, prefix="/api/v1")
+app.include_router(infra_nodes_router, prefix="/api/v1")
 
 
 @app.get("/")

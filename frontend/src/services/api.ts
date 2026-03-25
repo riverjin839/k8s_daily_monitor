@@ -385,6 +385,20 @@ export const managementServersApi = {
     ),
 };
 
+// Infra Nodes API (물리 서버 노드)
+export const infraNodesApi = {
+  getAll: (params?: { clusterId?: string; rackName?: string }) =>
+    api.get<import('@/types').InfraNodeListResponse>('/infra-nodes', { params }),
+  getById: (id: string) => api.get<import('@/types').InfraNode>(`/infra-nodes/${id}`),
+  create: (data: import('@/types').InfraNodeCreate) =>
+    api.post<import('@/types').InfraNode>('/infra-nodes', data),
+  update: (id: string, data: import('@/types').InfraNodeUpdate) =>
+    api.put<import('@/types').InfraNode>(`/infra-nodes/${id}`, data),
+  delete: (id: string) => api.delete(`/infra-nodes/${id}`),
+  sync: (clusterId: string) =>
+    api.post<import('@/types').InfraSyncResult>(`/infra-nodes/sync/${clusterId}`),
+};
+
 // Assignees API (담당자 관리)
 export const assigneesApi = {
   getAll: () => api.get<{ data: import('@/types').Assignee[] }>('/ui-settings/assignees'),

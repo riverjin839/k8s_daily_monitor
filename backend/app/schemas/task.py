@@ -21,6 +21,7 @@ class TaskBase(BaseModel):
     type_label: Optional[str] = Field(None, pattern="^(feature|bug|chore|docs|security)$")
     effort_hours: Optional[int] = Field(None, ge=1, le=999)
     done_condition: Optional[str] = None
+    parent_id: Optional[UUID] = None
 
 
 class TaskCreate(TaskBase):
@@ -54,6 +55,8 @@ class TaskResponse(TaskBase):
     id: UUID
     created_at: datetime
     updated_at: datetime
+    parent_id: Optional[UUID] = None
+    subtasks: list['TaskResponse'] = []
 
     class Config:
         from_attributes = True
@@ -68,3 +71,6 @@ class TaskStatusResponse(BaseModel):
 class TaskListResponse(BaseModel):
     data: list[TaskResponse]
     total: int
+
+
+TaskResponse.model_rebuild()

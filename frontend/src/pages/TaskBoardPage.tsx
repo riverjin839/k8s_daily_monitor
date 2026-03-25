@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, GripVertical, Clock, Kanban } from 'lucide-react';
+import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, GripVertical, Clock, Kanban, GitBranch } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -108,6 +108,7 @@ export function TaskBoardPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [showModal, setShowModal] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
+  const [parentTask, setParentTask] = useState<Task | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [filterClusterId, setFilterClusterId] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
@@ -201,6 +202,14 @@ export function TaskBoardPage() {
   const handleEdit = (task: Task) => {
     setSelectedTask(null);
     setEditTask(task);
+    setParentTask(null);
+    setShowModal(true);
+  };
+
+  const handleAddSubTask = (task: Task) => {
+    setSelectedTask(null);
+    setEditTask(null);
+    setParentTask(task);
     setShowModal(true);
   };
 
@@ -213,6 +222,7 @@ export function TaskBoardPage() {
   const handleModalClose = () => {
     setShowModal(false);
     setEditTask(null);
+    setParentTask(null);
   };
 
   const handleExportCsv = async () => {
@@ -598,6 +608,13 @@ export function TaskBoardPage() {
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
                             <button
+                              onClick={(e) => { e.stopPropagation(); handleAddSubTask(task); }}
+                              className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-primary"
+                              title="하위 작업 추가"
+                            >
+                              <GitBranch className="w-3.5 h-3.5" />
+                            </button>
+                            <button
                               onClick={(e) => { e.stopPropagation(); handleDelete(task); }}
                               className="p-1.5 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400"
                               title="삭제"
@@ -624,6 +641,7 @@ export function TaskBoardPage() {
         onSubmit={editTask ? handleUpdate : handleCreate}
         clusters={clusters}
         editTask={editTask}
+        parentTask={parentTask}
       />
 
       {selectedTask && (

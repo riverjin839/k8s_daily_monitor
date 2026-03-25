@@ -248,6 +248,8 @@ export interface Task {
   typeLabel?: TaskTypeLabel;
   effortHours?: number;
   doneCondition?: string;
+  parentId?: string;
+  subtasks?: Task[];
   createdAt: string;
   updatedAt: string;
 }
@@ -278,6 +280,7 @@ export interface TaskCreate {
   typeLabel?: TaskTypeLabel;
   effortHours?: number;
   doneCondition?: string;
+  parentId?: string;
 }
 
 export interface TaskUpdate extends Partial<TaskCreate> {}

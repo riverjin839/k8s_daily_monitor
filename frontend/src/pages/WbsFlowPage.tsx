@@ -65,6 +65,8 @@ interface DayItem {
   startDate: string;
   endDate?: string;
   resolved?: boolean;
+  isSubTask?: boolean;
+  parentId?: string;
 }
 
 interface AssigneeRow {
@@ -95,12 +97,13 @@ function ItemCard({ item, onClick }: { item: DayItem; onClick: () => void }) {
   const isIssue = item.type === 'issue';
   const base = isIssue
     ? (item.resolved ? 'border-l-green-500 bg-green-500/5' : 'border-l-orange-500 bg-orange-500/5')
-    : `border-l-blue-500 bg-blue-500/5`;
+    : item.isSubTask ? 'border-l-indigo-400 bg-indigo-500/5 opacity-90'
+    : 'border-l-blue-500 bg-blue-500/5';
 
   return (
     <div
       onClick={onClick}
-      className={`border-l-2 ${base} rounded-r px-2 py-1 cursor-pointer hover:opacity-80 transition-opacity text-left`}
+      className={`border-l-2 ${base} rounded-r px-2 py-1 cursor-pointer hover:opacity-80 transition-opacity text-left ${item.isSubTask ? 'ml-2' : ''}`}
     >
       <div className="flex items-center gap-1 min-w-0">
         <StatusIcon status={isIssue ? (item.resolved ? 'resolved' : 'open') : item.status} type={item.type} />
@@ -209,59 +212,84 @@ function SummaryBar({ tasks, issues }: { tasks: Task[]; issues: Issue[] }) {
   );
 }
 
-// ── 개인별 보기 ────────────────────────────────────────────────────────────────
-function PersonalView({
+// ── 개인별 Gantt 보기 ──────────────────────────────────────────────────────────
+const STATUS_CELL: Record<string, string> = {
+  done: 'bg-green-500/40 border-green-500/50',
+  in_progress: 'bg-blue-500/50 border-blue-500/60',
+  review_test: 'bg-yellow-500/40 border-yellow-500/50',
+  todo: 'bg-primary/25 border-primary/30',
+  backlog: 'bg-secondary border-border',
+};
+
+function PersonalGanttView({
   assignee,
   tasks,
   issues,
+  dates,
+  todayStr,
   onItemClick,
 }: {
   assignee: string;
   tasks: Task[];
   issues: Issue[];
+  dates: Date[];
+  todayStr: string;
   onItemClick: (item: DayItem) => void;
 }) {
   const myTasks = tasks.filter(t => (t.assignee || '미지정') === assignee);
   const myIssues = issues.filter(i => (i.assignee || '미지정') === assignee);
 
-  // 날짜 → 아이템 매핑
-  const byDate = new Map<string, DayItem[]>();
+  const startStr = dates.length > 0 ? fmtDate(dates[0]) : '';
+  const endStr   = dates.length > 0 ? fmtDate(dates[dates.length - 1]) : '';
 
-  for (const task of myTasks) {
-    const startStr = task.scheduledAt?.slice(0, 10);
-    if (!startStr) continue;
-    const endStr = task.completedAt?.slice(0, 10) ?? startStr;
-    const cur = new Date(startStr + 'T00:00:00');
-    const end = new Date(endStr + 'T00:00:00');
-    while (cur <= end) {
-      const key = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
-      if (!byDate.has(key)) byDate.set(key, []);
-      byDate.get(key)!.push({
-        type: 'task', id: task.id,
-        label: task.taskContent, sub: task.taskCategory,
-        status: task.kanbanStatus, priority: task.priority, module: task.module,
-        startDate: startStr, endDate: endStr !== startStr ? endStr : undefined,
-      });
-      cur.setDate(cur.getDate() + 1);
+  // task → set of active date strings (within window)
+  const taskActiveDates = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const task of myTasks) {
+      const ts = task.scheduledAt?.slice(0, 10);
+      if (!ts) continue;
+      const te = task.completedAt?.slice(0, 10) ??
+        ((task as Task & { parentId?: string }).kanbanStatus !== 'done' ? fmtDate(new Date()) : ts);
+      const loopStart = ts > startStr ? parseDate(ts) : parseDate(startStr);
+      const loopEnd   = te < endStr   ? parseDate(te)  : parseDate(endStr);
+      const active = new Set<string>();
+      let d = new Date(loopStart);
+      while (fmtDate(d) <= fmtDate(loopEnd)) {
+        active.add(fmtDate(d));
+        d = addDays(d, 1);
+      }
+      map.set(task.id, active);
     }
-  }
+    return map;
+  }, [myTasks, startStr, endStr]);
 
-  for (const issue of myIssues) {
-    const startStr = issue.occurredAt?.slice(0, 10);
-    if (!startStr) continue;
-    if (!byDate.has(startStr)) byDate.set(startStr, []);
-    byDate.get(startStr)!.push({
-      type: 'issue', id: issue.id,
-      label: issue.issueContent, sub: issue.issueArea,
-      status: issue.resolvedAt ? 'resolved' : 'open',
-      startDate: startStr,
-      resolved: !!issue.resolvedAt,
-    });
-  }
+  type GanttRow = { task: Task; indent: boolean } | { issue: Issue };
 
-  const sortedDates = Array.from(byDate.keys()).sort();
+  const rows: GanttRow[] = useMemo(() => {
+    const result: GanttRow[] = [];
+    const parentTasks = myTasks.filter(t => !(t as Task & {parentId?: string}).parentId);
+    const childTasks  = myTasks.filter(t =>  (t as Task & {parentId?: string}).parentId);
+    const addedIds = new Set<string>();
 
-  if (sortedDates.length === 0) {
+    for (const pt of parentTasks) {
+      result.push({ task: pt, indent: false });
+      addedIds.add(pt.id);
+      for (const ct of childTasks.filter(ct => (ct as Task & {parentId?: string}).parentId === pt.id)) {
+        result.push({ task: ct, indent: true });
+        addedIds.add(ct.id);
+      }
+    }
+    for (const ct of childTasks) {
+      if (!addedIds.has(ct.id)) result.push({ task: ct, indent: true });
+    }
+    for (const issue of myIssues) {
+      const ds = issue.occurredAt?.slice(0, 10);
+      if (ds && ds >= startStr && ds <= endStr) result.push({ issue });
+    }
+    return result;
+  }, [myTasks, myIssues, startStr, endStr]);
+
+  if (rows.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
         <Users className="w-12 h-12 mb-3 opacity-30" />
@@ -270,44 +298,120 @@ function PersonalView({
     );
   }
 
-  const today = fmtDate(new Date());
-  const KR_DAYS_LOCAL = ['일', '월', '화', '수', '목', '금', '토'];
+  const COL_W = dates.length > 14 ? 68 : 90;
 
   return (
-    <div className="flex-1 overflow-auto p-6">
-      <div className="max-w-4xl mx-auto space-y-4">
-        {sortedDates.map(dateStr => {
-          const d = new Date(dateStr + 'T00:00:00');
-          const isToday = dateStr === today;
-          const isWE = d.getDay() === 0 || d.getDay() === 6;
-          const items = byDate.get(dateStr) ?? [];
-          // deduplicate by id
-          const seen = new Set<string>();
-          const uniqueItems = items.filter(item => {
-            if (seen.has(item.id)) return false;
-            seen.add(item.id);
-            return true;
-          });
+    <div className="flex-1 overflow-auto">
+      <table className="border-collapse min-w-full text-xs">
+        <thead className="sticky top-0 z-20 bg-card">
+          <tr>
+            <th className="sticky left-0 z-30 bg-card border-b border-r border-border px-3 py-2 text-left min-w-[240px]">
+              <span className="text-xs font-semibold text-muted-foreground">작업 / 이슈</span>
+            </th>
+            {dates.map(d => {
+              const ds = fmtDate(d);
+              const isTd = ds === todayStr;
+              const isWE = isWeekend(d);
+              return (
+                <th key={ds} className={`border-b border-r border-border px-1 py-2 text-center font-medium ${isTd ? 'bg-primary/10 text-primary' : isWE ? 'text-muted-foreground/50 bg-secondary/30' : 'text-muted-foreground'}`}
+                  style={{ minWidth: COL_W, width: COL_W }}>
+                  <div className="text-[11px] font-semibold">{dayLabel(d)}</div>
+                  {isTd && <div className="text-[9px] text-primary font-bold">TODAY</div>}
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, ri) => {
+            const bgBase = ri % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--secondary)/0.08)';
+            const bgClass = ri % 2 === 0 ? 'bg-background' : 'bg-secondary/5';
 
-          return (
-            <div key={dateStr}>
-              <div className={`flex items-center gap-2 mb-2 ${isToday ? 'text-primary' : isWE ? 'text-muted-foreground/50' : 'text-muted-foreground'}`}>
-                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isToday ? 'bg-primary' : 'bg-border'}`} />
-                <span className="text-sm font-semibold">
-                  {dateStr} ({KR_DAYS_LOCAL[d.getDay()]})
-                  {isToday && <span className="ml-1.5 text-xs bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">오늘</span>}
-                </span>
-                <span className="text-xs text-muted-foreground/60">{uniqueItems.length}건</span>
-              </div>
-              <div className="ml-5 space-y-1.5">
-                {uniqueItems.map(item => (
-                  <ItemCard key={item.id} item={item} onClick={() => onItemClick(item)} />
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            if ('task' in row) {
+              const t = row.task;
+              const active = taskActiveDates.get(t.id) ?? new Set<string>();
+              const cellColor = STATUS_CELL[t.kanbanStatus] ?? STATUS_CELL.todo;
+              const item: DayItem = {
+                type: 'task', id: t.id, label: t.taskContent, sub: t.taskCategory,
+                status: t.kanbanStatus, priority: t.priority, module: t.module,
+                startDate: t.scheduledAt?.slice(0, 10) ?? '',
+                endDate: t.completedAt?.slice(0, 10),
+              };
+              return (
+                <tr key={t.id} className={bgClass}>
+                  <td className="sticky left-0 z-10 border-b border-r border-border px-3 py-1.5 align-middle"
+                    style={{ backgroundColor: bgBase }}>
+                    <div className={`flex items-center gap-1.5 ${row.indent ? 'ml-4' : ''}`}>
+                      {row.indent && <span className="text-muted-foreground/40 text-xs flex-shrink-0">└</span>}
+                      <StatusIcon status={t.kanbanStatus} type="task" />
+                      <span className={`truncate max-w-[180px] leading-tight ${row.indent ? 'text-muted-foreground text-[11px]' : 'font-medium text-xs'}`}>{t.taskContent}</span>
+                    </div>
+                    <div className={`text-[10px] text-muted-foreground mt-0.5 truncate ${row.indent ? 'ml-9' : 'ml-4'}`}>
+                      {t.taskCategory}
+                      {t.module && <span className={`ml-1 px-1 rounded ${MODULE_COLOR[t.module] ?? 'bg-secondary text-muted-foreground'}`}>{t.module}</span>}
+                    </div>
+                  </td>
+                  {dates.map(d => {
+                    const ds = fmtDate(d);
+                    const on = active.has(ds);
+                    const isTd = ds === todayStr;
+                    return (
+                      <td key={ds}
+                        onClick={() => on && onItemClick(item)}
+                        className={`border-b border-r border-border align-middle ${isTd ? 'bg-primary/5' : isWeekend(d) ? 'bg-secondary/20' : ''} ${on ? 'cursor-pointer hover:brightness-110' : ''}`}
+                        style={{ minWidth: COL_W, width: COL_W, height: 34 }}>
+                        {on && (
+                          <div className={`mx-0.5 rounded border h-[22px] ${cellColor} flex items-center justify-center gap-0.5`}>
+                            {t.kanbanStatus === 'done' && <CheckCircle2 className="w-2.5 h-2.5 text-green-500" />}
+                            {t.kanbanStatus === 'in_progress' && <Clock className="w-2.5 h-2.5 text-blue-400" />}
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            } else {
+              const issue = row.issue;
+              const ds = issue.occurredAt?.slice(0, 10);
+              const item: DayItem = {
+                type: 'issue', id: issue.id, label: issue.issueContent, sub: issue.issueArea,
+                status: issue.resolvedAt ? 'resolved' : 'open',
+                startDate: ds ?? '', resolved: !!issue.resolvedAt,
+              };
+              return (
+                <tr key={issue.id} className={bgClass}>
+                  <td className="sticky left-0 z-10 border-b border-r border-border px-3 py-1.5 align-middle"
+                    style={{ backgroundColor: bgBase }}>
+                    <div className="flex items-center gap-1.5">
+                      <AlertCircle className={`w-3 h-3 flex-shrink-0 ${issue.resolvedAt ? 'text-green-400' : 'text-red-400'}`} />
+                      <span className="truncate max-w-[180px] font-medium leading-tight">{issue.issueContent}</span>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5 ml-4">{issue.issueArea}</div>
+                  </td>
+                  {dates.map(d => {
+                    const colDs = fmtDate(d);
+                    const on = colDs === ds;
+                    const isTd = colDs === todayStr;
+                    return (
+                      <td key={colDs}
+                        onClick={() => on && onItemClick(item)}
+                        className={`border-b border-r border-border align-middle ${isTd ? 'bg-primary/5' : isWeekend(d) ? 'bg-secondary/20' : ''} ${on ? 'cursor-pointer' : ''}`}
+                        style={{ minWidth: COL_W, width: COL_W, height: 34 }}>
+                        {on && (
+                          <div className={`mx-0.5 rounded border h-[22px] ${issue.resolvedAt ? 'bg-green-500/30 border-green-500/50' : 'bg-orange-500/30 border-orange-500/50'} flex items-center justify-center`}>
+                            <AlertCircle className={`w-2.5 h-2.5 ${issue.resolvedAt ? 'text-green-400' : 'text-orange-400'}`} />
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            }
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -325,7 +429,7 @@ export function WbsFlowPage() {
   const [filterAssignee, setFilterAssignee] = useState('');
   const [selectedItem, setSelectedItem] = useState<DayItem | null>(null);
   const [showOnlyActive, setShowOnlyActive] = useState(false);
-  const [pageView, setPageView] = useState<'grid' | 'personal'>('grid');
+  const [pageView, setPageView] = useState<'grid' | 'personal'>('personal');
   const [personalAssignee, setPersonalAssignee] = useState<string>('');
 
   // ── data fetching ──
@@ -378,8 +482,10 @@ export function WbsFlowPage() {
       const row = ensureRow(assignee);
       if (task.module && !row.roles.includes(task.module)) row.roles.push(task.module);
 
-      const startD = task.scheduledAt ? parseDate(task.scheduledAt) : null;
-      const endD = task.completedAt ? parseDate(task.completedAt) : null;
+      const taskStartStr = task.scheduledAt?.slice(0, 10);
+      const taskEndStr = task.completedAt?.slice(0, 10);
+      const startD = taskStartStr ? parseDate(taskStartStr) : null;
+      const endD = taskEndStr ? parseDate(taskEndStr) : null;
       if (!startD) continue;
 
       const item: DayItem = {
@@ -390,8 +496,10 @@ export function WbsFlowPage() {
         status: task.kanbanStatus,
         priority: task.priority,
         module: task.module,
-        startDate: fmtDate(startD),
-        endDate: endD ? fmtDate(endD) : undefined,
+        startDate: taskStartStr!,
+        endDate: taskEndStr,
+        isSubTask: !!(task as Task & { parentId?: string }).parentId,
+        parentId: (task as Task & { parentId?: string }).parentId,
       };
 
       // Place item on all dates in its range (within view)
@@ -417,8 +525,8 @@ export function WbsFlowPage() {
       const row = ensureRow(assignee);
       if (issue.issueArea && !row.roles.includes(issue.issueArea)) row.roles.push(issue.issueArea);
 
-      const startD = issue.occurredAt ? parseDate(issue.occurredAt) : null;
-      if (!startD) continue;
+      const issueDateStr = issue.occurredAt?.slice(0, 10);
+      if (!issueDateStr) continue;
 
       const item: DayItem = {
         type: 'issue',
@@ -426,13 +534,13 @@ export function WbsFlowPage() {
         label: issue.issueContent,
         sub: issue.issueArea,
         status: issue.resolvedAt ? 'resolved' : 'open',
-        startDate: fmtDate(startD),
-        endDate: issue.resolvedAt ? issue.resolvedAt : undefined,
+        startDate: issueDateStr,
+        endDate: issue.resolvedAt ? issue.resolvedAt.slice(0, 10) : undefined,
         resolved: !!issue.resolvedAt,
       };
 
-      if (fmtDate(startD) >= startStr && fmtDate(startD) <= endStr) {
-        addItem(assignee, fmtDate(startD), item);
+      if (issueDateStr >= startStr && issueDateStr <= endStr) {
+        addItem(assignee, issueDateStr, item);
       }
     }
 
@@ -572,10 +680,12 @@ export function WbsFlowPage() {
       {/* 개인별 보기 */}
       {pageView === 'personal' ? (
         personalAssignee ? (
-          <PersonalView
+          <PersonalGanttView
             assignee={personalAssignee}
             tasks={tasks}
             issues={issues}
+            dates={dates}
+            todayStr={todayStr}
             onItemClick={setSelectedItem}
           />
         ) : (

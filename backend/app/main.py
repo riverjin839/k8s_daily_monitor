@@ -123,6 +123,12 @@ def _run_migrations():
         if kanban_status_is_new:
             with engine.begin() as conn:
                 conn.execute(text("UPDATE tasks SET kanban_status = 'done' WHERE completed_at IS NOT NULL"))
+        # Task: parent_id for sub-tasks
+        if "parent_id" not in task_cols:
+            with engine.begin() as conn:
+                conn.execute(text('ALTER TABLE tasks ADD COLUMN parent_id UUID REFERENCES tasks(id) ON DELETE CASCADE'))
+            import logging as _logging
+            _logging.getLogger(__name__).info("Migration: added tasks.parent_id")
     # issues: Date → DateTime 마이그레이션
     if "issues" in inspector.get_table_names():
         issue_col_map = {col["name"]: col["type"].__class__.__name__ for col in inspector.get_columns("issues")}

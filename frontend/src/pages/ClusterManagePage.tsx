@@ -2,12 +2,13 @@ import { useState, useMemo } from 'react';
 import {
   Server, Pencil, Trash2, X, AlertTriangle,
   Network, Cpu, Search, ChevronDown,
+  LayoutList, LayoutGrid, Loader2,
 } from 'lucide-react';
 import { Cluster, ClusterManageUpdate } from '@/types';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { clustersApi } from '@/services/api';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 
 // ── 운영레벨 ──────────────────────────────────────────────────────────────────
 const OPERATION_LEVELS = [
@@ -90,6 +91,8 @@ function ClusterMetaModal({ isOpen, onClose, cluster, onSaved }: ClusterMetaModa
   const [bond1Mac, setBond1Mac]         = useState(cluster.bond1Mac ?? '');
   const [ciliumConfig, setCilium]       = useState(cluster.ciliumConfig ?? '');
   const [description, setDescription]  = useState(cluster.description ?? '');
+  const [bgpEnabled, setBgpEnabled]     = useState(cluster.bgpEnabled ?? false);
+  const [asNumber, setAsNumber]         = useState(cluster.asNumber ?? '');
   const [saving, setSaving]             = useState(false);
   const [error, setError]               = useState('');
   const [modalTab, setModalTab]         = useState<'node' | 'network' | 'extra'>('node');
@@ -122,6 +125,8 @@ function ClusterMetaModal({ isOpen, onClose, cluster, onSaved }: ClusterMetaModa
         bond1Mac: bond1Mac.trim() || undefined,
         ciliumConfig: ciliumConfig.trim() || undefined,
         description: description.trim() || undefined,
+        bgpEnabled: bgpEnabled,
+        asNumber: asNumber.trim() || undefined,
       };
       await clustersApi.update(cluster.id, payload as Record<string, unknown>);
       onSaved();
@@ -251,6 +256,34 @@ function ClusterMetaModal({ isOpen, onClose, cluster, onSaved }: ClusterMetaModa
                         <input type="text" value={bond1Mac} onChange={(e) => setBond1Mac(e.target.value)}
                           placeholder="aa:bb:cc:dd:ee:f0" className={ic} />
                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">BGP 설정</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-3 px-3 py-2.5 bg-background border border-border rounded-lg">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={bgpEnabled}
+                          onChange={(e) => setBgpEnabled(e.target.checked)}
+                          className="w-4 h-4 accent-primary rounded"
+                        />
+                        <span className="text-sm text-foreground">BGP 사용</span>
+                      </label>
+                    </div>
+                    <div>
+                      <label className={lc}>AS Number</label>
+                      <input
+                        type="text"
+                        value={asNumber}
+                        onChange={(e) => setAsNumber(e.target.value)}
+                        disabled={!bgpEnabled}
+                        placeholder="예: 64512"
+                        className={`${ic} disabled:opacity-40`}
+                      />
                     </div>
                   </div>
                 </div>
@@ -395,6 +428,90 @@ function CidrRow({
       {cidr  && <p className="text-xs font-mono"><span className="text-muted-foreground text-[10px]">CIDR  </span><span className="text-foreground font-semibold">{cidr}</span></p>}
       {first && <p className="text-xs font-mono mt-0.5"><span className="text-muted-foreground text-[10px]">First </span><span className="text-foreground">{first}</span></p>}
       {last  && <p className="text-xs font-mono mt-0.5"><span className="text-muted-foreground text-[10px]">Last  </span><span className="text-foreground">{last}</span></p>}
+    </div>
+  );
+}
+
+// ── Cilium Config 팝업 ────────────────────────────────────────────────────────
+function CiliumConfigModal({ cluster, onClose }: { cluster: Cluster; onClose: () => void }) {
+  const [search, setSearch] = useState('');
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['cilium-config', cluster.id],
+    queryFn: () => clustersApi.getCiliumConfig(cluster.id).then(r => r.data),
+    staleTime: 1000 * 60,
+  });
+
+  const rawText = data?.live ?? data?.stored ?? '';
+  const lines = rawText.split('\n');
+  const filteredLines = search.trim()
+    ? lines.filter((l: string) => l.toLowerCase().includes(search.toLowerCase()))
+    : lines;
+  const displayText = filteredLines.join('\n');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative bg-card border border-border rounded-xl w-full max-w-3xl mx-4 shadow-2xl flex flex-col" style={{ maxHeight: '80vh' }}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
+          <div>
+            <h3 className="text-base font-semibold">Cilium 설정 — {cluster.name}</h3>
+            {data && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                소스: {data.source === 'live' ? '🟢 kubectl 실시간' : data.source === 'stored' ? '🟡 저장된 설정' : '⚪ 없음'}
+                {data.error && <span className="text-amber-400 ml-2">⚠ {data.error}</span>}
+              </p>
+            )}
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-secondary rounded-lg text-muted-foreground hover:text-foreground transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="px-5 py-3 border-b border-border flex-shrink-0">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="설정 항목 검색..."
+              className="w-full pl-8 pr-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          {search && (
+            <p className="text-xs text-muted-foreground mt-1">{filteredLines.length}줄 매치</p>
+          )}
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              <span className="ml-2 text-sm text-muted-foreground">kubectl로 Cilium 설정 조회 중...</span>
+            </div>
+          ) : error ? (
+            <p className="text-sm text-destructive py-4 text-center">조회에 실패했습니다.</p>
+          ) : !rawText ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">Cilium 설정 정보가 없습니다.</p>
+          ) : displayText ? (
+            <pre className="text-xs font-mono text-foreground whitespace-pre-wrap leading-relaxed">
+              {search.trim()
+                ? filteredLines.map((line: string, i: number) => {
+                    const idx = line.toLowerCase().indexOf(search.toLowerCase());
+                    if (idx === -1) return <div key={i}>{line}</div>;
+                    return (
+                      <div key={i}>
+                        {line.slice(0, idx)}
+                        <mark className="bg-yellow-400/30 text-yellow-200 rounded px-0.5">{line.slice(idx, idx + search.length)}</mark>
+                        {line.slice(idx + search.length)}
+                      </div>
+                    );
+                  })
+                : displayText}
+            </pre>
+          ) : (
+            <p className="text-sm text-muted-foreground py-4 text-center">검색 결과 없음</p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -630,6 +747,146 @@ function ClusterCard({
 
 const STATUS_ORDER: Record<string, number> = { critical: 0, warning: 1, healthy: 2, pending: 3 };
 
+// ── 테이블 행 컴포넌트 ────────────────────────────────────────────────────────
+function ClusterTableRow({
+  cluster,
+  onEdit,
+  onDelete,
+  deletingId,
+  overlapGroupIdx,
+  onCilium,
+}: {
+  cluster: Cluster;
+  onEdit: (c: Cluster) => void;
+  onDelete: (c: Cluster) => void;
+  deletingId: string | null;
+  overlapGroupIdx: number | undefined;
+  onCilium: (c: Cluster) => void;
+}) {
+  const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
+  const lv = LEVEL_BADGE[cluster.operationLevel ?? ''];
+
+  return (
+    <tr className="border-b border-border hover:bg-secondary/20 transition-colors">
+      {/* 클러스터명 */}
+      <td className="px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />
+          <span className="font-medium text-sm text-foreground">{cluster.name}</span>
+        </div>
+        {cluster.hostname && (
+          <p className="text-[10px] font-mono text-muted-foreground mt-0.5 ml-4">{cluster.hostname}</p>
+        )}
+      </td>
+      {/* 상태 */}
+      <td className="px-3 py-2.5">
+        <span className={`text-[11px] px-2 py-0.5 rounded-full border ${st.badge}`}>{st.label}</span>
+      </td>
+      {/* 지역 */}
+      <td className="px-3 py-2.5 text-sm text-muted-foreground">{cluster.region || '-'}</td>
+      {/* 운영레벨 */}
+      <td className="px-3 py-2.5">
+        {cluster.operationLevel ? (
+          <span className={`text-[11px] px-2 py-0.5 rounded-full border ${lv}`}>
+            {OPERATION_LEVELS.find(l => l.value === cluster.operationLevel)?.label ?? cluster.operationLevel}
+          </span>
+        ) : <span className="text-muted-foreground text-xs">-</span>}
+      </td>
+      {/* BGP / AS */}
+      <td className="px-3 py-2.5">
+        {cluster.bgpEnabled ? (
+          <div>
+            <span className="text-[11px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">BGP</span>
+            {cluster.asNumber && (
+              <p className="text-[10px] font-mono text-muted-foreground mt-0.5">AS{cluster.asNumber}</p>
+            )}
+          </div>
+        ) : <span className="text-muted-foreground text-xs">-</span>}
+      </td>
+      {/* Node CIDR */}
+      <td className="px-3 py-2.5">
+        {cluster.cidr ? (
+          <div>
+            <p className="text-xs font-mono text-foreground">{cluster.cidr}</p>
+            {(cluster.firstHost || cluster.lastHost) && (
+              <p className="text-[10px] font-mono text-muted-foreground">{cluster.firstHost} ~ {cluster.lastHost}</p>
+            )}
+            {overlapGroupIdx !== undefined && (
+              <span className="text-[10px] text-amber-400 flex items-center gap-0.5">
+                <AlertTriangle className="w-2.5 h-2.5" />겹침
+              </span>
+            )}
+          </div>
+        ) : <span className="text-muted-foreground text-xs">-</span>}
+      </td>
+      {/* Pod CIDR */}
+      <td className="px-3 py-2.5">
+        {cluster.podCidr ? (
+          <div>
+            <p className="text-xs font-mono text-foreground">{cluster.podCidr}</p>
+            {(cluster.podFirstHost || cluster.podLastHost) && (
+              <p className="text-[10px] font-mono text-muted-foreground">{cluster.podFirstHost} ~ {cluster.podLastHost}</p>
+            )}
+          </div>
+        ) : <span className="text-muted-foreground text-xs">-</span>}
+      </td>
+      {/* Svc CIDR */}
+      <td className="px-3 py-2.5">
+        {cluster.svcCidr ? (
+          <div>
+            <p className="text-xs font-mono text-foreground">{cluster.svcCidr}</p>
+            {(cluster.svcFirstHost || cluster.svcLastHost) && (
+              <p className="text-[10px] font-mono text-muted-foreground">{cluster.svcFirstHost} ~ {cluster.svcLastHost}</p>
+            )}
+          </div>
+        ) : <span className="text-muted-foreground text-xs">-</span>}
+      </td>
+      {/* Max Pods */}
+      <td className="px-3 py-2.5 text-sm text-center">
+        {cluster.maxPod ? (
+          <span className="font-mono text-foreground">{cluster.maxPod}</span>
+        ) : <span className="text-muted-foreground text-xs">-</span>}
+      </td>
+      {/* K8s 정보 (API Endpoint) */}
+      <td className="px-3 py-2.5 max-w-[180px]">
+        <p className="text-[11px] font-mono text-muted-foreground truncate" title={cluster.apiEndpoint}>
+          {cluster.apiEndpoint}
+        </p>
+        {cluster.nodeCount && (
+          <p className="text-[10px] text-muted-foreground/60">노드 {cluster.nodeCount}개</p>
+        )}
+      </td>
+      {/* Cilium / 수정 / 삭제 */}
+      <td className="px-3 py-2.5">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onCilium(cluster)}
+            className="px-2 py-1 text-[11px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20 rounded transition-colors"
+            title="Cilium 설정 보기"
+          >
+            Cilium
+          </button>
+          <button
+            onClick={() => onEdit(cluster)}
+            className="p-1.5 hover:bg-secondary rounded text-muted-foreground hover:text-foreground transition-colors"
+            title="수정"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => onDelete(cluster)}
+            disabled={deletingId === cluster.id}
+            className="p-1.5 hover:bg-red-500/10 rounded text-muted-foreground hover:text-red-400 disabled:opacity-40 transition-colors"
+            title="삭제"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 // ── 메인 페이지 ───────────────────────────────────────────────────────────────
 export function ClusterManagePage() {
   const { clusters } = useClusterStore();
@@ -642,6 +899,8 @@ export function ClusterManagePage() {
   const [filterLevel, setFilterLevel]   = useState('');
   const [sortBy, setSortBy]             = useState<'name' | 'status' | 'level'>('name');
   const [showFilter, setShowFilter]     = useState(false);
+  const [viewMode, setViewMode]         = useState<'table' | 'card'>('table');
+  const [ciliumCluster, setCiliumCluster] = useState<Cluster | null>(null);
 
   // 검색 + 필터 + 정렬
   const filteredClusters = useMemo(() => {
@@ -742,6 +1001,23 @@ export function ClusterManagePage() {
               </span>
             )}
           </div>
+          {/* 뷰 모드 토글 */}
+          <div className="flex items-center gap-1 bg-secondary rounded-lg p-0.5">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              title="테이블 보기"
+            >
+              <LayoutList className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('card')}
+              className={`p-1.5 rounded-md transition-colors ${viewMode === 'card' ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              title="카드 보기"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
           <button
             onClick={() => setShowFilter((v) => !v)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors text-muted-foreground hover:text-foreground"
@@ -795,7 +1071,7 @@ export function ClusterManagePage() {
           </div>
         )}
 
-        {/* 카드 그리드 */}
+        {/* 클러스터 목록 */}
         {clusters.length === 0 ? (
           <div className="text-center py-20">
             <Server className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
@@ -806,6 +1082,41 @@ export function ClusterManagePage() {
           <div className="text-center py-16 text-muted-foreground">
             <Search className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p>검색 결과가 없습니다.</p>
+          </div>
+        ) : viewMode === 'table' ? (
+          <div className="rounded-xl border border-border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead className="bg-secondary/50">
+                  <tr className="border-b border-border">
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">클러스터명</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">상태</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">지역</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">운영레벨</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">BGP / AS</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">Node CIDR</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">Pod CIDR</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">Svc CIDR</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-semibold text-muted-foreground">Max Pods</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">K8s 정보</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">액션</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredClusters.map((cluster) => (
+                    <ClusterTableRow
+                      key={cluster.id}
+                      cluster={cluster}
+                      onEdit={(c) => setEditCluster(c)}
+                      onDelete={handleDelete}
+                      deletingId={deletingId}
+                      overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
+                      onCilium={(c) => setCiliumCluster(c)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : (
           <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
@@ -834,6 +1145,14 @@ export function ClusterManagePage() {
           onClose={() => setEditCluster(null)}
           cluster={editCluster}
           onSaved={handleSaved}
+        />
+      )}
+
+      {/* Cilium 설정 팝업 */}
+      {ciliumCluster && (
+        <CiliumConfigModal
+          cluster={ciliumCluster}
+          onClose={() => setCiliumCluster(null)}
         />
       )}
     </div>

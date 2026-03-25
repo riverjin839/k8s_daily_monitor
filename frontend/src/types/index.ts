@@ -33,6 +33,8 @@ export interface Cluster {
   description?: string;
   nodeCount?: number;
   hostname?: string;
+  bgpEnabled?: boolean;
+  asNumber?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -58,6 +60,8 @@ export interface ClusterManageUpdate {
   description?: string;
   nodeCount?: number;
   hostname?: string;
+  bgpEnabled?: boolean;
+  asNumber?: string;
 }
 
 // Addon

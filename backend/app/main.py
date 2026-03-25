@@ -66,6 +66,8 @@ def _run_migrations():
             ("bond0_mac", "VARCHAR(50)"),
             ("bond1_ip", "VARCHAR(100)"),
             ("bond1_mac", "VARCHAR(50)"),
+            ("bgp_enabled", "BOOLEAN DEFAULT FALSE"),
+            ("as_number", "VARCHAR(20)"),
         ]
         for col_name, col_type in new_cluster_cols:
             if col_name not in columns:

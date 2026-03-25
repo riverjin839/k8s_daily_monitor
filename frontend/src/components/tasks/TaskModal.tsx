@@ -4,6 +4,7 @@ import { Task, TaskCreate, KanbanStatus, TaskModule, TaskTypeLabel } from '@/typ
 import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from './taskKanbanUtils';
 import { loadTaskImages } from '@/lib/taskImages';
 import { RichTextEditor } from '@/components/editor';
+import { useAssignees } from '@/hooks/useAssignees';
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -69,6 +70,7 @@ function toDatetimeLocal(dateStr?: string | null): string {
 }
 
 export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: TaskModalProps) {
+  const { data: registeredAssignees = [] } = useAssignees();
   const [assignee, setAssignee] = useState('');
   const [clusterId, setClusterId] = useState('');
   const [taskCategory, setTaskCategory] = useState('');
@@ -216,7 +218,13 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
                 placeholder="이름"
                 className={inputClass}
                 required
+                list="task-assignee-list"
               />
+              <datalist id="task-assignee-list">
+                {registeredAssignees.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
             </div>
             <div>
               <label className={labelClass}>대상 클러스터</label>

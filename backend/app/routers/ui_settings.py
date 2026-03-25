@@ -94,12 +94,32 @@ def update_cluster_links(payload: ClusterLinksUpdate, db: Session = Depends(get_
     return ClusterLinksResponse(data=ClusterLinksPayload(**next_value))
 
 
+def _normalize_assignee(a) -> dict | None:
+    """Normalize an assignee entry: accepts both plain string (legacy) and object."""
+    if isinstance(a, str):
+        name = a.strip()
+        return {"name": name} if name else None
+    if isinstance(a, dict):
+        name = str(a.get("name", "")).strip()
+        return {
+            "name": name,
+            "employeeId": a.get("employeeId") or a.get("employee_id"),
+            "email": a.get("email"),
+            "ip": a.get("ip"),
+            "primaryRole": a.get("primaryRole") or a.get("primary_role"),
+            "secondaryRole": a.get("secondaryRole") or a.get("secondary_role"),
+        } if name else None
+    return None
+
+
 @router.get("/assignees")
 def get_assignees(db: Session = Depends(get_db)):
     setting = _get_or_create(db, ASSIGNEES_KEY, DEFAULT_ASSIGNEES)
     value = setting.value
     if isinstance(value, list):
-        return {"data": value}
+        # Normalize legacy plain strings to Assignee objects
+        normalized = [n for a in value if (n := _normalize_assignee(a)) is not None]
+        return {"data": normalized}
     return {"data": []}
 
 
@@ -108,14 +128,14 @@ def update_assignees(payload: dict, db: Session = Depends(get_db)):
     assignees = payload.get("assignees", [])
     if not isinstance(assignees, list):
         assignees = []
-    # clean: unique non-empty strings
-    seen = set()
+    # Normalize and deduplicate by name
+    seen: set[str] = set()
     cleaned = []
-    for a in assignees:
-        a = str(a).strip()
-        if a and a not in seen:
-            seen.add(a)
-            cleaned.append(a)
+    for raw in assignees:
+        entry = _normalize_assignee(raw)
+        if entry and entry["name"] not in seen:
+            seen.add(entry["name"])
+            cleaned.append(entry)
     setting = _get_or_create(db, ASSIGNEES_KEY, DEFAULT_ASSIGNEES)
     setting.value = cleaned
     db.commit()

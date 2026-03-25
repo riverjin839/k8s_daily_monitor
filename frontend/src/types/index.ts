@@ -576,6 +576,54 @@ export interface ManagementServerListResponse {
   data: ManagementServer[];
 }
 
+// Infrastructure Nodes (물리 서버 노드)
+export type InfraNodeRole = 'master' | 'worker' | 'storage' | 'infra';
+
+export interface InfraNode {
+  id: string;
+  clusterId: string;
+  hostname: string;
+  rackName?: string;
+  ipAddress?: string;
+  role: InfraNodeRole;
+  cpuCores?: number;
+  ramGb?: number;
+  diskGb?: number;
+  osInfo?: string;
+  switchName?: string;
+  notes?: string;
+  autoSynced: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InfraNodeCreate {
+  clusterId: string;
+  hostname: string;
+  rackName?: string;
+  ipAddress?: string;
+  role?: InfraNodeRole;
+  cpuCores?: number;
+  ramGb?: number;
+  diskGb?: number;
+  osInfo?: string;
+  switchName?: string;
+  notes?: string;
+}
+
+export interface InfraNodeUpdate extends Partial<Omit<InfraNodeCreate, 'clusterId'>> {}
+
+export interface InfraNodeListResponse {
+  data: InfraNode[];
+  total: number;
+}
+
+export interface InfraSyncResult {
+  created: number;
+  updated: number;
+  total: number;
+}
+
 export interface MindMapNodeUpdate {
   label?: string;
   note?: string;

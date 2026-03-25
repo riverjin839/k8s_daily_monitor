@@ -84,6 +84,10 @@ export const clustersApi = {
     api.get<{ content: string; path: string }>(`/clusters/${id}/kubeconfig`),
   updateKubeconfig: (id: string, content: string) =>
     api.put<{ content: string; path: string }>(`/clusters/${id}/kubeconfig`, { content }),
+  verify: (id: string) =>
+    api.post<{ ok: boolean; cluster_name: string; results: { check: string; ok: boolean | null; detail: string }[] }>(`/clusters/${id}/verify`),
+  getCiliumConfig: (id: string) =>
+    api.get<{ live: string | null; stored: string | null; source: string; error: string | null }>(`/clusters/${id}/cilium-config`),
 };
 
 // Health API
@@ -221,7 +225,8 @@ export interface TodayTasksSummary {
 }
 
 export const todayTasksApi = {
-  getSummary: () => api.get<TodayTasksSummary>('/tasks/today/summary'),
+  getSummary: (date?: string) =>
+    api.get<TodayTasksSummary>('/tasks/today/summary', { params: date ? { date } : {} }),
 };
 
 // Tasks API

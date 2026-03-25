@@ -1,6 +1,7 @@
 import csv
 import io
 from datetime import date, datetime
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -147,14 +148,21 @@ def export_csv(
 
 
 @router.get("/today/summary")
-def get_today_tasks(db: Session = Depends(get_db)):
+def get_today_tasks(date: Optional[str] = None, db: Session = Depends(get_db)):
     """
-    오늘 할일 게시판 데이터:
-    - 오늘 예정된 작업 (scheduled_at = 오늘)
-    - 진행 중인 작업 (kanban_status = in_progress)
+    할일 게시판 데이터 (date 미입력 시 오늘):
+    - 지정일 예정된 작업 (scheduled_at = 해당일)
+    - 진행 중인 작업 (kanban_status = in_progress, 해당일 제외)
     담당자별로 그룹화해서 반환.
     """
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    if date:
+        try:
+            target = datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            target = datetime.utcnow()
+    else:
+        target = datetime.utcnow()
+    today_start = target.replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start.replace(hour=23, minute=59, second=59)
 
     # 오늘 예정 작업 (완료 포함)
@@ -229,7 +237,7 @@ def get_today_tasks(db: Session = Depends(get_db)):
         })
 
     return {
-        "date": today_start.date().isoformat(),
+        "date": today_start.strftime("%Y-%m-%d"),
         "total_today": len(today_tasks),
         "total_in_progress": len(in_progress_tasks),
         "groups": result,

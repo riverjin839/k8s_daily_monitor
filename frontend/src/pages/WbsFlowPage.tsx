@@ -209,6 +209,109 @@ function SummaryBar({ tasks, issues }: { tasks: Task[]; issues: Issue[] }) {
   );
 }
 
+// ── 개인별 보기 ────────────────────────────────────────────────────────────────
+function PersonalView({
+  assignee,
+  tasks,
+  issues,
+  onItemClick,
+}: {
+  assignee: string;
+  tasks: Task[];
+  issues: Issue[];
+  onItemClick: (item: DayItem) => void;
+}) {
+  const myTasks = tasks.filter(t => (t.assignee || '미지정') === assignee);
+  const myIssues = issues.filter(i => (i.assignee || '미지정') === assignee);
+
+  // 날짜 → 아이템 매핑
+  const byDate = new Map<string, DayItem[]>();
+
+  for (const task of myTasks) {
+    const startStr = task.scheduledAt?.slice(0, 10);
+    if (!startStr) continue;
+    const endStr = task.completedAt?.slice(0, 10) ?? startStr;
+    let cur = new Date(startStr + 'T00:00:00');
+    const end = new Date(endStr + 'T00:00:00');
+    while (cur <= end) {
+      const key = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
+      if (!byDate.has(key)) byDate.set(key, []);
+      byDate.get(key)!.push({
+        type: 'task', id: task.id,
+        label: task.taskContent, sub: task.taskCategory,
+        status: task.kanbanStatus, priority: task.priority, module: task.module,
+        startDate: startStr, endDate: endStr !== startStr ? endStr : undefined,
+      });
+      cur.setDate(cur.getDate() + 1);
+    }
+  }
+
+  for (const issue of myIssues) {
+    const startStr = issue.occurredAt?.slice(0, 10);
+    if (!startStr) continue;
+    if (!byDate.has(startStr)) byDate.set(startStr, []);
+    byDate.get(startStr)!.push({
+      type: 'issue', id: issue.id,
+      label: issue.issueContent, sub: issue.issueArea,
+      status: issue.resolvedAt ? 'resolved' : 'open',
+      startDate: startStr,
+      resolved: !!issue.resolvedAt,
+    });
+  }
+
+  const sortedDates = Array.from(byDate.keys()).sort();
+
+  if (sortedDates.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
+        <Users className="w-12 h-12 mb-3 opacity-30" />
+        <p className="text-sm">"{assignee}"의 작업/이슈가 없습니다.</p>
+      </div>
+    );
+  }
+
+  const today = fmtDate(new Date());
+  const KR_DAYS_LOCAL = ['일', '월', '화', '수', '목', '금', '토'];
+
+  return (
+    <div className="flex-1 overflow-auto p-6">
+      <div className="max-w-4xl mx-auto space-y-4">
+        {sortedDates.map(dateStr => {
+          const d = new Date(dateStr + 'T00:00:00');
+          const isToday = dateStr === today;
+          const isWE = d.getDay() === 0 || d.getDay() === 6;
+          const items = byDate.get(dateStr) ?? [];
+          // deduplicate by id
+          const seen = new Set<string>();
+          const uniqueItems = items.filter(item => {
+            if (seen.has(item.id)) return false;
+            seen.add(item.id);
+            return true;
+          });
+
+          return (
+            <div key={dateStr}>
+              <div className={`flex items-center gap-2 mb-2 ${isToday ? 'text-primary' : isWE ? 'text-muted-foreground/50' : 'text-muted-foreground'}`}>
+                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isToday ? 'bg-primary' : 'bg-border'}`} />
+                <span className="text-sm font-semibold">
+                  {dateStr} ({KR_DAYS_LOCAL[d.getDay()]})
+                  {isToday && <span className="ml-1.5 text-xs bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">오늘</span>}
+                </span>
+                <span className="text-xs text-muted-foreground/60">{uniqueItems.length}건</span>
+              </div>
+              <div className="ml-5 space-y-1.5">
+                {uniqueItems.map(item => (
+                  <ItemCard key={item.id} item={item} onClick={() => onItemClick(item)} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── main page ─────────────────────────────────────────────────────────────────
 
 export function WbsFlowPage() {
@@ -222,6 +325,8 @@ export function WbsFlowPage() {
   const [filterAssignee, setFilterAssignee] = useState('');
   const [selectedItem, setSelectedItem] = useState<DayItem | null>(null);
   const [showOnlyActive, setShowOnlyActive] = useState(false);
+  const [pageView, setPageView] = useState<'grid' | 'personal'>('grid');
+  const [personalAssignee, setPersonalAssignee] = useState<string>('');
 
   // ── data fetching ──
   const { data: taskRes } = useQuery({
@@ -370,6 +475,21 @@ export function WbsFlowPage() {
           <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
             담당자별 역할 · 날짜별 업무 현황
           </span>
+          {/* 보기 모드 토글 */}
+          <div className="flex items-center gap-0.5 bg-secondary rounded-lg p-0.5 text-xs ml-2">
+            <button
+              onClick={() => setPageView('grid')}
+              className={`px-3 py-1.5 rounded-md font-medium transition-colors ${pageView === 'grid' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              전체
+            </button>
+            <button
+              onClick={() => setPageView('personal')}
+              className={`px-3 py-1.5 rounded-md font-medium transition-colors ${pageView === 'personal' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              개인별
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
@@ -403,6 +523,21 @@ export function WbsFlowPage() {
             ))}
           </div>
 
+          {/* 개인별 보기: 담당자 선택 */}
+          {pageView === 'personal' && (
+            <div className="flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-primary" />
+              <select
+                value={personalAssignee}
+                onChange={e => setPersonalAssignee(e.target.value)}
+                className="text-xs bg-secondary border border-primary/30 rounded-lg px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="">담당자 선택...</option>
+                {allAssignees.map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </div>
+          )}
+
           {/* Assignee filter */}
           <div className="flex items-center gap-1.5">
             <Filter className="w-3.5 h-3.5 text-muted-foreground" />
@@ -434,7 +569,23 @@ export function WbsFlowPage() {
 
       <SummaryBar tasks={tasks} issues={issues} />
 
-      {/* Grid */}
+      {/* 개인별 보기 */}
+      {pageView === 'personal' ? (
+        personalAssignee ? (
+          <PersonalView
+            assignee={personalAssignee}
+            tasks={tasks}
+            issues={issues}
+            onItemClick={setSelectedItem}
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
+            <Users className="w-12 h-12 mb-3 opacity-30" />
+            <p className="text-sm">왼쪽에서 담당자를 선택하세요.</p>
+          </div>
+        )
+      ) : (
+      /* Grid */
       <div className="flex-1 overflow-auto">
         {filteredRows.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
@@ -526,6 +677,7 @@ export function WbsFlowPage() {
           </table>
         )}
       </div>
+      )}
 
       {/* Legend */}
       <div className="px-4 py-2 border-t border-border bg-card flex items-center gap-4 text-xs text-muted-foreground flex-wrap">

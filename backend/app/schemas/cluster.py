@@ -41,6 +41,8 @@ class ClusterBase(BaseModel):
     description: Optional[str] = None
     node_count: Optional[int] = None
     hostname: Optional[str] = None
+    bgp_enabled: Optional[bool] = None
+    as_number: Optional[str] = None
 
 
 class ClusterCreate(ClusterBase):
@@ -75,6 +77,8 @@ class ClusterUpdate(BaseModel):
     description: Optional[str] = None
     node_count: Optional[int] = None
     hostname: Optional[str] = None
+    bgp_enabled: Optional[bool] = None
+    as_number: Optional[str] = None
 
 
 class ClusterResponse(ClusterBase):

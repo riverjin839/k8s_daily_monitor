@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye } from 'lucide-react';
 import { useClusters, useUpdateCluster, useDeleteCluster } from '@/hooks/useCluster';
+import { clustersApi } from '@/services/api';
 import { useClusterStore } from '@/stores/clusterStore';
 import { AddClusterModal, KubeconfigEditModal } from '@/components/dashboard';
 import { Cluster } from '@/types';
@@ -140,6 +141,8 @@ export function SettingsPage() {
   const [editCluster, setEditCluster] = useState<Cluster | null>(null);
   const [kubeconfigCluster, setKubeconfigCluster] = useState<Cluster | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [verifyResults, setVerifyResults] = useState<Record<string, { ok: boolean; detail: string }>>({});
 
   const { clusters } = useClusterStore();
   useClusters();
@@ -163,6 +166,22 @@ export function SettingsPage() {
       alert(`삭제 실패: ${msg}`);
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleVerify = async (cluster: Cluster) => {
+    setVerifyingId(cluster.id);
+    try {
+      const res = await clustersApi.verify(cluster.id);
+      const data = res.data;
+      const summary = data.results
+        .map((r) => `${r.check === 'api_server' ? 'API서버' : r.check === 'kubeconfig_auth' ? '인증' : '노드조회'}: ${r.ok === null ? '건너뜀' : r.ok ? '✓' : '✗'} ${r.detail}`)
+        .join(' | ');
+      setVerifyResults((prev) => ({ ...prev, [cluster.id]: { ok: data.ok, detail: summary } }));
+    } catch {
+      setVerifyResults((prev) => ({ ...prev, [cluster.id]: { ok: false, detail: '연결 확인 실패' } }));
+    } finally {
+      setVerifyingId(null);
     }
   };
 
@@ -275,9 +294,30 @@ export function SettingsPage() {
                         <span className="ml-4">수정일: {formatDateTime(cluster.updatedAt)}</span>
                       )}
                     </div>
+                    {verifyResults[cluster.id] && (
+                      <div className={`text-xs mt-1 px-2 py-1 rounded ${
+                        verifyResults[cluster.id].ok
+                          ? 'bg-emerald-500/10 text-emerald-400'
+                          : 'bg-red-500/10 text-red-400'
+                      }`}>
+                        {verifyResults[cluster.id].ok ? '✓ 연결 정상' : '✗ 연결 이상'} — {verifyResults[cluster.id].detail}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleVerify(cluster)}
+                      disabled={verifyingId === cluster.id}
+                      className="p-2 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-primary disabled:opacity-40"
+                      title="연결 확인"
+                    >
+                      {verifyingId === cluster.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <ShieldCheck className="w-4 h-4" />
+                      )}
+                    </button>
                     <button
                       onClick={() => setKubeconfigCluster(cluster)}
                       className="p-2 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"

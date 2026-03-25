@@ -1,4 +1,5 @@
 import os
+import subprocess
 import tempfile
 
 import httpx
@@ -330,3 +331,95 @@ def update_kubeconfig(
     cluster.kubeconfig_path = saved_path
     db.commit()
     return KubeconfigResponse(content=body.content.strip(), path=saved_path)
+
+
+@router.post("/{cluster_id}/verify")
+def verify_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
+    """클러스터 연결 상태 상세 검증"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+
+    results = []
+
+    # 1. API Server 연결
+    try:
+        healthz_url = (cluster.api_endpoint or "").rstrip("/") + "/healthz"
+        with httpx.Client(verify=False, timeout=_CONNECT_TIMEOUT) as client:
+            resp = client.get(healthz_url)
+        ok = resp.status_code < 500
+        results.append({"check": "api_server", "ok": ok, "detail": f"HTTP {resp.status_code} — {resp.text[:80].strip()}"})
+    except httpx.ConnectError as e:
+        results.append({"check": "api_server", "ok": False, "detail": f"연결 실패: {str(e)[:80]}"})
+    except httpx.TimeoutException:
+        results.append({"check": "api_server", "ok": False, "detail": f"타임아웃 ({_CONNECT_TIMEOUT}s)"})
+    except Exception as e:
+        results.append({"check": "api_server", "ok": False, "detail": str(e)[:80]})
+
+    # 2. kubeconfig 인증
+    kc_path = cluster.kubeconfig_path
+    if kc_path and os.path.exists(kc_path):
+        try:
+            api_client = k8s_config.new_client_from_config(config_file=kc_path)
+            v1 = k8s_client.CoreV1Api(api_client)
+            v1.list_namespace(limit=1, _request_timeout=_K8S_AUTH_TIMEOUT)
+            results.append({"check": "kubeconfig_auth", "ok": True, "detail": "인증 성공"})
+        except ApiException as e:
+            results.append({"check": "kubeconfig_auth", "ok": False, "detail": f"HTTP {e.status}: {e.reason}"})
+        except Exception as e:
+            results.append({"check": "kubeconfig_auth", "ok": False, "detail": str(e)[:80]})
+    else:
+        results.append({"check": "kubeconfig_auth", "ok": None, "detail": "kubeconfig 파일 없음"})
+
+    # 3. kubectl get nodes
+    if kc_path and os.path.exists(kc_path):
+        try:
+            cmd = ["kubectl", "--kubeconfig", kc_path]
+            if cluster.api_endpoint:
+                cmd += ["--server", cluster.api_endpoint]
+            cmd += ["get", "nodes", "--no-headers"]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            if res.returncode == 0:
+                node_lines = [l for l in res.stdout.strip().split("\n") if l]
+                results.append({"check": "kubectl_nodes", "ok": True, "detail": f"{len(node_lines)}개 노드 조회 성공"})
+            else:
+                results.append({"check": "kubectl_nodes", "ok": False, "detail": res.stderr.strip()[:100]})
+        except Exception as e:
+            results.append({"check": "kubectl_nodes", "ok": False, "detail": str(e)[:80]})
+    else:
+        results.append({"check": "kubectl_nodes", "ok": None, "detail": "kubeconfig 파일 없음"})
+
+    overall_ok = all(r["ok"] is True for r in results if r["ok"] is not None)
+    return {"cluster_id": str(cluster_id), "cluster_name": cluster.name, "ok": overall_ok, "results": results}
+
+
+@router.get("/{cluster_id}/cilium-config")
+def get_cluster_cilium_config(cluster_id: UUID, db: Session = Depends(get_db)):
+    """Cilium ConfigMap 조회 (kubectl 또는 저장된 설정)"""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+
+    live_config = None
+    error_msg = None
+    kc_path = cluster.kubeconfig_path
+    if kc_path and os.path.exists(kc_path):
+        try:
+            cmd = ["kubectl", "--kubeconfig", kc_path]
+            if cluster.api_endpoint:
+                cmd += ["--server", cluster.api_endpoint]
+            cmd += ["-n", "kube-system", "get", "configmap", "cilium-config", "-o", "yaml"]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+            if res.returncode == 0:
+                live_config = res.stdout
+            else:
+                error_msg = res.stderr.strip()[:200]
+        except Exception as e:
+            error_msg = str(e)[:100]
+
+    return {
+        "live": live_config,
+        "stored": cluster.cilium_config,
+        "source": "live" if live_config else ("stored" if cluster.cilium_config else "none"),
+        "error": error_msg,
+    }

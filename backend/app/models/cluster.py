@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Enum, Integer, Text
+from sqlalchemy import Column, String, DateTime, Enum, Integer, Text, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -47,6 +47,8 @@ class Cluster(Base):
     bond0_mac = Column(String(50), nullable=True)
     bond1_ip = Column(String(100), nullable=True)
     bond1_mac = Column(String(50), nullable=True)
+    bgp_enabled = Column(Boolean, nullable=True, default=False)   # BGP 설정 여부
+    as_number = Column(String(20), nullable=True)                  # BGP AS 번호
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

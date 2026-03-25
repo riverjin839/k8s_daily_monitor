@@ -12,6 +12,8 @@ import {
   Loader2,
   Plus,
   ExternalLink,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { todayTasksApi, tasksApi, TodayTaskGroup } from '@/services/api';
 import { Task, TaskCreate, KanbanStatus } from '@/types';
@@ -40,6 +42,21 @@ function getTodayString(): string {
   const m = String(now.getMonth() + 1).padStart(2, '0');
   const d = String(now.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+}
+
+function addDaysToStr(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+
+function formatDisplayDate(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  const days = ['일', '월', '화', '수', '목', '금', '토'];
+  return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
 }
 
 function formatScheduledAt(dateStr?: string | null): string {
@@ -237,10 +254,11 @@ export function TodoTodayPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const today = getTodayString();
+  const [selectedDate, setSelectedDate] = useState<string>(getTodayString());
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ['tasks', 'today'],
-    queryFn: () => todayTasksApi.getSummary().then((r) => r.data),
+    queryKey: ['tasks', 'today', selectedDate],
+    queryFn: () => todayTasksApi.getSummary(selectedDate).then((r) => r.data),
     refetchInterval: 60000, // 1분 자동 갱신
   });
 
@@ -298,8 +316,37 @@ export function TodoTodayPage() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <CalendarCheck2 className="w-5 h-5 text-primary" />
-            <h1 className="text-xl font-bold">오늘 할일</h1>
-            <span className="text-sm text-muted-foreground">{today}</span>
+            <h1 className="text-xl font-bold">할일</h1>
+            <div className="flex items-center gap-1 bg-secondary rounded-lg px-1 py-0.5">
+              <button
+                onClick={() => setSelectedDate(addDaysToStr(selectedDate, -1))}
+                className="p-1.5 hover:bg-card rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                title="이전 날"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-sm text-foreground px-2 min-w-[200px] text-center">
+                {formatDisplayDate(selectedDate)}
+                {selectedDate === today && (
+                  <span className="ml-1.5 text-xs text-primary font-medium">오늘</span>
+                )}
+              </span>
+              <button
+                onClick={() => setSelectedDate(addDaysToStr(selectedDate, 1))}
+                className="p-1.5 hover:bg-card rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                title="다음 날"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            {selectedDate !== today && (
+              <button
+                onClick={() => setSelectedDate(today)}
+                className="text-xs px-2.5 py-1 rounded-full border border-primary/30 text-primary hover:bg-primary/10 transition-colors"
+              >
+                오늘로
+              </button>
+            )}
           </div>
           <p className="text-sm text-muted-foreground">
             오늘 예정된 작업과 진행 중인 작업을 담당자별로 확인합니다.

@@ -231,7 +231,7 @@ function PersonalView({
     const startStr = task.scheduledAt?.slice(0, 10);
     if (!startStr) continue;
     const endStr = task.completedAt?.slice(0, 10) ?? startStr;
-    let cur = new Date(startStr + 'T00:00:00');
+    const cur = new Date(startStr + 'T00:00:00');
     const end = new Date(endStr + 'T00:00:00');
     while (cur <= end) {
       const key = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;

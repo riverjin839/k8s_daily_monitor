@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { Issue, IssueCreate } from '@/types';
 import { loadIssueImages } from '@/lib/issueImages';
 import { RichTextEditor } from '@/components/editor';
+import { useAssignees } from '@/hooks/useAssignees';
 
 interface IssueModalProps {
   isOpen: boolean;
@@ -42,6 +43,7 @@ function toDatetimeLocal(dateStr?: string | null): string {
 }
 
 export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: IssueModalProps) {
+  const { data: registeredAssignees = [] } = useAssignees();
   const [assignee, setAssignee] = useState('');
   const [clusterId, setClusterId] = useState('');
   const [issueArea, setIssueArea] = useState('');
@@ -145,7 +147,13 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
                 placeholder="이름"
                 className={inputClass}
                 required
+                list="issue-assignee-list"
               />
+              <datalist id="issue-assignee-list">
+                {registeredAssignees.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
             </div>
 
             {/* 대상 클러스터 */}

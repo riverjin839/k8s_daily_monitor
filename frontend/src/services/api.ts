@@ -385,4 +385,11 @@ export const managementServersApi = {
     ),
 };
 
+// Assignees API (담당자 관리)
+export const assigneesApi = {
+  getAll: () => api.get<{ data: string[] }>('/ui-settings/assignees'),
+  update: (assignees: string[]) =>
+    api.put<{ data: string[] }>('/ui-settings/assignees', { assignees }),
+};
+
 export default api;

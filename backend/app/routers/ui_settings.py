@@ -15,6 +15,8 @@ router = APIRouter(prefix="/ui-settings", tags=["ui-settings"])
 
 UI_SETTINGS_KEY = "ui_settings"
 CLUSTER_LINKS_KEY = "cluster_links"
+ASSIGNEES_KEY = "assignees"
+DEFAULT_ASSIGNEES = []
 
 
 DEFAULT_UI_SETTINGS = {
@@ -90,3 +92,32 @@ def update_cluster_links(payload: ClusterLinksUpdate, db: Session = Depends(get_
     db.refresh(setting)
 
     return ClusterLinksResponse(data=ClusterLinksPayload(**next_value))
+
+
+@router.get("/assignees")
+def get_assignees(db: Session = Depends(get_db)):
+    setting = _get_or_create(db, ASSIGNEES_KEY, DEFAULT_ASSIGNEES)
+    value = setting.value
+    if isinstance(value, list):
+        return {"data": value}
+    return {"data": []}
+
+
+@router.put("/assignees")
+def update_assignees(payload: dict, db: Session = Depends(get_db)):
+    assignees = payload.get("assignees", [])
+    if not isinstance(assignees, list):
+        assignees = []
+    # clean: unique non-empty strings
+    seen = set()
+    cleaned = []
+    for a in assignees:
+        a = str(a).strip()
+        if a and a not in seen:
+            seen.add(a)
+            cleaned.append(a)
+    setting = _get_or_create(db, ASSIGNEES_KEY, DEFAULT_ASSIGNEES)
+    setting.value = cleaned
+    db.commit()
+    db.refresh(setting)
+    return {"data": cleaned}

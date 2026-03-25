@@ -395,7 +395,7 @@ export function WbsFlowPage() {
       };
 
       // Place item on all dates in its range (within view)
-      const effectiveEnd = endD ?? startD;
+      const effectiveEnd = endD ?? (task.kanbanStatus !== 'done' ? new Date() : startD);
       const rangeStart = startD < parseDate(startStr) ? parseDate(startStr) : startD;
       const rangeEnd = effectiveEnd > parseDate(endStr) ? parseDate(endStr) : effectiveEnd;
 

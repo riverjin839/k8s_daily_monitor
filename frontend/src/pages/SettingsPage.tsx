@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserPlus, UserCheck, UserX } from 'lucide-react';
 import { useClusters, useUpdateCluster, useDeleteCluster } from '@/hooks/useCluster';
+import { useAssignees, useUpdateAssignees } from '@/hooks/useAssignees';
 import { clustersApi, managementServersApi } from '@/services/api';
 import { useClusterStore } from '@/stores/clusterStore';
 import { AddClusterModal, KubeconfigEditModal } from '@/components/dashboard';
@@ -319,6 +320,22 @@ export function SettingsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [verifyResults, setVerifyResults] = useState<Record<string, { ok: boolean; detail: string }>>({});
+
+  // Assignee management state
+  const [newAssigneeName, setNewAssigneeName] = useState('');
+  const { data: assignees = [] } = useAssignees();
+  const updateAssignees = useUpdateAssignees();
+
+  const handleAddAssignee = () => {
+    const name = newAssigneeName.trim();
+    if (!name || assignees.includes(name)) return;
+    updateAssignees.mutate([...assignees, name]);
+    setNewAssigneeName('');
+  };
+
+  const handleRemoveAssignee = (name: string) => {
+    updateAssignees.mutate(assignees.filter(a => a !== name));
+  };
 
   // Management server state
   const [showServerModal, setShowServerModal] = useState(false);
@@ -682,6 +699,58 @@ export function SettingsPage() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* Assignee Management */}
+        <div className="bg-card border border-border rounded-xl mt-8">
+          <div className="px-6 py-4 border-b border-border flex items-center gap-2">
+            <UserCheck className="w-4 h-4 text-primary" />
+            <h2 className="font-semibold">담당자 관리</h2>
+            <span className="text-xs text-muted-foreground ml-1">작업/이슈 등록 시 자동완성으로 사용됩니다</span>
+          </div>
+          <div className="p-6">
+            {/* Add form */}
+            <div className="flex gap-2 mb-4">
+              <input
+                type="text"
+                value={newAssigneeName}
+                onChange={(e) => setNewAssigneeName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddAssignee(); } }}
+                placeholder="담당자 이름 입력"
+                className="flex-1 px-3 py-2 bg-secondary border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+              />
+              <button
+                onClick={handleAddAssignee}
+                disabled={!newAssigneeName.trim() || assignees.includes(newAssigneeName.trim())}
+                className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40"
+              >
+                <UserPlus className="w-4 h-4" />
+                추가
+              </button>
+            </div>
+            {/* Assignee list */}
+            {assignees.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">등록된 담당자가 없습니다.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {assignees.map((name) => (
+                  <div key={name} className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary border border-border rounded-full text-sm">
+                    <span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                      {name.charAt(0).toUpperCase()}
+                    </span>
+                    <span className="font-medium">{name}</span>
+                    <button
+                      onClick={() => handleRemoveAssignee(name)}
+                      className="ml-1 text-muted-foreground hover:text-red-400 transition-colors"
+                      title="삭제"
+                    >
+                      <UserX className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </main>
 

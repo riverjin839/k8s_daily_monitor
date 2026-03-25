@@ -12,6 +12,7 @@ interface TaskModalProps {
   onSubmit: (data: TaskCreate, images: string[]) => void;
   clusters: { id: string; name: string }[];
   editTask?: Task | null;
+  parentTask?: Task | null;
 }
 
 const DEFAULT_TASK_CATEGORIES = [
@@ -69,7 +70,7 @@ function toDatetimeLocal(dateStr?: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: TaskModalProps) {
+export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask, parentTask }: TaskModalProps) {
   const { data: registeredAssignees = [] } = useAssignees();
   const [assignee, setAssignee] = useState('');
   const [clusterId, setClusterId] = useState('');
@@ -113,9 +114,9 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
       setEffortHours(editTask.effortHours ? String(editTask.effortHours) : '');
       setDoneCondition(editTask.doneCondition ?? '');
     } else {
-      setAssignee('');
+      setAssignee(parentTask ? parentTask.assignee : '');
       setClusterId('');
-      setTaskCategory('');
+      setTaskCategory(parentTask ? parentTask.taskCategory : '');
       setTaskCategoryCustom('');
       setTaskContent('');
       setResultContent('');
@@ -133,7 +134,7 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
     setCustomCategories(loadCustomCategories());
     setShowCatManage(false);
     setNewCatInput('');
-  }, [editTask, isOpen]);
+  }, [editTask, isOpen, parentTask]);
 
   const addCustomCategory = () => {
     const cat = newCatInput.trim();
@@ -184,6 +185,7 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
         typeLabel: typeLabel || undefined,
         effortHours: effortHours ? parseInt(effortHours, 10) : undefined,
         doneCondition: doneCondition.trim() || undefined,
+        parentId: parentTask?.id,
       },
       images,
     );
@@ -199,9 +201,16 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-card border border-border rounded-xl p-6 w-full max-w-2xl shadow-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold">
-            {editTask ? '작업 수정' : '작업 등록'}
-          </h2>
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg font-semibold">
+              {parentTask ? '하위 작업 등록' : editTask ? '작업 수정' : '작업 등록'}
+            </h2>
+            {parentTask && (
+              <div className="text-xs text-muted-foreground bg-secondary px-2 py-1 rounded-md">
+                상위 작업: <span className="text-foreground font-medium">{parentTask.taskContent.replace(/<[^>]*>/g, '').slice(0, 40)}{parentTask.taskContent.replace(/<[^>]*>/g, '').length > 40 ? '...' : ''}</span>
+              </div>
+            )}
+          </div>
           <button onClick={onClose} className="p-1 hover:bg-secondary rounded-md">
             <X className="w-5 h-5" />
           </button>
@@ -475,7 +484,7 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
               type="submit"
               className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
             >
-              {editTask ? '저장' : '등록'}
+              {editTask ? '저장' : parentTask ? '하위 작업 등록' : '등록'}
             </button>
           </div>
         </form>

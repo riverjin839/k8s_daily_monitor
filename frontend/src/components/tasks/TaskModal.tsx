@@ -221,8 +221,8 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask }: Tas
                 list="task-assignee-list"
               />
               <datalist id="task-assignee-list">
-                {registeredAssignees.map((name) => (
-                  <option key={name} value={name} />
+                {registeredAssignees.map((a) => (
+                  <option key={a.name} value={a.name} />
                 ))}
               </datalist>
             </div>

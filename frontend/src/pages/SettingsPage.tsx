@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserPlus, UserCheck, UserX } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserPlus, UserCheck, Check, X as XIcon } from 'lucide-react';
 import { useClusters, useUpdateCluster, useDeleteCluster } from '@/hooks/useCluster';
 import { useAssignees, useUpdateAssignees } from '@/hooks/useAssignees';
 import { clustersApi, managementServersApi } from '@/services/api';
 import { useClusterStore } from '@/stores/clusterStore';
 import { AddClusterModal, KubeconfigEditModal } from '@/components/dashboard';
-import { Cluster, ManagementServer, ManagementServerCreate } from '@/types';
+import { Cluster, ManagementServer, ManagementServerCreate, Assignee } from '@/types';
 import { getStatusIcon, formatDateTime } from '@/lib/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -322,19 +322,37 @@ export function SettingsPage() {
   const [verifyResults, setVerifyResults] = useState<Record<string, { ok: boolean; detail: string }>>({});
 
   // Assignee management state
-  const [newAssigneeName, setNewAssigneeName] = useState('');
   const { data: assignees = [] } = useAssignees();
   const updateAssignees = useUpdateAssignees();
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<Assignee>({ name: '' });
+  const [showAddRow, setShowAddRow] = useState(false);
+  const [addForm, setAddForm] = useState<Assignee>({ name: '' });
 
-  const handleAddAssignee = () => {
-    const name = newAssigneeName.trim();
-    if (!name || assignees.includes(name)) return;
-    updateAssignees.mutate([...assignees, name]);
-    setNewAssigneeName('');
+  const handleSaveAssignee = (idx: number) => {
+    if (!editForm.name.trim()) return;
+    const updated = assignees.map((a, i) => (i === idx ? { ...editForm, name: editForm.name.trim() } : a));
+    updateAssignees.mutate(updated);
+    setEditingIdx(null);
   };
 
-  const handleRemoveAssignee = (name: string) => {
-    updateAssignees.mutate(assignees.filter(a => a !== name));
+  const handleAddAssignee = () => {
+    if (!addForm.name.trim()) return;
+    if (assignees.some(a => a.name === addForm.name.trim())) return;
+    updateAssignees.mutate([...assignees, { ...addForm, name: addForm.name.trim() }]);
+    setAddForm({ name: '' });
+    setShowAddRow(false);
+  };
+
+  const handleDeleteAssignee = (idx: number) => {
+    updateAssignees.mutate(assignees.filter((_, i) => i !== idx));
+    if (editingIdx === idx) setEditingIdx(null);
+  };
+
+  const startEdit = (idx: number) => {
+    setEditingIdx(idx);
+    setEditForm({ ...assignees[idx] });
+    setShowAddRow(false);
   };
 
   // Management server state
@@ -437,10 +455,19 @@ export function SettingsPage() {
     cicd: 'CI/CD',
   };
 
+  type TabId = 'cluster' | 'server' | 'assignee';
+  const [activeTab, setActiveTab] = useState<TabId>('cluster');
+
+  const TABS: { id: TabId; label: string; icon: JSX.Element; count: number }[] = [
+    { id: 'cluster', label: '클러스터', icon: <Server className="w-4 h-4" />, count: clusters.length },
+    { id: 'server', label: '관리서버', icon: <MonitorDot className="w-4 h-4" />, count: servers.length },
+    { id: 'assignee', label: '담당자', icon: <UserCheck className="w-4 h-4" />, count: assignees.length },
+  ];
+
   return (
     <div className="min-h-screen bg-background">
       <main className="max-w-[1200px] mx-auto px-8 py-8">
-        {/* Page Header */}
+        {/* Page Header + Tabs */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <SettingsIcon className="w-6 h-6 text-primary" />
@@ -448,8 +475,31 @@ export function SettingsPage() {
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        {/* Tab Navigation */}
+        <div className="flex gap-1 mb-6 bg-secondary/50 rounded-xl p-1 w-fit">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                activeTab === tab.id
+                  ? 'bg-card text-foreground shadow-sm border border-border'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+              <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                activeTab === tab.id ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'
+              }`}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Cluster Tab: Summary Cards */}
+        {activeTab === 'cluster' && <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-card border border-border rounded-xl p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
               <Server className="w-4 h-4" />
@@ -478,10 +528,10 @@ export function SettingsPage() {
             </div>
             <p className="text-2xl font-bold text-red-400">{statusCounts.critical}</p>
           </div>
-        </div>
+        </div>}
 
         {/* Cluster List */}
-        <div className="bg-card border border-border rounded-xl mb-8">
+        {activeTab === 'cluster' && <div className="bg-card border border-border rounded-xl mb-8">
           <div className="px-6 py-4 border-b border-border flex items-center justify-between">
             <h2 className="font-semibold">등록된 클러스터</h2>
             <button
@@ -595,10 +645,10 @@ export function SettingsPage() {
               ))}
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Management Server List */}
-        <div className="bg-card border border-border rounded-xl">
+        {activeTab === 'server' && <div className="bg-card border border-border rounded-xl">
           <div className="px-6 py-4 border-b border-border flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MonitorDot className="w-4 h-4 text-primary" />
@@ -699,59 +749,165 @@ export function SettingsPage() {
               ))}
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Assignee Management */}
-        <div className="bg-card border border-border rounded-xl mt-8">
-          <div className="px-6 py-4 border-b border-border flex items-center gap-2">
-            <UserCheck className="w-4 h-4 text-primary" />
-            <h2 className="font-semibold">담당자 관리</h2>
-            <span className="text-xs text-muted-foreground ml-1">작업/이슈 등록 시 자동완성으로 사용됩니다</span>
-          </div>
-          <div className="p-6">
-            {/* Add form */}
-            <div className="flex gap-2 mb-4">
-              <input
-                type="text"
-                value={newAssigneeName}
-                onChange={(e) => setNewAssigneeName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddAssignee(); } }}
-                placeholder="담당자 이름 입력"
-                className="flex-1 px-3 py-2 bg-secondary border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
-              />
-              <button
-                onClick={handleAddAssignee}
-                disabled={!newAssigneeName.trim() || assignees.includes(newAssigneeName.trim())}
-                className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2 disabled:opacity-40"
-              >
-                <UserPlus className="w-4 h-4" />
-                추가
-              </button>
+        {activeTab === 'assignee' && <div className="bg-card border border-border rounded-xl">
+          <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <UserCheck className="w-4 h-4 text-primary" />
+              <h2 className="font-semibold">담당자 관리</h2>
+              <span className="text-xs text-muted-foreground ml-1">작업/이슈 등록 시 자동완성 · 행 클릭으로 바로 수정</span>
             </div>
-            {/* Assignee list */}
-            {assignees.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">등록된 담당자가 없습니다.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {assignees.map((name) => (
-                  <div key={name} className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary border border-border rounded-full text-sm">
-                    <span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      {name.charAt(0).toUpperCase()}
-                    </span>
-                    <span className="font-medium">{name}</span>
-                    <button
-                      onClick={() => handleRemoveAssignee(name)}
-                      className="ml-1 text-muted-foreground hover:text-red-400 transition-colors"
-                      title="삭제"
-                    >
-                      <UserX className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            <button
+              onClick={() => { setShowAddRow(true); setEditingIdx(null); setAddForm({ name: '' }); }}
+              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
+            >
+              <UserPlus className="w-4 h-4" />
+              담당자 추가
+            </button>
           </div>
-        </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-secondary/40 border-b border-border text-xs text-muted-foreground">
+                  <th className="text-left px-4 py-3 font-medium w-24">사번</th>
+                  <th className="text-left px-4 py-3 font-medium w-32">이름 *</th>
+                  <th className="text-left px-4 py-3 font-medium">이메일</th>
+                  <th className="text-left px-4 py-3 font-medium w-36">IP 주소</th>
+                  <th className="text-left px-4 py-3 font-medium">정 담당역할</th>
+                  <th className="text-left px-4 py-3 font-medium">부담당 역할</th>
+                  <th className="px-3 py-3 w-20"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {assignees.map((a, idx) => {
+                  const isEditing = editingIdx === idx;
+                  const cellInput = (field: keyof Assignee, placeholder: string, required?: boolean) => (
+                    <input
+                      type="text"
+                      value={(editForm[field] as string) ?? ''}
+                      onChange={(e) => setEditForm((f) => ({ ...f, [field]: e.target.value }))}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSaveAssignee(idx); if (e.key === 'Escape') setEditingIdx(null); }}
+                      placeholder={placeholder}
+                      required={required}
+                      className="w-full px-2 py-1 bg-background border border-primary/40 rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                      autoFocus={field === 'name'}
+                    />
+                  );
+                  return (
+                    <tr
+                      key={idx}
+                      onClick={() => !isEditing && startEdit(idx)}
+                      className={`transition-colors ${isEditing ? 'bg-primary/5' : 'hover:bg-muted/30 cursor-pointer'}`}
+                    >
+                      <td className="px-4 py-2.5">
+                        {isEditing ? cellInput('employeeId', 'EMP001') : (
+                          <span className="text-muted-foreground font-mono text-xs">{a.employeeId || '—'}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {isEditing ? cellInput('name', '이름', true) : (
+                          <div className="flex items-center gap-2">
+                            <span className="w-7 h-7 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                              {a.name.charAt(0).toUpperCase()}
+                            </span>
+                            <span className="font-medium">{a.name}</span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {isEditing ? cellInput('email', 'user@company.com') : (
+                          <span className="text-muted-foreground">{a.email || '—'}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {isEditing ? cellInput('ip', '10.0.0.1') : (
+                          <span className="font-mono text-xs text-muted-foreground">{a.ip || '—'}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {isEditing ? cellInput('primaryRole', 'Backend Engineer') : (
+                          a.primaryRole
+                            ? <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">{a.primaryRole}</span>
+                            : <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {isEditing ? cellInput('secondaryRole', 'DevOps') : (
+                          a.secondaryRole
+                            ? <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">{a.secondaryRole}</span>
+                            : <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {isEditing ? (
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <button onClick={() => handleSaveAssignee(idx)} disabled={!editForm.name.trim()} title="저장"
+                              className="p-1.5 rounded bg-primary/10 hover:bg-primary/20 text-primary transition-colors disabled:opacity-40">
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => setEditingIdx(null)} title="취소"
+                              className="p-1.5 rounded hover:bg-secondary text-muted-foreground transition-colors">
+                              <XIcon className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100" onClick={(e) => e.stopPropagation()}>
+                            <button onClick={() => handleDeleteAssignee(idx)} title="삭제"
+                              className="p-1.5 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {/* Add new row */}
+                {showAddRow && (
+                  <tr className="bg-emerald-500/5 border-t-2 border-emerald-500/30">
+                    {(['employeeId', 'name', 'email', 'ip', 'primaryRole', 'secondaryRole'] as (keyof Assignee)[]).map((field) => (
+                      <td key={field} className="px-4 py-2.5">
+                        <input
+                          type="text"
+                          value={(addForm[field] as string) ?? ''}
+                          onChange={(e) => setAddForm((f) => ({ ...f, [field]: e.target.value }))}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleAddAssignee(); if (e.key === 'Escape') setShowAddRow(false); }}
+                          placeholder={field === 'employeeId' ? 'EMP001' : field === 'name' ? '이름 *' : field === 'email' ? 'user@co.kr' : field === 'ip' ? '10.0.0.1' : field === 'primaryRole' ? '정 담당역할' : '부담당 역할'}
+                          autoFocus={field === 'name'}
+                          className="w-full px-2 py-1 bg-background border border-emerald-500/40 rounded text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        />
+                      </td>
+                    ))}
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-1">
+                        <button onClick={handleAddAssignee} disabled={!addForm.name.trim()} title="추가"
+                          className="p-1.5 rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition-colors disabled:opacity-40">
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => setShowAddRow(false)} title="취소"
+                          className="p-1.5 rounded hover:bg-secondary text-muted-foreground transition-colors">
+                          <XIcon className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+
+                {assignees.length === 0 && !showAddRow && (
+                  <tr>
+                    <td colSpan={7} className="text-center py-10 text-muted-foreground text-sm">
+                      등록된 담당자가 없습니다. "담당자 추가" 버튼을 클릭하세요.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>}
       </main>
 
       {/* Add Cluster Modal */}

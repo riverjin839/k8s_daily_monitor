@@ -527,6 +527,16 @@ export interface MindMapNodeCreate {
   extra?: Record<string, any>;
 }
 
+// Assignee (담당자)
+export interface Assignee {
+  name: string;
+  employeeId?: string;
+  email?: string;
+  ip?: string;
+  primaryRole?: string;
+  secondaryRole?: string;
+}
+
 // Management Server
 export interface ManagementServer {
   id: string;

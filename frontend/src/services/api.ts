@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate, TaskStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate, TaskStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse } from '@/types';
 
 // snake_case → camelCase 변환 (Backend는 snake_case, Frontend는 camelCase)
 function toCamelCase(str: string): string {
@@ -366,6 +366,23 @@ export const mindmapApi = {
     api.delete(`/mindmaps/${mapId}/nodes/${nodeId}`),
   bulkUpdatePositions: (mapId: string, updates: { id: string; x: number; y: number }[]) =>
     api.patch<MindMapNode[]>(`/mindmaps/${mapId}/nodes/positions`, updates),
+};
+
+// Management Servers API
+export const managementServersApi = {
+  getAll: (serverType?: string) =>
+    api.get<ManagementServerListResponse>('/management-servers', {
+      params: serverType ? { server_type: serverType } : {},
+    }),
+  getById: (id: string) => api.get<ManagementServer>(`/management-servers/${id}`),
+  create: (data: ManagementServerCreate) => api.post<ManagementServer>('/management-servers', data),
+  update: (id: string, data: ManagementServerUpdate) =>
+    api.put<ManagementServer>(`/management-servers/${id}`, data),
+  delete: (id: string) => api.delete(`/management-servers/${id}`),
+  ping: (id: string) =>
+    api.post<{ ok: boolean; host: string; port: number; latency_ms: number | null; detail: string }>(
+      `/management-servers/${id}/ping`
+    ),
 };
 
 export default api;

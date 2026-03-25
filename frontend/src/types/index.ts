@@ -527,6 +527,42 @@ export interface MindMapNodeCreate {
   extra?: Record<string, any>;
 }
 
+// Management Server
+export interface ManagementServer {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  username?: string;
+  serverType: string;  // jump_host / admin / monitoring / cicd / bastion
+  description?: string;
+  status: string;      // online / offline / unknown
+  region?: string;
+  tags?: string;
+  osInfo?: string;
+  lastChecked?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ManagementServerCreate {
+  name: string;
+  host: string;
+  port?: number;
+  username?: string;
+  serverType?: string;
+  description?: string;
+  region?: string;
+  tags?: string;
+  osInfo?: string;
+}
+
+export interface ManagementServerUpdate extends Partial<ManagementServerCreate> {}
+
+export interface ManagementServerListResponse {
+  data: ManagementServer[];
+}
+
 export interface MindMapNodeUpdate {
   label?: string;
   note?: string;

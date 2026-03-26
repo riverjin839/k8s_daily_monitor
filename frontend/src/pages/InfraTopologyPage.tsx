@@ -1,11 +1,641 @@
-import { Network } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import {
+  Network, Plus, RefreshCw, Server, Cpu, Database, HardDrive,
+  Trash2, Pencil, X, ChevronDown, AlertTriangle, Loader2, Tag,
+} from 'lucide-react';
+import { useClusters } from '@/hooks/useCluster';
+import {
+  useInfraNodes,
+  useCreateInfraNode,
+  useUpdateInfraNode,
+  useDeleteInfraNode,
+  useSyncInfraNodes,
+} from '@/hooks/useInfraNodes';
+import type { InfraNode, InfraNodeCreate, InfraNodeRole } from '@/types';
 
-export function InfraTopologyPage() {
+// ── Role 메타 ────────────────────────────────────────────────────────────────
+const ROLE_META: Record<InfraNodeRole, { label: string; color: string; bg: string; dot: string }> = {
+  master:  { label: 'Master',  color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30',   dot: 'bg-blue-400'   },
+  worker:  { label: 'Worker',  color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30', dot: 'bg-emerald-400' },
+  storage: { label: 'Storage', color: 'text-amber-400',  bg: 'bg-amber-500/10 border-amber-500/30',  dot: 'bg-amber-400'  },
+  infra:   { label: 'Infra',   color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/30', dot: 'bg-purple-400' },
+};
+
+const ROLES: InfraNodeRole[] = ['master', 'worker', 'storage', 'infra'];
+
+// ── 유틸 ────────────────────────────────────────────────────────────────────
+function extractError(e: unknown): string {
+  const err = e as { response?: { data?: { detail?: string } }; message?: string };
+  return err?.response?.data?.detail ?? err?.message ?? '알 수 없는 오류';
+}
+
+// ── 노드 카드 ────────────────────────────────────────────────────────────────
+interface NodeCardProps {
+  node: InfraNode;
+  onEdit: (n: InfraNode) => void;
+  onDelete: (n: InfraNode) => void;
+}
+
+function NodeCard({ node, onEdit, onDelete }: NodeCardProps) {
+  const meta = ROLE_META[node.role];
   return (
-    <div className="flex flex-col items-center justify-center h-full min-h-[60vh] gap-4 text-muted-foreground">
-      <Network className="w-12 h-12 opacity-40" />
-      <p className="text-lg font-medium">인프라 토폴로지</p>
-      <p className="text-sm">준비 중입니다.</p>
+    <div className="bg-card border border-border rounded-lg p-3 flex flex-col gap-2 hover:border-primary/40 transition-colors group">
+      {/* 헤더 */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${meta.dot}`} />
+          <span className="text-sm font-medium text-foreground truncate" title={node.hostname}>
+            {node.hostname}
+          </span>
+        </div>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+          <button
+            onClick={() => onEdit(node)}
+            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Pencil className="w-3 h-3" />
+          </button>
+          <button
+            onClick={() => onDelete(node)}
+            className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+
+      {/* Role 배지 */}
+      <span className={`inline-flex items-center self-start px-2 py-0.5 rounded text-xs font-medium border ${meta.bg} ${meta.color}`}>
+        {meta.label}
+      </span>
+
+      {/* IP */}
+      {node.ipAddress && (
+        <p className="text-xs text-muted-foreground font-mono">{node.ipAddress}</p>
+      )}
+
+      {/* 스펙 */}
+      {(node.cpuCores || node.ramGb || node.diskGb) && (
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          {node.cpuCores && (
+            <span className="flex items-center gap-1">
+              <Cpu className="w-3 h-3" />{node.cpuCores}c
+            </span>
+          )}
+          {node.ramGb && (
+            <span className="flex items-center gap-1">
+              <Database className="w-3 h-3" />{node.ramGb}G
+            </span>
+          )}
+          {node.diskGb && (
+            <span className="flex items-center gap-1">
+              <HardDrive className="w-3 h-3" />{node.diskGb}G
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* 스위치 */}
+      {node.switchName && (
+        <p className="text-xs text-muted-foreground truncate">
+          <span className="opacity-60">SW: </span>{node.switchName}
+        </p>
+      )}
+
+      {/* OS */}
+      {node.osInfo && (
+        <p className="text-xs text-muted-foreground truncate" title={node.osInfo}>
+          {node.osInfo}
+        </p>
+      )}
+
+      {/* Auto-synced 배지 */}
+      {node.autoSynced && (
+        <span className="inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded text-xs bg-sky-500/10 border border-sky-500/20 text-sky-400">
+          <RefreshCw className="w-2.5 h-2.5" />K8s 동기화
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ── 노드 추가/수정 모달 ───────────────────────────────────────────────────────
+interface NodeModalProps {
+  clusterId: string;
+  initial?: InfraNode | null;
+  onClose: () => void;
+}
+
+const EMPTY_FORM: InfraNodeCreate = {
+  clusterId: '',
+  hostname: '',
+  rackName: '',
+  ipAddress: '',
+  role: 'worker',
+  cpuCores: undefined,
+  ramGb: undefined,
+  diskGb: undefined,
+  osInfo: '',
+  switchName: '',
+  notes: '',
+};
+
+function NodeModal({ clusterId, initial, onClose }: NodeModalProps) {
+  const isEdit = !!initial;
+  const createNode = useCreateInfraNode();
+  const updateNode = useUpdateInfraNode();
+
+  const [form, setForm] = useState<InfraNodeCreate>(() => {
+    if (initial) {
+      return {
+        clusterId: initial.clusterId,
+        hostname: initial.hostname,
+        rackName: initial.rackName ?? '',
+        ipAddress: initial.ipAddress ?? '',
+        role: initial.role,
+        cpuCores: initial.cpuCores ?? undefined,
+        ramGb: initial.ramGb ?? undefined,
+        diskGb: initial.diskGb ?? undefined,
+        osInfo: initial.osInfo ?? '',
+        switchName: initial.switchName ?? '',
+        notes: initial.notes ?? '',
+      };
+    }
+    return { ...EMPTY_FORM, clusterId };
+  });
+
+  const [error, setError] = useState('');
+
+  function set<K extends keyof InfraNodeCreate>(key: K, val: InfraNodeCreate[K]) {
+    setForm(f => ({ ...f, [key]: val }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    if (!form.hostname.trim()) { setError('호스트명은 필수입니다.'); return; }
+    try {
+      if (isEdit && initial) {
+        const { clusterId: _cid, ...updateData } = form;
+        await updateNode.mutateAsync({ id: initial.id, data: updateData });
+      } else {
+        await createNode.mutateAsync(form);
+      }
+      onClose();
+    } catch (e) {
+      setError(extractError(e));
+    }
+  }
+
+  const isPending = createNode.isPending || updateNode.isPending;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+      <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <h2 className="text-base font-semibold text-foreground">
+            {isEdit ? '노드 수정' : '노드 추가'}
+          </h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
+          {/* 호스트명 */}
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">호스트명 *</label>
+            <input
+              value={form.hostname}
+              onChange={e => set('hostname', e.target.value)}
+              placeholder="node-01"
+              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+
+          {/* Role */}
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">역할</label>
+            <div className="relative">
+              <select
+                value={form.role}
+                onChange={e => set('role', e.target.value as InfraNodeRole)}
+                className="w-full appearance-none bg-background border border-border rounded-lg px-3 py-2 text-sm pr-8 focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                {ROLES.map(r => (
+                  <option key={r} value={r}>{ROLE_META[r].label}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            </div>
+          </div>
+
+          {/* 랙 / IP */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">랙 이름</label>
+              <input
+                value={form.rackName ?? ''}
+                onChange={e => set('rackName', e.target.value)}
+                placeholder="Rack-A1"
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">관리 IP</label>
+              <input
+                value={form.ipAddress ?? ''}
+                onChange={e => set('ipAddress', e.target.value)}
+                placeholder="192.168.1.10"
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+          </div>
+
+          {/* CPU / RAM / Disk */}
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">CPU (코어)</label>
+              <input
+                type="number" min={1}
+                value={form.cpuCores ?? ''}
+                onChange={e => set('cpuCores', e.target.value ? Number(e.target.value) : undefined)}
+                placeholder="32"
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">RAM (GB)</label>
+              <input
+                type="number" min={1}
+                value={form.ramGb ?? ''}
+                onChange={e => set('ramGb', e.target.value ? Number(e.target.value) : undefined)}
+                placeholder="128"
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Disk (GB)</label>
+              <input
+                type="number" min={1}
+                value={form.diskGb ?? ''}
+                onChange={e => set('diskGb', e.target.value ? Number(e.target.value) : undefined)}
+                placeholder="960"
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+          </div>
+
+          {/* 스위치 / OS */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">연결 스위치</label>
+              <input
+                value={form.switchName ?? ''}
+                onChange={e => set('switchName', e.target.value)}
+                placeholder="SW-Core-01"
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">OS 정보</label>
+              <input
+                value={form.osInfo ?? ''}
+                onChange={e => set('osInfo', e.target.value)}
+                placeholder="Ubuntu 22.04"
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+          </div>
+
+          {/* 메모 */}
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">메모</label>
+            <textarea
+              value={form.notes ?? ''}
+              onChange={e => set('notes', e.target.value)}
+              rows={2}
+              placeholder="참고 사항..."
+              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />{error}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button" onClick={onClose}
+              className="px-4 py-2 text-sm rounded-lg border border-border hover:bg-muted text-muted-foreground transition-colors"
+            >
+              취소
+            </button>
+            <button
+              type="submit" disabled={isPending}
+              className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center gap-2"
+            >
+              {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {isEdit ? '저장' : '추가'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── 삭제 확인 모달 ───────────────────────────────────────────────────────────
+interface DeleteConfirmProps {
+  node: InfraNode;
+  onConfirm: () => void;
+  onCancel: () => void;
+  isPending: boolean;
+}
+
+function DeleteConfirm({ node, onConfirm, onCancel, isPending }: DeleteConfirmProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+      <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-full bg-red-500/10">
+            <AlertTriangle className="w-5 h-5 text-red-400" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">노드 삭제</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              <span className="font-medium text-foreground">{node.hostname}</span>을 삭제하시겠습니까?
+            </p>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm rounded-lg border border-border hover:bg-muted text-muted-foreground"
+          >
+            취소
+          </button>
+          <button
+            onClick={onConfirm} disabled={isPending}
+            className="px-4 py-2 text-sm rounded-lg bg-red-500 hover:bg-red-600 text-white disabled:opacity-50 flex items-center gap-2"
+          >
+            {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            삭제
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 메인 페이지 ──────────────────────────────────────────────────────────────
+export function InfraTopologyPage() {
+  const { data: clusters = [], isLoading: clustersLoading } = useClusters();
+  const [selectedClusterId, setSelectedClusterId] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<InfraNode | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<InfraNode | null>(null);
+  const [syncError, setSyncError] = useState('');
+
+  const activeClusterId = selectedClusterId || clusters[0]?.id || '';
+  const activeCluster = clusters.find(c => c.id === activeClusterId);
+
+  const { data: nodesResp, isLoading: nodesLoading } = useInfraNodes(
+    activeClusterId ? { clusterId: activeClusterId } : undefined,
+  );
+  const nodes: InfraNode[] = nodesResp?.data ?? [];
+
+  const deleteNode = useDeleteInfraNode();
+  const syncNodes = useSyncInfraNodes();
+
+  // 랙별 그룹핑
+  const racks = useMemo(() => {
+    const map = new Map<string, InfraNode[]>();
+    for (const n of nodes) {
+      const rack = n.rackName ?? '(랙 미지정)';
+      if (!map.has(rack)) map.set(rack, []);
+      map.get(rack)!.push(n);
+    }
+    // 랙 내 정렬: role 우선순위
+    const rolePriority: Record<InfraNodeRole, number> = { master: 0, infra: 1, storage: 2, worker: 3 };
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([rack, rackNodes]) => ({
+        rack,
+        nodes: [...rackNodes].sort((a, b) =>
+          (rolePriority[a.role] ?? 9) - (rolePriority[b.role] ?? 9) || a.hostname.localeCompare(b.hostname),
+        ),
+      }));
+  }, [nodes]);
+
+  // 요약 통계
+  const stats = useMemo(() => {
+    const counts: Record<InfraNodeRole, number> = { master: 0, worker: 0, storage: 0, infra: 0 };
+    for (const n of nodes) counts[n.role] = (counts[n.role] ?? 0) + 1;
+    return counts;
+  }, [nodes]);
+
+  async function handleSync() {
+    if (!activeClusterId) return;
+    setSyncError('');
+    try {
+      await syncNodes.mutateAsync(activeClusterId);
+    } catch (e) {
+      setSyncError(extractError(e));
+    }
+  }
+
+  async function handleDeleteConfirm() {
+    if (!deleteTarget) return;
+    try {
+      await deleteNode.mutateAsync(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch {
+      setDeleteTarget(null);
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <main className="max-w-[1600px] mx-auto px-8 py-8">
+
+        {/* 헤더 */}
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Network className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-foreground">인프라 토폴로지</h1>
+              <p className="text-xs text-muted-foreground mt-0.5">클러스터별 물리 노드 구성 시각화</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSync}
+              disabled={!activeClusterId || syncNodes.isPending}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted text-muted-foreground disabled:opacity-50 transition-colors"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncNodes.isPending ? 'animate-spin' : ''}`} />
+              K8s 동기화
+            </button>
+            <button
+              onClick={() => { setEditTarget(null); setModalOpen(true); }}
+              disabled={!activeClusterId}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              노드 추가
+            </button>
+          </div>
+        </div>
+
+        {/* 클러스터 탭 */}
+        {clustersLoading ? (
+          <div className="flex items-center gap-2 text-muted-foreground text-sm mb-6">
+            <Loader2 className="w-4 h-4 animate-spin" />로딩 중...
+          </div>
+        ) : clusters.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+            <Server className="w-10 h-10 opacity-30 mb-3" />
+            <p className="text-sm">등록된 클러스터가 없습니다.</p>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-1 mb-6 overflow-x-auto pb-1">
+              {clusters.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => setSelectedClusterId(c.id)}
+                  className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg border transition-colors whitespace-nowrap flex-shrink-0 ${
+                    c.id === activeClusterId
+                      ? 'bg-primary/10 border-primary/40 text-primary font-medium'
+                      : 'border-border text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                    c.status === 'healthy' ? 'bg-emerald-400' :
+                    c.status === 'warning' ? 'bg-amber-400' :
+                    c.status === 'critical' ? 'bg-red-400' : 'bg-slate-400'
+                  }`} />
+                  {c.name}
+                  {c.region && <span className="text-xs opacity-60">({c.region})</span>}
+                </button>
+              ))}
+            </div>
+
+            {/* 동기화 오류 */}
+            {syncError && (
+              <div className="flex items-center gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-4">
+                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />{syncError}
+                <button onClick={() => setSyncError('')} className="ml-auto"><X className="w-3 h-3" /></button>
+              </div>
+            )}
+
+            {/* 요약 통계 */}
+            {activeCluster && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 mb-6">
+                <div className="col-span-2 sm:col-span-4 lg:col-span-1 bg-card border border-border rounded-lg p-4 flex flex-col gap-1">
+                  <p className="text-xs text-muted-foreground">전체 노드</p>
+                  <p className="text-2xl font-bold text-foreground">{nodes.length}</p>
+                  <p className="text-xs text-muted-foreground">{activeCluster.name}</p>
+                </div>
+                {ROLES.map(role => {
+                  const meta = ROLE_META[role];
+                  return (
+                    <div key={role} className="bg-card border border-border rounded-lg p-4 flex flex-col gap-1">
+                      <p className="text-xs text-muted-foreground">{meta.label}</p>
+                      <p className={`text-2xl font-bold ${meta.color}`}>{stats[role]}</p>
+                      <div className="flex items-center gap-1">
+                        <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
+                        <span className="text-xs text-muted-foreground">노드</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 토폴로지 본문 */}
+            {nodesLoading ? (
+              <div className="flex items-center justify-center py-20 text-muted-foreground">
+                <Loader2 className="w-6 h-6 animate-spin" />
+              </div>
+            ) : nodes.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground border border-dashed border-border rounded-xl">
+                <Server className="w-10 h-10 opacity-30" />
+                <p className="text-sm">이 클러스터에 노드가 없습니다.</p>
+                <button
+                  onClick={() => { setEditTarget(null); setModalOpen(true); }}
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  <Plus className="w-3.5 h-3.5" />첫 노드 추가
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-4 overflow-x-auto pb-4">
+                {racks.map(({ rack, nodes: rackNodes }) => (
+                  <div
+                    key={rack}
+                    className="flex-shrink-0 w-56 flex flex-col gap-2"
+                  >
+                    {/* 랙 헤더 */}
+                    <div className="flex items-center gap-2 px-2 py-1.5 bg-muted/50 rounded-lg border border-border">
+                      <Tag className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                      <span className="text-xs font-semibold text-foreground truncate">{rack}</span>
+                      <span className="ml-auto text-xs text-muted-foreground flex-shrink-0">
+                        {rackNodes.length}
+                      </span>
+                    </div>
+
+                    {/* 스위치 표시 (switchName이 있는 경우) */}
+                    {rackNodes[0]?.switchName && (
+                      <div className="flex items-center gap-2 px-2 py-1 bg-sky-500/5 border border-sky-500/20 rounded-lg">
+                        <Network className="w-3 h-3 text-sky-400 flex-shrink-0" />
+                        <span className="text-xs text-sky-400 truncate">{rackNodes[0].switchName}</span>
+                      </div>
+                    )}
+
+                    {/* 노드 카드들 */}
+                    <div className="flex flex-col gap-2">
+                      {rackNodes.map(node => (
+                        <NodeCard
+                          key={node.id}
+                          node={node}
+                          onEdit={n => { setEditTarget(n); setModalOpen(true); }}
+                          onDelete={n => setDeleteTarget(n)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </main>
+
+      {/* 추가/수정 모달 */}
+      {modalOpen && activeClusterId && (
+        <NodeModal
+          clusterId={activeClusterId}
+          initial={editTarget}
+          onClose={() => { setModalOpen(false); setEditTarget(null); }}
+        />
+      )}
+
+      {/* 삭제 확인 */}
+      {deleteTarget && (
+        <DeleteConfirm
+          node={deleteTarget}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeleteTarget(null)}
+          isPending={deleteNode.isPending}
+        />
+      )}
     </div>
   );
 }

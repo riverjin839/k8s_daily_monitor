@@ -51,12 +51,24 @@ class AIAgentService:
                 tags_resp = await client.get(f"{self.base_url}/api/tags")
                 if tags_resp.status_code == 200:
                     models = tags_resp.json().get("models", [])
-                    model_names = [m.get("name", "").split(":")[0] for m in models]
-                    if self.model not in model_names:
+                    # Ollama returns full names like "qwen2.5:7b".
+                    # Match by full name OR by base name (before ":") so that
+                    # OLLAMA_MODEL="qwen2.5" matches a pulled "qwen2.5:7b".
+                    model_names_full = [m.get("name", "") for m in models]
+                    model_names_base = [n.split(":")[0] for n in model_names_full]
+                    configured_base = self.model.split(":")[0]
+                    model_found = (
+                        self.model in model_names_full
+                        or configured_base in model_names_base
+                    )
+                    if not model_found:
                         return {
                             "status": "online",
                             "model": self.model,
-                            "detail": f"Server running but model '{self.model}' not pulled. Available: {model_names or 'none'}",
+                            "detail": (
+                                f"Server running but model '{self.model}' not pulled. "
+                                f"Available: {model_names_full or 'none'}"
+                            ),
                         }
                 return {"status": "online", "model": self.model}
         except Exception as exc:

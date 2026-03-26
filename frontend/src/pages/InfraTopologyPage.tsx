@@ -176,7 +176,8 @@ function NodeModal({ clusterId, initial, onClose }: NodeModalProps) {
     if (!form.hostname.trim()) { setError('호스트명은 필수입니다.'); return; }
     try {
       if (isEdit && initial) {
-        const { clusterId: _cid, ...updateData } = form;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { clusterId, ...updateData } = form;
         await updateNode.mutateAsync({ id: initial.id, data: updateData });
       } else {
         await createNode.mutateAsync(form);
@@ -405,7 +406,7 @@ export function InfraTopologyPage() {
   const { data: nodesResp, isLoading: nodesLoading } = useInfraNodes(
     activeClusterId ? { clusterId: activeClusterId } : undefined,
   );
-  const nodes: InfraNode[] = nodesResp?.data ?? [];
+  const nodes = useMemo<InfraNode[]>(() => nodesResp?.data ?? [], [nodesResp]);
 
   const deleteNode = useDeleteInfraNode();
   const syncNodes = useSyncInfraNodes();

@@ -224,6 +224,19 @@ monitoring:
         cpu: "100m"
 
 # ============================================
+# Ollama (AI Agent backend)
+# Air-gap: set model to match the name baked into your custom image.
+# e.g. for ghcr.io/riverjin839/ollama-qwen2.5-coder:7b → model: "qwen2.5-coder:7b"
+# ============================================
+ollama:
+  model: "llama3"
+  url: "http://ollama:11434"
+  image:
+    repository: ghcr.io/riverjin839/ollama-qwen2.5-coder
+    tag: "7b"
+    pullPolicy: IfNotPresent
+
+# ============================================
 # OpenClaw AI Alert Agent (Optional)
 # ============================================
 openclaw:

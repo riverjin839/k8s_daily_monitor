@@ -19,3 +19,7 @@ data:
   # Redis connection
   REDIS_HOST: "redis"
   REDIS_PORT: "6379"
+  # Ollama (AI Agent)
+  # Air-gap: override OLLAMA_MODEL in your overlay's configMapGenerator to match the baked-in model
+  OLLAMA_URL: "http://ollama:11434"
+  OLLAMA_MODEL: "llama3"

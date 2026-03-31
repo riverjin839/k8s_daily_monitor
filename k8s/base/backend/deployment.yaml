@@ -100,6 +100,16 @@ spec:
                 configMapKeyRef:
                   name: k8s-monitor-config
                   key: GRAFANA_URL
+            - name: OLLAMA_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: k8s-monitor-config
+                  key: OLLAMA_URL
+            - name: OLLAMA_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: k8s-monitor-config
+                  key: OLLAMA_MODEL
           resources:
             requests:
               memory: "256Mi"

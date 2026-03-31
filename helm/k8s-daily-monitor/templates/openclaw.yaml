@@ -85,8 +85,8 @@ data:
   WATCH_EVENT_TYPES: {{ .Values.openclaw.watch.eventTypes | quote }}
   ERROR_PATTERNS: {{ .Values.openclaw.watch.errorPatterns | quote }}
   WATCH_INTERVAL_SECONDS: {{ .Values.openclaw.watch.intervalSeconds | quote }}
-  OLLAMA_URL: "http://ollama:11434"
-  OLLAMA_MODEL: "llama3"
+  OLLAMA_URL: {{ .Values.ollama.url | quote }}
+  OLLAMA_MODEL: {{ .Values.ollama.model | quote }}
   BACKEND_WEBHOOK_URL: "http://backend:8000/api/v1/openclaw/webhook"
   alert-rules.json: |
     {

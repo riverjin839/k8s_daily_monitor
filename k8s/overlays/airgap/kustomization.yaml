@@ -39,6 +39,10 @@ images:
   - name: prom/node-exporter:v1.7.0
     newName: 10.61.162.101:5000/prom/node-exporter
     newTag: v1.7.0
+  # Air-gap: custom Ollama image with qwen2.5-coder:7b pre-baked
+  - name: ghcr.io/riverjin839/ollama-qwen2.5-coder
+    newName: 10.61.162.101:5000/ollama-qwen2.5-coder
+    newTag: "7b"
 
 patches:
   # Ingress 비활성화 (폐쇄망에서는 NodePort 또는 LoadBalancer 사용)
@@ -142,6 +146,14 @@ configMapGenerator:
     literals:
       - DEBUG=true
       - CHECK_INTERVAL_MINUTES=5
+      # Ollama: match the model name baked into the custom image
+      - OLLAMA_MODEL=qwen2.5-coder:7b
+      - OLLAMA_URL=http://ollama:11434
+  # openclaw also reads OLLAMA_MODEL for AI-enriched alert summaries
+  - name: openclaw-config
+    behavior: merge
+    literals:
+      - OLLAMA_MODEL=qwen2.5-coder:7b
 
 secretGenerator:
   - name: k8s-monitor-secret

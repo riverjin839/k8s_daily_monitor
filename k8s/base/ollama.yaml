@@ -1,6 +1,8 @@
 ---
-# Ollama Deployment - CPU-Optimized for Llama-3 inference
+# Ollama Deployment - CPU-Optimized inference
 # This is OPTIONAL: If not deployed, the AI Agent feature is simply disabled.
+# Air-gap note: Use an image with the model pre-baked. Do NOT add 'ollama pull' in args
+# when deploying in a closed network — it will fail or hang indefinitely.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -35,9 +37,8 @@ spec:
                 echo "Waiting for Ollama server..."
                 sleep 2
               done
-              echo "Ollama server ready. Pulling model..."
-              ollama pull llama3
-              echo "Model pull complete. Ollama is fully ready."
+              echo "Ollama server ready. Pre-baked model is available."
+              ollama list
               # Keep container running (wait for background serve process)
               wait
           ports:
@@ -79,7 +80,7 @@ spec:
       volumes:
         - name: ollama-data
           emptyDir:
-            sizeLimit: 20Gi       # Enough for one quantized Llama-3 model
+            sizeLimit: 20Gi       # Enough for one quantized model (qwen2.5-coder:7b ~4GB)
 ---
 apiVersion: v1
 kind: Service

@@ -54,6 +54,15 @@ monitoring:
     image:
       repository: prom/node-exporter
 
+ollama:
+  # 폐쇄망: bake-in된 모델명과 일치해야 함 (ollama list 로 확인)
+  model: "qwen2.5-coder:7b"
+  url: "http://ollama:11434"
+  image:
+    repository: 10.61.162.101:5000/ollama-qwen2.5-coder
+    tag: "7b"
+    pullPolicy: IfNotPresent
+
 ingress:
   enabled: false
 

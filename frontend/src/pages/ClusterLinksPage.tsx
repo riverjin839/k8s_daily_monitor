@@ -19,7 +19,14 @@ import { ClusterLink, ClusterLinkGroup } from '@/types';
 
 type LayoutMode = 'vertical' | 'horizontal' | 'table';
 const LAYOUT_KEY = 'cluster-links-layout';
-const CLUSTERS_PER_PAGE = 4;
+
+interface TableAppearance {
+  cellBg: string;
+  headerBg: string;
+  borderColor: string;
+  textColor: string;
+  fontSize: number;
+}
 
 function genId() {
   return Math.random().toString(36).slice(2, 10);
@@ -111,18 +118,33 @@ function LinkCard({ link, onEdit, onDelete }: { link: ClusterLink; onEdit: () =>
 
 // ── Compact Link Cell (table mode) ────────────────────────────────────────────
 function CompactLinkCell({
-  link, onEdit, onDelete,
-}: { link: ClusterLink; onEdit: () => void; onDelete: () => void }) {
+  link, onEdit, onDelete, appearance, rowHeight,
+}: {
+  link: ClusterLink;
+  onEdit: () => void;
+  onDelete: () => void;
+  appearance: TableAppearance;
+  rowHeight: number;
+}) {
   return (
-    <div className="group flex items-center gap-2 px-2 py-1.5 bg-secondary/30 hover:bg-secondary/60 border border-border rounded-md transition-colors">
+    <div
+      className="group flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors"
+      style={{
+        minHeight: rowHeight - 12,
+        backgroundColor: appearance.cellBg,
+        border: `1px solid ${appearance.borderColor}`,
+      }}
+    >
       <div className="flex-1 min-w-0">
         <a href={link.url} target="_blank" rel="noopener noreferrer"
-          className="font-medium text-xs text-foreground hover:text-primary transition-colors flex items-center gap-1 truncate">
+          className="font-medium hover:text-primary transition-colors flex items-center gap-1 truncate"
+          style={{ color: appearance.textColor, fontSize: `${appearance.fontSize}px` }}
+        >
           {link.label}
           <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
         </a>
         {link.description && (
-          <p className="text-xs text-muted-foreground/70 truncate">{link.description}</p>
+          <p className="truncate" style={{ color: appearance.textColor, opacity: 0.7, fontSize: `${Math.max(11, appearance.fontSize - 1)}px` }}>{link.description}</p>
         )}
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
@@ -186,6 +208,18 @@ export function ClusterLinksPage() {
 
   // Table mode pagination
   const [tablePage, setTablePage] = useState(0);
+  const [clustersPerPage, setClustersPerPage] = useState(12);
+  const [showAllInTable, setShowAllInTable] = useState(true);
+  const [columnMinWidth, setColumnMinWidth] = useState(220);
+  const [rowHeight, setRowHeight] = useState(72);
+  const [tableHeight, setTableHeight] = useState(620);
+  const [appearance, setAppearance] = useState<TableAppearance>({
+    cellBg: '#f8fafc',
+    headerBg: '#f1f5f9',
+    borderColor: '#dbe2ea',
+    textColor: '#0f172a',
+    fontSize: 12,
+  });
 
   // Active form target in table mode: 'common' | clusterId | null
   const [tableFormTarget, setTableFormTarget] = useState<string | null>(null);
@@ -299,11 +333,13 @@ export function ClusterLinksPage() {
 
   // ── Table / Matrix view ──────────────────────────────────────────────────────
   const renderTableView = () => {
-    const totalPages = Math.ceil(orderedGroups.length / CLUSTERS_PER_PAGE);
-    const pagedGroups = orderedGroups.slice(
-      tablePage * CLUSTERS_PER_PAGE,
-      (tablePage + 1) * CLUSTERS_PER_PAGE,
-    );
+    const totalPages = Math.max(1, Math.ceil(orderedGroups.length / clustersPerPage));
+    const pagedGroups = showAllInTable
+      ? orderedGroups
+      : orderedGroups.slice(
+        tablePage * clustersPerPage,
+        (tablePage + 1) * clustersPerPage,
+      );
     const maxRows = Math.max(
       commonLinks.length,
       ...pagedGroups.map((g) => g.links.length),
@@ -312,13 +348,83 @@ export function ClusterLinksPage() {
 
     return (
       <div className="space-y-4">
+        {/* Table controls */}
+        <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+          <p className="text-xs font-semibold text-slate-700">표 뷰 설정</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            <label className="text-xs text-slate-600">
+              열 최소 너비: {columnMinWidth}px
+              <input type="range" min={170} max={420} step={10} value={columnMinWidth}
+                onChange={(e) => setColumnMinWidth(Number(e.target.value))}
+                className="w-full mt-1" />
+            </label>
+            <label className="text-xs text-slate-600">
+              행 높이: {rowHeight}px
+              <input type="range" min={54} max={120} step={2} value={rowHeight}
+                onChange={(e) => setRowHeight(Number(e.target.value))}
+                className="w-full mt-1" />
+            </label>
+            <label className="text-xs text-slate-600">
+              표 높이(리사이즈): {tableHeight}px
+              <input type="range" min={420} max={980} step={20} value={tableHeight}
+                onChange={(e) => setTableHeight(Number(e.target.value))}
+                className="w-full mt-1" />
+            </label>
+            <label className="text-xs text-slate-600">
+              폰트 크기: {appearance.fontSize}px
+              <input type="range" min={11} max={16} step={1} value={appearance.fontSize}
+                onChange={(e) => setAppearance((prev) => ({ ...prev, fontSize: Number(e.target.value) }))}
+                className="w-full mt-1" />
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
+            <label className="flex items-center gap-1">셀 배경
+              <input type="color" value={appearance.cellBg} onChange={(e) => setAppearance((prev) => ({ ...prev, cellBg: e.target.value }))} />
+            </label>
+            <label className="flex items-center gap-1">헤더 배경
+              <input type="color" value={appearance.headerBg} onChange={(e) => setAppearance((prev) => ({ ...prev, headerBg: e.target.value }))} />
+            </label>
+            <label className="flex items-center gap-1">테두리
+              <input type="color" value={appearance.borderColor} onChange={(e) => setAppearance((prev) => ({ ...prev, borderColor: e.target.value }))} />
+            </label>
+            <label className="flex items-center gap-1">폰트
+              <input type="color" value={appearance.textColor} onChange={(e) => setAppearance((prev) => ({ ...prev, textColor: e.target.value }))} />
+            </label>
+            <label className="flex items-center gap-1">
+              <input type="checkbox" checked={showAllInTable} onChange={(e) => setShowAllInTable(e.target.checked)} />
+              페이지 없이 전체 표시
+            </label>
+            {!showAllInTable && (
+              <label className="flex items-center gap-1">
+                페이지당 클러스터
+                <input
+                  type="number"
+                  min={2}
+                  max={30}
+                  value={clustersPerPage}
+                  onChange={(e) => setClustersPerPage(Math.max(2, Number(e.target.value) || 2))}
+                  className="w-16 px-1 py-0.5 rounded border border-slate-300 bg-white"
+                />
+              </label>
+            )}
+          </div>
+        </div>
+
         {/* Table grid */}
-        <div
-          className="border border-border rounded-xl overflow-hidden"
-          style={{ display: 'grid', gridTemplateColumns: `repeat(${colCount}, minmax(200px, 1fr))` }}
-        >
+        <div className="border border-slate-200 rounded-xl bg-slate-50/80 p-2 shadow-sm resize-y overflow-auto" style={{ height: tableHeight }}>
+          <div
+            className="overflow-auto"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: `repeat(${colCount}, minmax(${columnMinWidth}px, 1fr))`,
+              border: `1px solid ${appearance.borderColor}`,
+              borderRadius: '0.75rem',
+              overflow: 'hidden',
+              backgroundColor: '#ffffff',
+            }}
+          >
           {/* Header row */}
-          <div className="px-3 py-2.5 bg-emerald-500/10 border-b border-r border-emerald-500/20 flex items-center gap-1.5">
+          <div className="px-3 py-2.5 border-b border-r flex items-center gap-1.5" style={{ backgroundColor: appearance.headerBg, borderColor: appearance.borderColor }}>
             <Globe className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
             <span className="font-semibold text-xs text-emerald-400">공통 링크</span>
             <span className="ml-auto text-xs text-muted-foreground font-normal">({commonLinks.length})</span>
@@ -333,10 +439,11 @@ export function ClusterLinksPage() {
           {pagedGroups.map((g, idx) => (
             <div
               key={g.clusterId}
-              className={`px-3 py-2.5 bg-muted/20 border-b border-border flex items-center gap-1.5${idx < pagedGroups.length - 1 ? ' border-r' : ''}`}
+              className={`px-3 py-2.5 border-b flex items-center gap-1.5${idx < pagedGroups.length - 1 ? ' border-r' : ''}`}
+              style={{ backgroundColor: appearance.headerBg, borderColor: appearance.borderColor }}
             >
               <span className="text-sm">☸</span>
-              <span className="font-semibold text-xs truncate">{g.clusterName}</span>
+              <span className="font-semibold text-xs truncate" style={{ color: appearance.textColor }}>{g.clusterName}</span>
               <span className="ml-auto text-xs text-muted-foreground font-normal">({g.links.length})</span>
               <button
                 onClick={() => { setTableFormTarget(g.clusterId); setEditingLink(null); setEditingCommonLink(null); }}
@@ -375,6 +482,8 @@ export function ClusterLinksPage() {
                     ) : (
                       <CompactLinkCell
                         link={commonLinks[rowIdx]}
+                        appearance={appearance}
+                        rowHeight={rowHeight}
                         onEdit={() => { setEditingCommonLink(commonLinks[rowIdx]); setTableFormTarget(null); }}
                         onDelete={() => handleDeleteCommon(commonLinks[rowIdx].id)}
                       />
@@ -387,7 +496,8 @@ export function ClusterLinksPage() {
                   return (
                     <div
                       key={`${g.clusterId}-${rowIdx}`}
-                      className={`p-2 border-b border-border${idx < pagedGroups.length - 1 ? ' border-r' : ''}`}
+                      className={`p-2 border-b${idx < pagedGroups.length - 1 ? ' border-r' : ''}`}
+                      style={{ borderColor: appearance.borderColor, minHeight: rowHeight }}
                     >
                       {link ? (
                         editingLink?.clusterId === g.clusterId && editingLink.link.id === link.id ? (
@@ -399,6 +509,8 @@ export function ClusterLinksPage() {
                         ) : (
                           <CompactLinkCell
                             link={link}
+                            appearance={appearance}
+                            rowHeight={rowHeight}
                             onEdit={() => { setEditingLink({ clusterId: g.clusterId, link }); setTableFormTarget(null); }}
                             onDelete={() => {
                               if (confirm(`"${link.label}" 링크를 삭제하시겠습니까?`)) handleDeleteLink(g.clusterId, link.id);
@@ -412,6 +524,7 @@ export function ClusterLinksPage() {
               </React.Fragment>
             ))
           )}
+          </div>
         </div>
 
         {/* Inline add form panel */}
@@ -442,10 +555,10 @@ export function ClusterLinksPage() {
         )}
 
         {/* Pagination */}
-        {totalPages > 1 && (
+        {!showAllInTable && totalPages > 1 && (
           <div className="flex items-center justify-between px-1">
             <span className="text-xs text-muted-foreground">
-              클러스터 {tablePage * CLUSTERS_PER_PAGE + 1}–{Math.min((tablePage + 1) * CLUSTERS_PER_PAGE, orderedGroups.length)} / 전체 {orderedGroups.length}개
+              클러스터 {tablePage * clustersPerPage + 1}–{Math.min((tablePage + 1) * clustersPerPage, orderedGroups.length)} / 전체 {orderedGroups.length}개
             </span>
             <div className="flex items-center gap-1">
               <button

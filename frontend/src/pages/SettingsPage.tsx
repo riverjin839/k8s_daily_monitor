@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserPlus, UserCheck, Check, X as XIcon } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserPlus, UserCheck, Check, X as XIcon, SlidersHorizontal } from 'lucide-react';
 import { useClusters, useUpdateCluster, useDeleteCluster } from '@/hooks/useCluster';
 import { useAssignees, useUpdateAssignees } from '@/hooks/useAssignees';
 import { clustersApi, managementServersApi } from '@/services/api';
@@ -320,6 +320,8 @@ export function SettingsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [verifyResults, setVerifyResults] = useState<Record<string, { ok: boolean; detail: string }>>({});
+  const [clusterRowHeight, setClusterRowHeight] = useState(74);
+  const [compactClusterText, setCompactClusterText] = useState(true);
 
   // Assignee management state
   const { data: assignees = [] } = useAssignees();
@@ -534,13 +536,38 @@ export function SettingsPage() {
         {activeTab === 'cluster' && <div className="bg-card border border-border rounded-xl mb-8">
           <div className="px-6 py-4 border-b border-border flex items-center justify-between">
             <h2 className="font-semibold">등록된 클러스터</h2>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              클러스터 추가
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-muted/40 border border-border">
+                <SlidersHorizontal className="w-3.5 h-3.5 text-muted-foreground" />
+                <label className="text-[11px] text-muted-foreground">
+                  행 높이 {clusterRowHeight}px
+                  <input
+                    type="range"
+                    min={62}
+                    max={104}
+                    step={2}
+                    value={clusterRowHeight}
+                    onChange={(e) => setClusterRowHeight(Number(e.target.value))}
+                    className="w-24 ml-2 align-middle"
+                  />
+                </label>
+                <label className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={compactClusterText}
+                    onChange={(e) => setCompactClusterText(e.target.checked)}
+                  />
+                  촘촘한 텍스트
+                </label>
+              </div>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                클러스터 추가
+              </button>
+            </div>
           </div>
 
           {clusters.length === 0 ? (
@@ -559,15 +586,16 @@ export function SettingsPage() {
               {clusters.map((cluster) => (
                 <div
                   key={cluster.id}
-                  className="px-6 py-4 flex items-center gap-4 hover:bg-muted/20 transition-colors"
+                  className="px-6 flex items-center gap-3 hover:bg-muted/20 transition-colors"
+                  style={{ minHeight: clusterRowHeight }}
                 >
                   <span className="text-xl">{getStatusIcon(cluster.status)}</span>
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium">{cluster.name}</span>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className={`font-medium tracking-tight ${compactClusterText ? 'text-[14px]' : ''}`}>{cluster.name}</span>
                       <span
-                        className={`text-xs px-2 py-0.5 rounded-full border ${
+                        className={`text-[10px] px-2 py-0.5 rounded-full border ${
                           cluster.status === 'healthy'
                             ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                             : cluster.status === 'warning'
@@ -578,16 +606,16 @@ export function SettingsPage() {
                         {cluster.status}
                       </span>
                     </div>
-                    <div className="text-sm text-muted-foreground flex items-center gap-4">
-                      <span className="font-mono">{cluster.apiEndpoint}</span>
+                    <div className={`text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-0.5 ${compactClusterText ? 'text-[12px] leading-tight' : 'text-sm'}`}>
+                      <span className="font-mono tracking-tight">{cluster.apiEndpoint}</span>
                       {cluster.kubeconfigPath && (
-                        <span className="text-xs">kubeconfig: {cluster.kubeconfigPath}</span>
+                        <span className="text-[11px]">kubeconfig: {cluster.kubeconfigPath}</span>
                       )}
                     </div>
-                    <div className="text-xs text-muted-foreground mt-1">
+                    <div className={`text-muted-foreground mt-0.5 ${compactClusterText ? 'text-[11px] leading-tight' : 'text-xs'}`}>
                       등록일: {formatDateTime(cluster.createdAt)}
                       {cluster.updatedAt !== cluster.createdAt && (
-                        <span className="ml-4">수정일: {formatDateTime(cluster.updatedAt)}</span>
+                        <span className="ml-3">수정일: {formatDateTime(cluster.updatedAt)}</span>
                       )}
                     </div>
                     {verifyResults[cluster.id] && (

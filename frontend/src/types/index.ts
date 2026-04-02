@@ -624,6 +624,33 @@ export interface InfraSyncResult {
   total: number;
 }
 
+
+export type TopologyTargetType = 'service' | 'pod';
+
+export interface TopologyTraceRequest {
+  clusterId: string;
+  namespace: string;
+  targetType: TopologyTargetType;
+  targetName: string;
+}
+
+export interface TopologyTraceHop {
+  entityType: string;
+  entityId: string;
+  name: string;
+  interface?: string;
+  latencyMs?: number;
+  errorCount?: number;
+}
+
+export interface TopologyTraceResponse {
+  clusterId: string;
+  namespace: string;
+  targetType: TopologyTargetType;
+  targetName: string;
+  hops: TopologyTraceHop[];
+}
+
 export interface MindMapNodeUpdate {
   label?: string;
   note?: string;

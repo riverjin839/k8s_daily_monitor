@@ -167,8 +167,50 @@ def _run_migrations():
                     switch_name VARCHAR(100),
                     notes TEXT,
                     auto_synced BOOLEAN DEFAULT FALSE,
+                    version INTEGER NOT NULL DEFAULT 1,
                     created_at TIMESTAMP DEFAULT NOW(),
                     updated_at TIMESTAMP DEFAULT NOW()
+                )
+            '''))
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_infra_nodes_cluster_hostname "
+                "ON infra_nodes(cluster_id, hostname)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_infra_nodes_cluster_hostname "
+                "ON infra_nodes(cluster_id, hostname)"
+            ))
+    else:
+        infra_cols = [col["name"] for col in inspector.get_columns("infra_nodes")]
+        if "version" not in infra_cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE infra_nodes ADD COLUMN version INTEGER NOT NULL DEFAULT 1"))
+        with engine.begin() as conn:
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_infra_nodes_cluster_hostname "
+                "ON infra_nodes(cluster_id, hostname)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_infra_nodes_cluster_hostname "
+                "ON infra_nodes(cluster_id, hostname)"
+            ))
+
+    # topology_audit_logs: 토폴로지 변경 감사 로그
+    if "topology_audit_logs" not in inspector.get_table_names():
+        with engine.begin() as conn:
+            conn.execute(text('''
+                CREATE TABLE topology_audit_logs (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    cluster_id UUID NOT NULL REFERENCES clusters(id) ON DELETE CASCADE,
+                    entity_type VARCHAR(20) NOT NULL,
+                    entity_id VARCHAR(100),
+                    action VARCHAR(30) NOT NULL,
+                    scope VARCHAR(20) NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'success',
+                    reason TEXT,
+                    before_data JSONB,
+                    after_data JSONB,
+                    created_at TIMESTAMP DEFAULT NOW()
                 )
             '''))
 

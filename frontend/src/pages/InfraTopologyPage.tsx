@@ -122,6 +122,7 @@ function NodeCard({ node, onEdit, onDelete }: NodeCardProps) {
 // ── 노드 추가/수정 모달 ───────────────────────────────────────────────────────
 interface NodeModalProps {
   clusterId: string;
+  clusterMeta?: { hostname?: string; firstHost?: string; description?: string; name?: string } | null;
   initial?: InfraNode | null;
   onClose: () => void;
 }
@@ -140,7 +141,7 @@ const EMPTY_FORM: InfraNodeCreate = {
   notes: '',
 };
 
-function NodeModal({ clusterId, initial, onClose }: NodeModalProps) {
+function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps) {
   const isEdit = !!initial;
   const createNode = useCreateInfraNode();
   const updateNode = useUpdateInfraNode();
@@ -161,7 +162,13 @@ function NodeModal({ clusterId, initial, onClose }: NodeModalProps) {
         notes: initial.notes ?? '',
       };
     }
-    return { ...EMPTY_FORM, clusterId };
+    return {
+      ...EMPTY_FORM,
+      clusterId,
+      hostname: clusterMeta?.hostname || '',
+      ipAddress: clusterMeta?.firstHost || '',
+      notes: clusterMeta?.description ? `[cluster:${clusterMeta.name}] ${clusterMeta.description}` : '',
+    };
   });
 
   const [error, setError] = useState('');
@@ -178,7 +185,7 @@ function NodeModal({ clusterId, initial, onClose }: NodeModalProps) {
       if (isEdit && initial) {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { clusterId, ...updateData } = form;
-        await updateNode.mutateAsync({ id: initial.id, data: updateData });
+        await updateNode.mutateAsync({ id: initial.id, data: { ...updateData, version: initial.version } });
       } else {
         await createNode.mutateAsync(form);
       }
@@ -203,6 +210,11 @@ function NodeModal({ clusterId, initial, onClose }: NodeModalProps) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
+          {!isEdit && clusterMeta && (
+            <div className="text-[11px] text-muted-foreground bg-muted/40 border border-border rounded-lg px-3 py-2">
+              클러스터 관리정보 기반 자동입력: hostname / first_host / description
+            </div>
+          )}
           {/* 호스트명 */}
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">호스트명 *</label>
@@ -623,6 +635,7 @@ export function InfraTopologyPage() {
       {modalOpen && activeClusterId && (
         <NodeModal
           clusterId={activeClusterId}
+          clusterMeta={activeCluster}
           initial={editTarget}
           onClose={() => { setModalOpen(false); setEditTarget(null); }}
         />

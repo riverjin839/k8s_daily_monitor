@@ -32,12 +32,14 @@ class InfraNodeUpdate(BaseModel):
     os_info: Optional[str] = Field(None, max_length=200)
     switch_name: Optional[str] = Field(None, max_length=100)
     notes: Optional[str] = None
+    version: int = Field(..., ge=1)
 
 
 class InfraNodeResponse(InfraNodeBase):
     id: UUID
     cluster_id: UUID
     auto_synced: bool
+    version: int
     created_at: datetime
     updated_at: datetime
 
@@ -51,6 +53,11 @@ class InfraNodeListResponse(BaseModel):
 
 
 class SyncResult(BaseModel):
+    success: bool
     created: int
     updated: int
+    failed: int
+    retry_count: int
+    partial_failure: bool
+    errors: list[str] = []
     total: int

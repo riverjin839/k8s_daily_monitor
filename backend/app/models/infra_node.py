@@ -1,6 +1,16 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Text, DateTime, Integer, Boolean, ForeignKey
+from sqlalchemy import (
+    Column,
+    String,
+    Text,
+    DateTime,
+    Integer,
+    Boolean,
+    ForeignKey,
+    UniqueConstraint,
+    Index,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -8,6 +18,10 @@ from app.database import Base
 
 class InfraNode(Base):
     __tablename__ = "infra_nodes"
+    __table_args__ = (
+        UniqueConstraint("cluster_id", "hostname", name="uq_infra_nodes_cluster_hostname"),
+        Index("ix_infra_nodes_cluster_hostname", "cluster_id", "hostname"),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     cluster_id = Column(UUID(as_uuid=True), ForeignKey("clusters.id", ondelete="CASCADE"), nullable=False)
@@ -22,6 +36,7 @@ class InfraNode(Base):
     switch_name = Column(String(100), nullable=True)    # 연결 스위치명
     notes = Column(Text, nullable=True)
     auto_synced = Column(Boolean, default=False)        # K8s에서 자동 수집 여부
+    version = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

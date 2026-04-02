@@ -212,6 +212,17 @@ k8s_daily_monitor/
 | GET | `/health/live` | Kubernetes liveness |
 | GET | `/health/ready` | Kubernetes readiness |
 
+### 인프라 토폴로지 관리(신규)
+| 항목 | 내용 |
+|------|------|
+| 노드 유니크 | `infra_nodes(cluster_id, hostname)` 유니크 제약 + 조회 인덱스 |
+| 감사로그 | `topology_audit_logs`에 node/port/link 변경 이벤트 저장 |
+| API 스코프 | `infra_topology.read`, `infra_topology.edit`, `infra_topology.sync`, `infra_topology.force_fix` |
+| 낙관적 락 | `infra_nodes.version` 기반 업데이트 충돌(409) 방지 |
+| 동기화 실패 규칙 | kubectl 최대 2회 재시도(총 3회 시도), 개별 노드 실패는 `partial_failure=true`로 반환 |
+
+> infra-nodes API 호출 시 `X-API-Scopes` 헤더에 필요한 스코프를 쉼표로 전달해야 합니다. 예: `infra_topology.read,infra_topology.sync`
+
 ## 빠른 시작
 
 ### 1. kind 로컬 개발 (권장)

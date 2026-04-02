@@ -141,6 +141,25 @@ def _run_migrations():
                         f"ALTER TABLE issues ALTER COLUMN {col_name} TYPE TIMESTAMP WITHOUT TIME ZONE "
                         f"USING {col_name}::TIMESTAMP WITHOUT TIME ZONE"
                     ))
+        if "primary_assignee" not in issue_col_map:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE issues ADD COLUMN primary_assignee VARCHAR(100)"))
+                conn.execute(text("UPDATE issues SET primary_assignee = assignee WHERE primary_assignee IS NULL"))
+                conn.execute(text("ALTER TABLE issues ALTER COLUMN primary_assignee SET NOT NULL"))
+        if "secondary_assignee" not in issue_col_map:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE issues ADD COLUMN secondary_assignee VARCHAR(100)"))
+
+    if "tasks" in inspector.get_table_names():
+        task_cols = [col["name"] for col in inspector.get_columns("tasks")]
+        if "primary_assignee" not in task_cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE tasks ADD COLUMN primary_assignee VARCHAR(100)"))
+                conn.execute(text("UPDATE tasks SET primary_assignee = assignee WHERE primary_assignee IS NULL"))
+                conn.execute(text("ALTER TABLE tasks ALTER COLUMN primary_assignee SET NOT NULL"))
+        if "secondary_assignee" not in task_cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE tasks ADD COLUMN secondary_assignee VARCHAR(100)"))
 
 
     # clusters: statusenum 에 'pending' 값 추가 (PostgreSQL enum 확장)

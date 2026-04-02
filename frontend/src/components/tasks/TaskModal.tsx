@@ -72,7 +72,8 @@ function toDatetimeLocal(dateStr?: string | null): string {
 
 export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask, parentTask }: TaskModalProps) {
   const { data: registeredAssignees = [] } = useAssignees();
-  const [assignee, setAssignee] = useState('');
+  const [primaryAssignee, setPrimaryAssignee] = useState('');
+  const [secondaryAssignee, setSecondaryAssignee] = useState('');
   const [clusterId, setClusterId] = useState('');
   const [taskCategory, setTaskCategory] = useState('');
   const [taskCategoryCustom, setTaskCategoryCustom] = useState('');
@@ -96,7 +97,8 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask, paren
   useEffect(() => {
     const allKnownCategories = [...TASK_CATEGORIES, ...loadCustomCategories()];
     if (editTask) {
-      setAssignee(editTask.assignee);
+      setPrimaryAssignee(editTask.primaryAssignee ?? editTask.assignee);
+      setSecondaryAssignee(editTask.secondaryAssignee ?? '');
       setClusterId(editTask.clusterId ?? '');
       const predefined = allKnownCategories.includes(editTask.taskCategory);
       setTaskCategory(predefined ? editTask.taskCategory : '기타');
@@ -114,7 +116,8 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask, paren
       setEffortHours(editTask.effortHours ? String(editTask.effortHours) : '');
       setDoneCondition(editTask.doneCondition ?? '');
     } else {
-      setAssignee(parentTask ? parentTask.assignee : '');
+      setPrimaryAssignee(parentTask ? (parentTask.primaryAssignee ?? parentTask.assignee) : '');
+      setSecondaryAssignee(parentTask?.secondaryAssignee ?? '');
       setClusterId('');
       setTaskCategory(parentTask ? parentTask.taskCategory : '');
       setTaskCategoryCustom('');
@@ -166,11 +169,13 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask, paren
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const plainTaskContent = taskContent.replace(/<[^>]*>/g, '').trim();
-    if (!assignee.trim() || !resolvedCategory || !plainTaskContent || !scheduledAt) return;
+    if (!primaryAssignee.trim() || !resolvedCategory || !plainTaskContent || !scheduledAt) return;
 
     onSubmit(
       {
-        assignee: assignee.trim(),
+        assignee: primaryAssignee.trim(),
+        primaryAssignee: primaryAssignee.trim(),
+        secondaryAssignee: secondaryAssignee.trim() || undefined,
         clusterId: clusterId || undefined,
         clusterName: selectedCluster?.name,
         taskCategory: resolvedCategory,
@@ -219,11 +224,11 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask, paren
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>담당자 *</label>
+              <label className={labelClass}>담당자(정) *</label>
               <input
                 type="text"
-                value={assignee}
-                onChange={(e) => setAssignee(e.target.value)}
+                value={primaryAssignee}
+                onChange={(e) => setPrimaryAssignee(e.target.value)}
                 placeholder="이름"
                 className={inputClass}
                 required
@@ -234,6 +239,15 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask, paren
                   <option key={a.name} value={a.name} />
                 ))}
               </datalist>
+              <label className={`${labelClass} mt-2`}>담당자(부)</label>
+              <input
+                type="text"
+                value={secondaryAssignee}
+                onChange={(e) => setSecondaryAssignee(e.target.value)}
+                placeholder="보조 담당자"
+                className={inputClass}
+                list="task-assignee-list"
+              />
             </div>
             <div>
               <label className={labelClass}>대상 클러스터</label>

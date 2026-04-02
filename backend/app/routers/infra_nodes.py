@@ -120,7 +120,14 @@ def create_infra_node(payload: InfraNodeCreate, _=Depends(_require_scope(SCOPE_E
     cluster = db.query(Cluster).filter(Cluster.id == payload.cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
-    node = InfraNode(**payload.model_dump())
+    payload_data = payload.model_dump()
+    if not payload_data.get("hostname") and cluster.hostname:
+        payload_data["hostname"] = cluster.hostname
+    if not payload_data.get("ip_address") and cluster.first_host:
+        payload_data["ip_address"] = cluster.first_host
+    if not payload_data.get("notes") and cluster.description:
+        payload_data["notes"] = f"[cluster:{cluster.name}] {cluster.description}"
+    node = InfraNode(**payload_data)
     db.add(node)
     _audit(
         db,

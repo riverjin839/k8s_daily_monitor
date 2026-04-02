@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 
 class TaskBase(BaseModel):
     assignee: str = Field(..., min_length=1, max_length=100)
+    primary_assignee: str = Field(..., min_length=1, max_length=100)
+    secondary_assignee: Optional[str] = Field(None, min_length=1, max_length=100)
     cluster_id: Optional[UUID] = None
     cluster_name: Optional[str] = Field(None, max_length=100)
     task_category: str = Field(..., min_length=1, max_length=100)
@@ -30,6 +32,8 @@ class TaskCreate(TaskBase):
 
 class TaskUpdate(BaseModel):
     assignee: Optional[str] = Field(None, min_length=1, max_length=100)
+    primary_assignee: Optional[str] = Field(None, min_length=1, max_length=100)
+    secondary_assignee: Optional[str] = Field(None, min_length=1, max_length=100)
     cluster_id: Optional[UUID] = None
     cluster_name: Optional[str] = Field(None, max_length=100)
     task_category: Optional[str] = Field(None, min_length=1, max_length=100)

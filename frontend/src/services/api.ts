@@ -388,15 +388,15 @@ export const managementServersApi = {
 // Infra Nodes API (물리 서버 노드)
 export const infraNodesApi = {
   getAll: (params?: { clusterId?: string; rackName?: string }) =>
-    api.get<import('@/types').InfraNodeListResponse>('/infra-nodes', { params }),
-  getById: (id: string) => api.get<import('@/types').InfraNode>(`/infra-nodes/${id}`),
+    api.get<import('@/types').InfraNodeListResponse>('/infra-nodes', { params, headers: { 'X-API-Scopes': 'infra_topology.read' } }),
+  getById: (id: string) => api.get<import('@/types').InfraNode>(`/infra-nodes/${id}`, { headers: { 'X-API-Scopes': 'infra_topology.read' } }),
   create: (data: import('@/types').InfraNodeCreate) =>
-    api.post<import('@/types').InfraNode>('/infra-nodes', data),
+    api.post<import('@/types').InfraNode>('/infra-nodes', data, { headers: { 'X-API-Scopes': 'infra_topology.edit' } }),
   update: (id: string, data: import('@/types').InfraNodeUpdate) =>
-    api.put<import('@/types').InfraNode>(`/infra-nodes/${id}`, data),
-  delete: (id: string) => api.delete(`/infra-nodes/${id}`),
+    api.put<import('@/types').InfraNode>(`/infra-nodes/${id}`, data, { headers: { 'X-API-Scopes': 'infra_topology.edit' } }),
+  delete: (id: string) => api.delete(`/infra-nodes/${id}`, { headers: { 'X-API-Scopes': 'infra_topology.force_fix' } }),
   sync: (clusterId: string) =>
-    api.post<import('@/types').InfraSyncResult>(`/infra-nodes/sync/${clusterId}`),
+    api.post<import('@/types').InfraSyncResult>(`/infra-nodes/sync/${clusterId}`, undefined, { headers: { 'X-API-Scopes': 'infra_topology.sync' } }),
 };
 
 

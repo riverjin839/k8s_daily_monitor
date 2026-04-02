@@ -28,7 +28,11 @@ def list_issues(
     if cluster_id:
         query = query.filter(Issue.cluster_id == cluster_id)
     if assignee:
-        query = query.filter(Issue.assignee.ilike(f"%{assignee}%"))
+        query = query.filter(
+            Issue.primary_assignee.ilike(f"%{assignee}%")
+            | Issue.secondary_assignee.ilike(f"%{assignee}%")
+            | Issue.assignee.ilike(f"%{assignee}%")
+        )
     if issue_area:
         query = query.filter(Issue.issue_area.ilike(f"%{issue_area}%"))
     if occurred_from:
@@ -54,7 +58,11 @@ def export_csv(
     if cluster_id:
         query = query.filter(Issue.cluster_id == cluster_id)
     if assignee:
-        query = query.filter(Issue.assignee.ilike(f"%{assignee}%"))
+        query = query.filter(
+            Issue.primary_assignee.ilike(f"%{assignee}%")
+            | Issue.secondary_assignee.ilike(f"%{assignee}%")
+            | Issue.assignee.ilike(f"%{assignee}%")
+        )
     if issue_area:
         query = query.filter(Issue.issue_area.ilike(f"%{issue_area}%"))
     if occurred_from:
@@ -68,7 +76,8 @@ def export_csv(
     writer = csv.writer(output)
     # Header
     writer.writerow([
-        "담당자",
+        "담당자(정)",
+        "담당자(부)",
         "대상 클러스터",
         "이슈 부분",
         "이슈 내용",
@@ -80,7 +89,8 @@ def export_csv(
     ])
     for issue in issues:
         writer.writerow([
-            issue.assignee,
+            issue.primary_assignee,
+            issue.secondary_assignee or "",
             issue.cluster_name or "",
             issue.issue_area,
             issue.issue_content,
@@ -123,8 +133,13 @@ def create_issue(payload: IssueCreate, db: Session = Depends(get_db)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
         cluster_name = cluster.name
 
+    primary_assignee = (payload.primary_assignee or payload.assignee).strip()
+    secondary_assignee = payload.secondary_assignee.strip() if payload.secondary_assignee else None
     issue = Issue(
         **{k: v for k, v in payload.model_dump().items() if k != "cluster_name"},
+        assignee=primary_assignee,
+        primary_assignee=primary_assignee,
+        secondary_assignee=secondary_assignee,
         cluster_name=cluster_name,
     )
     db.add(issue)
@@ -141,6 +156,10 @@ def update_issue(issue_id: UUID, payload: IssueUpdate, db: Session = Depends(get
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+    if "primary_assignee" in update_data:
+        update_data["assignee"] = update_data["primary_assignee"]
+    elif "assignee" in update_data:
+        update_data["primary_assignee"] = update_data["assignee"]
 
     # cluster_id 변경 시 cluster_name 자동 갱신
     if "cluster_id" in update_data and update_data["cluster_id"] and "cluster_name" not in update_data:

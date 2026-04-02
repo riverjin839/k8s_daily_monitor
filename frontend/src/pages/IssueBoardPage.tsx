@@ -429,7 +429,7 @@ export function IssueBoardPage() {
                   <tr className="border-b border-border bg-muted/30">
                     <th className="w-7" />
                     <SortTh label="상태" col="status" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh label="담당자" col="assignee" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh label="담당자(정/부)" col="assignee" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="대상 클러스터" col="clusterName" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <SortTh label="이슈 부분" col="issueArea" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">이슈 내용</th>
@@ -464,7 +464,18 @@ export function IssueBoardPage() {
                             </span>
                           </span>
                         </td>
-                        <td className="px-4 py-3 font-medium whitespace-nowrap cursor-pointer" onClick={() => setSelectedIssue(issue)}>{issue.assignee}</td>
+                        <td className="px-4 py-3 font-medium whitespace-nowrap cursor-pointer" onClick={() => setSelectedIssue(issue)}>
+                          <div className="flex items-center gap-1.5">
+                            <span className="px-2 py-0.5 text-[11px] rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                              정: {issue.primaryAssignee || issue.assignee}
+                            </span>
+                            {issue.secondaryAssignee && (
+                              <span className="px-2 py-0.5 text-[11px] rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                                부: {issue.secondaryAssignee}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap cursor-pointer" onClick={() => setSelectedIssue(issue)}>
                           {issue.clusterName || '-'}
                         </td>

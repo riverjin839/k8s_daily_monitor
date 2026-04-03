@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ViewModeBar } from '@/components/common';
 import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, GripVertical, Clock, Kanban, GitBranch } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -304,41 +305,16 @@ export function TaskBoardPage() {
             )}
 
             {/* View mode toggle */}
-            <div className="flex items-center bg-secondary rounded-lg p-0.5 border border-border">
-              <button
-                onClick={() => setViewMode('table')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  viewMode === 'table'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <List className="w-3.5 h-3.5" />
-                목록
-              </button>
-              <button
-                onClick={() => setViewMode('calendar')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  viewMode === 'calendar'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <CalendarDays className="w-3.5 h-3.5" />
-                달력
-              </button>
-              <button
-                onClick={() => setViewMode('kanban')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  viewMode === 'kanban'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Kanban className="w-3.5 h-3.5" />
-                칸반
-              </button>
-            </div>
+            <ViewModeBar
+              modes={[
+                { id: 'table',    label: '목록', icon: <List        className="w-3.5 h-3.5" /> },
+                { id: 'calendar', label: '달력', icon: <CalendarDays className="w-3.5 h-3.5" /> },
+                { id: 'kanban',   label: '칸반', icon: <Kanban      className="w-3.5 h-3.5" /> },
+              ]}
+              active={viewMode}
+              onChange={(v) => setViewMode(v as ViewMode)}
+              showStylePanel={false}
+            />
 
             {viewMode !== 'calendar' && tasks.length > 0 && (
               <button

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { ViewModeBar } from '@/components/common';
 import {
   Server, Pencil, Trash2, X, AlertTriangle,
   Network, Cpu, Search, ChevronDown,
@@ -1002,22 +1003,15 @@ export function ClusterManagePage() {
             )}
           </div>
           {/* 뷰 모드 토글 */}
-          <div className="flex items-center gap-1 bg-secondary rounded-lg p-0.5">
-            <button
-              onClick={() => setViewMode('table')}
-              className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-              title="테이블 보기"
-            >
-              <LayoutList className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('card')}
-              className={`p-1.5 rounded-md transition-colors ${viewMode === 'card' ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-              title="카드 보기"
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-          </div>
+          <ViewModeBar
+            modes={[
+              { id: 'table', label: '테이블', icon: <LayoutList className="w-3.5 h-3.5" /> },
+              { id: 'card',  label: '카드',   icon: <LayoutGrid className="w-3.5 h-3.5" /> },
+            ]}
+            active={viewMode}
+            onChange={(v) => setViewMode(v as 'table' | 'card')}
+            showStylePanel={false}
+          />
           <button
             onClick={() => setShowFilter((v) => !v)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors text-muted-foreground hover:text-foreground"

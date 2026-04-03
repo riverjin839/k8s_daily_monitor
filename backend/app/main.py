@@ -172,6 +172,28 @@ def _run_migrations():
                 )
             '''))
 
+
+    # infra_node_sync_histories: 노드/토폴로지 동기화 이력 테이블 생성
+    if "infra_node_sync_histories" not in inspector.get_table_names():
+        with engine.begin() as conn:
+            conn.execute(text('''
+                CREATE TABLE infra_node_sync_histories (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    cluster_id UUID NOT NULL REFERENCES clusters(id) ON DELETE CASCADE,
+                    node_id UUID REFERENCES infra_nodes(id) ON DELETE SET NULL,
+                    sync_type VARCHAR(30) NOT NULL,
+                    source VARCHAR(30) NOT NULL,
+                    action VARCHAR(20) NOT NULL,
+                    confidence INTEGER NOT NULL DEFAULT 50,
+                    priority INTEGER NOT NULL DEFAULT 50,
+                    message TEXT,
+                    before_data JSONB,
+                    after_data JSONB,
+                    conflict_fields JSONB,
+                    synced_at TIMESTAMP DEFAULT NOW()
+                )
+            '''))
+
     # work_guides: 계층 구조 + 정렬 컬럼 추가
     if "work_guides" in inspector.get_table_names():
         wg_cols = [col["name"] for col in inspector.get_columns("work_guides")]

@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
 from uuid import UUID
-from typing import Optional
+from typing import Optional, Any
 
 
 class InfraNodeBase(BaseModel):
@@ -50,7 +50,43 @@ class InfraNodeListResponse(BaseModel):
     total: int
 
 
+class TopologySyncSource(BaseModel):
+    type: str = Field(..., pattern="^(lldp_cdp|cmdb|manual)$")
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class TopologySyncRequest(BaseModel):
+    sources: list[TopologySyncSource] = Field(default_factory=list)
+    delete_missing: bool = False
+
+
 class SyncResult(BaseModel):
     created: int
     updated: int
+    deleted: int = 0
+    conflicts: int = 0
+    total: int
+
+
+class InfraNodeSyncHistoryResponse(BaseModel):
+    id: UUID
+    cluster_id: UUID
+    node_id: Optional[UUID]
+    sync_type: str
+    source: str
+    action: str
+    confidence: int
+    priority: int
+    message: Optional[str]
+    before_data: Optional[dict[str, Any]]
+    after_data: Optional[dict[str, Any]]
+    conflict_fields: Optional[list[str]]
+    synced_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class InfraNodeSyncHistoryListResponse(BaseModel):
+    data: list[InfraNodeSyncHistoryResponse]
     total: int

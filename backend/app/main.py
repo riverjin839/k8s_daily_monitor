@@ -26,6 +26,7 @@ from app.routers import (
     mindmap_router,
     management_server_router,
     infra_nodes_router,
+    topology_trace_router,
 )
 
 
@@ -140,6 +141,25 @@ def _run_migrations():
                         f"ALTER TABLE issues ALTER COLUMN {col_name} TYPE TIMESTAMP WITHOUT TIME ZONE "
                         f"USING {col_name}::TIMESTAMP WITHOUT TIME ZONE"
                     ))
+        if "primary_assignee" not in issue_col_map:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE issues ADD COLUMN primary_assignee VARCHAR(100)"))
+                conn.execute(text("UPDATE issues SET primary_assignee = assignee WHERE primary_assignee IS NULL"))
+                conn.execute(text("ALTER TABLE issues ALTER COLUMN primary_assignee SET NOT NULL"))
+        if "secondary_assignee" not in issue_col_map:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE issues ADD COLUMN secondary_assignee VARCHAR(100)"))
+
+    if "tasks" in inspector.get_table_names():
+        task_cols = [col["name"] for col in inspector.get_columns("tasks")]
+        if "primary_assignee" not in task_cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE tasks ADD COLUMN primary_assignee VARCHAR(100)"))
+                conn.execute(text("UPDATE tasks SET primary_assignee = assignee WHERE primary_assignee IS NULL"))
+                conn.execute(text("ALTER TABLE tasks ALTER COLUMN primary_assignee SET NOT NULL"))
+        if "secondary_assignee" not in task_cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE tasks ADD COLUMN secondary_assignee VARCHAR(100)"))
 
 
     # clusters: statusenum 에 'pending' 값 추가 (PostgreSQL enum 확장)
@@ -167,8 +187,50 @@ def _run_migrations():
                     switch_name VARCHAR(100),
                     notes TEXT,
                     auto_synced BOOLEAN DEFAULT FALSE,
+                    version INTEGER NOT NULL DEFAULT 1,
                     created_at TIMESTAMP DEFAULT NOW(),
                     updated_at TIMESTAMP DEFAULT NOW()
+                )
+            '''))
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_infra_nodes_cluster_hostname "
+                "ON infra_nodes(cluster_id, hostname)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_infra_nodes_cluster_hostname "
+                "ON infra_nodes(cluster_id, hostname)"
+            ))
+    else:
+        infra_cols = [col["name"] for col in inspector.get_columns("infra_nodes")]
+        if "version" not in infra_cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE infra_nodes ADD COLUMN version INTEGER NOT NULL DEFAULT 1"))
+        with engine.begin() as conn:
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_infra_nodes_cluster_hostname "
+                "ON infra_nodes(cluster_id, hostname)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_infra_nodes_cluster_hostname "
+                "ON infra_nodes(cluster_id, hostname)"
+            ))
+
+    # topology_audit_logs: 토폴로지 변경 감사 로그
+    if "topology_audit_logs" not in inspector.get_table_names():
+        with engine.begin() as conn:
+            conn.execute(text('''
+                CREATE TABLE topology_audit_logs (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    cluster_id UUID NOT NULL REFERENCES clusters(id) ON DELETE CASCADE,
+                    entity_type VARCHAR(20) NOT NULL,
+                    entity_id VARCHAR(100),
+                    action VARCHAR(30) NOT NULL,
+                    scope VARCHAR(20) NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'success',
+                    reason TEXT,
+                    before_data JSONB,
+                    after_data JSONB,
+                    created_at TIMESTAMP DEFAULT NOW()
                 )
             '''))
 
@@ -327,6 +389,7 @@ app.include_router(ops_note_router, prefix="/api/v1")
 app.include_router(mindmap_router, prefix="/api/v1")
 app.include_router(management_server_router, prefix="/api/v1")
 app.include_router(infra_nodes_router, prefix="/api/v1")
+app.include_router(topology_trace_router, prefix="/api/v1")
 
 
 @app.get("/")

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate, TaskStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate, TaskStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse } from '@/types';
 
 // snake_case → camelCase 변환 (Backend는 snake_case, Frontend는 camelCase)
 function toCamelCase(str: string): string {
@@ -388,15 +388,23 @@ export const managementServersApi = {
 // Infra Nodes API (물리 서버 노드)
 export const infraNodesApi = {
   getAll: (params?: { clusterId?: string; rackName?: string }) =>
-    api.get<import('@/types').InfraNodeListResponse>('/infra-nodes', { params }),
-  getById: (id: string) => api.get<import('@/types').InfraNode>(`/infra-nodes/${id}`),
+    api.get<import('@/types').InfraNodeListResponse>('/infra-nodes', { params, headers: { 'X-API-Scopes': 'infra_topology.read' } }),
+  getById: (id: string) => api.get<import('@/types').InfraNode>(`/infra-nodes/${id}`, { headers: { 'X-API-Scopes': 'infra_topology.read' } }),
   create: (data: import('@/types').InfraNodeCreate) =>
-    api.post<import('@/types').InfraNode>('/infra-nodes', data),
+    api.post<import('@/types').InfraNode>('/infra-nodes', data, { headers: { 'X-API-Scopes': 'infra_topology.edit' } }),
   update: (id: string, data: import('@/types').InfraNodeUpdate) =>
-    api.put<import('@/types').InfraNode>(`/infra-nodes/${id}`, data),
-  delete: (id: string) => api.delete(`/infra-nodes/${id}`),
+    api.put<import('@/types').InfraNode>(`/infra-nodes/${id}`, data, { headers: { 'X-API-Scopes': 'infra_topology.edit' } }),
+  delete: (id: string) => api.delete(`/infra-nodes/${id}`, { headers: { 'X-API-Scopes': 'infra_topology.force_fix' } }),
   sync: (clusterId: string) =>
-    api.post<import('@/types').InfraSyncResult>(`/infra-nodes/sync/${clusterId}`),
+    api.post<import('@/types').InfraSyncResult>(`/infra-nodes/sync/${clusterId}`, undefined, { headers: { 'X-API-Scopes': 'infra_topology.sync' } }),
+};
+
+
+
+// Topology Trace API
+export const topologyTraceApi = {
+  trace: (payload: TopologyTraceRequest) =>
+    api.post<TopologyTraceResponse>('/topology-trace', payload),
 };
 
 // Assignees API (담당자 관리)

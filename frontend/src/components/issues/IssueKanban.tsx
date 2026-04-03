@@ -72,7 +72,10 @@ function IssueCard({ issue, onClick, onEdit, onDelete }: IssueCardProps) {
       <div className="flex flex-col gap-1 text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1">
           <User className="w-3 h-3 flex-shrink-0" />
-          {issue.assignee}
+          <span className="px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">정:{issue.primaryAssignee || issue.assignee}</span>
+          {issue.secondaryAssignee && (
+            <span className="px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">부:{issue.secondaryAssignee}</span>
+          )}
           {issue.clusterName && (
             <>
               <Server className="w-3 h-3 flex-shrink-0 ml-1" />

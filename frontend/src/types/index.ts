@@ -192,6 +192,8 @@ export interface MetricCard {
 export interface Issue {
   id: string;
   assignee: string;
+  primaryAssignee: string;
+  secondaryAssignee?: string;
   clusterId?: string;
   clusterName?: string;
   issueArea: string;
@@ -212,6 +214,8 @@ export interface IssueListResponse {
 
 export interface IssueCreate {
   assignee: string;
+  primaryAssignee: string;
+  secondaryAssignee?: string;
   clusterId?: string;
   clusterName?: string;
   issueArea: string;
@@ -233,6 +237,8 @@ export type TaskTypeLabel = 'feature' | 'bug' | 'chore' | 'docs' | 'security';
 export interface Task {
   id: string;
   assignee: string;
+  primaryAssignee: string;
+  secondaryAssignee?: string;
   clusterId?: string;
   clusterName?: string;
   taskCategory: string;
@@ -266,6 +272,8 @@ export interface TaskStatusResponse {
 
 export interface TaskCreate {
   assignee: string;
+  primaryAssignee: string;
+  secondaryAssignee?: string;
   clusterId?: string;
   clusterName?: string;
   taskCategory: string;
@@ -593,6 +601,7 @@ export interface InfraNode {
   switchName?: string;
   notes?: string;
   autoSynced: boolean;
+  version: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -611,7 +620,9 @@ export interface InfraNodeCreate {
   notes?: string;
 }
 
-export interface InfraNodeUpdate extends Partial<Omit<InfraNodeCreate, 'clusterId'>> {}
+export interface InfraNodeUpdate extends Partial<Omit<InfraNodeCreate, 'clusterId'>> {
+  version: number;
+}
 
 export interface InfraNodeListResponse {
   data: InfraNode[];
@@ -619,9 +630,41 @@ export interface InfraNodeListResponse {
 }
 
 export interface InfraSyncResult {
+  success: boolean;
   created: number;
   updated: number;
+  failed: number;
+  retryCount: number;
+  partialFailure: boolean;
+  errors: string[];
   total: number;
+}
+
+
+export type TopologyTargetType = 'service' | 'pod';
+
+export interface TopologyTraceRequest {
+  clusterId: string;
+  namespace: string;
+  targetType: TopologyTargetType;
+  targetName: string;
+}
+
+export interface TopologyTraceHop {
+  entityType: string;
+  entityId: string;
+  name: string;
+  interface?: string;
+  latencyMs?: number;
+  errorCount?: number;
+}
+
+export interface TopologyTraceResponse {
+  clusterId: string;
+  namespace: string;
+  targetType: TopologyTargetType;
+  targetName: string;
+  hops: TopologyTraceHop[];
 }
 
 export interface MindMapNodeUpdate {

@@ -146,7 +146,10 @@ function TaskCard({ task, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
       <div className="flex flex-col gap-1 text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1">
           <User className="w-3 h-3 flex-shrink-0" />
-          {task.assignee}
+          <span className="px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">정:{task.primaryAssignee || task.assignee}</span>
+          {task.secondaryAssignee && (
+            <span className="px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">부:{task.secondaryAssignee}</span>
+          )}
           {task.clusterName && (
             <>
               <Server className="w-3 h-3 flex-shrink-0 ml-1" />

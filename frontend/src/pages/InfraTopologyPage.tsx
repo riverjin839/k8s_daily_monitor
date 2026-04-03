@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import {
   Network, Plus, RefreshCw, Server, Cpu, Database, HardDrive,
-  Trash2, Pencil, X, ChevronDown, AlertTriangle, Loader2, Tag,
+  Trash2, Pencil, X, ChevronDown, AlertTriangle, Loader2, Tag, GitBranch, Activity,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import {
@@ -11,7 +11,14 @@ import {
   useDeleteInfraNode,
   useSyncInfraNodes,
 } from '@/hooks/useInfraNodes';
-import type { InfraNode, InfraNodeCreate, InfraNodeRole } from '@/types';
+import { topologyTraceApi } from '@/services/api';
+import type {
+  InfraNode,
+  InfraNodeCreate,
+  InfraNodeRole,
+  TopologyTargetType,
+  TopologyTraceResponse,
+} from '@/types';
 
 // ── Role 메타 ────────────────────────────────────────────────────────────────
 const ROLE_META: Record<InfraNodeRole, { label: string; color: string; bg: string; dot: string }> = {
@@ -122,6 +129,7 @@ function NodeCard({ node, onEdit, onDelete }: NodeCardProps) {
 // ── 노드 추가/수정 모달 ───────────────────────────────────────────────────────
 interface NodeModalProps {
   clusterId: string;
+  clusterMeta?: { hostname?: string; firstHost?: string; description?: string; name?: string } | null;
   initial?: InfraNode | null;
   onClose: () => void;
 }
@@ -140,7 +148,7 @@ const EMPTY_FORM: InfraNodeCreate = {
   notes: '',
 };
 
-function NodeModal({ clusterId, initial, onClose }: NodeModalProps) {
+function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps) {
   const isEdit = !!initial;
   const createNode = useCreateInfraNode();
   const updateNode = useUpdateInfraNode();
@@ -161,7 +169,13 @@ function NodeModal({ clusterId, initial, onClose }: NodeModalProps) {
         notes: initial.notes ?? '',
       };
     }
-    return { ...EMPTY_FORM, clusterId };
+    return {
+      ...EMPTY_FORM,
+      clusterId,
+      hostname: clusterMeta?.hostname || '',
+      ipAddress: clusterMeta?.firstHost || '',
+      notes: clusterMeta?.description ? `[cluster:${clusterMeta.name}] ${clusterMeta.description}` : '',
+    };
   });
 
   const [error, setError] = useState('');
@@ -178,7 +192,7 @@ function NodeModal({ clusterId, initial, onClose }: NodeModalProps) {
       if (isEdit && initial) {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { clusterId, ...updateData } = form;
-        await updateNode.mutateAsync({ id: initial.id, data: updateData });
+        await updateNode.mutateAsync({ id: initial.id, data: { ...updateData, version: initial.version } });
       } else {
         await createNode.mutateAsync(form);
       }
@@ -203,6 +217,11 @@ function NodeModal({ clusterId, initial, onClose }: NodeModalProps) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
+          {!isEdit && clusterMeta && (
+            <div className="text-[11px] text-muted-foreground bg-muted/40 border border-border rounded-lg px-3 py-2">
+              클러스터 관리정보 기반 자동입력: hostname / first_host / description
+            </div>
+          )}
           {/* 호스트명 */}
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">호스트명 *</label>
@@ -399,6 +418,12 @@ export function InfraTopologyPage() {
   const [editTarget, setEditTarget] = useState<InfraNode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<InfraNode | null>(null);
   const [syncError, setSyncError] = useState('');
+  const [traceNamespace, setTraceNamespace] = useState('default');
+  const [traceTargetType, setTraceTargetType] = useState<TopologyTargetType>('service');
+  const [traceTargetName, setTraceTargetName] = useState('');
+  const [traceResult, setTraceResult] = useState<TopologyTraceResponse | null>(null);
+  const [traceError, setTraceError] = useState('');
+  const [traceLoading, setTraceLoading] = useState(false);
 
   const activeClusterId = selectedClusterId || clusters[0]?.id || '';
   const activeCluster = clusters.find(c => c.id === activeClusterId);
@@ -438,6 +463,19 @@ export function InfraTopologyPage() {
     return counts;
   }, [nodes]);
 
+  const traceBottleneck = useMemo(() => {
+    if (!traceResult?.hops?.length) return null;
+    return traceResult.hops.reduce((acc, hop) => {
+      const latency = hop.latencyMs ?? 0;
+      const errors = hop.errorCount ?? 0;
+      const score = latency + (errors * 10);
+      if (!acc || score > acc.score) {
+        return { hop, score };
+      }
+      return acc;
+    }, null as { hop: TopologyTraceResponse['hops'][number]; score: number } | null);
+  }, [traceResult]);
+
   async function handleSync() {
     if (!activeClusterId) return;
     setSyncError('');
@@ -455,6 +493,26 @@ export function InfraTopologyPage() {
       setDeleteTarget(null);
     } catch {
       setDeleteTarget(null);
+    }
+  }
+
+  async function handleTrace() {
+    if (!activeClusterId || !traceTargetName.trim() || !traceNamespace.trim()) return;
+    setTraceError('');
+    setTraceLoading(true);
+    try {
+      const res = await topologyTraceApi.trace({
+        clusterId: activeClusterId,
+        namespace: traceNamespace.trim(),
+        targetType: traceTargetType,
+        targetName: traceTargetName.trim(),
+      });
+      setTraceResult(res.data);
+    } catch (e) {
+      setTraceResult(null);
+      setTraceError(extractError(e));
+    } finally {
+      setTraceLoading(false);
     }
   }
 
@@ -560,6 +618,85 @@ export function InfraTopologyPage() {
               </div>
             )}
 
+            {/* Trace 패널 */}
+            {activeCluster && (
+              <div className="bg-card border border-border rounded-xl p-4 mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <GitBranch className="w-4 h-4 text-primary" />
+                  <h2 className="text-sm font-semibold text-foreground">Pod/Service → Switch Trace</h2>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3">
+                  <input
+                    value={traceNamespace}
+                    onChange={e => setTraceNamespace(e.target.value)}
+                    placeholder="namespace"
+                    className="bg-background border border-border rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                  <select
+                    value={traceTargetType}
+                    onChange={e => setTraceTargetType(e.target.value as TopologyTargetType)}
+                    className="bg-background border border-border rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  >
+                    <option value="service">service</option>
+                    <option value="pod">pod</option>
+                  </select>
+                  <input
+                    value={traceTargetName}
+                    onChange={e => setTraceTargetName(e.target.value)}
+                    placeholder={traceTargetType === 'service' ? 'service-name' : 'pod-name'}
+                    className="bg-background border border-border rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                  <button
+                    onClick={handleTrace}
+                    disabled={traceLoading || !traceTargetName.trim() || !traceNamespace.trim()}
+                    className="px-3 py-2 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                  >
+                    {traceLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+                    Trace 실행
+                  </button>
+                </div>
+
+                {traceError && (
+                  <div className="flex items-center gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-3">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />{traceError}
+                  </div>
+                )}
+
+                {traceResult && (
+                  <div className="flex flex-col gap-2">
+                    {traceBottleneck && (
+                      <div className="flex items-center gap-2 text-amber-300 text-xs bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+                        <Activity className="w-3.5 h-3.5" />
+                        병목 의심 홉: <span className="font-semibold">{traceBottleneck.hop.name}</span>
+                        <span className="opacity-80">
+                          (latency: {traceBottleneck.hop.latencyMs ?? '-'}ms, errors: {traceBottleneck.hop.errorCount ?? 0})
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {traceResult.hops.map((hop, idx) => (
+                        <div key={`${hop.entityId}-${idx}`} className="inline-flex items-center gap-2">
+                          <div className="px-2.5 py-1.5 rounded-lg border border-border bg-background text-xs">
+                            <span className="text-muted-foreground">{hop.entityType}</span>
+                            <span className="mx-1">·</span>
+                            <span className="font-medium text-foreground">{hop.name}</span>
+                            {(hop.latencyMs !== undefined || hop.errorCount !== undefined) && (
+                              <span className="ml-1 text-muted-foreground">
+                                ({hop.latencyMs ?? '-'}ms / err {hop.errorCount ?? 0})
+                              </span>
+                            )}
+                          </div>
+                          {idx < traceResult.hops.length - 1 && (
+                            <span className="text-muted-foreground text-xs">→</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* 토폴로지 본문 */}
             {nodesLoading ? (
               <div className="flex items-center justify-center py-20 text-muted-foreground">
@@ -623,6 +760,7 @@ export function InfraTopologyPage() {
       {modalOpen && activeClusterId && (
         <NodeModal
           clusterId={activeClusterId}
+          clusterMeta={activeCluster}
           initial={editTarget}
           onClose={() => { setModalOpen(false); setEditTarget(null); }}
         />

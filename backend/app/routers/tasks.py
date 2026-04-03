@@ -43,7 +43,11 @@ def list_tasks(
     if cluster_id:
         query = query.filter(Task.cluster_id == cluster_id)
     if assignee:
-        query = query.filter(Task.assignee.ilike(f"%{assignee}%"))
+        query = query.filter(
+            Task.primary_assignee.ilike(f"%{assignee}%")
+            | Task.secondary_assignee.ilike(f"%{assignee}%")
+            | Task.assignee.ilike(f"%{assignee}%")
+        )
     if task_category:
         query = query.filter(Task.task_category.ilike(f"%{task_category}%"))
     if priority:
@@ -82,7 +86,11 @@ def export_csv(
     if cluster_id:
         query = query.filter(Task.cluster_id == cluster_id)
     if assignee:
-        query = query.filter(Task.assignee.ilike(f"%{assignee}%"))
+        query = query.filter(
+            Task.primary_assignee.ilike(f"%{assignee}%")
+            | Task.secondary_assignee.ilike(f"%{assignee}%")
+            | Task.assignee.ilike(f"%{assignee}%")
+        )
     if task_category:
         query = query.filter(Task.task_category.ilike(f"%{task_category}%"))
     if priority:
@@ -101,7 +109,8 @@ def export_csv(
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
-        "담당자",
+        "담당자(정)",
+        "담당자(부)",
         "대상 클러스터",
         "모듈",
         "작업 분류",
@@ -119,7 +128,8 @@ def export_csv(
     ])
     for task in tasks:
         writer.writerow([
-            task.assignee,
+            task.primary_assignee,
+            task.secondary_assignee or "",
             task.cluster_name or "",
             task.module or "",
             task.task_category,
@@ -172,7 +182,7 @@ def get_today_tasks(date: Optional[str] = None, db: Session = Depends(get_db)):
             Task.scheduled_at >= today_start,
             Task.scheduled_at <= today_end,
         )
-        .order_by(Task.assignee, Task.priority)
+        .order_by(Task.primary_assignee, Task.priority)
         .all()
     )
 
@@ -186,20 +196,20 @@ def get_today_tasks(date: Optional[str] = None, db: Session = Depends(get_db)):
                 (Task.scheduled_at <= today_end)
             ),
         )
-        .order_by(Task.assignee, Task.priority)
+        .order_by(Task.primary_assignee, Task.priority)
         .all()
     )
 
     # 담당자별 그룹화
     assignee_map: dict[str, dict] = {}
     for task in today_tasks:
-        key = task.assignee or "미지정"
+        key = task.primary_assignee or task.assignee or "미지정"
         if key not in assignee_map:
             assignee_map[key] = {"assignee": key, "today_tasks": [], "in_progress_tasks": []}
         assignee_map[key]["today_tasks"].append(task)
 
     for task in in_progress_tasks:
-        key = task.assignee or "미지정"
+        key = task.primary_assignee or task.assignee or "미지정"
         if key not in assignee_map:
             assignee_map[key] = {"assignee": key, "today_tasks": [], "in_progress_tasks": []}
         assignee_map[key]["in_progress_tasks"].append(task)
@@ -209,6 +219,8 @@ def get_today_tasks(date: Optional[str] = None, db: Session = Depends(get_db)):
         return {
             "id": str(t.id),
             "assignee": t.assignee,
+            "primary_assignee": t.primary_assignee,
+            "secondary_assignee": t.secondary_assignee,
             "cluster_id": str(t.cluster_id) if t.cluster_id else None,
             "cluster_name": t.cluster_name,
             "task_category": t.task_category,
@@ -263,8 +275,13 @@ def create_task(payload: TaskCreate, db: Session = Depends(get_db)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
         cluster_name = cluster.name
 
+    primary_assignee = (payload.primary_assignee or payload.assignee).strip()
+    secondary_assignee = payload.secondary_assignee.strip() if payload.secondary_assignee else None
     task = Task(
         **{k: v for k, v in payload.model_dump().items() if k != "cluster_name"},
+        assignee=primary_assignee,
+        primary_assignee=primary_assignee,
+        secondary_assignee=secondary_assignee,
         cluster_name=cluster_name,
     )
     db.add(task)
@@ -281,6 +298,10 @@ def update_task(task_id: UUID, payload: TaskUpdate, db: Session = Depends(get_db
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+    if "primary_assignee" in update_data:
+        update_data["assignee"] = update_data["primary_assignee"]
+    elif "assignee" in update_data:
+        update_data["primary_assignee"] = update_data["assignee"]
 
     if "cluster_id" in update_data and update_data["cluster_id"] and "cluster_name" not in update_data:
         cluster = db.query(Cluster).filter(Cluster.id == update_data["cluster_id"]).first()

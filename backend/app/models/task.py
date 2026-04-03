@@ -11,6 +11,8 @@ class Task(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     assignee = Column(String(100), nullable=False)               # 담당자
+    primary_assignee = Column(String(100), nullable=False)       # 담당자(정)
+    secondary_assignee = Column(String(100), nullable=True)      # 담당자(부)
     cluster_id = Column(UUID(as_uuid=True), ForeignKey("clusters.id"), nullable=True)
     cluster_name = Column(String(100), nullable=True)            # 비정규화
     task_category = Column(String(100), nullable=False)          # 작업 분류

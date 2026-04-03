@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 
 class IssueBase(BaseModel):
     assignee: str = Field(..., min_length=1, max_length=100)
+    primary_assignee: str = Field(..., min_length=1, max_length=100)
+    secondary_assignee: Optional[str] = Field(None, min_length=1, max_length=100)
     cluster_id: Optional[UUID] = None
     cluster_name: Optional[str] = Field(None, max_length=100)
     issue_area: str = Field(..., min_length=1, max_length=100)
@@ -23,6 +25,8 @@ class IssueCreate(IssueBase):
 
 class IssueUpdate(BaseModel):
     assignee: Optional[str] = Field(None, min_length=1, max_length=100)
+    primary_assignee: Optional[str] = Field(None, min_length=1, max_length=100)
+    secondary_assignee: Optional[str] = Field(None, min_length=1, max_length=100)
     cluster_id: Optional[UUID] = None
     cluster_name: Optional[str] = Field(None, max_length=100)
     issue_area: Optional[str] = Field(None, min_length=1, max_length=100)

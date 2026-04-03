@@ -44,7 +44,8 @@ function toDatetimeLocal(dateStr?: string | null): string {
 
 export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: IssueModalProps) {
   const { data: registeredAssignees = [] } = useAssignees();
-  const [assignee, setAssignee] = useState('');
+  const [primaryAssignee, setPrimaryAssignee] = useState('');
+  const [secondaryAssignee, setSecondaryAssignee] = useState('');
   const [clusterId, setClusterId] = useState('');
   const [issueArea, setIssueArea] = useState('');
   const [issueAreaCustom, setIssueAreaCustom] = useState('');
@@ -59,7 +60,8 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
   // Pre-fill when editing
   useEffect(() => {
     if (editIssue) {
-      setAssignee(editIssue.assignee);
+      setPrimaryAssignee(editIssue.primaryAssignee ?? editIssue.assignee);
+      setSecondaryAssignee(editIssue.secondaryAssignee ?? '');
       setClusterId(editIssue.clusterId ?? '');
       const predefined = ISSUE_AREAS.includes(editIssue.issueArea);
       setIssueArea(predefined ? editIssue.issueArea : '기타');
@@ -72,7 +74,8 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
       setRemarks(editIssue.remarks ?? '');
       setImages(loadIssueImages(editIssue.id));
     } else {
-      setAssignee('');
+      setPrimaryAssignee('');
+      setSecondaryAssignee('');
       setClusterId('');
       setIssueArea('');
       setIssueAreaCustom('');
@@ -98,11 +101,13 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const plainIssueContent = issueContent.replace(/<[^>]*>/g, '').trim();
-    if (!assignee.trim() || !resolvedIssueArea || !plainIssueContent || !occurredAt) return;
+    if (!primaryAssignee.trim() || !resolvedIssueArea || !plainIssueContent || !occurredAt) return;
 
     onSubmit(
       {
-        assignee: assignee.trim(),
+        assignee: primaryAssignee.trim(),
+        primaryAssignee: primaryAssignee.trim(),
+        secondaryAssignee: secondaryAssignee.trim() || undefined,
         clusterId: clusterId || undefined,
         clusterName: selectedCluster?.name,
         issueArea: resolvedIssueArea,
@@ -137,13 +142,13 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            {/* 담당자 */}
+            {/* 담당자(정/부) */}
             <div>
-              <label className={labelClass}>담당자 *</label>
+              <label className={labelClass}>담당자(정) *</label>
               <input
                 type="text"
-                value={assignee}
-                onChange={(e) => setAssignee(e.target.value)}
+                value={primaryAssignee}
+                onChange={(e) => setPrimaryAssignee(e.target.value)}
                 placeholder="이름"
                 className={inputClass}
                 required
@@ -154,6 +159,15 @@ export function IssueModal({ isOpen, onClose, onSubmit, clusters, editIssue }: I
                   <option key={a.name} value={a.name} />
                 ))}
               </datalist>
+              <label className={`${labelClass} mt-2`}>담당자(부)</label>
+              <input
+                type="text"
+                value={secondaryAssignee}
+                onChange={(e) => setSecondaryAssignee(e.target.value)}
+                placeholder="보조 담당자"
+                className={inputClass}
+                list="issue-assignee-list"
+              />
             </div>
 
             {/* 대상 클러스터 */}

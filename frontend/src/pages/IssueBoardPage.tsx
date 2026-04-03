@@ -266,6 +266,7 @@ export function IssueBoardPage() {
               ]}
               active={viewMode}
               onChange={(v) => setViewMode(v as 'table' | 'kanban')}
+              showStylePanel={false}
             />
 
             {viewMode === 'table' && (

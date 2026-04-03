@@ -1010,6 +1010,7 @@ export function ClusterManagePage() {
             ]}
             active={viewMode}
             onChange={(v) => setViewMode(v as 'table' | 'card')}
+            showStylePanel={false}
           />
           <button
             onClick={() => setShowFilter((v) => !v)}

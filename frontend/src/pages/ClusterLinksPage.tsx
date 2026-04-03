@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Link2, Plus, Pencil, Trash2, ExternalLink, X, Check, Globe,
   GripVertical, Table2, LayoutList, LayoutGrid,
@@ -35,10 +35,11 @@ function loadColWidths(): Record<string, number> {
 }
 
 // ── Column resize handle ───────────────────────────────────────────────────────
-function ColResizeHandle({ colId, currentWidth, onResize }: {
+function ColResizeHandle({ colId, currentWidth, onResize, onResizeDone }: {
   colId: string;
   currentWidth: number;
   onResize: (id: string, w: number) => void;
+  onResizeDone: () => void;
 }) {
   const start = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -46,10 +47,14 @@ function ColResizeHandle({ colId, currentWidth, onResize }: {
     const sx = e.clientX;
     const sw = currentWidth;
     const move = (ev: MouseEvent) => onResize(colId, Math.max(MIN_COL, sw + ev.clientX - sx));
-    const up   = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+    const up   = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      onResizeDone(); // persist to localStorage once on drag end
+    };
     document.addEventListener('mousemove', move);
     document.addEventListener('mouseup', up);
-  }, [colId, currentWidth, onResize]);
+  }, [colId, currentWidth, onResize, onResizeDone]);
 
   return (
     <div
@@ -179,12 +184,15 @@ export function ClusterLinksPage() {
 
   // Column widths (table mode)
   const [colWidths, setColWidths] = useState<Record<string, number>>(loadColWidths);
+  const colWidthsRef = useRef(colWidths);
+  useEffect(() => { colWidthsRef.current = colWidths; }, [colWidths]);
+
+  // Update state on every mousemove (live preview), persist to localStorage only on drag end
   const handleColResize = useCallback((id: string, w: number) => {
-    setColWidths(prev => {
-      const next = { ...prev, [id]: w };
-      saveColWidths(next);
-      return next;
-    });
+    setColWidths(prev => ({ ...prev, [id]: w }));
+  }, []);
+  const handleColResizeDone = useCallback(() => {
+    saveColWidths(colWidthsRef.current);
   }, []);
   const colW = (id: string) => colWidths[id] ?? DEFAULT_COL;
 
@@ -302,7 +310,7 @@ export function ClusterLinksPage() {
           className="ml-1 p-0.5 rounded text-emerald-400/50 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors flex-shrink-0" title="공통 링크 추가">
           <Plus className="w-3 h-3" />
         </button>
-        <ColResizeHandle colId="common" currentWidth={colW('common')} onResize={handleColResize} />
+        <ColResizeHandle colId="common" currentWidth={colW('common')} onResize={handleColResize} onResizeDone={handleColResizeDone} />
       </div>,
     );
     groups.forEach((g, idx) => {
@@ -316,7 +324,7 @@ export function ClusterLinksPage() {
             className={`ml-1 p-0.5 rounded transition-colors flex-shrink-0 ${hdrText} opacity-50 hover:opacity-100 hover:bg-white/10`} title="링크 추가">
             <Plus className="w-3 h-3" />
           </button>
-          <ColResizeHandle colId={g.clusterId} currentWidth={colW(g.clusterId)} onResize={handleColResize} />
+          <ColResizeHandle colId={g.clusterId} currentWidth={colW(g.clusterId)} onResize={handleColResize} onResizeDone={handleColResizeDone} />
         </div>,
       );
     });

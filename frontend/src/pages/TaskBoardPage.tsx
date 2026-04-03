@@ -313,6 +313,7 @@ export function TaskBoardPage() {
               ]}
               active={viewMode}
               onChange={(v) => setViewMode(v as ViewMode)}
+              showStylePanel={false}
             />
 
             {viewMode !== 'calendar' && tasks.length > 0 && (

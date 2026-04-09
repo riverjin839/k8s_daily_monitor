@@ -13,6 +13,7 @@ from app.models.ops_note import OpsNote
 from app.models.management_server import ManagementServer
 from app.models.infra_node import InfraNode
 from app.models.topology_audit_log import TopologyAuditLog
+from app.models.ontology import OntologyEntity, OntologyRelationship, OntologyEvent, OntologyEntityType
 
 __all__ = [
     "Cluster",
@@ -35,4 +36,8 @@ __all__ = [
     "ManagementServer",
     "InfraNode",
     "TopologyAuditLog",
+    "OntologyEntity",
+    "OntologyRelationship",
+    "OntologyEvent",
+    "OntologyEntityType",
 ]

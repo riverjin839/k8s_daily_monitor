@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ViewModeBar } from '@/components/common';
 import { Plus, Download, Pencil, Trash2, ClipboardList, Search, X, ImagePlus, ChevronUp, ChevronDown, ArrowUpDown, GripVertical, Clock, Kanban, List } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -258,30 +259,15 @@ export function IssueBoardPage() {
 
           <div className="flex items-center gap-3">
             {/* View mode toggle */}
-            <div className="flex items-center rounded-lg border border-border overflow-hidden">
-              <button
-                onClick={() => setViewMode('table')}
-                className={`px-3 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                  viewMode === 'table'
-                    ? 'bg-primary/10 text-primary'
-                    : 'bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground'
-                }`}
-                title="목록 보기"
-              >
-                <List className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('kanban')}
-                className={`px-3 py-2 text-sm font-medium border-l border-border transition-colors flex items-center gap-1.5 ${
-                  viewMode === 'kanban'
-                    ? 'bg-primary/10 text-primary'
-                    : 'bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground'
-                }`}
-                title="칸반 보기"
-              >
-                <Kanban className="w-4 h-4" />
-              </button>
-            </div>
+            <ViewModeBar
+              modes={[
+                { id: 'table',  label: '목록', icon: <List   className="w-3.5 h-3.5" /> },
+                { id: 'kanban', label: '칸반', icon: <Kanban className="w-3.5 h-3.5" /> },
+              ]}
+              active={viewMode}
+              onChange={(v) => setViewMode(v as 'table' | 'kanban')}
+              showStylePanel={false}
+            />
 
             {viewMode === 'table' && (
               <button

@@ -667,6 +667,23 @@ export interface TopologyTraceResponse {
   hops: TopologyTraceHop[];
 }
 
+export type PacketProtocol = 'http' | 'https' | 'grpc' | 'tcp';
+
+export interface PacketFlowRequest {
+  clusterId: string;
+  host: string;
+  path?: string;
+  protocol?: PacketProtocol;
+}
+
+export interface PacketFlowResponse {
+  clusterId: string;
+  host: string;
+  path: string;
+  protocol: string;
+  hops: TopologyTraceHop[];
+}
+
 // Incident Analysis
 export interface KubeEvent {
   reason: string;

@@ -23,6 +23,7 @@ import {
   Map,
   BarChart3,
   Network,
+  Zap,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
@@ -43,6 +44,7 @@ const NAV_ITEMS: Array<{ to: string; defaultLabel: string; icon: ComponentType<{
   { to: '/wbs', defaultLabel: 'WBS 작업흐름', icon: BarChart3 },
   { to: '/mindmap', defaultLabel: '마인드맵', icon: Map },
   { to: '/workflow', defaultLabel: '워크플로우', icon: GitFork },
+  { to: '/incident-analysis', defaultLabel: '장애 로그 분석', icon: Zap },
   { to: '/settings', defaultLabel: 'Settings', icon: Settings },
 ];
 

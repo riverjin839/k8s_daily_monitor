@@ -18,6 +18,7 @@ from app.routers.management_servers import router as management_server_router
 from app.routers.infra_nodes import router as infra_nodes_router
 from app.routers.topology_trace import router as topology_trace_router
 from app.routers.ontology import router as ontology_router
+from app.routers.analyze import router as analyze_router
 
 __all__ = [
     "clusters_router",
@@ -40,4 +41,5 @@ __all__ = [
     "infra_nodes_router",
     "topology_trace_router",
     "ontology_router",
+    "analyze_router",
 ]

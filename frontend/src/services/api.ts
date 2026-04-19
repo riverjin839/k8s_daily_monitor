@@ -414,4 +414,12 @@ export const assigneesApi = {
     api.put<{ data: import('@/types').Assignee[] }>('/ui-settings/assignees', { assignees }),
 };
 
+// Incident Analysis API
+export const analyzeApi = {
+  analyze: (data: import('@/types').IncidentAnalysisRequest) =>
+    api.post<import('@/types').IncidentAnalysisResponse>('/analyze/incident', data),
+  health: () =>
+    api.get<import('@/types').AnalyzerHealthResponse>('/analyze/health'),
+};
+
 export default api;

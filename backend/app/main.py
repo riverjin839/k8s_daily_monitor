@@ -28,6 +28,7 @@ from app.routers import (
     infra_nodes_router,
     topology_trace_router,
     ontology_router,
+    analyze_router,
 )
 
 
@@ -392,6 +393,7 @@ app.include_router(management_server_router, prefix="/api/v1")
 app.include_router(infra_nodes_router, prefix="/api/v1")
 app.include_router(topology_trace_router, prefix="/api/v1")
 app.include_router(ontology_router, prefix="/api/v1")
+app.include_router(analyze_router, prefix="/api/v1")
 
 
 @app.get("/")

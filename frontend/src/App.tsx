@@ -16,6 +16,7 @@ import { OpsNotesPage } from '@/pages/OpsNotesPage';
 import { MindMapPage } from '@/pages/MindMapPage';
 import { WbsFlowPage } from '@/pages/WbsFlowPage';
 import { InfraTopologyPage } from '@/pages/InfraTopologyPage';
+import { IncidentAnalysisPage } from '@/pages/IncidentAnalysisPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar } from '@/components/layout';
 
@@ -52,6 +53,7 @@ function App() {
               <Route path="/ops-notes" element={<OpsNotesPage />} />
               <Route path="/mindmap" element={<MindMapPage />} />
               <Route path="/wbs" element={<WbsFlowPage />} />
+              <Route path="/incident-analysis" element={<IncidentAnalysisPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>

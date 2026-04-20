@@ -218,6 +218,16 @@ k8s_daily_monitor/
 | 노드 유니크 | `infra_nodes(cluster_id, hostname)` 유니크 제약 + 조회 인덱스 |
 | 감사로그 | `topology_audit_logs`에 node/port/link 변경 이벤트 저장 |
 | API 스코프 | `infra_topology.read`, `infra_topology.edit`, `infra_topology.sync`, `infra_topology.force_fix` |
+
+### 장애 영향도 온톨로지(신규)
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| POST | `/api/v1/ontology/entities` | 온톨로지 엔티티 등록 (node/os/component/workload/config 등) |
+| POST | `/api/v1/ontology/relationships` | 엔티티 간 관계 등록 (`uses_config`, `depends_on` 등) |
+| GET | `/api/v1/ontology/graph/{cluster_id}` | 클러스터 온톨로지 그래프 조회 |
+| POST | `/api/v1/ontology/impact` | config 변경 이벤트의 blast radius(영향도) 계산 + 이벤트 저장 |
+
+`/api/v1/ontology/impact` 호출 시 관계 그래프를 BFS 기반으로 순회하여 영향 경로(path), 점수(score), 영향받은 엔티티 목록을 함께 반환합니다.
 | 낙관적 락 | `infra_nodes.version` 기반 업데이트 충돌(409) 방지 |
 | 동기화 실패 규칙 | kubectl 최대 2회 재시도(총 3회 시도), 개별 노드 실패는 `partial_failure=true`로 반환 |
 

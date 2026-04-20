@@ -25,3 +25,18 @@ class TopologyTraceResponse(BaseModel):
     target_type: str
     target_name: str
     hops: list[TopologyHop]
+
+
+class PacketFlowRequest(BaseModel):
+    cluster_id: UUID
+    host: str = Field(..., min_length=1, max_length=253)
+    path: str = Field(default="/", min_length=1, max_length=512)
+    protocol: str = Field(default="https", pattern="^(http|https|grpc|tcp)$")
+
+
+class PacketFlowResponse(BaseModel):
+    cluster_id: UUID
+    host: str
+    path: str
+    protocol: str
+    hops: list[TopologyHop]

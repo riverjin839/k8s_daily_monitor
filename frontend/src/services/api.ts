@@ -405,6 +405,8 @@ export const infraNodesApi = {
 export const topologyTraceApi = {
   trace: (payload: TopologyTraceRequest) =>
     api.post<TopologyTraceResponse>('/topology-trace', payload),
+  packetFlow: (payload: import('@/types').PacketFlowRequest) =>
+    api.post<import('@/types').PacketFlowResponse>('/topology-trace/packet-flow', payload),
 };
 
 // Assignees API (담당자 관리)
@@ -412,6 +414,14 @@ export const assigneesApi = {
   getAll: () => api.get<{ data: import('@/types').Assignee[] }>('/ui-settings/assignees'),
   update: (assignees: import('@/types').Assignee[]) =>
     api.put<{ data: import('@/types').Assignee[] }>('/ui-settings/assignees', { assignees }),
+};
+
+// Incident Analysis API
+export const analyzeApi = {
+  analyze: (data: import('@/types').IncidentAnalysisRequest) =>
+    api.post<import('@/types').IncidentAnalysisResponse>('/analyze/incident', data),
+  health: () =>
+    api.get<import('@/types').AnalyzerHealthResponse>('/analyze/health'),
 };
 
 export default api;

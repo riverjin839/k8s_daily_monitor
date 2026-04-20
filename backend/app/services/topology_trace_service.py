@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from typing import Optional
 
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
@@ -13,6 +14,13 @@ from app.models.infra_node import InfraNode
 class TraceTarget:
     target_type: str
     target_name: str
+
+
+@dataclass
+class PacketFlowRequest:
+    host: str
+    path: str = "/"
+    protocol: str = "https"
 
 
 class TopologyTraceService:
@@ -45,6 +53,10 @@ class TopologyTraceService:
         self._core_v1 = client.CoreV1Api()
         self._discovery_v1 = client.DiscoveryV1Api()
         return self._core_v1, self._discovery_v1
+
+    def _get_networking_client(self) -> client.NetworkingV1Api:
+        self._load_config()
+        return client.NetworkingV1Api()
 
     @staticmethod
     def _safe_error_count(pod: client.V1Pod | None, node: client.V1Node | None) -> int | None:
@@ -214,6 +226,205 @@ class TopologyTraceService:
                 interface=node_interface,
                 latency_ms=None,
                 error_count=None,
+            )
+        )
+
+        return hops
+
+    # ── Packet flow (외부 client → 내부 pod) ──────────────────────────
+    def _find_ingress_for_host(
+        self, host: str, path: str
+    ) -> tuple[client.V1Ingress, client.V1IngressBackend, str]:
+        """Search all namespaces for an Ingress matching the given host/path."""
+        networking_v1 = self._get_networking_client()
+        ingresses = networking_v1.list_ingress_for_all_namespaces()
+
+        for ing in ingresses.items:
+            for rule in ing.spec.rules or []:
+                rule_host = getattr(rule, "host", None)
+                if rule_host and rule_host != host:
+                    continue
+                http = getattr(rule, "http", None)
+                if not http or not http.paths:
+                    continue
+                for p in http.paths:
+                    p_path = p.path or "/"
+                    if path == p_path or path.startswith(p_path.rstrip("*")):
+                        return ing, p.backend, ing.metadata.namespace
+
+        raise ValueError(f"host '{host}' path '{path}'에 매칭되는 Ingress를 찾지 못했습니다")
+
+    def _get_service(self, namespace: str, service_name: str) -> client.V1Service:
+        core_v1, _ = self._get_clients()
+        return core_v1.read_namespaced_service(name=service_name, namespace=namespace)
+
+    def _service_entry_info(self, svc: client.V1Service) -> tuple[str, Optional[str]]:
+        """Return (entry_label, external_address) describing the service entry type."""
+        spec = svc.spec
+        svc_type = spec.type or "ClusterIP"
+
+        if svc_type == "LoadBalancer":
+            lb = svc.status.load_balancer if svc.status else None
+            if lb and lb.ingress:
+                ext = lb.ingress[0]
+                addr = ext.ip or ext.hostname
+                return ("LoadBalancer", addr)
+            return ("LoadBalancer", None)
+
+        if svc_type == "NodePort":
+            ports = spec.ports or []
+            node_ports = [str(p.node_port) for p in ports if p.node_port]
+            return ("NodePort", f":{','.join(node_ports)}" if node_ports else None)
+
+        return ("ClusterIP", spec.cluster_ip)
+
+    def _find_ingress_controller_pod(self, ing: client.V1Ingress) -> Optional[client.V1Pod]:
+        """Try to locate an Ingress-controller pod via IngressClass → controller deploy."""
+        core_v1, _ = self._get_clients()
+
+        class_name = (
+            ing.spec.ingress_class_name
+            or (ing.metadata.annotations or {}).get("kubernetes.io/ingress.class")
+        )
+
+        selectors = [
+            "app.kubernetes.io/name=ingress-nginx",
+            "app.kubernetes.io/component=controller",
+            "app=istio-ingressgateway",
+            "app=traefik",
+        ]
+        if class_name:
+            selectors.insert(0, f"app.kubernetes.io/instance={class_name}")
+
+        for selector in selectors:
+            pods = core_v1.list_pod_for_all_namespaces(label_selector=selector, limit=1)
+            if pods.items:
+                return pods.items[0]
+        return None
+
+    def trace_packet_flow(self, req: PacketFlowRequest) -> list[dict]:
+        """Trace the full E2E packet path: external client → pod → switch."""
+        core_v1, _ = self._get_clients()
+
+        hops: list[dict] = []
+
+        # 1. External client
+        hops.append(
+            self._build_hop(
+                entity_type="client",
+                entity_id="external-client",
+                name="External Client",
+                interface=f"{req.protocol}://{req.host}{req.path}",
+            )
+        )
+
+        # 2. DNS (logical hop)
+        hops.append(
+            self._build_hop(
+                entity_type="dns",
+                entity_id=req.host,
+                name=req.host,
+                interface="DNS lookup",
+            )
+        )
+
+        # 3. Ingress resource lookup
+        ing, backend, ing_ns = self._find_ingress_for_host(req.host, req.path)
+
+        # 4. Ingress Controller pod (LB / NodePort entry)
+        ctrl_pod = self._find_ingress_controller_pod(ing)
+        if ctrl_pod:
+            hops.append(
+                self._build_hop(
+                    entity_type="ingress_controller",
+                    entity_id=ctrl_pod.metadata.uid,
+                    name=f"{ctrl_pod.metadata.namespace}/{ctrl_pod.metadata.name}",
+                    interface=ctrl_pod.status.pod_ip if ctrl_pod.status else None,
+                    latency_ms=self._safe_latency_ms(ctrl_pod, None),
+                    error_count=self._safe_error_count(ctrl_pod, None),
+                )
+            )
+        else:
+            hops.append(
+                self._build_hop(
+                    entity_type="ingress_controller",
+                    entity_id="unknown-ingress",
+                    name="Ingress Controller (unknown)",
+                )
+            )
+
+        # 5. Ingress resource
+        hops.append(
+            self._build_hop(
+                entity_type="ingress",
+                entity_id=ing.metadata.uid,
+                name=f"{ing_ns}/{ing.metadata.name}",
+                interface=f"{req.host}{req.path}",
+            )
+        )
+
+        # 6. Service
+        svc_ref = backend.service
+        if not svc_ref or not svc_ref.name:
+            raise ValueError("Ingress backend에 service 정보가 없습니다")
+
+        svc = self._get_service(ing_ns, svc_ref.name)
+        entry_label, ext_addr = self._service_entry_info(svc)
+        svc_port = svc_ref.port.number if svc_ref.port else None
+        svc_interface = f"{svc.spec.cluster_ip}:{svc_port}" if svc_port else svc.spec.cluster_ip
+
+        hops.append(
+            self._build_hop(
+                entity_type="service",
+                entity_id=svc.metadata.uid,
+                name=f"{ing_ns}/{svc.metadata.name} ({entry_label})",
+                interface=ext_addr or svc_interface,
+            )
+        )
+
+        # 7. Backend pod (via EndpointSlice)
+        pod = self._get_service_backend_pod(ing_ns, svc.metadata.name)
+        hops.append(
+            self._build_hop(
+                entity_type="pod",
+                entity_id=pod.metadata.uid,
+                name=f"{pod.metadata.namespace}/{pod.metadata.name}",
+                interface=pod.status.pod_ip if pod.status else None,
+                latency_ms=self._safe_latency_ms(pod, None),
+                error_count=self._safe_error_count(pod, None),
+            )
+        )
+
+        if not pod.spec or not pod.spec.node_name:
+            raise ValueError(f"pod '{pod.metadata.name}' 의 node 정보를 찾지 못했습니다")
+
+        # 8. Node
+        node = core_v1.read_node(name=pod.spec.node_name)
+        infra_node = self.db.query(InfraNode).filter(
+            InfraNode.cluster_id == self.cluster.id,
+            InfraNode.hostname == node.metadata.name,
+        ).first()
+
+        node_interface = self._resolve_interface(node, infra_node)
+        hops.append(
+            self._build_hop(
+                entity_type="node",
+                entity_id=node.metadata.uid,
+                name=node.metadata.name,
+                interface=node_interface,
+                latency_ms=self._safe_latency_ms(None, node),
+                error_count=self._safe_error_count(None, node),
+            )
+        )
+
+        # 9. Switch (ToR)
+        switch_name = infra_node.switch_name if infra_node and infra_node.switch_name else "unknown-switch"
+        hops.append(
+            self._build_hop(
+                entity_type="switch",
+                entity_id=switch_name,
+                name=switch_name,
+                interface=node_interface,
             )
         )
 

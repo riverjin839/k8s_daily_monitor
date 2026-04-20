@@ -4,7 +4,7 @@ import {
   LayoutDashboard, BookOpen, ClipboardList, ListTodo, CalendarCheck2,
   Settings, Link2, Tags, Calculator, Server, GitFork, BookMarked, Layers,
   Pencil, Moon, Sun, Monitor, Map, BarChart3, Network,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Zap, Route,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
@@ -12,28 +12,31 @@ import { InlineEdit } from '@/components/common';
 
 // ── Nav registry ──────────────────────────────────────────────────────────────
 const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ className?: string }> }> = {
-  '/':               { defaultLabel: 'Dashboard',      icon: LayoutDashboard },
-  '/playbooks':      { defaultLabel: 'Playbooks',      icon: BookOpen },
-  '/issues':         { defaultLabel: '이슈 게시판',    icon: ClipboardList },
-  '/tasks':          { defaultLabel: '작업 게시판',    icon: ListTodo },
-  '/todo-today':     { defaultLabel: '오늘 할일',      icon: CalendarCheck2 },
-  '/cluster-manage': { defaultLabel: '클러스터 관리',  icon: Server },
-  '/infra-topology': { defaultLabel: '인프라 토폴로지', icon: Network },
-  '/links':          { defaultLabel: '클러스터 링크',  icon: Link2 },
-  '/node-labels':    { defaultLabel: '노드 라벨',      icon: Tags },
-  '/cidr':           { defaultLabel: 'CIDR 계산기',    icon: Calculator },
-  '/work-guides':    { defaultLabel: '작업 가이드',    icon: BookMarked },
-  '/ops-notes':      { defaultLabel: '업무 게시판',    icon: Layers },
-  '/wbs':            { defaultLabel: 'WBS 작업흐름',   icon: BarChart3 },
-  '/mindmap':        { defaultLabel: '마인드맵',       icon: Map },
-  '/workflow':       { defaultLabel: '워크플로우',     icon: GitFork },
-  '/settings':       { defaultLabel: 'Settings',       icon: Settings },
+  '/':                   { defaultLabel: 'Dashboard',      icon: LayoutDashboard },
+  '/playbooks':          { defaultLabel: 'Playbooks',      icon: BookOpen },
+  '/issues':             { defaultLabel: '이슈 게시판',    icon: ClipboardList },
+  '/tasks':              { defaultLabel: '작업 게시판',    icon: ListTodo },
+  '/todo-today':         { defaultLabel: '오늘 할일',      icon: CalendarCheck2 },
+  '/cluster-manage':     { defaultLabel: '클러스터 관리',  icon: Server },
+  '/infra-topology':     { defaultLabel: '인프라 토폴로지', icon: Network },
+  '/links':              { defaultLabel: '클러스터 링크',  icon: Link2 },
+  '/node-labels':        { defaultLabel: '노드 라벨',      icon: Tags },
+  '/cidr':               { defaultLabel: 'CIDR 계산기',    icon: Calculator },
+  '/incident-analysis':  { defaultLabel: '장애 로그 분석', icon: Zap },
+  '/packet-flow':        { defaultLabel: '패킷 흐름 분석', icon: Route },
+  '/work-guides':        { defaultLabel: '작업 가이드',    icon: BookMarked },
+  '/ops-notes':          { defaultLabel: '업무 게시판',    icon: Layers },
+  '/wbs':                { defaultLabel: 'WBS 작업흐름',   icon: BarChart3 },
+  '/mindmap':            { defaultLabel: '마인드맵',       icon: Map },
+  '/workflow':           { defaultLabel: '워크플로우',     icon: GitFork },
+  '/settings':           { defaultLabel: 'Settings',       icon: Settings },
 };
 
 const NAV_GROUPS: Array<{ id: string; label: string; paths: string[] }> = [
   { id: 'monitoring', label: '모니터링',  paths: ['/', '/playbooks'] },
   { id: 'work',       label: '작업관리', paths: ['/issues', '/tasks', '/todo-today'] },
   { id: 'cluster',    label: '클러스터', paths: ['/cluster-manage', '/infra-topology', '/links', '/node-labels', '/cidr'] },
+  { id: 'analysis',   label: 'AI 분석',  paths: ['/incident-analysis', '/packet-flow'] },
   { id: 'docs',       label: '운영/문서', paths: ['/work-guides', '/ops-notes', '/wbs', '/mindmap', '/workflow'] },
   { id: 'system',     label: '시스템',   paths: ['/settings'] },
 ];
@@ -122,7 +125,6 @@ export function Sidebar() {
 
           return (
             <div key={id} className="mb-2">
-              {/* 그룹 헤더 */}
               <button
                 onClick={() => toggleGroup(id)}
                 className="w-full flex items-center gap-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 hover:text-muted-foreground rounded transition-colors"
@@ -136,7 +138,6 @@ export function Sidebar() {
                 )}
               </button>
 
-              {/* 그룹 아이템 */}
               {!isCollapsed && (
                 <div className="mt-0.5 space-y-0.5">
                   {paths.map(path => {

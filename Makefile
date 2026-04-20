@@ -1,5 +1,6 @@
 .PHONY: help install dev build test clean docker-up docker-down \
 	k8s-dev k8s-prod k8s-delete-dev k8s-delete-prod k8s-status skaffold-dev \
+	kind-up kind-reload kind-down kind-status kind-logs \
 	monitoring-status monitoring-test monitoring-port-forward monitoring-images
 
 help:
@@ -15,7 +16,17 @@ help:
 	@echo "  make docker-up       - Start Docker Compose"
 	@echo "  make docker-down     - Stop Docker Compose"
 	@echo ""
-	@echo "Kubernetes Commands:"
+	@echo "kind 로컬 배포 (Mac 개발용 - 이 명령을 사용하세요):"
+	@echo "  make kind-up         - 최초 환경 구축 (kind 클러스터 + 빌드 + 배포)"
+	@echo "  make kind-reload     - 코드 수정 후 재빌드 & 재배포"
+	@echo "  make kind-status     - Pod 상태 확인"
+	@echo "  make kind-logs       - 백엔드 로그 스트리밍"
+	@echo "  make kind-down       - kind 클러스터 전체 삭제"
+	@echo ""
+	@echo "  접속:  Frontend http://localhost:30080"
+	@echo "        Backend  http://localhost:30800/docs"
+	@echo ""
+	@echo "Kubernetes Commands (실제 클러스터용):"
 	@echo "  make k8s-dev         - Deploy to Kubernetes (dev)"
 	@echo "  make k8s-prod        - Deploy to Kubernetes (prod)"
 	@echo "  make k8s-delete-dev  - Delete dev deployment"
@@ -87,7 +98,27 @@ docker-rebuild:
 	docker-compose build --no-cache
 	docker-compose up -d
 
-# Kubernetes Deployments
+# ── kind 로컬 배포 (Mac 개발용) ───────────────────────────────────────────────
+kind-up:
+	@echo "=== kind 로컬 환경 구축 ==="
+	@echo "Frontend: http://localhost:30080  Backend: http://localhost:30800"
+	@bash scripts/kind-setup.sh up
+
+kind-reload:
+	@echo "=== 코드 재빌드 & 재배포 ==="
+	@bash scripts/kind-setup.sh reload
+
+kind-down:
+	@echo "=== kind 클러스터 삭제 ==="
+	@bash scripts/kind-setup.sh destroy
+
+kind-status:
+	@bash scripts/kind-setup.sh status
+
+kind-logs:
+	@bash scripts/kind-setup.sh logs backend
+
+# Kubernetes Deployments (실제 클러스터용)
 k8s-dev:
 	@echo "Deploying to Kubernetes (dev environment)..."
 	kubectl apply -k k8s/overlays/dev

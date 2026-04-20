@@ -44,12 +44,15 @@
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.21.3",
     "recharts": "^2.10.4",
+    "react-force-graph-3d": "^1.25.0",
+    "three": "^0.169.0",
     "tailwind-merge": "^2.2.0",
     "zustand": "^4.4.7"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/react": "^18.2.48",
+    "@types/three": "^0.169.0",
     "@types/react-dom": "^18.2.18",
     "@typescript-eslint/eslint-plugin": "^6.19.0",
     "@typescript-eslint/parser": "^6.19.0",

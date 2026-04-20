@@ -4,7 +4,7 @@ import {
   LayoutDashboard, BookOpen, ClipboardList, ListTodo, CalendarCheck2,
   Settings, Link2, Tags, Calculator, Server, GitFork, BookMarked, Layers,
   Pencil, Moon, Sun, Monitor, Map, BarChart3, Network,
-  ChevronDown, ChevronRight, Zap, Route,
+  ChevronDown, ChevronRight, Zap, Route, Share2,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
@@ -24,6 +24,7 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
   '/cidr':               { defaultLabel: 'CIDR 계산기',    icon: Calculator },
   '/incident-analysis':  { defaultLabel: '장애 로그 분석', icon: Zap },
   '/packet-flow':        { defaultLabel: '패킷 흐름 분석', icon: Route },
+  '/ontology':           { defaultLabel: '온톨로지 그래프', icon: Share2 },
   '/work-guides':        { defaultLabel: '작업 가이드',    icon: BookMarked },
   '/ops-notes':          { defaultLabel: '업무 게시판',    icon: Layers },
   '/wbs':                { defaultLabel: 'WBS 작업흐름',   icon: BarChart3 },
@@ -36,7 +37,7 @@ const NAV_GROUPS: Array<{ id: string; label: string; paths: string[] }> = [
   { id: 'monitoring', label: '모니터링',  paths: ['/', '/playbooks'] },
   { id: 'work',       label: '작업관리', paths: ['/issues', '/tasks', '/todo-today'] },
   { id: 'cluster',    label: '클러스터', paths: ['/cluster-manage', '/infra-topology', '/links', '/node-labels', '/cidr'] },
-  { id: 'analysis',   label: 'AI 분석',  paths: ['/incident-analysis', '/packet-flow'] },
+  { id: 'analysis',   label: 'AI 분석',  paths: ['/incident-analysis', '/packet-flow', '/ontology'] },
   { id: 'docs',       label: '운영/문서', paths: ['/work-guides', '/ops-notes', '/wbs', '/mindmap', '/workflow'] },
   { id: 'system',     label: '시스템',   paths: ['/settings'] },
 ];

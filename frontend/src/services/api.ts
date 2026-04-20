@@ -416,6 +416,22 @@ export const assigneesApi = {
     api.put<{ data: import('@/types').Assignee[] }>('/ui-settings/assignees', { assignees }),
 };
 
+// Ontology API
+export const ontologyApi = {
+  getGraph: (clusterId: string) =>
+    api.get<import('@/types').OntologyGraph>(`/ontology/graph/${clusterId}`),
+  createEntity: (data: {
+    clusterId: string; entityType: string; name: string;
+    externalId?: string; version?: string; properties?: Record<string, unknown>;
+  }) => api.post<import('@/types').OntologyEntity>('/ontology/entities', data),
+  createRelationship: (data: {
+    clusterId: string; sourceEntityId: string; relationType: string;
+    targetEntityId: string; weight?: number; relationMetadata?: Record<string, unknown>;
+  }) => api.post<import('@/types').OntologyRelationship>('/ontology/relationships', data),
+  analyzeImpact: (data: import('@/types').OntologyImpactRequest) =>
+    api.post<import('@/types').OntologyImpactResponse>('/ontology/impact', data),
+};
+
 // Incident Analysis API
 export const analyzeApi = {
   analyze: (data: import('@/types').IncidentAnalysisRequest) =>

@@ -684,6 +684,65 @@ export interface PacketFlowResponse {
   hops: TopologyTraceHop[];
 }
 
+// Ontology Graph
+export type OntologyEntityType =
+  | 'node' | 'hardware' | 'os' | 'kernel_param' | 'network'
+  | 'k8s_component' | 'cilium_component' | 'workload' | 'service' | 'config_item';
+
+export interface OntologyEntity {
+  id: string;
+  clusterId: string;
+  entityType: OntologyEntityType;
+  name: string;
+  externalId?: string;
+  version?: string;
+  properties: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OntologyRelationship {
+  id: string;
+  clusterId: string;
+  sourceEntityId: string;
+  relationType: string;
+  targetEntityId: string;
+  weight: number;
+  relationMetadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface OntologyGraph {
+  clusterId: string;
+  entities: OntologyEntity[];
+  relationships: OntologyRelationship[];
+}
+
+export interface ImpactPath {
+  path: string[];
+  pathNames: string[];
+  pathRelations: string[];
+  score: number;
+}
+
+export interface OntologyImpactRequest {
+  clusterId: string;
+  configEntityId: string;
+  category: string;
+  severity: 'info' | 'warning' | 'critical';
+  title: string;
+  description?: string;
+  evidence?: Record<string, unknown>;
+  maxDepth?: number;
+}
+
+export interface OntologyImpactResponse {
+  eventId: string;
+  blastRadiusScore: number;
+  impactedEntities: OntologyEntity[];
+  impactPaths: ImpactPath[];
+}
+
 // Incident Analysis
 export interface KubeEvent {
   reason: string;

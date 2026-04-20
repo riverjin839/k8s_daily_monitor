@@ -6,6 +6,7 @@ import {
   ChevronLeft, ChevronRight, Calendar, Users, Filter,
   CheckCircle2, Clock, AlertCircle, Circle, BarChart3,
 } from 'lucide-react';
+import { ViewModeBar } from '@/components/common';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -619,17 +620,16 @@ export function WbsFlowPage() {
           </div>
 
           {/* View mode */}
-          <div className="flex items-center gap-0.5 bg-secondary rounded-lg p-0.5 text-xs">
-            {(['week', 'twoWeek', 'month'] as ViewMode[]).map(m => (
-              <button key={m}
-                onClick={() => setViewMode(m)}
-                className={`px-3 py-1.5 rounded-md font-medium transition-colors ${
-                  viewMode === m ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                }`}>
-                {m === 'week' ? '1주' : m === 'twoWeek' ? '2주' : '1달'}
-              </button>
-            ))}
-          </div>
+          <ViewModeBar
+            modes={[
+              { id: 'week',    label: '1주' },
+              { id: 'twoWeek', label: '2주' },
+              { id: 'month',   label: '1달' },
+            ]}
+            active={viewMode}
+            onChange={(v) => setViewMode(v as ViewMode)}
+            showStylePanel={false}
+          />
 
           {/* 개인별 보기: 담당자 선택 */}
           {pageView === 'personal' && (

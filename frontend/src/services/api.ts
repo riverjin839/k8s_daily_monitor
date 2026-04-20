@@ -405,6 +405,8 @@ export const infraNodesApi = {
 export const topologyTraceApi = {
   trace: (payload: TopologyTraceRequest) =>
     api.post<TopologyTraceResponse>('/topology-trace', payload),
+  packetFlow: (payload: import('@/types').PacketFlowRequest) =>
+    api.post<import('@/types').PacketFlowResponse>('/topology-trace/packet-flow', payload),
 };
 
 // Assignees API (담당자 관리)

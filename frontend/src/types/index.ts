@@ -794,6 +794,40 @@ export interface AnalyzerHealthResponse {
   available: boolean;
 }
 
+// Trend Digest
+export type TrendCategory = 'k8s' | 'cilium' | 'linux' | 'cncf' | string;
+export type TrendItemType = 'release' | 'blog' | 'news';
+
+export interface TrendSource {
+  id: string;
+  name: string;
+  sourceType: 'github_release' | 'rss';
+  url: string;
+  category: TrendCategory;
+  enabled: boolean;
+}
+
+export interface TrendItem {
+  id: string;
+  title: string;
+  url: string;
+  publishedAt: string;
+  summaryKo?: string;
+  version?: string;
+  itemType: TrendItemType;
+  sourceName: string;
+  category: TrendCategory;
+}
+
+export interface TrendDigest {
+  id: string;
+  digestDate: string;
+  overallSummaryKo?: string;
+  itemCount: number;
+  status: 'pending' | 'collecting' | 'summarizing' | 'done' | 'failed';
+  errorMessage?: string;
+}
+
 export interface MindMapNodeUpdate {
   label?: string;
   note?: string;

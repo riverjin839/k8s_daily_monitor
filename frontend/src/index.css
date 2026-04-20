@@ -3,8 +3,38 @@
 @tailwind utilities;
 
 @layer base {
-  /* ── Dark theme (default) ─────────────────────────────────────────────── */
+  /* ── macOS-inspired Light theme (default) ────────────────────────────────── */
   :root {
+    --background: 0 0% 87%;          /* #DEDEDE - light gray bg */
+    --foreground: 0 0% 11%;          /* #1C1C1C - near-black text */
+    --card: 0 0% 97%;                /* #F7F7F7 - white cards */
+    --card-foreground: 0 0% 11%;
+    --popover: 0 0% 97%;
+    --popover-foreground: 0 0% 11%;
+    --primary: 211 100% 44%;         /* #0071E3 - macOS blue */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 91%;           /* #E8E8E8 */
+    --secondary-foreground: 0 0% 11%;
+    --muted: 0 0% 91%;
+    --muted-foreground: 0 0% 42%;    /* #6B6B6B */
+    --accent: 0 0% 91%;
+    --accent-foreground: 0 0% 11%;
+    --destructive: 4 86% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 80%;              /* #CCCCCC */
+    --input: 0 0% 91%;
+    --ring: 211 100% 44%;
+    --radius: 0.875rem;              /* 14px */
+    /* macOS traffic lights */
+    --mac-red:    #FF5F57;
+    --mac-yellow: #FEBC2E;
+    --mac-green:  #28C840;
+    /* card shadow */
+    --card-shadow: 0 2px 14px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.06);
+  }
+
+  /* ── Dark theme ──────────────────────────────────────────────────────────── */
+  html.dark {
     --background: 0 0% 4%;
     --foreground: 0 0% 98%;
     --card: 0 0% 7%;
@@ -24,31 +54,39 @@
     --border: 0 0% 15%;
     --input: 0 0% 15%;
     --ring: 217 91% 60%;
-    --radius: 0.75rem;
+    --radius: 0.875rem;
+    --mac-red:    #FF5F57;
+    --mac-yellow: #FEBC2E;
+    --mac-green:  #28C840;
+    --card-shadow: 0 2px 14px rgba(0,0,0,0.3);
   }
 
-  /* ── Light theme ──────────────────────────────────────────────────────── */
+  /* ── Legacy light class (keep for transition) ─────────────────────────────── */
   html.light {
-    --background: 0 0% 97%;
-    --foreground: 0 0% 10%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 10%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 10%;
-    --primary: 217 91% 50%;
+    --background: 0 0% 87%;
+    --foreground: 0 0% 11%;
+    --card: 0 0% 97%;
+    --card-foreground: 0 0% 11%;
+    --popover: 0 0% 97%;
+    --popover-foreground: 0 0% 11%;
+    --primary: 211 100% 44%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 92%;
-    --secondary-foreground: 0 0% 10%;
-    --muted: 0 0% 92%;
-    --muted-foreground: 0 0% 45%;
-    --accent: 0 0% 92%;
-    --accent-foreground: 0 0% 10%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 83%;
-    --input: 0 0% 83%;
-    --ring: 217 91% 50%;
-    --radius: 0.75rem;
+    --secondary: 0 0% 91%;
+    --secondary-foreground: 0 0% 11%;
+    --muted: 0 0% 91%;
+    --muted-foreground: 0 0% 42%;
+    --accent: 0 0% 91%;
+    --accent-foreground: 0 0% 11%;
+    --destructive: 4 86% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 80%;
+    --input: 0 0% 91%;
+    --ring: 211 100% 44%;
+    --radius: 0.875rem;
+    --mac-red:    #FF5F57;
+    --mac-yellow: #FEBC2E;
+    --mac-green:  #28C840;
+    --card-shadow: 0 2px 14px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.06);
   }
 }
 
@@ -62,23 +100,28 @@
   }
 }
 
+/* ── macOS-style Card shadow utility ──────────────────────────────────────── */
+.mac-shadow {
+  box-shadow: var(--card-shadow);
+}
+
 /* ── Scrollbar ─────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(var(--secondary));
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.3);
-  border-radius: 4px;
+  background: hsl(var(--muted-foreground) / 0.25);
+  border-radius: 99px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.5);
+  background: hsl(var(--muted-foreground) / 0.45);
 }
 
 /* ── Animation ─────────────────────────────────────────────────────────────── */

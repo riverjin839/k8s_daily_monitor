@@ -29,6 +29,7 @@ from app.routers import (
     topology_trace_router,
     ontology_router,
     analyze_router,
+    trends_router,
 )
 
 
@@ -331,12 +332,37 @@ def _seed_default_metric_cards():
         db.close()
 
 
+def _seed_default_trend_sources():
+    """기본 트렌드 수집 소스 등록 (최초 1회)"""
+    from app.models.trend import TrendSource
+
+    db = SessionLocal()
+    try:
+        if db.query(TrendSource).count() > 0:
+            return
+        defaults = [
+            TrendSource(name="Kubernetes", source_type="github_release", url="kubernetes/kubernetes", category="k8s"),
+            TrendSource(name="Cilium",     source_type="github_release", url="cilium/cilium",         category="cilium"),
+            TrendSource(name="Linux Kernel", source_type="github_release", url="torvalds/linux",      category="linux"),
+            TrendSource(name="Kubernetes 블로그", source_type="rss", url="https://kubernetes.io/feed.xml",       category="k8s"),
+            TrendSource(name="Cilium 블로그",     source_type="rss", url="https://cilium.io/blog/rss.xml",      category="cilium"),
+            TrendSource(name="CNCF 블로그",       source_type="rss", url="https://www.cncf.io/blog/feed/",      category="cncf"),
+            TrendSource(name="LWN.net",           source_type="rss", url="https://lwn.net/headlines/rss",       category="linux"),
+            TrendSource(name="kernel.org",        source_type="rss", url="https://www.kernel.org/feeds/all.atom.xml", category="linux"),
+        ]
+        db.add_all(defaults)
+        db.commit()
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: DB 테이블 생성
     Base.metadata.create_all(bind=engine)
     _run_migrations()
     _seed_default_metric_cards()
+    _seed_default_trend_sources()
     yield
     # Shutdown: 필요한 정리 작업
 
@@ -394,6 +420,7 @@ app.include_router(infra_nodes_router, prefix="/api/v1")
 app.include_router(topology_trace_router, prefix="/api/v1")
 app.include_router(ontology_router, prefix="/api/v1")
 app.include_router(analyze_router, prefix="/api/v1")
+app.include_router(trends_router, prefix="/api/v1")
 
 
 @app.get("/")

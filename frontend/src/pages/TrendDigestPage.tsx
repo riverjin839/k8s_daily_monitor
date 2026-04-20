@@ -1,0 +1,355 @@
+import { useState } from 'react';
+import { RefreshCw, ExternalLink, ChevronDown, ChevronRight, Settings2, AlertCircle, Loader2, CheckCircle2, Clock } from 'lucide-react';
+import { useTrendDigests, useTrendItems, useTrendSources, useTriggerCollect, useToggleSource } from '@/hooks/useTrends';
+import type { TrendDigest, TrendItem, TrendSource } from '@/types';
+
+// ── 카테고리 색상 ────────────────────────────────────────────────
+const CATEGORY_COLORS: Record<string, string> = {
+  k8s:    'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  cilium: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+  linux:  'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+  cncf:   'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+};
+
+const CATEGORY_LABEL: Record<string, string> = {
+  k8s: 'Kubernetes', cilium: 'Cilium', linux: 'Linux', cncf: 'CNCF',
+};
+
+const ITEM_TYPE_LABEL: Record<string, string> = {
+  release: '릴리즈', blog: '블로그', news: '뉴스',
+};
+
+const STATUS_INFO: Record<string, { icon: import('react').ReactNode; label: string; cls: string }> = {
+  pending:     { icon: <Clock className="w-3.5 h-3.5" />, label: '대기',   cls: 'text-muted-foreground' },
+  collecting:  { icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />, label: '수집 중', cls: 'text-blue-500' },
+  summarizing: { icon: <Loader2 className="w-3.5 h-3.5 animate-spin" />, label: '요약 중', cls: 'text-purple-500' },
+  done:        { icon: <CheckCircle2 className="w-3.5 h-3.5" />, label: '완료',   cls: 'text-green-500' },
+  failed:      { icon: <AlertCircle className="w-3.5 h-3.5" />, label: '실패',   cls: 'text-red-500' },
+};
+
+// ── 개별 아이템 카드 ─────────────────────────────────────────────
+function TrendItemCard({ item }: { item: TrendItem }) {
+  const [open, setOpen] = useState(false);
+  const catCls = CATEGORY_COLORS[item.category] ?? 'bg-secondary text-muted-foreground';
+
+  return (
+    <div className="border border-border rounded-lg bg-card overflow-hidden">
+      <button
+        className="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-secondary/30 transition-colors"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="mt-0.5 flex-shrink-0 text-muted-foreground">
+          {open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5 mb-1">
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${catCls}`}>
+              {CATEGORY_LABEL[item.category] ?? item.category.toUpperCase()}
+            </span>
+            <span className="text-[10px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">
+              {ITEM_TYPE_LABEL[item.itemType] ?? item.itemType}
+            </span>
+            {item.version && (
+              <span className="text-[10px] font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                {item.version}
+              </span>
+            )}
+            <span className="text-[10px] text-muted-foreground ml-auto">
+              {new Date(item.publishedAt).toLocaleDateString('ko-KR')}
+            </span>
+          </div>
+          <p className="text-sm font-medium text-foreground truncate">{item.title}</p>
+          <p className="text-[11px] text-muted-foreground">{item.sourceName}</p>
+        </div>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 border-t border-border bg-secondary/10">
+          {item.summaryKo ? (
+            <div className="mt-3">
+              <p className="text-xs font-semibold text-muted-foreground mb-1.5">AI 요약 (한국어)</p>
+              <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{item.summaryKo}</p>
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-muted-foreground italic">요약 준비 중...</p>
+          )}
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+          >
+            원문 보기 <ExternalLink className="w-3 h-3" />
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 다이제스트 날짜 패널 ─────────────────────────────────────────
+function DigestPanel({ digest }: { digest: TrendDigest }) {
+  const [selCategory, setSelCategory] = useState<string>('all');
+  const [selType, setSelType] = useState<string>('all');
+
+  const { data: items = [], isLoading } = useTrendItems(
+    digest.digestDate,
+    selCategory !== 'all' ? selCategory : undefined,
+    selType !== 'all' ? selType : undefined,
+  );
+
+  const statusInfo = STATUS_INFO[digest.status] ?? STATUS_INFO.pending;
+  const categories = ['all', 'k8s', 'cilium', 'linux', 'cncf'];
+  const types = ['all', 'release', 'blog', 'news'];
+
+  return (
+    <div className="space-y-4">
+      {/* 상태 + 종합 요약 */}
+      <div className="bg-card border border-border rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className={`flex items-center gap-1 text-xs font-medium ${statusInfo.cls}`}>
+            {statusInfo.icon} {statusInfo.label}
+          </span>
+          <span className="text-xs text-muted-foreground">· {digest.itemCount}건 수집</span>
+          {digest.errorMessage && (
+            <span className="text-xs text-red-500 truncate ml-1">{digest.errorMessage}</span>
+          )}
+        </div>
+
+        {digest.overallSummaryKo ? (
+          <>
+            <p className="text-xs font-semibold text-muted-foreground mb-1.5">오늘의 기술 동향 요약</p>
+            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{digest.overallSummaryKo}</p>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground italic">
+            {digest.status === 'done' ? '종합 요약 없음' : '요약 생성 중...'}
+          </p>
+        )}
+      </div>
+
+      {/* 필터 */}
+      <div className="flex flex-wrap gap-3">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-muted-foreground">카테고리:</span>
+          {categories.map((c) => (
+            <button
+              key={c}
+              onClick={() => setSelCategory(c)}
+              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                selCategory === c
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-border text-muted-foreground hover:bg-secondary'
+              }`}
+            >
+              {c === 'all' ? '전체' : (CATEGORY_LABEL[c] ?? c)}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-muted-foreground">타입:</span>
+          {types.map((t) => (
+            <button
+              key={t}
+              onClick={() => setSelType(t)}
+              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                selType === t
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-border text-muted-foreground hover:bg-secondary'
+              }`}
+            >
+              {t === 'all' ? '전체' : (ITEM_TYPE_LABEL[t] ?? t)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 아이템 목록 */}
+      {isLoading ? (
+        <div className="flex justify-center py-10">
+          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-10">해당 조건의 항목이 없습니다</p>
+      ) : (
+        <div className="space-y-2">
+          {items.map((item) => (
+            <TrendItemCard key={item.id} item={item} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 소스 관리 패널 ───────────────────────────────────────────────
+function SourcesPanel() {
+  const { data: sources = [] } = useTrendSources();
+  const toggle = useToggleSource();
+
+  const grouped = sources.reduce<Record<string, TrendSource[]>>((acc, s) => {
+    (acc[s.category] ??= []).push(s);
+    return acc;
+  }, {});
+
+  return (
+    <div className="space-y-4">
+      {Object.entries(grouped).map(([cat, srcs]) => (
+        <div key={cat}>
+          <p className={`text-xs font-semibold px-2 py-1 rounded mb-2 w-fit ${CATEGORY_COLORS[cat] ?? 'bg-secondary'}`}>
+            {CATEGORY_LABEL[cat] ?? cat.toUpperCase()}
+          </p>
+          <div className="space-y-1.5">
+            {srcs.map((s) => (
+              <div key={s.id} className="flex items-center gap-3 p-3 border border-border rounded-lg bg-card">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{s.name}</p>
+                  <p className="text-xs text-muted-foreground font-mono truncate">{s.url}</p>
+                  <p className="text-[10px] text-muted-foreground">{s.sourceType === 'github_release' ? 'GitHub Releases' : 'RSS 피드'}</p>
+                </div>
+                <button
+                  onClick={() => toggle.mutate({ id: s.id, enabled: !s.enabled })}
+                  className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors duration-200 ${
+                    s.enabled ? 'bg-primary' : 'bg-secondary border border-border'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 mt-0.5 rounded-full bg-white shadow transform transition-transform duration-200 ${
+                      s.enabled ? 'translate-x-4' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── 메인 페이지 ──────────────────────────────────────────────────
+export function TrendDigestPage() {
+  const [activeTab, setActiveTab] = useState<'digest' | 'sources'>('digest');
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  const { data: digests = [], isLoading: digestsLoading } = useTrendDigests(30);
+  const triggerCollect = useTriggerCollect();
+
+  const displayDigests = digests;
+  const activeDigest = selectedDate
+    ? displayDigests.find((d) => d.digestDate === selectedDate)
+    : displayDigests[0];
+
+  const handleCollect = () => {
+    triggerCollect.mutate(undefined);
+  };
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-background">
+      {/* 좌측: 날짜 목록 */}
+      <aside className="w-56 flex-shrink-0 border-r border-border flex flex-col bg-card">
+        <div className="px-4 py-4 border-b border-border">
+          <h2 className="font-semibold text-sm">기술 동향</h2>
+          <p className="text-[11px] text-muted-foreground mt-0.5">K8s · Cilium · Linux</p>
+        </div>
+
+        <div className="px-3 py-3 border-b border-border">
+          <button
+            onClick={handleCollect}
+            disabled={triggerCollect.isPending}
+            className="w-full flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-60 transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${triggerCollect.isPending ? 'animate-spin' : ''}`} />
+            {triggerCollect.isPending ? '수집 중...' : '지금 수집'}
+          </button>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto py-2">
+          {digestsLoading ? (
+            <div className="flex justify-center pt-4">
+              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : displayDigests.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center pt-6 px-3">
+              수집된 동향이 없습니다.<br />위 버튼을 눌러 시작하세요.
+            </p>
+          ) : (
+            displayDigests.map((d) => {
+              const si = STATUS_INFO[d.status] ?? STATUS_INFO.pending;
+              const isActive = (selectedDate ?? displayDigests[0]?.digestDate) === d.digestDate;
+              return (
+                <button
+                  key={d.id}
+                  onClick={() => setSelectedDate(d.digestDate)}
+                  className={`w-full text-left px-4 py-2.5 transition-colors ${
+                    isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary'
+                  }`}
+                >
+                  <p className="text-sm font-medium">{d.digestDate}</p>
+                  <div className={`flex items-center gap-1 text-[11px] mt-0.5 ${si.cls}`}>
+                    {si.icon}
+                    <span>{si.label}</span>
+                    {d.status === 'done' && (
+                      <span className="text-muted-foreground ml-1">({d.itemCount}건)</span>
+                    )}
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </nav>
+
+        {/* 소스 관리 탭 */}
+        <div className="border-t border-border p-2">
+          <button
+            onClick={() => setActiveTab((t) => t === 'sources' ? 'digest' : 'sources')}
+            className={`w-full flex items-center gap-2 px-3 py-2 text-xs rounded-lg transition-colors ${
+              activeTab === 'sources'
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:bg-secondary'
+            }`}
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+            소스 관리
+          </button>
+        </div>
+      </aside>
+
+      {/* 우측: 콘텐츠 */}
+      <main className="flex-1 min-w-0 overflow-y-auto">
+        <div className="max-w-4xl mx-auto px-6 py-6">
+          {activeTab === 'sources' ? (
+            <>
+              <h1 className="text-lg font-bold mb-4">수집 소스 관리</h1>
+              <SourcesPanel />
+            </>
+          ) : activeDigest ? (
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <h1 className="text-lg font-bold">
+                  {activeDigest.digestDate} 기술 동향
+                </h1>
+              </div>
+              <DigestPanel digest={activeDigest} />
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <p className="text-muted-foreground text-sm mb-4">
+                아직 수집된 동향이 없습니다.
+              </p>
+              <button
+                onClick={handleCollect}
+                disabled={triggerCollect.isPending}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 text-sm"
+              >
+                <RefreshCw className={`w-4 h-4 ${triggerCollect.isPending ? 'animate-spin' : ''}`} />
+                지금 수집 시작
+              </button>
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}

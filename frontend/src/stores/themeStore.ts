@@ -8,21 +8,24 @@ function getSystemPreference(): 'dark' | 'light' {
 
 function applyTheme(theme: Theme) {
   const resolved = theme === 'system' ? getSystemPreference() : theme;
-  if (resolved === 'light') {
-    document.documentElement.classList.add('light');
+  const root = document.documentElement;
+  if (resolved === 'dark') {
+    root.classList.add('dark');
+    root.classList.remove('light');
   } else {
-    document.documentElement.classList.remove('light');
+    root.classList.add('light');
+    root.classList.remove('dark');
   }
   localStorage.setItem('k8s:theme', theme);
 }
 
 // Apply theme immediately on module load (before React renders)
-const _initial = (localStorage.getItem('k8s:theme') as Theme | null) ?? 'dark';
+const _initial = (localStorage.getItem('k8s:theme') as Theme | null) ?? 'light';
 applyTheme(_initial);
 
 // Listen for system preference changes when theme is 'system'
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-  const current = (localStorage.getItem('k8s:theme') as Theme | null) ?? 'dark';
+  const current = (localStorage.getItem('k8s:theme') as Theme | null) ?? 'light';
   if (current === 'system') applyTheme('system');
 });
 

@@ -47,6 +47,11 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=18, minute=0),
         "args": ("evening",),
     },
+    # 기술 트렌드 수집 (07:00 KST)
+    "daily-trend-collect": {
+        "task": "app.celery_app.run_trend_collect",
+        "schedule": crontab(hour=7, minute=0),
+    },
 }
 
 
@@ -114,6 +119,28 @@ def run_scheduled_check(self, schedule_type: str):
             "results": results
         }
 
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_trend_collect")
+def run_trend_collect(self):
+    """매일 07:00 KST 기술 트렌드 수집"""
+    from app.database import SessionLocal
+    from app.services.trends.trend_service import TrendService
+
+    db = SessionLocal()
+    try:
+        svc = TrendService(db)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        digest = loop.run_until_complete(svc.run_daily_collect())
+        loop.close()
+        return {
+            "digest_date": str(digest.digest_date),
+            "status": digest.status,
+            "item_count": digest.item_count,
+        }
     finally:
         db.close()
 

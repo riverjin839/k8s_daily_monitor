@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     prometheus_url: str = "http://prometheus-k8s.monitoring.svc:9090"
     grafana_url: str = "http://grafana.monitoring.svc:3000"
 
+    # Trend Digest
+    # 폐쇄망: github_api_url을 내부 GitHub Enterprise 주소로 변경
+    trends_github_api_url: str = "https://api.github.com"
+    trends_github_token: str = ""          # optional: rate limit 향상
+    trends_collect_hour: int = 7           # 매일 07:00 KST 자동 수집
+
     # Kubeconfig 저장 디렉토리 (content 방식으로 등록 시 사용)
     kubeconfig_store_dir: str = "/tmp/k8s-monitor/kubeconfigs"
     

@@ -19,6 +19,7 @@ import { InfraTopologyPage } from '@/pages/InfraTopologyPage';
 import { IncidentAnalysisPage } from '@/pages/IncidentAnalysisPage';
 import { PacketFlowPage } from '@/pages/PacketFlowPage';
 import { OntologyPage } from '@/pages/OntologyPage';
+import { TrendDigestPage } from '@/pages/TrendDigestPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar } from '@/components/layout';
 
@@ -58,6 +59,7 @@ function App() {
               <Route path="/incident-analysis" element={<IncidentAnalysisPage />} />
               <Route path="/packet-flow" element={<PacketFlowPage />} />
               <Route path="/ontology" element={<OntologyPage />} />
+              <Route path="/trends" element={<TrendDigestPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>

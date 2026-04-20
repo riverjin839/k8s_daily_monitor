@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate, TaskStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate, TaskStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource } from '@/types';
 
 // snake_case → camelCase 변환 (Backend는 snake_case, Frontend는 camelCase)
 function toCamelCase(str: string): string {
@@ -438,6 +438,25 @@ export const analyzeApi = {
     api.post<import('@/types').IncidentAnalysisResponse>('/analyze/incident', data),
   health: () =>
     api.get<import('@/types').AnalyzerHealthResponse>('/analyze/health'),
+};
+
+// Trend Digest API
+export const trendsApi = {
+  triggerCollect: (targetDate?: string) =>
+    api.post<TrendDigest>('/trends/collect', undefined, {
+      params: targetDate ? { target_date: targetDate } : {},
+    }),
+  listDigests: (limit = 30) =>
+    api.get<TrendDigest[]>('/trends/digests', { params: { limit } }),
+  getDigest: (date: string) =>
+    api.get<TrendDigest>(`/trends/digests/${date}`),
+  listItems: (date: string, category?: string, itemType?: string) =>
+    api.get<TrendItem[]>(`/trends/items/${date}`, {
+      params: { ...(category && { category }), ...(itemType && { item_type: itemType }) },
+    }),
+  listSources: () => api.get<TrendSource[]>('/trends/sources'),
+  toggleSource: (id: string, enabled: boolean) =>
+    api.patch<TrendSource>(`/trends/sources/${id}`, { enabled }),
 };
 
 export default api;

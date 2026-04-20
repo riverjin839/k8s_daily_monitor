@@ -44,7 +44,7 @@ const NAV_GROUPS: Array<{ id: string; label: string; paths: string[] }> = [
 ];
 
 const DEFAULT_TITLE = 'K8s Daily Monitor';
-const THEME_CYCLE: Record<Theme, Theme> = { dark: 'light', light: 'system', system: 'dark' };
+const THEME_CYCLE: Record<Theme, Theme> = { light: 'dark', dark: 'system', system: 'light' };
 const THEME_LABEL: Record<Theme, string> = { dark: '다크', light: '라이트', system: '시스템' };
 const COLLAPSE_KEY = 'k8s:sidebar-collapsed';
 

@@ -14,6 +14,7 @@ import {
   KanbanSummaryCharts,
 } from '@/components/dashboard';
 import { PlaybookCard, AddPlaybookModal } from '@/components/playbooks';
+import { MacCard } from '@/components/ui/MacCard';
 import { useClusterStore } from '@/stores/clusterStore';
 import { usePlaybookStore } from '@/stores/playbookStore';
 import { useClusters, useSummary, useAddons, useLogs, useHealthCheck, useCreateAddon, useDeleteAddon, useAddonHealthCheck } from '@/hooks/useCluster';
@@ -237,154 +238,124 @@ export function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Page top bar */}
-      <div className="px-8 py-4 border-b border-border flex items-center justify-between">
-        <h1 className="font-semibold text-base">Dashboard</h1>
-        <div className="flex items-center gap-4">
+      {/* ── Top bar ──────────────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-10 px-8 py-3 bg-background/80 backdrop-blur-sm border-b border-border flex items-center justify-between">
+        <div>
+          <h1 className="font-bold text-base tracking-tight">K8s Daily Monitor</h1>
           {lastCheckTime && (
-            <span className="text-xs text-muted-foreground font-mono">
+            <p className="text-[11px] text-muted-foreground font-mono">
               Last check: {formatDateTime(lastCheckTime)}
-            </span>
+            </p>
           )}
-          <button
-            onClick={handleRunCheck}
-            disabled={isChecking}
-            className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />
-            {isChecking ? 'Checking...' : 'Run Check'}
-          </button>
         </div>
+        <button
+          onClick={handleRunCheck}
+          disabled={isChecking}
+          className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50 mac-shadow"
+        >
+          <RefreshCw className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />
+          {isChecking ? 'Checking...' : 'Run Check'}
+        </button>
       </div>
 
-      <main className="max-w-[1600px] mx-auto px-8 py-8">
-        {/* Summary Stats */}
+      <main className="max-w-[1600px] mx-auto px-8 py-7 space-y-5">
+
+        {/* ── Summary Stats ──────────────────────────────────────────────── */}
         <SummaryStats
           stats={summary ?? { totalClusters: 0, healthy: 0, warning: 0, critical: 0 }}
           isLoading={summaryLoading}
         />
 
-        {/* Cluster Status Section */}
-        <section className="mb-8">
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                Cluster Status
-              </h2>
+        {/* ── Cluster Status ─────────────────────────────────────────────── */}
+        <MacCard title="Cluster Status" bodyPadding="p-5">
+          {/* Controls */}
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setShowAddCluster(true)}
-                className="px-3 py-1.5 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
+                className="px-3 py-1.5 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl transition-colors"
               >
                 + Add Cluster
               </button>
               {clusters.length > 0 && (
                 <button
                   onClick={() => setShowAddAddon(true)}
-                  className="px-3 py-1.5 text-xs font-medium bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 rounded-lg transition-colors flex items-center gap-1"
+                  className="px-3 py-1.5 text-xs font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border border-emerald-500/20 rounded-xl transition-colors flex items-center gap-1"
                 >
-                  <Plus className="w-3 h-3" />
-                  Add Check
+                  <Plus className="w-3 h-3" /> Add Check
                 </button>
               )}
               {selectedClusterId && (
                 <button
                   onClick={() => setShowKubeconfig(true)}
-                  className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+                  className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors"
                 >
                   Kubeconfig
                 </button>
               )}
               <button
                 onClick={() => handleDailyReport('md')}
-                className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1.5"
+                className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5"
               >
-                <Download className="w-3 h-3" />
-                Daily Report .md
+                <Download className="w-3 h-3" /> Daily Report .md
               </button>
               <button
                 onClick={() => handleDailyReport('csv')}
-                className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1.5"
+                className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5"
               >
-                <Download className="w-3 h-3" />
-                .csv
+                <Download className="w-3 h-3" /> .csv
               </button>
             </div>
-            <ClusterTabs
-              clusters={clusters}
-              selectedId={selectedClusterId}
-              onSelect={setSelectedClusterId}
-            />
+            <ClusterTabs clusters={clusters} selectedId={selectedClusterId} onSelect={setSelectedClusterId} />
           </div>
 
           {selectedClusterId === null ? (
-            <ClusterOverviewGrid
-              clusters={clusters}
-              addons={addons}
-              onSelectCluster={setSelectedClusterId}
-            />
+            <ClusterOverviewGrid clusters={clusters} addons={addons} onSelectCluster={setSelectedClusterId} />
           ) : (
             <AddonGrid
               addons={currentAddons}
               isLoading={clustersLoading || addonsLoading}
               onAddDefaultAddons={clusters.length > 0 && missingAddons.length > 0 ? handleAddDefaultAddons : undefined}
-              onEditAddon={(addon) => {
-                setEditingAddon(addon);
-                setShowAddAddon(true);
-              }}
-              onDeleteAddon={(addon) => {
-                if (confirm(`Delete check "${addon.name}"?`)) {
-                  deleteAddon.mutate({ addonId: addon.id, clusterId: addon.clusterId });
-                }
-              }}
-              onRunAddon={(addon) => {
-                addonHealthCheck.mutate({ clusterId: addon.clusterId, addonId: addon.id });
-              }}
+              onEditAddon={(addon) => { setEditingAddon(addon); setShowAddAddon(true); }}
+              onDeleteAddon={(addon) => { if (confirm(`Delete check "${addon.name}"?`)) deleteAddon.mutate({ addonId: addon.id, clusterId: addon.clusterId }); }}
+              onRunAddon={(addon) => addonHealthCheck.mutate({ clusterId: addon.clusterId, addonId: addon.id })}
             />
           )}
-        </section>
+        </MacCard>
 
-        {/* Prometheus Insights (PromQL Metric Cards) */}
-        <section className="mb-8">
+        {/* ── Prometheus Insights ────────────────────────────────────────── */}
+        <MacCard
+          title="Prometheus Insights"
+          bodyPadding="p-5"
+          rootClassName=""
+        >
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Activity className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-semibold">Prometheus Insights</h2>
-              <span className="text-xs text-muted-foreground">({metricCards.length})</span>
+            <div className="flex items-center gap-2 text-muted-foreground text-xs">
+              <Activity className="w-4 h-4 text-primary" />
+              <span>{metricCards.length} metric cards</span>
             </div>
             <button
-              onClick={() => {
-                setEditingMetricCard(null);
-                setShowAddMetric(true);
-              }}
-              className="px-3 py-1.5 text-xs font-medium bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 rounded-lg transition-colors flex items-center gap-1"
+              onClick={() => { setEditingMetricCard(null); setShowAddMetric(true); }}
+              className="px-3 py-1.5 text-xs font-medium bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 border border-purple-500/20 rounded-xl transition-colors flex items-center gap-1"
             >
-              <Plus className="w-3 h-3" />
-              Add Metric
+              <Plus className="w-3 h-3" /> Add Metric
             </button>
           </div>
           <MetricCardGrid
             cards={metricCards}
             results={metricResults}
             isLoading={metricsLoading}
-            onDeleteCard={(id) => {
-              if (confirm('Delete this metric card?')) {
-                deleteMetricCard.mutate(id);
-              }
-            }}
-            onEditCard={(card) => {
-              setEditingMetricCard(card);
-              setShowAddMetric(true);
-            }}
+            onDeleteCard={(id) => { if (confirm('Delete this metric card?')) deleteMetricCard.mutate(id); }}
+            onEditCard={(card) => { setEditingMetricCard(card); setShowAddMetric(true); }}
           />
-        </section>
+        </MacCard>
 
-        {/* Dashboard Playbooks */}
+        {/* ── Playbook Checks ────────────────────────────────────────────── */}
         {dashboardPlaybooks.length > 0 && (
-          <section className="mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <BookOpen className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-semibold">Playbook Checks</h2>
-              <span className="text-xs text-muted-foreground">({dashboardPlaybooks.length})</span>
+          <MacCard title="Playbook Checks" bodyPadding="p-5">
+            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-4">
+              <BookOpen className="w-4 h-4 text-primary" />
+              <span>{dashboardPlaybooks.length} playbooks</span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {dashboardPlaybooks.map((playbook) => (
@@ -393,42 +364,35 @@ export function Dashboard() {
                   playbook={playbook}
                   isRunning={runningIds.has(playbook.id)}
                   onRun={() => runPlaybook.mutate(playbook.id)}
-                  onDelete={() => {
-                    if (confirm(`Delete playbook "${playbook.name}"?`)) {
-                      deletePlaybook.mutate(playbook.id);
-                    }
-                  }}
+                  onDelete={() => { if (confirm(`Delete playbook "${playbook.name}"?`)) deletePlaybook.mutate(playbook.id); }}
                   onToggleDashboard={() => toggleDashboard.mutate(playbook.id)}
-                  onEdit={() => {
-                    setEditingPlaybook(playbook);
-                    setShowPlaybookModal(true);
-                  }}
+                  onEdit={() => { setEditingPlaybook(playbook); setShowPlaybookModal(true); }}
                 />
               ))}
             </div>
-          </section>
+          </MacCard>
         )}
 
-        {/* Kanban Summary Charts */}
-        <section className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <h2 className="text-lg font-semibold">작업 / 이슈 현황</h2>
-          </div>
+        {/* ── 작업 / 이슈 현황 ───────────────────────────────────────────── */}
+        <MacCard title="작업 / 이슈 현황" bodyPadding="p-5">
           <KanbanSummaryCharts
             tasks={allTasks}
             issues={allIssues}
             isLoading={tasksLoading || issuesLoading}
             selectedClusterId={selectedClusterId}
           />
-        </section>
+        </MacCard>
 
-        {/* History Log */}
-        <HistoryLog
-          logs={logs}
-          isLoading={logsLoading}
-          maxItems={10}
-          onViewAll={() => console.log('View all logs')}
-        />
+        {/* ── History Log ───────────────────────────────────────────────── */}
+        <MacCard title="Recent Check History" bodyPadding="p-0">
+          <HistoryLog
+            logs={logs}
+            isLoading={logsLoading}
+            maxItems={10}
+            onViewAll={() => console.log('View all logs')}
+          />
+        </MacCard>
+
       </main>
 
       {/* Add Cluster Modal */}

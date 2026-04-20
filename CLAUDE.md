@@ -340,6 +340,87 @@ Both `AIAgentService` (`agent_service.py`) and `PrometheusService` (`prometheus_
 
 ---
 
+## UI Design System
+
+The frontend uses a **macOS-inspired light theme** (reference: weather-theme.vercel.app screenshot).
+
+### Core Visual Identity
+
+| Token | Value | Usage |
+|---|---|---|
+| `--background` | `hsl(0 0% 87%)` — `#DEDEDE` | Page background (medium gray) |
+| `--card` | `hsl(0 0% 97%)` — `#F7F7F7` | Card surface (near white) |
+| `--border` | `hsl(0 0% 80%)` — `#CCCCCC` | Subtle card borders |
+| `--primary` | `hsl(211 100% 44%)` — `#0071E3` | macOS blue accent |
+| `--muted-foreground` | `hsl(0 0% 42%)` — `#6B6B6B` | Secondary text |
+| `--radius` | `0.875rem` (14 px) | Base border radius |
+| `--card-shadow` | `0 2px 14px rgba(0,0,0,0.07)` | Subtle elevation |
+
+### MacCard Component (`frontend/src/components/ui/MacCard.tsx`)
+
+Every major UI section is wrapped in a `MacCard`. The pattern:
+
+```
+┌──────────────────────────────────────────┐
+│  ● ● ●        SECTION TITLE              │  ← header: traffic lights + centered title
+├──────────────────────────────────────────┤  ← 1 px divider
+│                                          │
+│   {children}                             │  ← body: p-5 default padding
+│                                          │
+└──────────────────────────────────────────┘
+```
+
+Traffic-light colors (CSS vars available anywhere):
+- `--mac-red`    `#FF5F57`
+- `--mac-yellow` `#FEBC2E`
+- `--mac-green`  `#28C840`
+
+**Usage:**
+```tsx
+import { MacCard } from '@/components/ui/MacCard';
+
+<MacCard title="Cluster Status">
+  {/* content */}
+</MacCard>
+```
+
+Props: `title?`, `children`, `className?` (body extra classes), `rootClassName?`, `bodyPadding?` (default `"p-5"`).
+
+### Theme System
+
+Default theme: **light** (macOS palette). Dark mode available via sidebar toggle.
+
+`themeStore.ts` applies `.light` / `.dark` class to `<html>`:
+- `:root` (no class) → light macOS palette
+- `html.light`       → same light palette (explicit class)
+- `html.dark`        → standard dark palette
+
+**Changing default:** `localStorage.getItem('k8s:theme')` — falls back to `'light'` if unset.
+
+### Dashboard Layout Conventions
+
+```
+min-h-screen bg-background
+  sticky top-bar (backdrop-blur)
+  main (max-w-[1600px] space-y-5)
+    grid 4-col SummaryStats  ← individual MacCards (no outer title)
+    MacCard "Cluster Status"
+    MacCard "Prometheus Insights"
+    MacCard "Playbook Checks"   (conditional)
+    MacCard "작업 / 이슈 현황"
+    MacCard "Recent Check History"  (bodyPadding="p-0")
+```
+
+### Component Conventions (updated)
+
+- **Rounded corners**: always `rounded-2xl` for cards, `rounded-xl` for buttons/inputs.
+- **Shadows**: use `.mac-shadow` utility class (maps to `--card-shadow`).
+- **Buttons**: `rounded-xl`, never sharp corners.
+- **Section titles inside MacCard**: content should NOT repeat the card title as an `<h2>` — the MacCard header already carries it.
+- **Colors**: avoid raw hex in JSX; prefer Tailwind tokens (`text-primary`, `bg-secondary`, etc.) or `hsl(var(--*))`.
+
+---
+
 ## Frontend Architecture Details
 
 ### State Management

@@ -32,6 +32,7 @@ from app.routers import (
     trends_router,
     versions_router,
     bulk_exec_router,
+    etcdctl_router,
 )
 
 
@@ -455,6 +456,7 @@ app.include_router(analyze_router, prefix="/api/v1")
 app.include_router(trends_router, prefix="/api/v1")
 app.include_router(versions_router, prefix="/api/v1")
 app.include_router(bulk_exec_router, prefix="/api/v1")
+app.include_router(etcdctl_router, prefix="/api/v1")
 
 
 @app.get("/")

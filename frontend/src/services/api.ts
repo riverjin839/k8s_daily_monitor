@@ -209,6 +209,69 @@ export const bulkExecApi = {
     api.post<BulkExecResponse>('/bulk-exec/run', payload),
 };
 
+// etcdctl API
+export interface EtcdMasterCandidate {
+  name: string;
+  internalIp?: string | null;
+  externalIp?: string | null;
+}
+
+export interface EtcdPreset {
+  key: string;
+  label: string;
+  args: string;
+}
+
+export interface EtcdCtlRunResponse {
+  host: string;
+  status: 'ok' | 'error' | 'timeout' | 'auth_error' | 'connect_error';
+  exitCode?: number | null;
+  stdout: string;
+  stderr: string;
+  durationMs: number;
+  error?: string | null;
+  executedCommand: string;
+}
+
+export interface EtcdCtlRunRequest {
+  host: string;
+  port: number;
+  username: string;
+  password?: string;
+  privateKey?: string;
+  args: string;
+  envFile: string;
+  useEnv: boolean;
+  extraEnv?: Record<string, string>;
+  etcdctlPath: string;
+  timeout: number;
+}
+
+export interface EtcdLogsRequest {
+  host: string;
+  port: number;
+  username: string;
+  password?: string;
+  privateKey?: string;
+  unit: string;
+  tail: number;
+  since?: string;
+  grep?: string;
+}
+
+export const etcdctlApi = {
+  presets: (clusterId: string) =>
+    api.get<{ presets: EtcdPreset[] }>(`/clusters/${clusterId}/etcdctl/presets`),
+  masters: (clusterId: string) =>
+    api.get<{ clusterId: string; clusterName: string; candidates: EtcdMasterCandidate[] }>(
+      `/clusters/${clusterId}/etcdctl/master-candidates`,
+    ),
+  run: (clusterId: string, payload: EtcdCtlRunRequest) =>
+    api.post<EtcdCtlRunResponse>(`/clusters/${clusterId}/etcdctl/run`, payload),
+  logs: (clusterId: string, payload: EtcdLogsRequest) =>
+    api.post<EtcdCtlRunResponse>(`/clusters/${clusterId}/etcdctl/logs`, payload),
+};
+
 // Health API
 export const healthApi = {
   runCheck: (clusterId: string) => api.post<ApiResponse<void>>(`/health/check/${clusterId}`),

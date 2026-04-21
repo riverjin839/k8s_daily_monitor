@@ -22,6 +22,7 @@ from app.routers.analyze import router as analyze_router
 from app.routers.trends import router as trends_router
 from app.routers.versions import router as versions_router
 from app.routers.bulk_exec import router as bulk_exec_router
+from app.routers.etcdctl import router as etcdctl_router
 
 __all__ = [
     "clusters_router",
@@ -48,4 +49,5 @@ __all__ = [
     "trends_router",
     "versions_router",
     "bulk_exec_router",
+    "etcdctl_router",
 ]

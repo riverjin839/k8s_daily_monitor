@@ -5,32 +5,30 @@
 @layer base {
   /* ── macOS-inspired Light theme (default) ────────────────────────────────── */
   :root {
-    --background: 0 0% 96%;          /* #F5F5F5 - soft near-white bg */
-    --foreground: 0 0% 11%;          /* #1C1C1C - near-black text */
-    --card: 0 0% 100%;               /* #FFFFFF - pure white cards */
-    --card-foreground: 0 0% 11%;
+    --background: 190 55% 96%;       /* aqua mist */
+    --foreground: 202 39% 18%;       /* deep ocean text */
+    --card: 0 0% 100%;
+    --card-foreground: 202 39% 18%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 11%;
-    --primary: 211 100% 44%;         /* #0071E3 - macOS blue */
+    --popover-foreground: 202 39% 18%;
+    --primary: 191 88% 41%;          /* aqua brand color */
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 93%;           /* #EDEDED */
-    --secondary-foreground: 0 0% 11%;
-    --muted: 0 0% 93%;
-    --muted-foreground: 0 0% 42%;    /* #6B6B6B */
-    --accent: 0 0% 93%;
-    --accent-foreground: 0 0% 11%;
+    --secondary: 191 52% 90%;
+    --secondary-foreground: 202 39% 18%;
+    --muted: 191 45% 92%;
+    --muted-foreground: 197 24% 36%;
+    --accent: 183 72% 86%;
+    --accent-foreground: 202 39% 18%;
     --destructive: 4 86% 58%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 85%;              /* #D9D9D9 */
-    --input: 0 0% 93%;
-    --ring: 211 100% 44%;
-    --radius: 0.875rem;              /* 14px */
-    /* macOS traffic lights */
+    --border: 190 40% 82%;
+    --input: 191 52% 90%;
+    --ring: 191 88% 41%;
+    --radius: 0.875rem;
     --mac-red:    #FF5F57;
     --mac-yellow: #FEBC2E;
     --mac-green:  #28C840;
-    /* card shadow */
-    --card-shadow: 0 2px 14px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.06);
+    --card-shadow: 0 4px 18px rgba(14, 116, 144, 0.16), 0 1px 4px rgba(14, 116, 144, 0.12);
   }
 
   /* ── Dark theme ──────────────────────────────────────────────────────────── */
@@ -63,30 +61,30 @@
 
   /* ── Legacy light class (keep for transition) ─────────────────────────────── */
   html.light {
-    --background: 0 0% 96%;
-    --foreground: 0 0% 11%;
+    --background: 190 55% 96%;
+    --foreground: 202 39% 18%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 11%;
+    --card-foreground: 202 39% 18%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 11%;
-    --primary: 211 100% 44%;
+    --popover-foreground: 202 39% 18%;
+    --primary: 191 88% 41%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 93%;
-    --secondary-foreground: 0 0% 11%;
-    --muted: 0 0% 93%;
-    --muted-foreground: 0 0% 42%;
-    --accent: 0 0% 93%;
-    --accent-foreground: 0 0% 11%;
+    --secondary: 191 52% 90%;
+    --secondary-foreground: 202 39% 18%;
+    --muted: 191 45% 92%;
+    --muted-foreground: 197 24% 36%;
+    --accent: 183 72% 86%;
+    --accent-foreground: 202 39% 18%;
     --destructive: 4 86% 58%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 85%;
-    --input: 0 0% 93%;
-    --ring: 211 100% 44%;
+    --border: 190 40% 82%;
+    --input: 191 52% 90%;
+    --ring: 191 88% 41%;
     --radius: 0.875rem;
     --mac-red:    #FF5F57;
     --mac-yellow: #FEBC2E;
     --mac-green:  #28C840;
-    --card-shadow: 0 2px 14px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.06);
+    --card-shadow: 0 4px 18px rgba(14, 116, 144, 0.16), 0 1px 4px rgba(14, 116, 144, 0.12);
   }
 }
 
@@ -96,6 +94,8 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-image: radial-gradient(circle at 20% 0%, hsl(184 90% 82% / 0.28), transparent 34%),
+      radial-gradient(circle at 80% 20%, hsl(196 95% 78% / 0.22), transparent 30%);
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }

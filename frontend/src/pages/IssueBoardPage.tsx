@@ -1,17 +1,17 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ViewModeBar } from '@/components/common';
 import { Plus, Download, Pencil, Trash2, ClipboardList, Search, X, ImagePlus, ChevronUp, ChevronDown, ArrowUpDown, GripVertical, Clock, Kanban, List } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { IssueModal, IssueDetailModal, IssueKanban } from '@/components/issues';
-import { saveIssueImages } from '@/lib/issueImages';
-import { useIssues, useCreateIssue, useUpdateIssue, useDeleteIssue } from '@/hooks/useIssues';
+import { IssueDetailModal, IssueKanban } from '@/components/issues';
+import { useIssues, useDeleteIssue } from '@/hooks/useIssues';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { issuesApi } from '@/services/api';
-import { Issue, IssueCreate, IssueUpdate } from '@/types';
+import { Issue } from '@/types';
 
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '-';
@@ -100,8 +100,7 @@ function SortableIssueRow({
 }
 
 export function IssueBoardPage() {
-  const [showModal, setShowModal] = useState(false);
-  const [editIssue, setEditIssue] = useState<Issue | null>(null);
+  const navigate = useNavigate();
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [filterClusterId, setFilterClusterId] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
@@ -159,25 +158,7 @@ export function IssueBoardPage() {
     })
     : dndIssues;
 
-  const createIssue = useCreateIssue();
-  const updateIssue = useUpdateIssue();
   const deleteIssue = useDeleteIssue();
-
-  const handleCreate = async (formData: IssueCreate, images: string[]) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res: any = await createIssue.mutateAsync(formData);
-    const newId: string | undefined = res?.data?.id ?? res?.id;
-    if (images.length > 0 && newId) {
-      saveIssueImages(newId, images);
-    }
-  };
-
-  const handleUpdate = async (formData: IssueCreate, images: string[]) => {
-    if (!editIssue) return;
-    await updateIssue.mutateAsync({ id: editIssue.id, data: formData as IssueUpdate });
-    saveIssueImages(editIssue.id, images);
-    setEditIssue(null);
-  };
 
   const handleDelete = (issue: Issue) => {
     if (!confirm(`"${issue.issueArea}" 이슈를 삭제하시겠습니까?`)) return;
@@ -187,19 +168,12 @@ export function IssueBoardPage() {
 
   const handleEdit = (issue: Issue) => {
     setSelectedIssue(null);
-    setEditIssue(issue);
-    setShowModal(true);
+    navigate(`/issues/${issue.id}/edit`);
   };
 
   const handleDetailEdit = (issue: Issue) => {
     setSelectedIssue(null);
-    setEditIssue(issue);
-    setShowModal(true);
-  };
-
-  const handleModalClose = () => {
-    setShowModal(false);
-    setEditIssue(null);
+    navigate(`/issues/${issue.id}/edit`);
   };
 
   const handleExportCsv = async () => {
@@ -293,7 +267,7 @@ export function IssueBoardPage() {
               </button>
             )}
             <button
-              onClick={() => { setEditIssue(null); setShowModal(true); }}
+              onClick={() => navigate('/issues/new')}
               className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
@@ -400,7 +374,7 @@ export function IssueBoardPage() {
             </p>
             {!hasFilters && (
               <button
-                onClick={() => { setEditIssue(null); setShowModal(true); }}
+                onClick={() => navigate('/issues/new')}
                 className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
               >
                 + 첫 번째 이슈 등록
@@ -523,14 +497,6 @@ export function IssueBoardPage() {
           </div>
         ))}
       </main>
-
-      <IssueModal
-        isOpen={showModal}
-        onClose={handleModalClose}
-        onSubmit={editIssue ? handleUpdate : handleCreate}
-        clusters={clusters}
-        editIssue={editIssue}
-      />
 
       {selectedIssue && (
         <IssueDetailModal

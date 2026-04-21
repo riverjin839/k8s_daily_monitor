@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ViewModeBar } from '@/components/common';
 import {
   Server, AlertTriangle, Search, ChevronDown,
@@ -10,7 +11,6 @@ import { useClusterStore } from '@/stores/clusterStore';
 import { clustersApi } from '@/services/api';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  ClusterMetaModal,
   CiliumConfigModal,
   ClusterCard,
   ClusterTableRow,
@@ -41,11 +41,11 @@ const STATUS_ORDER: Record<string, number> = { critical: 0, warning: 1, healthy:
 
 // ── 메인 페이지 ───────────────────────────────────────────────────────────────
 export function ClusterManagePage() {
+  const navigate = useNavigate();
   const { clusters } = useClusterStore();
   useClusters();
   const queryClient = useQueryClient();
 
-  const [editCluster, setEditCluster]     = useState<Cluster | null>(null);
   const [deletingId, setDeletingId]       = useState<string | null>(null);
   const [search, setSearch]               = useState('');
   const [filterLevel, setFilterLevel]     = useState('');
@@ -126,8 +126,6 @@ export function ClusterManagePage() {
       setDeletingId(null);
     }
   };
-
-  const handleSaved = () => queryClient.invalidateQueries({ queryKey: ['clusters'] });
 
   return (
     <div className="min-h-screen bg-background">
@@ -240,7 +238,7 @@ export function ClusterManagePage() {
                     <ClusterTableRow
                       key={cluster.id}
                       cluster={cluster}
-                      onEdit={c => setEditCluster(c)}
+                      onEdit={c => navigate(`/cluster-manage/${c.id}/edit`)}
                       onDelete={handleDelete}
                       deletingId={deletingId}
                       overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
@@ -257,7 +255,7 @@ export function ClusterManagePage() {
               <ClusterCard
                 key={cluster.id}
                 cluster={cluster}
-                onEdit={c => setEditCluster(c)}
+                onEdit={c => navigate(`/cluster-manage/${c.id}/edit`)}
                 onDelete={handleDelete}
                 deletingId={deletingId}
                 overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
@@ -271,14 +269,6 @@ export function ClusterManagePage() {
         </p>
       </main>
 
-      {editCluster && (
-        <ClusterMetaModal
-          isOpen
-          onClose={() => setEditCluster(null)}
-          cluster={editCluster}
-          onSaved={handleSaved}
-        />
-      )}
       {ciliumCluster && (
         <CiliumConfigModal
           cluster={ciliumCluster}

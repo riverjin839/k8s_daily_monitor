@@ -1,18 +1,18 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ViewModeBar } from '@/components/common';
 import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, GripVertical, Clock, Kanban, GitBranch } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { TaskModal, TaskDetailModal, TaskCalendar, TaskKanban } from '@/components/tasks';
+import { TaskDetailModal, TaskCalendar, TaskKanban } from '@/components/tasks';
 import { MODULE_CONFIG } from '@/components/tasks/taskKanbanUtils';
-import { saveTaskImages } from '@/lib/taskImages';
-import { useTasks, useCreateTask, useUpdateTask, useDeleteTask } from '@/hooks/useTasks';
+import { useTasks, useDeleteTask } from '@/hooks/useTasks';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { tasksApi } from '@/services/api';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
-import { Task, TaskCreate, TaskUpdate, TaskModule } from '@/types';
+import { Task, TaskModule } from '@/types';
 
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '-';
@@ -106,10 +106,8 @@ function SortableTaskRow({
 }
 
 export function TaskBoardPage() {
+  const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>('table');
-  const [showModal, setShowModal] = useState(false);
-  const [editTask, setEditTask] = useState<Task | null>(null);
-  const [parentTask, setParentTask] = useState<Task | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [filterClusterId, setFilterClusterId] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
@@ -174,25 +172,7 @@ export function TaskBoardPage() {
       })
     : dndTasks;
 
-  const createTask = useCreateTask();
-  const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
-
-  const handleCreate = async (formData: TaskCreate, images: string[]) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res: any = await createTask.mutateAsync(formData);
-    const newId: string | undefined = res?.data?.id ?? res?.id;
-    if (images.length > 0 && newId) {
-      saveTaskImages(newId, images);
-    }
-  };
-
-  const handleUpdate = async (formData: TaskCreate, images: string[]) => {
-    if (!editTask) return;
-    await updateTask.mutateAsync({ id: editTask.id, data: formData as TaskUpdate });
-    saveTaskImages(editTask.id, images);
-    setEditTask(null);
-  };
 
   const handleDelete = (task: Task) => {
     if (!confirm(`"${task.taskCategory}" 작업을 삭제하시겠습니까?`)) return;
@@ -202,28 +182,17 @@ export function TaskBoardPage() {
 
   const handleEdit = (task: Task) => {
     setSelectedTask(null);
-    setEditTask(task);
-    setParentTask(null);
-    setShowModal(true);
+    navigate(`/tasks/${task.id}/edit`);
   };
 
   const handleAddSubTask = (task: Task) => {
     setSelectedTask(null);
-    setEditTask(null);
-    setParentTask(task);
-    setShowModal(true);
+    navigate(`/tasks/new?parentId=${task.id}`);
   };
 
   const handleDetailEdit = (task: Task) => {
     setSelectedTask(null);
-    setEditTask(task);
-    setShowModal(true);
-  };
-
-  const handleModalClose = () => {
-    setShowModal(false);
-    setEditTask(null);
-    setParentTask(null);
+    navigate(`/tasks/${task.id}/edit`);
   };
 
   const handleExportCsv = async () => {
@@ -326,7 +295,7 @@ export function TaskBoardPage() {
               </button>
             )}
             <button
-              onClick={() => { setEditTask(null); setShowModal(true); }}
+              onClick={() => navigate('/tasks/new')}
               className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
@@ -479,7 +448,7 @@ export function TaskBoardPage() {
             </p>
             {!hasFilters && (
               <button
-                onClick={() => { setEditTask(null); setShowModal(true); }}
+                onClick={() => navigate('/tasks/new')}
                 className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
               >
                 + 첫 번째 작업 등록
@@ -621,15 +590,6 @@ export function TaskBoardPage() {
           </div>
         ))}
       </main>
-
-      <TaskModal
-        isOpen={showModal}
-        onClose={handleModalClose}
-        onSubmit={editTask ? handleUpdate : handleCreate}
-        clusters={clusters}
-        editTask={editTask}
-        parentTask={parentTask}
-      />
 
       {selectedTask && (
         <TaskDetailModal

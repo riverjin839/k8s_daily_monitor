@@ -1,19 +1,14 @@
-import { useState, useEffect } from 'react';
-import { X, Settings2, Plus } from 'lucide-react';
-import { Task, TaskCreate, KanbanStatus, TaskModule, TaskTypeLabel } from '@/types';
-import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from './taskKanbanUtils';
-import { loadTaskImages } from '@/lib/taskImages';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, ListTodo, Plus, Settings2 } from 'lucide-react';
+import { Task, TaskCreate, TaskUpdate, KanbanStatus, TaskModule, TaskTypeLabel } from '@/types';
+import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from '@/components/tasks/taskKanbanUtils';
+import { loadTaskImages, saveTaskImages } from '@/lib/taskImages';
 import { RichTextEditor } from '@/components/editor';
 import { useAssignees } from '@/hooks/useAssignees';
-
-interface TaskModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSubmit: (data: TaskCreate, images: string[]) => void;
-  clusters: { id: string; name: string }[];
-  editTask?: Task | null;
-  parentTask?: Task | null;
-}
+import { useClusters } from '@/hooks/useCluster';
+import { useClusterStore } from '@/stores/clusterStore';
+import { useTasks, useCreateTask, useUpdateTask } from '@/hooks/useTasks';
 
 const DEFAULT_TASK_CATEGORIES = [
   'Cluster 점검',
@@ -28,9 +23,7 @@ const DEFAULT_TASK_CATEGORIES = [
   '장애 대응',
   '문서 작업',
 ];
-
 const TASK_CATEGORIES = [...DEFAULT_TASK_CATEGORIES, '기타'];
-
 const CATEGORY_STORAGE_KEY = 'k8s:task:categories';
 
 function loadCustomCategories(): string[] {
@@ -70,8 +63,25 @@ function toDatetimeLocal(dateStr?: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask, parentTask }: TaskModalProps) {
+export function TaskFormPage() {
+  const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const isEdit = !!id;
+  const parentId = searchParams.get('parentId') || undefined;
+
+  useClusters();
+  const { clusters } = useClusterStore();
   const { data: registeredAssignees = [] } = useAssignees();
+  const { data: listData } = useTasks();
+  const createTask = useCreateTask();
+  const updateTask = useUpdateTask();
+
+  const editTask: Task | null =
+    isEdit ? listData?.data.find((x) => x.id === id) ?? null : null;
+  const parentTask: Task | null =
+    parentId ? listData?.data.find((x) => x.id === parentId) ?? null : null;
+
   const [primaryAssignee, setPrimaryAssignee] = useState('');
   const [secondaryAssignee, setSecondaryAssignee] = useState('');
   const [clusterId, setClusterId] = useState('');
@@ -87,16 +97,18 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask, paren
   const [customCategories, setCustomCategories] = useState<string[]>(loadCustomCategories);
   const [showCatManage, setShowCatManage] = useState(false);
   const [newCatInput, setNewCatInput] = useState('');
-  // 칸반 보드 필드
   const [kanbanStatus, setKanbanStatus] = useState<KanbanStatus>('todo');
   const [module, setModule] = useState<TaskModule | ''>('');
   const [typeLabel, setTypeLabel] = useState<TaskTypeLabel | ''>('');
   const [effortHours, setEffortHours] = useState('');
   const [doneCondition, setDoneCondition] = useState('');
+  const [hydrated, setHydrated] = useState(!isEdit && !parentId);
 
   useEffect(() => {
+    if (hydrated) return;
     const allKnownCategories = [...TASK_CATEGORIES, ...loadCustomCategories()];
-    if (editTask) {
+    if (isEdit) {
+      if (!editTask) return;
       setPrimaryAssignee(editTask.primaryAssignee ?? editTask.assignee);
       setSecondaryAssignee(editTask.secondaryAssignee ?? '');
       setClusterId(editTask.clusterId ?? '');
@@ -115,29 +127,15 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask, paren
       setTypeLabel((editTask.typeLabel ?? '') as TaskTypeLabel | '');
       setEffortHours(editTask.effortHours ? String(editTask.effortHours) : '');
       setDoneCondition(editTask.doneCondition ?? '');
-    } else {
-      setPrimaryAssignee(parentTask ? (parentTask.primaryAssignee ?? parentTask.assignee) : '');
-      setSecondaryAssignee(parentTask?.secondaryAssignee ?? '');
-      setClusterId('');
-      setTaskCategory(parentTask ? parentTask.taskCategory : '');
-      setTaskCategoryCustom('');
-      setTaskContent('');
-      setResultContent('');
-      setScheduledAt(todayDatetimeLocal());
-      setCompletedAt('');
-      setPriority('medium');
-      setRemarks('');
-      setImages([]);
-      setKanbanStatus('todo');
-      setModule('');
-      setTypeLabel('');
-      setEffortHours('');
-      setDoneCondition('');
+      setHydrated(true);
+    } else if (parentId) {
+      if (!parentTask) return;
+      setPrimaryAssignee(parentTask.primaryAssignee ?? parentTask.assignee);
+      setSecondaryAssignee(parentTask.secondaryAssignee ?? '');
+      setTaskCategory(parentTask.taskCategory);
+      setHydrated(true);
     }
-    setCustomCategories(loadCustomCategories());
-    setShowCatManage(false);
-    setNewCatInput('');
-  }, [editTask, isOpen, parentTask]);
+  }, [isEdit, editTask, parentId, parentTask, hydrated]);
 
   const addCustomCategory = () => {
     const cat = newCatInput.trim();
@@ -160,69 +158,106 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask, paren
     setImages((prev) => [...prev, dataUrl]);
   };
 
-  if (!isOpen) return null;
-
   const allCategories = [...DEFAULT_TASK_CATEGORIES, ...customCategories, '기타'];
   const resolvedCategory = taskCategory === '기타' ? taskCategoryCustom.trim() : taskCategory;
   const selectedCluster = clusters.find((c) => c.id === clusterId);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const plainTaskContent = taskContent.replace(/<[^>]*>/g, '').trim();
     if (!primaryAssignee.trim() || !resolvedCategory || !plainTaskContent || !scheduledAt) return;
 
-    onSubmit(
-      {
-        assignee: primaryAssignee.trim(),
-        primaryAssignee: primaryAssignee.trim(),
-        secondaryAssignee: secondaryAssignee.trim() || undefined,
-        clusterId: clusterId || undefined,
-        clusterName: selectedCluster?.name,
-        taskCategory: resolvedCategory,
-        taskContent,
-        resultContent: resultContent || undefined,
-        scheduledAt,
-        completedAt: completedAt || null,
-        priority,
-        remarks: remarks.trim() || undefined,
-        kanbanStatus,
-        module: module || undefined,
-        typeLabel: typeLabel || undefined,
-        effortHours: effortHours ? parseInt(effortHours, 10) : undefined,
-        doneCondition: doneCondition.trim() || undefined,
-        parentId: parentTask?.id,
-      },
-      images,
-    );
-    onClose();
+    const payload: TaskCreate = {
+      assignee: primaryAssignee.trim(),
+      primaryAssignee: primaryAssignee.trim(),
+      secondaryAssignee: secondaryAssignee.trim() || undefined,
+      clusterId: clusterId || undefined,
+      clusterName: selectedCluster?.name,
+      taskCategory: resolvedCategory,
+      taskContent,
+      resultContent: resultContent || undefined,
+      scheduledAt,
+      completedAt: completedAt || null,
+      priority,
+      remarks: remarks.trim() || undefined,
+      kanbanStatus,
+      module: module || undefined,
+      typeLabel: typeLabel || undefined,
+      effortHours: effortHours ? parseInt(effortHours, 10) : undefined,
+      doneCondition: doneCondition.trim() || undefined,
+      parentId: parentTask?.id,
+    };
+
+    if (isEdit && editTask) {
+      await updateTask.mutateAsync({ id: editTask.id, data: payload as TaskUpdate });
+      saveTaskImages(editTask.id, images);
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const res: any = await createTask.mutateAsync(payload);
+      const newId: string | undefined = res?.data?.id ?? res?.id;
+      if (images.length > 0 && newId) saveTaskImages(newId, images);
+    }
+    navigate('/tasks');
   };
+
+  // Edit-mode fallback: task not found in cache after list loaded
+  if (isEdit && listData && !editTask) {
+    return (
+      <div className="min-h-screen bg-background">
+        <main className="max-w-[1200px] mx-auto px-8 py-8">
+          <div className="text-center py-20">
+            <ListTodo className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
+            <p className="text-muted-foreground mb-4">작업을 찾을 수 없습니다.</p>
+            <button
+              onClick={() => navigate('/tasks')}
+              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg"
+            >
+              작업 목록으로
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   const inputClass =
     'w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary';
   const labelClass = 'block text-sm font-medium mb-1';
+  const submitting = createTask.isPending || updateTask.isPending;
+  const pageTitle = parentTask ? '하위 작업 등록' : isEdit ? '작업 수정' : '작업 등록';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-xl p-6 w-full max-w-2xl shadow-xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-lg font-semibold">
-              {parentTask ? '하위 작업 등록' : editTask ? '작업 수정' : '작업 등록'}
-            </h2>
+    <div className="min-h-screen bg-background">
+      <main className="max-w-[1200px] mx-auto px-8 py-8">
+        {/* Page header */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/tasks')}
+              className="p-2 hover:bg-secondary rounded-lg transition-colors"
+              title="목록으로"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <ListTodo className="w-6 h-6 text-primary" />
+            <h1 className="text-xl font-bold">{pageTitle}</h1>
             {parentTask && (
-              <div className="text-xs text-muted-foreground bg-secondary px-2 py-1 rounded-md">
-                상위 작업: <span className="text-foreground font-medium">{parentTask.taskContent.replace(/<[^>]*>/g, '').slice(0, 40)}{parentTask.taskContent.replace(/<[^>]*>/g, '').length > 40 ? '...' : ''}</span>
+              <div className="ml-3 text-xs text-muted-foreground bg-secondary px-2 py-1 rounded-md">
+                상위 작업:{' '}
+                <span className="text-foreground font-medium">
+                  {parentTask.taskContent.replace(/<[^>]*>/g, '').slice(0, 40)}
+                  {parentTask.taskContent.replace(/<[^>]*>/g, '').length > 40 ? '...' : ''}
+                </span>
               </div>
             )}
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-secondary rounded-md">
-            <X className="w-5 h-5" />
-          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <form
+          onSubmit={handleSubmit}
+          className="bg-card border border-border rounded-xl p-6 space-y-5"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <label className={labelClass}>담당자(정) *</label>
               <input
@@ -239,7 +274,7 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask, paren
                   <option key={a.name} value={a.name} />
                 ))}
               </datalist>
-              <label className={`${labelClass} mt-2`}>담당자(부)</label>
+              <label className={`${labelClass} mt-3`}>담당자(부)</label>
               <input
                 type="text"
                 value={secondaryAssignee}
@@ -261,94 +296,7 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask, paren
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-sm font-medium">작업 분류 *</label>
-                <button
-                  type="button"
-                  onClick={() => setShowCatManage((v) => !v)}
-                  className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  title="분류 관리"
-                >
-                  <Settings2 className="w-3 h-3" />
-                  관리
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <select
-                  value={taskCategory}
-                  onChange={(e) => setTaskCategory(e.target.value)}
-                  className={`${inputClass} flex-1`}
-                  required={taskCategory !== '기타'}
-                >
-                  <option value="">— 선택 —</option>
-                  {allCategories.map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-                {taskCategory === '기타' && (
-                  <input
-                    type="text"
-                    value={taskCategoryCustom}
-                    onChange={(e) => setTaskCategoryCustom(e.target.value)}
-                    placeholder="직접 입력"
-                    className={`${inputClass} flex-1`}
-                    required
-                  />
-                )}
-              </div>
-              {showCatManage && (
-                <div className="mt-2 p-3 bg-muted/20 border border-border rounded-lg space-y-2">
-                  {customCategories.length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground font-medium">사용자 분류</p>
-                      {customCategories.map((cat) => (
-                        <div key={cat} className="flex items-center justify-between py-0.5">
-                          <span className="text-xs text-foreground/80">{cat}</span>
-                          <button
-                            type="button"
-                            onClick={() => deleteCustomCategory(cat)}
-                            className="text-xs text-muted-foreground hover:text-red-400 transition-colors px-1"
-                            title="삭제"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      value={newCatInput}
-                      onChange={(e) => setNewCatInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          addCustomCategory();
-                        }
-                      }}
-                      placeholder="새 분류명 입력"
-                      className="flex-1 px-2 py-1 text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <button
-                      type="button"
-                      onClick={addCustomCategory}
-                      className="flex items-center gap-0.5 px-2 py-1 text-xs bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded transition-colors"
-                    >
-                      <Plus className="w-3 h-3" />
-                      추가
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div>
-              <label className={labelClass}>우선순위 *</label>
+              <label className={`${labelClass} mt-3`}>우선순위 *</label>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
@@ -362,12 +310,95 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask, paren
           </div>
 
           <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-sm font-medium">작업 분류 *</label>
+              <button
+                type="button"
+                onClick={() => setShowCatManage((v) => !v)}
+                className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                title="분류 관리"
+              >
+                <Settings2 className="w-3 h-3" />
+                관리
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <select
+                value={taskCategory}
+                onChange={(e) => setTaskCategory(e.target.value)}
+                className={`${inputClass} flex-1`}
+                required={taskCategory !== '기타'}
+              >
+                <option value="">— 선택 —</option>
+                {allCategories.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+              {taskCategory === '기타' && (
+                <input
+                  type="text"
+                  value={taskCategoryCustom}
+                  onChange={(e) => setTaskCategoryCustom(e.target.value)}
+                  placeholder="직접 입력"
+                  className={`${inputClass} flex-1`}
+                  required
+                />
+              )}
+            </div>
+            {showCatManage && (
+              <div className="mt-2 p-3 bg-muted/20 border border-border rounded-lg space-y-2">
+                {customCategories.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground font-medium">사용자 분류</p>
+                    {customCategories.map((cat) => (
+                      <div key={cat} className="flex items-center justify-between py-0.5">
+                        <span className="text-xs text-foreground/80">{cat}</span>
+                        <button
+                          type="button"
+                          onClick={() => deleteCustomCategory(cat)}
+                          className="text-xs text-muted-foreground hover:text-red-400 transition-colors px-1"
+                          title="삭제"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={newCatInput}
+                    onChange={(e) => setNewCatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addCustomCategory();
+                      }
+                    }}
+                    placeholder="새 분류명 입력"
+                    className="flex-1 px-2 py-1 text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={addCustomCategory}
+                    className="flex items-center gap-0.5 px-2 py-1 text-xs bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded transition-colors"
+                  >
+                    <Plus className="w-3 h-3" />
+                    추가
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div>
             <label className={labelClass}>작업 내용 *</label>
             <RichTextEditor
               value={taskContent}
               onChange={setTaskContent}
               placeholder="수행할 작업을 상세히 기술하세요"
-              minHeight="120px"
+              minHeight="180px"
               onImagePaste={handleImagePaste}
             />
           </div>
@@ -378,12 +409,12 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask, paren
               value={resultContent}
               onChange={setResultContent}
               placeholder="작업 결과를 기술하세요 (선택 사항)"
-              minHeight="96px"
+              minHeight="140px"
               onImagePaste={handleImagePaste}
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
               <label className={labelClass}>작업 예정일시 *</label>
               <input
@@ -403,12 +434,22 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask, paren
                 className={inputClass}
               />
             </div>
+            <div>
+              <label className={labelClass}>비고</label>
+              <input
+                type="text"
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+                placeholder="추가 메모 (선택 사항)"
+                className={inputClass}
+              />
+            </div>
           </div>
 
-          {/* 칸반 보드 필드 ─────────────────────────────────── */}
-          <div className="border-t border-border pt-4">
+          {/* 칸반 보드 필드 */}
+          <div className="border-t border-border pt-5">
             <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">칸반 보드</p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
               <div>
                 <label className={labelClass}>보드 상태</label>
                 <select
@@ -460,7 +501,7 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask, paren
                 />
               </div>
             </div>
-            <div className="mt-3">
+            <div className="mt-4">
               <label className={labelClass}>
                 완료 조건
                 <span className="ml-1.5 text-xs text-muted-foreground font-normal">(Done 이동 기준)</span>
@@ -475,34 +516,25 @@ export function TaskModal({ isOpen, onClose, onSubmit, clusters, editTask, paren
             </div>
           </div>
 
-          <div>
-            <label className={labelClass}>비고</label>
-            <input
-              type="text"
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
-              placeholder="추가 메모 (선택 사항)"
-              className={inputClass}
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
+          {/* Actions */}
+          <div className="flex justify-end gap-3 pt-3 border-t border-border">
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => navigate('/tasks')}
               className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
             >
               취소
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
+              disabled={submitting}
+              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {editTask ? '저장' : parentTask ? '하위 작업 등록' : '등록'}
+              {isEdit ? '저장' : parentTask ? '하위 작업 등록' : '등록'}
             </button>
           </div>
         </form>
-      </div>
+      </main>
     </div>
   );
 }

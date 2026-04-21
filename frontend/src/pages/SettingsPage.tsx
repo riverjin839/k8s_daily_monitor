@@ -572,7 +572,9 @@ export function SettingsPage() {
                             ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                             : cluster.status === 'warning'
                             ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                            : 'bg-red-500/10 text-red-400 border-red-500/30'
+                            : cluster.status === 'critical'
+                            ? 'bg-red-500/10 text-red-400 border-red-500/30'
+                            : 'bg-slate-500/10 text-slate-400 border-slate-500/30'
                         }`}
                       >
                         {cluster.status}

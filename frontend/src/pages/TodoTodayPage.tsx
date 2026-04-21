@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   CalendarCheck2,
   RefreshCw,
@@ -16,11 +16,8 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { todayTasksApi, tasksApi, TodayTaskGroup } from '@/services/api';
-import { Task, TaskCreate, KanbanStatus } from '@/types';
-import { TaskModal } from '@/components/tasks';
+import { Task, KanbanStatus } from '@/types';
 import { useClusters } from '@/hooks/useCluster';
-import { useCreateTask, useUpdateTask } from '@/hooks/useTasks';
-import { saveTaskImages } from '@/lib/taskImages';
 
 const PRIORITY_STYLES: Record<string, { dot: string; label: string; text: string }> = {
   high:   { dot: 'bg-red-500',   label: '높음', text: 'text-red-400' },
@@ -247,10 +244,9 @@ function AssigneeColumn({ group, onStatusChange, onEdit, updatingId }: AssigneeC
 }
 
 export function TodoTodayPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { data: clusterList = [] } = useClusters();
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  useClusters();
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const today = getTodayString();
@@ -272,32 +268,12 @@ export function TodoTodayPage() {
     },
   });
 
-  const createTask = useCreateTask();
-  const updateTask = useUpdateTask();
-
   const handleStatusChange = (id: string, status: KanbanStatus) => {
     statusMutation.mutate({ id, status });
   };
 
   const handleEdit = (task: Task) => {
-    setEditingTask(task);
-  };
-
-  const handleCreateSubmit = async (formData: TaskCreate, images: string[]) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res: any = await createTask.mutateAsync(formData);
-    const newId: string | undefined = res?.data?.id ?? res?.id;
-    if (images.length > 0 && newId) saveTaskImages(newId, images);
-    setIsAddOpen(false);
-    queryClient.invalidateQueries({ queryKey: ['tasks'] });
-  };
-
-  const handleUpdateSubmit = async (formData: TaskCreate, images: string[]) => {
-    if (!editingTask) return;
-    await updateTask.mutateAsync({ id: editingTask.id, data: formData });
-    saveTaskImages(editingTask.id, images);
-    setEditingTask(null);
-    queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    navigate(`/tasks/${task.id}/edit`);
   };
 
   const totalToday = data?.totalToday ?? 0;
@@ -361,7 +337,7 @@ export function TodoTodayPage() {
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
           <button
-            onClick={() => setIsAddOpen(true)}
+            onClick={() => navigate('/tasks/new')}
             className="flex items-center gap-1.5 px-3 py-2 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
           >
             <Plus className="w-4 h-4" />
@@ -456,26 +432,6 @@ export function TodoTodayPage() {
         </div>
       )}
 
-      {/* 작업 추가 모달 */}
-      {isAddOpen && (
-        <TaskModal
-          isOpen={isAddOpen}
-          onClose={() => setIsAddOpen(false)}
-          onSubmit={handleCreateSubmit}
-          clusters={clusterList}
-        />
-      )}
-
-      {/* 작업 수정 모달 */}
-      {editingTask && (
-        <TaskModal
-          isOpen={!!editingTask}
-          onClose={() => setEditingTask(null)}
-          onSubmit={handleUpdateSubmit}
-          editTask={editingTask}
-          clusters={clusterList}
-        />
-      )}
     </div>
   );
 }

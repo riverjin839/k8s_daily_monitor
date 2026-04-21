@@ -86,7 +86,13 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
               {cluster.status === 'healthy'  && <CheckCircle className="w-3 h-3" />}
               {cluster.status === 'warning'  && <AlertTriangle className="w-3 h-3" />}
               {cluster.status === 'critical' && <XCircle className="w-3 h-3" />}
-              {cluster.status === 'healthy' ? '정상' : cluster.status === 'warning' ? '경고' : '위험'}
+              {cluster.status === 'healthy'
+                ? '정상'
+                : cluster.status === 'warning'
+                ? '경고'
+                : cluster.status === 'critical'
+                ? '위험'
+                : '대기'}
             </div>
 
             {/* Check counts */}

@@ -1,6 +1,7 @@
 import os
 import subprocess
 import tempfile
+from datetime import datetime
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -13,6 +14,7 @@ from uuid import UUID
 from app.config import settings
 from app.database import get_db
 from app.models import Cluster, Addon
+from app.models.cluster import StatusEnum
 from app.models.daily_check import DailyCheckLog, CheckSchedule
 from app.models.issue import Issue
 from app.models.task import Task
@@ -217,7 +219,6 @@ def create_cluster(cluster_data: ClusterCreate, db: Session = Depends(get_db)):
 
     # 연결 실패 시 pending 상태로 설정
     if connectivity_failed:
-        from app.models.cluster import StatusEnum
         payload["status"] = StatusEnum.pending
 
     cluster = Cluster(**payload)
@@ -390,6 +391,13 @@ def verify_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
         results.append({"check": "kubectl_nodes", "ok": None, "detail": "kubeconfig 파일 없음"})
 
     overall_ok = all(r["ok"] is True for r in results if r["ok"] is not None)
+
+    # 연결 확인 결과를 cluster.status 에 반영 — OK → healthy, 실패 → critical
+    # (전체 HealthChecker 가 돌기 전까지 가장 최신의 연결 상태를 보여주기 위함)
+    cluster.status = StatusEnum.healthy if overall_ok else StatusEnum.critical
+    cluster.updated_at = datetime.utcnow()
+    db.commit()
+
     return {"cluster_id": str(cluster_id), "cluster_name": cluster.name, "ok": overall_ok, "results": results}
 
 

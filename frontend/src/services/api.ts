@@ -86,6 +86,8 @@ export const clustersApi = {
     api.put<{ content: string; path: string }>(`/clusters/${id}/kubeconfig`, { content }),
   verify: (id: string) =>
     api.post<{ ok: boolean; cluster_name: string; results: { check: string; ok: boolean | null; detail: string }[] }>(`/clusters/${id}/verify`),
+  autoUpdate: (id: string) =>
+    api.post<{ clusterId: string; clusterName: string; updated: Record<string, unknown>; warnings: string[] }>(`/clusters/${id}/auto-update`),
   getCiliumConfig: (id: string) =>
     api.get<{ live: string | null; stored: string | null; source: string; error: string | null }>(`/clusters/${id}/cilium-config`),
 };

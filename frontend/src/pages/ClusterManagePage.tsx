@@ -47,6 +47,7 @@ export function ClusterManagePage() {
   const queryClient = useQueryClient();
 
   const [deletingId, setDeletingId]       = useState<string | null>(null);
+  const [autoUpdatingId, setAutoUpdatingId] = useState<string | null>(null);
   const [search, setSearch]               = useState('');
   const [filterLevel, setFilterLevel]     = useState('');
   const [sortBy, setSortBy]               = useState<'name' | 'status' | 'level'>('name');
@@ -124,6 +125,25 @@ export function ClusterManagePage() {
       alert('삭제에 실패했습니다.');
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleAutoUpdate = async (cluster: Cluster) => {
+    setAutoUpdatingId(cluster.id);
+    try {
+      const { data } = await clustersApi.autoUpdate(cluster.id);
+      queryClient.invalidateQueries({ queryKey: ['clusters'] });
+      const updatedCount = Object.keys(data.updated ?? {}).length;
+      const warnings = (data.warnings ?? []).join('\n');
+      const msg = updatedCount > 0
+        ? `${updatedCount}개 필드가 업데이트되었습니다.`
+        : '변경된 필드가 없습니다.';
+      alert(warnings ? `${msg}\n\n⚠ 경고:\n${warnings}` : msg);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } }; message?: string };
+      alert(`자동 업데이트 실패: ${err.response?.data?.detail ?? err.message ?? '알 수 없는 오류'}`);
+    } finally {
+      setAutoUpdatingId(null);
     }
   };
 
@@ -243,6 +263,8 @@ export function ClusterManagePage() {
                       deletingId={deletingId}
                       overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
                       onCilium={c => setCiliumCluster(c)}
+                      onAutoUpdate={handleAutoUpdate}
+                      autoUpdatingId={autoUpdatingId}
                     />
                   ))}
                 </tbody>
@@ -259,6 +281,8 @@ export function ClusterManagePage() {
                 onDelete={handleDelete}
                 deletingId={deletingId}
                 overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
+                onAutoUpdate={handleAutoUpdate}
+                autoUpdatingId={autoUpdatingId}
               />
             ))}
           </div>

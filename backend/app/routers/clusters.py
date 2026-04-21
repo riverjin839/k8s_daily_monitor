@@ -48,6 +48,18 @@ def _save_kubeconfig_content(cluster_id: UUID, content: str) -> str:
     return path
 
 
+def _ensure_kubeconfig_file(cluster: Cluster) -> str | None:
+    """DB 에 저장된 kubeconfig_content 가 있으면 파일을 (재)생성하고 경로를 반환.
+    파일이 이미 있으면 그대로, 없으면 컨텐츠로 다시 써준다.
+    둘 다 없으면 None.
+    """
+    if cluster.kubeconfig_path and os.path.exists(cluster.kubeconfig_path):
+        return cluster.kubeconfig_path
+    if cluster.kubeconfig_content:
+        return _save_kubeconfig_content(cluster.id, cluster.kubeconfig_content)
+    return cluster.kubeconfig_path or None
+
+
 def _verify_cluster_connectivity(api_endpoint: str, kubeconfig_path: str | None) -> None:
     """
     클러스터 등록 전 연결 가능 여부 검증.
@@ -225,10 +237,11 @@ def create_cluster(cluster_data: ClusterCreate, db: Session = Depends(get_db)):
     db.add(cluster)
     db.flush()  # cluster.id 확정
 
-    # kubeconfig content 가 있으면 파일로 저장하고 경로 갱신
+    # kubeconfig content 가 있으면 DB 에 보관하고 파일로도 저장
     if content and content.strip():
-        saved_path = _save_kubeconfig_content(cluster.id, content.strip())
-        cluster.kubeconfig_path = saved_path
+        cleaned = content.strip()
+        cluster.kubeconfig_content = cleaned
+        cluster.kubeconfig_path = _save_kubeconfig_content(cluster.id, cleaned)
 
     # 기본 애드온 자동 등록
     for addon_config in DEFAULT_ADDONS:
@@ -294,21 +307,34 @@ def delete_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
 
 @router.get("/{cluster_id}/kubeconfig", response_model=KubeconfigResponse)
 def get_kubeconfig(cluster_id: UUID, db: Session = Depends(get_db)):
-    """클러스터 kubeconfig 내용 조회"""
+    """클러스터 kubeconfig 내용 조회 — DB 우선, 파일은 폴백."""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
 
-    path = cluster.kubeconfig_path
-    if not path or not os.path.exists(path):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="kubeconfig 파일이 없습니다. 먼저 kubeconfig를 등록하세요.",
-        )
+    # 1) DB 에 kubeconfig_content 가 있으면 그것이 진실 (컨테이너 재시작 대비)
+    if cluster.kubeconfig_content:
+        # 파일이 없으면 재생성해서 kubectl/k8s SDK 경로 수요도 채움
+        path = _ensure_kubeconfig_file(cluster) or ""
+        if path and path != cluster.kubeconfig_path:
+            cluster.kubeconfig_path = path
+            db.commit()
+        return KubeconfigResponse(content=cluster.kubeconfig_content, path=path)
 
-    with open(path, encoding="utf-8") as f:
-        content = f.read()
-    return KubeconfigResponse(content=content, path=path)
+    # 2) DB 에는 없고 파일만 있는 (구) 레코드 호환
+    path = cluster.kubeconfig_path
+    if path and os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            content = f.read()
+        # 다음 조회부터는 DB 에서 바로 내려주도록 백필
+        cluster.kubeconfig_content = content
+        db.commit()
+        return KubeconfigResponse(content=content, path=path)
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="kubeconfig 파일이 없습니다. 먼저 kubeconfig를 등록하세요.",
+    )
 
 
 @router.put("/{cluster_id}/kubeconfig", response_model=KubeconfigResponse)
@@ -328,10 +354,12 @@ def update_kubeconfig(
             detail="kubeconfig 내용이 비어 있습니다.",
         )
 
-    saved_path = _save_kubeconfig_content(cluster_id, body.content.strip())
+    cleaned = body.content.strip()
+    saved_path = _save_kubeconfig_content(cluster_id, cleaned)
     cluster.kubeconfig_path = saved_path
+    cluster.kubeconfig_content = cleaned
     db.commit()
-    return KubeconfigResponse(content=body.content.strip(), path=saved_path)
+    return KubeconfigResponse(content=cleaned, path=saved_path)
 
 
 @router.post("/{cluster_id}/verify")
@@ -357,8 +385,8 @@ def verify_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
     except Exception as e:
         results.append({"check": "api_server", "ok": False, "detail": str(e)[:80]})
 
-    # 2. kubeconfig 인증
-    kc_path = cluster.kubeconfig_path
+    # 2. kubeconfig 인증 — 파일이 없으면 DB content 로 재생성 시도
+    kc_path = _ensure_kubeconfig_file(cluster)
     if kc_path and os.path.exists(kc_path):
         try:
             api_client = k8s_config.new_client_from_config(config_file=kc_path)
@@ -399,6 +427,201 @@ def verify_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
     db.commit()
 
     return {"cluster_id": str(cluster_id), "cluster_name": cluster.name, "ok": overall_ok, "results": results}
+
+
+# ── 자동 업데이트 (kubeconfig 기반) ───────────────────────────────────────────
+
+def _extract_flag_value(container_spec, flag: str) -> str | None:
+    """kube-apiserver / kube-controller-manager 컨테이너 command/args 에서 --flag=value 또는 --flag value 추출."""
+    tokens: list[str] = []
+    if container_spec.command:
+        tokens.extend(container_spec.command)
+    if container_spec.args:
+        tokens.extend(container_spec.args)
+    prefix = f"--{flag}="
+    for i, tok in enumerate(tokens):
+        if tok.startswith(prefix):
+            return tok[len(prefix):]
+        if tok == f"--{flag}" and i + 1 < len(tokens):
+            return tokens[i + 1]
+    return None
+
+
+def _cidr_range(cidr: str | None) -> tuple[str | None, str | None]:
+    """CIDR 에서 first/last host 를 계산 (IPv4). 실패 시 (None, None)."""
+    if not cidr:
+        return None, None
+    try:
+        import ipaddress
+        net = ipaddress.ip_network(cidr.strip(), strict=False)
+        hosts = list(net.hosts()) if net.num_addresses > 2 else [net.network_address, net.broadcast_address]
+        if not hosts:
+            return None, None
+        return str(hosts[0]), str(hosts[-1])
+    except Exception:
+        return None, None
+
+
+@router.post("/{cluster_id}/auto-update")
+def auto_update_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
+    """kubeconfig/k8s API 만으로 얻을 수 있는 클러스터 메타데이터를 자동 수집/반영.
+
+    채우는 필드: node_count, hostname (master 후보), max_pod, pod_cidr/first/last,
+    svc_cidr/first/last, cilium_config, bgp_enabled, as_number.
+    NIC (bond*), Node CIDR 비트마스크는 kubeconfig 만으로는 알 수 없어 건너뜀.
+    """
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+
+    kc_path = _ensure_kubeconfig_file(cluster)
+    if not kc_path or not os.path.exists(kc_path):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="kubeconfig가 없습니다. 먼저 kubeconfig를 등록하세요.",
+        )
+
+    updated: dict[str, object] = {}
+    warnings: list[str] = []
+
+    try:
+        api_client = k8s_config.new_client_from_config(config_file=kc_path)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"kubeconfig 로드 실패: {str(e)[:120]}")
+
+    v1 = k8s_client.CoreV1Api(api_client)
+    custom = k8s_client.CustomObjectsApi(api_client)
+
+    # 1. nodes → node_count, hostname(master), max_pod, pod_cidr (node.spec.podCIDR 기반)
+    try:
+        nodes = v1.list_node(_request_timeout=_K8S_AUTH_TIMEOUT * 2)
+        items = nodes.items
+        cluster.node_count = len(items)
+        updated["nodeCount"] = len(items)
+
+        master_labels = ("node-role.kubernetes.io/control-plane", "node-role.kubernetes.io/master")
+        master_nodes = [n for n in items if any(l in (n.metadata.labels or {}) for l in master_labels)]
+        pick = (master_nodes or items)[0] if items else None
+        if pick:
+            cluster.hostname = pick.metadata.name
+            updated["hostname"] = pick.metadata.name
+            allocatable = (pick.status.allocatable or {}) if pick.status else {}
+            pods_str = allocatable.get("pods")
+            if pods_str:
+                try:
+                    cluster.max_pod = int(pods_str)
+                    updated["maxPod"] = int(pods_str)
+                except ValueError:
+                    warnings.append(f"maxPod 파싱 실패: {pods_str}")
+
+        # pod CIDR: 노드 spec.podCIDR 들을 모아 최소 덮는 대역을 추정하기는 어렵고,
+        # kube-controller-manager --cluster-cidr 를 우선 사용. 아래에서 처리.
+    except Exception as e:
+        warnings.append(f"nodes 조회 실패: {str(e)[:120]}")
+
+    # 2. kube-system 의 kube-apiserver / kube-controller-manager pod 의 플래그에서 CIDR 추출
+    try:
+        sys_pods = v1.list_namespaced_pod("kube-system", _request_timeout=_K8S_AUTH_TIMEOUT * 2)
+        api_pod = next((p for p in sys_pods.items if p.metadata.name.startswith("kube-apiserver")), None)
+        ctrl_pod = next((p for p in sys_pods.items if p.metadata.name.startswith("kube-controller-manager")), None)
+
+        if api_pod and api_pod.spec.containers:
+            svc_range = _extract_flag_value(api_pod.spec.containers[0], "service-cluster-ip-range")
+            if svc_range:
+                cluster.svc_cidr = svc_range
+                first, last = _cidr_range(svc_range)
+                cluster.svc_first_host = first
+                cluster.svc_last_host = last
+                updated["svcCidr"] = svc_range
+                if first: updated["svcFirstHost"] = first
+                if last: updated["svcLastHost"] = last
+
+        if ctrl_pod and ctrl_pod.spec.containers:
+            pod_range = _extract_flag_value(ctrl_pod.spec.containers[0], "cluster-cidr")
+            if pod_range:
+                cluster.pod_cidr = pod_range
+                first, last = _cidr_range(pod_range)
+                cluster.pod_first_host = first
+                cluster.pod_last_host = last
+                updated["podCidr"] = pod_range
+                if first: updated["podFirstHost"] = first
+                if last: updated["podLastHost"] = last
+    except Exception as e:
+        warnings.append(f"system pods 플래그 조회 실패: {str(e)[:120]}")
+
+    # 3. Cilium config — ConfigMap/kube-system/cilium-config
+    try:
+        cm = v1.read_namespaced_config_map("cilium-config", "kube-system", _request_timeout=_K8S_AUTH_TIMEOUT * 2)
+        data = cm.data or {}
+        # 핵심만 보여주기 (tunnel, kube-proxy-replacement, ipv4-native-routing-cidr, enable-bgp-control-plane 등)
+        interesting_keys = [
+            "tunnel", "routing-mode", "kube-proxy-replacement",
+            "ipv4-native-routing-cidr", "ipv6-native-routing-cidr",
+            "enable-bgp-control-plane", "bpf-lb-mode", "cluster-pool-ipv4-cidr",
+        ]
+        lines = [f"{k}: {data[k]}" for k in interesting_keys if k in data]
+        if lines:
+            cluster.cilium_config = "\n".join(lines)
+            updated["ciliumConfig"] = cluster.cilium_config
+        if data.get("enable-bgp-control-plane", "").lower() == "true":
+            cluster.bgp_enabled = True
+            updated["bgpEnabled"] = True
+    except ApiException as e:
+        if e.status != 404:
+            warnings.append(f"cilium-config 조회 실패: HTTP {e.status}")
+    except Exception as e:
+        warnings.append(f"cilium-config 조회 실패: {str(e)[:120]}")
+
+    # 4. Cilium BGP — CiliumBGPClusterConfig (신규) 또는 CiliumBGPPeeringPolicy (구) CR
+    try:
+        # 신규 CRD (Cilium 1.16+)
+        crs = custom.list_cluster_custom_object(
+            group="cilium.io", version="v2alpha1", plural="ciliumbgpclusterconfigs",
+            _request_timeout=_K8S_AUTH_TIMEOUT * 2,
+        )
+        items = crs.get("items") or []
+        for item in items:
+            for inst in (item.get("spec", {}).get("bgpInstances") or []):
+                local_asn = inst.get("localASN")
+                if local_asn:
+                    cluster.bgp_enabled = True
+                    cluster.as_number = str(local_asn)
+                    updated["bgpEnabled"] = True
+                    updated["asNumber"] = str(local_asn)
+                    break
+    except ApiException:
+        # 신규 CRD 없으면 구 버전 시도
+        try:
+            crs = custom.list_cluster_custom_object(
+                group="cilium.io", version="v2alpha1", plural="ciliumbgppeeringpolicies",
+                _request_timeout=_K8S_AUTH_TIMEOUT * 2,
+            )
+            for item in (crs.get("items") or []):
+                for vr in (item.get("spec", {}).get("virtualRouters") or []):
+                    local_asn = vr.get("localASN")
+                    if local_asn:
+                        cluster.bgp_enabled = True
+                        cluster.as_number = str(local_asn)
+                        updated["bgpEnabled"] = True
+                        updated["asNumber"] = str(local_asn)
+                        break
+        except ApiException:
+            pass  # BGP 미설정 클러스터
+        except Exception as e:
+            warnings.append(f"BGP 조회 실패: {str(e)[:120]}")
+    except Exception as e:
+        warnings.append(f"BGP 조회 실패: {str(e)[:120]}")
+
+    cluster.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(cluster)
+
+    return {
+        "cluster_id": str(cluster_id),
+        "cluster_name": cluster.name,
+        "updated": updated,
+        "warnings": warnings,
+    }
 
 
 @router.get("/{cluster_id}/cilium-config")

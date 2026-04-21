@@ -420,9 +420,10 @@ def verify_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
 
     overall_ok = all(r["ok"] is True for r in results if r["ok"] is not None)
 
-    # 연결 확인 결과를 cluster.status 에 반영 — OK → healthy, 실패 → critical
-    # (전체 HealthChecker 가 돌기 전까지 가장 최신의 연결 상태를 보여주기 위함)
-    cluster.status = StatusEnum.healthy if overall_ok else StatusEnum.critical
+    # 연결 확인 결과를 cluster.status 에 반영.
+    # - OK   → healthy
+    # - 실패 → pending (연결 불가. critical 은 "연결은 되는데 addon 이 critical" 을 위해 유지)
+    cluster.status = StatusEnum.healthy if overall_ok else StatusEnum.pending
     cluster.updated_at = datetime.utcnow()
     db.commit()
 

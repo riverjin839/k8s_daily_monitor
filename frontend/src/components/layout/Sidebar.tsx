@@ -4,7 +4,7 @@ import {
   LayoutDashboard, BookOpen, ClipboardList, ListTodo, CalendarCheck2,
   Settings, Link2, Tags, Calculator, Server, GitFork, BookMarked, Layers,
   Pencil, Moon, Sun, Monitor, Map, BarChart3, Network,
-  ChevronDown, ChevronRight, Zap, Route, Share2, Rss,
+  ChevronDown, ChevronRight, Zap, Route, Share2, Rss, Users,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
@@ -17,6 +17,7 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
   '/issues':             { defaultLabel: '이슈 게시판',    icon: ClipboardList },
   '/tasks':              { defaultLabel: '작업 게시판',    icon: ListTodo },
   '/todo-today':         { defaultLabel: '오늘 할일',      icon: CalendarCheck2 },
+  '/members':            { defaultLabel: '멤버별 업무',    icon: Users },
   '/cluster-manage':     { defaultLabel: '클러스터 관리',  icon: Server },
   '/infra-topology':     { defaultLabel: '인프라 토폴로지', icon: Network },
   '/links':              { defaultLabel: '클러스터 링크',  icon: Link2 },
@@ -36,7 +37,7 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
 
 const NAV_GROUPS: Array<{ id: string; label: string; paths: string[] }> = [
   { id: 'monitoring', label: '모니터링',  paths: ['/', '/playbooks'] },
-  { id: 'work',       label: '작업관리', paths: ['/issues', '/tasks', '/todo-today'] },
+  { id: 'work',       label: '작업관리', paths: ['/issues', '/tasks', '/todo-today', '/members'] },
   { id: 'cluster',    label: '클러스터', paths: ['/cluster-manage', '/infra-topology', '/links', '/node-labels', '/cidr'] },
   { id: 'analysis',   label: 'AI 분석',  paths: ['/incident-analysis', '/packet-flow', '/ontology', '/trends'] },
   { id: 'docs',       label: '운영/문서', paths: ['/work-guides', '/ops-notes', '/wbs', '/mindmap', '/workflow'] },

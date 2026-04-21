@@ -26,16 +26,20 @@ class NodeChecker(BaseChecker):
         total = len(nodes.items)
         ready_count = 0
         not_ready_nodes: list[str] = []
+        ready_nodes: list[str] = []
+        all_nodes: list[str] = []
         issues: list[dict] = []
 
         for node in nodes.items:
             name = node.metadata.name
+            all_nodes.append(name)
             conditions = {c.type: c for c in (node.status.conditions or [])}
 
             # Ready 상태 판별
             ready_cond = conditions.get("Ready")
             if ready_cond and ready_cond.status == "True":
                 ready_count += 1
+                ready_nodes.append(name)
             else:
                 not_ready_nodes.append(name)
 
@@ -49,8 +53,10 @@ class NodeChecker(BaseChecker):
         details = {
             "total": total,
             "ready": ready_count,
-            "not_ready": not_ready_nodes[:20],  # 최대 20개만
-            "issues": issues[:50],  # 최대 50개만
+            "nodes": all_nodes[:200],          # 전체 노드 이름 (최대 200)
+            "ready_nodes": ready_nodes[:200],  # Ready 노드 이름
+            "not_ready": not_ready_nodes[:20], # NotReady 노드 이름 (최대 20)
+            "issues": issues[:50],             # pressure 이슈 (최대 50)
         }
 
         if ready_count == 0 and total > 0:

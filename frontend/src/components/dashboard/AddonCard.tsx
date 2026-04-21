@@ -55,11 +55,68 @@ function EtcdDetails({ details }: { details: Details }) {
   );
 }
 
+/** 공통 prefix + 숫자 suffix 를 정규식/브라켓 패턴으로 압축.
+ *  예) ['k8s-master-01','k8s-master-02','k8s-worker-01'] → 'k8s-master-[01-02], k8s-worker-01'
+ */
+function compressNodeNames(names: string[]): string {
+  if (names.length === 0) return '';
+  const groups = new Map<string, { width: number; nums: number[] }>();
+  const standalone: string[] = [];
+
+  for (const name of names) {
+    const m = name.match(/^(.+?)(\d+)$/);
+    if (!m) {
+      standalone.push(name);
+      continue;
+    }
+    const [, prefix, numStr] = m;
+    const group = groups.get(prefix);
+    const n = parseInt(numStr, 10);
+    if (group) {
+      group.nums.push(n);
+      group.width = Math.max(group.width, numStr.length);
+    } else {
+      groups.set(prefix, { width: numStr.length, nums: [n] });
+    }
+  }
+
+  const parts: string[] = [];
+  for (const [prefix, { width, nums }] of groups) {
+    nums.sort((a, b) => a - b);
+    const pad = (n: number) => String(n).padStart(width, '0');
+
+    if (nums.length === 1) {
+      parts.push(`${prefix}${pad(nums[0])}`);
+      continue;
+    }
+
+    // 연속 범위로 쪼개기: [1,2,3,5,7,8] → "01-03,05,07-08"
+    const ranges: string[] = [];
+    let start = nums[0];
+    let prev = nums[0];
+    for (let i = 1; i <= nums.length; i++) {
+      const curr = nums[i];
+      if (i === nums.length || curr !== prev + 1) {
+        ranges.push(start === prev ? pad(start) : `${pad(start)}-${pad(prev)}`);
+        start = curr;
+      }
+      prev = curr;
+    }
+    parts.push(`${prefix}[${ranges.join(',')}]`);
+  }
+  return [...parts, ...standalone].join(', ');
+}
+
 function NodeDetails({ details }: { details: Details }) {
   const total = Number(details.total ?? 0);
   const ready = Number(details.ready ?? 0);
   const issues: NodeIssue[] = Array.isArray(details.issues) ? details.issues : [];
+  const allNodes: string[] = Array.isArray(details.nodes) ? (details.nodes as string[]) : [];
+  const notReadyNodes: string[] = Array.isArray(details.notReady) ? (details.notReady as string[]) : [];
   const pct = total > 0 ? Math.round((ready / total) * 100) : 0;
+
+  const pattern = allNodes.length > 0 ? compressNodeNames(allNodes) : '';
+  const notReadyPattern = notReadyNodes.length > 0 ? compressNodeNames(notReadyNodes) : '';
 
   return (
     <div className="space-y-2">
@@ -77,6 +134,19 @@ function NodeDetails({ details }: { details: Details }) {
           style={{ width: `${pct}%` }}
         />
       </div>
+      {pattern && (
+        <div
+          className="text-[11px] font-mono text-muted-foreground break-all"
+          title={allNodes.join('\n')}
+        >
+          {pattern}
+        </div>
+      )}
+      {notReadyPattern && (
+        <div className="text-[11px] font-mono text-red-400/80 break-all" title={notReadyNodes.join('\n')}>
+          NotReady: {notReadyPattern}
+        </div>
+      )}
     </div>
   );
 }

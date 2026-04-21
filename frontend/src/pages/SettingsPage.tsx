@@ -577,7 +577,13 @@ export function SettingsPage() {
                             : 'bg-slate-500/10 text-slate-400 border-slate-500/30'
                         }`}
                       >
-                        {cluster.status}
+                        {cluster.status === 'healthy'
+                          ? '정상'
+                          : cluster.status === 'warning'
+                          ? '경고'
+                          : cluster.status === 'critical'
+                          ? '위험'
+                          : '미연결'}
                       </span>
                     </div>
                     <div className="text-sm text-muted-foreground flex items-center gap-4">

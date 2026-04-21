@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, BookOpen, Plus, Activity, RefreshCw, CheckCircle, AlertTriangle, XCircle, Server } from 'lucide-react';
+import { Download, BookOpen, Plus, Activity, RefreshCw, CheckCircle, AlertTriangle, XCircle, Server, WifiOff } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils';
 import {
   SummaryStats,
@@ -86,13 +86,14 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
               {cluster.status === 'healthy'  && <CheckCircle className="w-3 h-3" />}
               {cluster.status === 'warning'  && <AlertTriangle className="w-3 h-3" />}
               {cluster.status === 'critical' && <XCircle className="w-3 h-3" />}
+              {cluster.status === 'pending'  && <WifiOff className="w-3 h-3" />}
               {cluster.status === 'healthy'
                 ? '정상'
                 : cluster.status === 'warning'
                 ? '경고'
                 : cluster.status === 'critical'
                 ? '위험'
-                : '대기'}
+                : '미연결'}
             </div>
 
             {/* Check counts */}

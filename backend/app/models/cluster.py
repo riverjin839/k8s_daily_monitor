@@ -21,6 +21,7 @@ class Cluster(Base):
     name = Column(String(100), nullable=False, unique=True)
     api_endpoint = Column(String(255), nullable=False)
     kubeconfig_path = Column(String(255), nullable=True)
+    kubeconfig_content = Column(Text, nullable=True)   # DB에 원본 YAML 보관 (컨테이너 재시작 대비)
     status = Column(Enum(StatusEnum), default=StatusEnum.healthy)
 
     # 클러스터 관리 메타데이터

@@ -7,6 +7,7 @@ import { IssueFormPage } from '@/pages/IssueFormPage';
 import { TaskBoardPage } from '@/pages/TaskBoardPage';
 import { TaskFormPage } from '@/pages/TaskFormPage';
 import { TodoTodayPage } from '@/pages/TodoTodayPage';
+import { MemberBoardPage } from '@/pages/MemberBoardPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { ClusterLinksPage } from '@/pages/ClusterLinksPage';
 import { NodeLabelsPage } from '@/pages/NodeLabelsPage';
@@ -52,6 +53,7 @@ function App() {
               <Route path="/tasks/new" element={<TaskFormPage />} />
               <Route path="/tasks/:id/edit" element={<TaskFormPage />} />
               <Route path="/todo-today" element={<TodoTodayPage />} />
+              <Route path="/members" element={<MemberBoardPage />} />
               <Route path="/links" element={<ClusterLinksPage />} />
               <Route path="/node-labels" element={<NodeLabelsPage />} />
               <Route path="/cidr" element={<CidrCalculatorPage />} />

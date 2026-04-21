@@ -74,6 +74,7 @@ def _run_migrations():
             ("bond1_mac", "VARCHAR(50)"),
             ("bgp_enabled", "BOOLEAN DEFAULT FALSE"),
             ("as_number", "VARCHAR(20)"),
+            ("kubeconfig_content", "TEXT"),
         ]
         for col_name, col_type in new_cluster_cols:
             if col_name not in columns:

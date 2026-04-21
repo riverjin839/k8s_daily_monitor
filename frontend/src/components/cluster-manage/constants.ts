@@ -18,7 +18,7 @@ export const STATUS_STYLE: Record<string, { dot: string; border: string; badge: 
   healthy:  { dot: 'bg-emerald-500', border: 'border-l-emerald-500', badge: 'bg-emerald-500/10 text-emerald-400', label: 'Healthy'  },
   warning:  { dot: 'bg-amber-500',   border: 'border-l-amber-500',   badge: 'bg-amber-500/10 text-amber-400',    label: 'Warning'  },
   critical: { dot: 'bg-red-500',     border: 'border-l-red-500',     badge: 'bg-red-500/10 text-red-400',        label: 'Critical' },
-  pending:  { dot: 'bg-slate-400',   border: 'border-l-slate-400',   badge: 'bg-slate-500/10 text-slate-400',    label: '임시등록' },
+  pending:  { dot: 'bg-slate-400',   border: 'border-l-slate-400',   badge: 'bg-slate-500/10 text-slate-400',    label: '미연결'   },
 };
 
 export const OVERLAP_COLORS = [

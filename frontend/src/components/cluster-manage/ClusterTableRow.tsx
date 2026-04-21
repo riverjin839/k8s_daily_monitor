@@ -1,4 +1,4 @@
-import { Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
 import type { Cluster } from '@/types';
 import { STATUS_STYLE, LEVEL_BADGE, OPERATION_LEVELS } from './constants';
 
@@ -9,9 +9,11 @@ interface ClusterTableRowProps {
   deletingId: string | null;
   overlapGroupIdx: number | undefined;
   onCilium: (c: Cluster) => void;
+  onAutoUpdate: (c: Cluster) => void;
+  autoUpdatingId: string | null;
 }
 
-export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onCilium }: ClusterTableRowProps) {
+export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onCilium, onAutoUpdate, autoUpdatingId }: ClusterTableRowProps) {
   const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
   const lv = LEVEL_BADGE[cluster.operationLevel ?? ''];
 
@@ -95,6 +97,13 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       </td>
       <td className="px-3 py-2.5">
         <div className="flex items-center gap-1">
+          <button onClick={() => onAutoUpdate(cluster)} disabled={autoUpdatingId === cluster.id}
+            className="p-1.5 hover:bg-primary/10 rounded text-muted-foreground hover:text-primary disabled:opacity-40 transition-colors"
+            title="kubeconfig 기반 자동 업데이트">
+            {autoUpdatingId === cluster.id
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <RefreshCw className="w-3.5 h-3.5" />}
+          </button>
           <button onClick={() => onCilium(cluster)}
             className="px-2 py-1 text-[11px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20 rounded transition-colors">
             Cilium

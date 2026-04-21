@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pencil, Trash2, Cpu, Network, AlertTriangle } from 'lucide-react';
+import { Pencil, Trash2, Cpu, Network, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
 import type { Cluster } from '@/types';
 import { STATUS_STYLE, LEVEL_BADGE, OPERATION_LEVELS, OVERLAP_COLORS } from './constants';
 import { CidrRow } from './CidrRow';
@@ -12,9 +12,11 @@ interface ClusterCardProps {
   onDelete: (c: Cluster) => void;
   deletingId: string | null;
   overlapGroupIdx: number | undefined;
+  onAutoUpdate: (c: Cluster) => void;
+  autoUpdatingId: string | null;
 }
 
-export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx }: ClusterCardProps) {
+export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onAutoUpdate, autoUpdatingId }: ClusterCardProps) {
   const [tab, setTab] = useState<CardTab>('node');
   const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
   const overlapColor = overlapGroupIdx !== undefined
@@ -49,6 +51,13 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
             </div>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
+            <button onClick={() => onAutoUpdate(cluster)} disabled={autoUpdatingId === cluster.id}
+              className="p-1.5 hover:bg-primary/10 rounded-md transition-colors text-muted-foreground hover:text-primary disabled:opacity-40"
+              title="kubeconfig 기반 자동 업데이트">
+              {autoUpdatingId === cluster.id
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <RefreshCw className="w-3.5 h-3.5" />}
+            </button>
             <button onClick={() => onEdit(cluster)}
               className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground" title="수정">
               <Pencil className="w-3.5 h-3.5" />

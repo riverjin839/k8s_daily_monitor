@@ -20,6 +20,7 @@ from app.routers.topology_trace import router as topology_trace_router
 from app.routers.ontology import router as ontology_router
 from app.routers.analyze import router as analyze_router
 from app.routers.trends import router as trends_router
+from app.routers.versions import router as versions_router
 
 __all__ = [
     "clusters_router",
@@ -44,4 +45,5 @@ __all__ = [
     "ontology_router",
     "analyze_router",
     "trends_router",
+    "versions_router",
 ]

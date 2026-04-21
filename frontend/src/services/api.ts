@@ -92,6 +92,66 @@ export const clustersApi = {
     api.get<{ live: string | null; stored: string | null; source: string; error: string | null }>(`/clusters/${id}/cilium-config`),
 };
 
+// Versions API — 클러스터 컴포넌트 버전/설정 스냅샷 수집 & 히스토리
+export interface ComponentSnapshot {
+  id: string;
+  component: string;
+  category: string | null;
+  version: string | null;
+  data: Record<string, unknown>;
+  contentHash?: string;
+  collectedAt: string;
+}
+
+export interface VersionGraphNode {
+  id: string;
+  label: string;
+  type: 'cluster' | 'category' | 'component' | 'flag';
+  category?: string;
+  version?: string | null;
+  value?: string;
+  collectedAt?: string;
+}
+
+export interface VersionGraphEdge {
+  source: string;
+  target: string;
+  type: 'contains' | 'param' | 'configures' | 'replaces';
+}
+
+export const versionsApi = {
+  collect: (clusterId: string) =>
+    api.post<{ clusterId: string; changed: number; errors: string[]; collectedAt: string }>(
+      `/clusters/${clusterId}/collect-versions`,
+    ),
+  current: (clusterId: string) =>
+    api.get<{ clusterId: string; components: ComponentSnapshot[] }>(
+      `/clusters/${clusterId}/versions/current`,
+    ),
+  history: (clusterId: string, component?: string, limit = 200) => {
+    const q = new URLSearchParams();
+    if (component) q.set('component', component);
+    q.set('limit', String(limit));
+    return api.get<{ clusterId: string; component: string | null; snapshots: ComponentSnapshot[] }>(
+      `/clusters/${clusterId}/versions/history?${q.toString()}`,
+    );
+  },
+  diff: (clusterId: string, fromId: string, toId: string) =>
+    api.get<{
+      from: { id: string; component: string; version: string | null; collectedAt: string };
+      to: { id: string; component: string; version: string | null; collectedAt: string };
+      versionChanged: boolean;
+      changes: { key: string; from: unknown; to: unknown }[];
+    }>(`/clusters/${clusterId}/versions/diff?from=${fromId}&to=${toId}`),
+  graph: (clusterId: string) =>
+    api.get<{
+      clusterId: string;
+      clusterName: string;
+      nodes: VersionGraphNode[];
+      edges: VersionGraphEdge[];
+    }>(`/clusters/${clusterId}/versions/graph`),
+};
+
 // Health API
 export const healthApi = {
   runCheck: (clusterId: string) => api.post<ApiResponse<void>>(`/health/check/${clusterId}`),

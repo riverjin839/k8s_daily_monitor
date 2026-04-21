@@ -14,6 +14,8 @@ import { NodeLabelsPage } from '@/pages/NodeLabelsPage';
 import { CidrCalculatorPage } from '@/pages/CidrCalculatorPage';
 import { ClusterManagePage } from '@/pages/ClusterManagePage';
 import { ClusterMetaFormPage } from '@/pages/ClusterMetaFormPage';
+import { VersionsPage } from '@/pages/VersionsPage';
+import { VersionGraphPage } from '@/pages/VersionGraphPage';
 import { WorkflowBoardPage } from '@/pages/WorkflowBoardPage';
 import { WorkGuidePage } from '@/pages/WorkGuidePage';
 import { OpsNotesPage } from '@/pages/OpsNotesPage';
@@ -59,6 +61,8 @@ function App() {
               <Route path="/cidr" element={<CidrCalculatorPage />} />
               <Route path="/cluster-manage" element={<ClusterManagePage />} />
               <Route path="/cluster-manage/:id/edit" element={<ClusterMetaFormPage />} />
+              <Route path="/versions" element={<VersionsPage />} />
+              <Route path="/versions/:clusterId/graph" element={<VersionGraphPage />} />
               <Route path="/infra-topology" element={<InfraTopologyPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/workflow" element={<WorkflowBoardPage />} />

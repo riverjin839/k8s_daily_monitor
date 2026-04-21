@@ -5,6 +5,7 @@ import {
   Wifi, FileText, ShieldAlert, Zap, Clock,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
+import { ConfirmDialog, LogViewer } from '@/components/common';
 import { bulkExecApi, type NodeSummary, type BulkExecResponse, type BulkExecResultItem } from '@/services/api';
 
 // ── 상태 색상 ───────────────────────────────────────────────────────────────
@@ -85,15 +86,11 @@ function ResultRow({ result }: { result: BulkExecResultItem }) {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
-                <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-48 overflow-auto whitespace-pre-wrap">
-                  {result.stdout || '(empty)'}
-                </pre>
+                <LogViewer text={result.stdout} maxHeight="max-h-72" />
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
-                <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-48 overflow-auto whitespace-pre-wrap text-red-400/90">
-                  {result.stderr || '(empty)'}
-                </pre>
+                <LogViewer text={result.stderr} maxHeight="max-h-72" asError />
               </div>
             </div>
             {result.error && (
@@ -192,6 +189,8 @@ export function BulkExecPage() {
     (action === 'ssh' ? !!command.trim() : !!scpRemotePath.trim());
 
   const runError = runMutation.error as { response?: { data?: { detail?: string } }; message?: string } | null;
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background">
@@ -472,7 +471,7 @@ export function BulkExecPage() {
                 인증 정보는 이 실행에만 사용되고 저장되지 않습니다.
               </p>
               <button
-                onClick={() => runMutation.mutate()}
+                onClick={() => setConfirmOpen(true)}
                 disabled={!canRun || runMutation.isPending}
                 className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -524,6 +523,62 @@ export function BulkExecPage() {
           </section>
         )}
       </main>
+
+      {/* 실행 확인 모달 */}
+      <ConfirmDialog
+        open={confirmOpen}
+        title={action === 'ssh' ? '노드 일괄 SSH 실행 확인' : '노드 일괄 SCP 업로드 확인'}
+        description={`이 작업은 ${selected.size}개 노드에 ${mode === 'parallel' ? '병렬' : '순차'}로 실행됩니다.`}
+        confirmLabel={action === 'ssh' ? '실행' : '업로드'}
+        danger={action === 'ssh'}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={() => { setConfirmOpen(false); runMutation.mutate(); }}
+      >
+        <div className="space-y-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">접속 정보</p>
+            <p className="font-mono">
+              <span className="text-primary">{username}</span>
+              <span className="text-muted-foreground">@</span>
+              <span className="text-foreground">(선택된 {selected.size}개 host)</span>
+              <span className="text-muted-foreground">:{port}</span>
+              <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded border border-border bg-secondary">
+                {authMode === 'password' ? '비밀번호' : 'Private Key'}
+              </span>
+            </p>
+          </div>
+          {action === 'ssh' ? (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">실행할 명령</p>
+              <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 max-h-28 overflow-auto whitespace-pre-wrap break-all">
+                {command}
+              </pre>
+            </div>
+          ) : (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">업로드 대상</p>
+              <p className="font-mono">{scpRemotePath}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                크기: {new Blob([scpContent]).size} bytes
+              </p>
+            </div>
+          )}
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">대상 호스트</p>
+            <div className="text-[11px] font-mono max-h-24 overflow-auto bg-background border border-border rounded p-2">
+              {selectedHosts.slice(0, 10).map((t) => (
+                <div key={t.name}>
+                  <span className="text-foreground">{t.name}</span>
+                  {t.host !== t.name && <span className="text-muted-foreground"> ({t.host})</span>}
+                </div>
+              ))}
+              {selectedHosts.length > 10 && (
+                <div className="text-muted-foreground">+ {selectedHosts.length - 10}개 더…</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </ConfirmDialog>
     </div>
   );
 }

@@ -277,8 +277,9 @@ def create_task(payload: TaskCreate, db: Session = Depends(get_db)):
 
     primary_assignee = (payload.primary_assignee or payload.assignee).strip()
     secondary_assignee = payload.secondary_assignee.strip() if payload.secondary_assignee else None
+    overridden = {"cluster_name", "assignee", "primary_assignee", "secondary_assignee"}
     task = Task(
-        **{k: v for k, v in payload.model_dump().items() if k != "cluster_name"},
+        **{k: v for k, v in payload.model_dump().items() if k not in overridden},
         assignee=primary_assignee,
         primary_assignee=primary_assignee,
         secondary_assignee=secondary_assignee,

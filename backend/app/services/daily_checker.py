@@ -263,9 +263,10 @@ class DailyChecker:
         self, api_result: dict, components: dict, nodes: dict
     ) -> StatusEnum:
         """전체 상태 결정"""
-        # API 서버가 critical이면 전체 critical
+        # API 서버 연결 자체가 실패했으면 pending(미연결) — 그 외 addon 결과는
+        # 의미 없으므로 여기서 종료. critical 은 "연결은 되는데 addon 심각" 전용.
         if api_result.get("status") == StatusEnum.critical:
-            return StatusEnum.critical
+            return StatusEnum.pending
 
         # 컴포넌트 중 critical이 있으면 전체 critical
         for comp_name, comp_data in components.items():

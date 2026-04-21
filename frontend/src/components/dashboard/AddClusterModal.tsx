@@ -407,7 +407,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                 <textarea
                   value={kubeconfigContent}
                   onChange={(e) => setKubeconfigContent(e.target.value)}
-                  placeholder="apiVersion: v1&#10;kind: Config&#10;clusters:&#10;  ..."
+                  placeholder="여기에 kubeconfig YAML 내용을 붙여넣으세요 (비워두면 kubeconfig 없이 등록)"
                   rows={6}
                   className="w-full px-3 py-2.5 bg-secondary border border-border rounded-lg text-[11px] font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none"
                 />

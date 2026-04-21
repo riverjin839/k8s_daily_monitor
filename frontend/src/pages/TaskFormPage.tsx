@@ -9,6 +9,7 @@ import { useAssignees } from '@/hooks/useAssignees';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useTasks, useCreateTask, useUpdateTask } from '@/hooks/useTasks';
+import { useIssues } from '@/hooks/useIssues';
 
 const DEFAULT_TASK_CATEGORIES = [
   'Cluster 점검',
@@ -102,7 +103,11 @@ export function TaskFormPage() {
   const [typeLabel, setTypeLabel] = useState<TaskTypeLabel | ''>('');
   const [effortHours, setEffortHours] = useState('');
   const [doneCondition, setDoneCondition] = useState('');
+  const [issueId, setIssueId] = useState('');
   const [hydrated, setHydrated] = useState(!isEdit && !parentId);
+
+  const { data: issueData } = useIssues();
+  const issues = issueData?.data ?? [];
 
   useEffect(() => {
     if (hydrated) return;
@@ -127,6 +132,7 @@ export function TaskFormPage() {
       setTypeLabel((editTask.typeLabel ?? '') as TaskTypeLabel | '');
       setEffortHours(editTask.effortHours ? String(editTask.effortHours) : '');
       setDoneCondition(editTask.doneCondition ?? '');
+      setIssueId(editTask.issueId ?? '');
       setHydrated(true);
     } else if (parentId) {
       if (!parentTask) return;
@@ -186,6 +192,7 @@ export function TaskFormPage() {
       effortHours: effortHours ? parseInt(effortHours, 10) : undefined,
       doneCondition: doneCondition.trim() || undefined,
       parentId: parentTask?.id,
+      issueId: issueId || undefined,
     };
 
     if (isEdit && editTask) {
@@ -444,6 +451,34 @@ export function TaskFormPage() {
                 className={inputClass}
               />
             </div>
+          </div>
+
+          {/* 연결된 이슈 */}
+          <div>
+            <label className={labelClass}>
+              연결된 이슈
+              <span className="ml-1.5 text-xs text-muted-foreground font-normal">(optional — 이 작업의 원인/배경이 되는 이슈)</span>
+            </label>
+            <select
+              value={issueId}
+              onChange={(e) => setIssueId(e.target.value)}
+              className={inputClass}
+            >
+              <option value="">— 연결 안 함 —</option>
+              {issues
+                .slice()
+                .sort((a, b) => (b.occurredAt ?? '').localeCompare(a.occurredAt ?? ''))
+                .map((i) => {
+                  const title = i.issueContent.replace(/<[^>]*>/g, '').slice(0, 60);
+                  const when = (i.occurredAt ?? '').slice(0, 10);
+                  const status = i.resolvedAt ? '✓' : '●';
+                  return (
+                    <option key={i.id} value={i.id}>
+                      {status} [{i.issueArea}] {title || i.issueArea} — {when}
+                    </option>
+                  );
+                })}
+            </select>
           </div>
 
           {/* 칸반 보드 필드 */}

@@ -74,13 +74,9 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
-          volumeMounts:
-            - name: ollama-data
-              mountPath: /root/.ollama
-      volumes:
-        - name: ollama-data
-          emptyDir:
-            sizeLimit: 20Gi       # Enough for one quantized model (qwen2.5-coder:7b ~4GB)
+          # No volumeMount for /root/.ollama — mounting an emptyDir there would shadow
+          # models baked into the image. For persistent model storage across pod restarts,
+          # add a PVC in your overlay (k8s/overlays/<env>/ollama-pvc.yaml).
 ---
 apiVersion: v1
 kind: Service

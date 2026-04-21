@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
 import type { Cluster } from '@/types';
+import { useUpdateCluster } from '@/hooks/useCluster';
+import { InlineEdit } from '@/components/common';
 import { STATUS_STYLE, LEVEL_BADGE, OPERATION_LEVELS } from './constants';
 
 interface ClusterTableRowProps {
@@ -14,6 +17,12 @@ interface ClusterTableRowProps {
 }
 
 export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onCilium, onAutoUpdate, autoUpdatingId }: ClusterTableRowProps) {
+  const updateCluster = useUpdateCluster();
+  const [editingField, setEditingField] = useState<null | 'region' | 'operationLevel' | 'cidr' | 'podCidr' | 'svcCidr'>(null);
+
+  const quickUpdate = (patch: Partial<Cluster>) => {
+    updateCluster.mutate({ id: cluster.id, data: patch }, { onSettled: () => setEditingField(null) });
+  };
   const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
   const lv = LEVEL_BADGE[cluster.operationLevel ?? ''];
 
@@ -31,9 +40,34 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       <td className="px-3 py-2.5">
         <span className={`text-[11px] px-2 py-0.5 rounded-full border ${st.badge}`}>{st.label}</span>
       </td>
-      <td className="px-3 py-2.5 text-sm text-muted-foreground">{cluster.region || '-'}</td>
-      <td className="px-3 py-2.5">
-        {cluster.operationLevel ? (
+      <td
+        className="px-3 py-2.5 text-sm text-muted-foreground cursor-text"
+        onDoubleClick={() => setEditingField('region')}
+        title="더블클릭해서 수정"
+      >
+        {editingField === 'region' ? (
+          <InlineEdit
+            value={cluster.region ?? ''}
+            onSave={(v) => quickUpdate({ region: v || undefined })}
+            onCancel={() => setEditingField(null)}
+            placeholder="예: 서울"
+            inputClassName="text-sm"
+          />
+        ) : (cluster.region || '-')}
+      </td>
+      <td className="px-3 py-2.5" onDoubleClick={() => setEditingField('operationLevel')} title="더블클릭해서 수정">
+        {editingField === 'operationLevel' ? (
+          <select
+            autoFocus
+            value={cluster.operationLevel ?? ''}
+            onChange={(e) => quickUpdate({ operationLevel: e.target.value || undefined })}
+            onBlur={() => setEditingField(null)}
+            className="text-xs bg-background border border-border rounded px-1.5 py-0.5"
+          >
+            <option value="">—</option>
+            {OPERATION_LEVELS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+          </select>
+        ) : cluster.operationLevel ? (
           <span className={`text-[11px] px-2 py-0.5 rounded-full border ${lv}`}>
             {OPERATION_LEVELS.find(l => l.value === cluster.operationLevel)?.label ?? cluster.operationLevel}
           </span>
@@ -47,8 +81,16 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           </div>
         ) : <span className="text-muted-foreground text-xs">-</span>}
       </td>
-      <td className="px-3 py-2.5">
-        {cluster.cidr ? (
+      <td className="px-3 py-2.5 cursor-text" onDoubleClick={() => setEditingField('cidr')} title="더블클릭해서 수정">
+        {editingField === 'cidr' ? (
+          <InlineEdit
+            value={cluster.cidr ?? ''}
+            onSave={(v) => quickUpdate({ cidr: v || undefined })}
+            onCancel={() => setEditingField(null)}
+            placeholder="192.168.0.0/24"
+            inputClassName="text-xs font-mono"
+          />
+        ) : cluster.cidr ? (
           <div>
             <p className="text-xs font-mono text-foreground">{cluster.cidr}</p>
             {(cluster.firstHost || cluster.lastHost) && (
@@ -62,8 +104,16 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           </div>
         ) : <span className="text-muted-foreground text-xs">-</span>}
       </td>
-      <td className="px-3 py-2.5">
-        {cluster.podCidr ? (
+      <td className="px-3 py-2.5 cursor-text" onDoubleClick={() => setEditingField('podCidr')} title="더블클릭해서 수정">
+        {editingField === 'podCidr' ? (
+          <InlineEdit
+            value={cluster.podCidr ?? ''}
+            onSave={(v) => quickUpdate({ podCidr: v || undefined })}
+            onCancel={() => setEditingField(null)}
+            placeholder="10.244.0.0/16"
+            inputClassName="text-xs font-mono"
+          />
+        ) : cluster.podCidr ? (
           <div>
             <p className="text-xs font-mono text-foreground">{cluster.podCidr}</p>
             {(cluster.podFirstHost || cluster.podLastHost) && (
@@ -72,8 +122,16 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           </div>
         ) : <span className="text-muted-foreground text-xs">-</span>}
       </td>
-      <td className="px-3 py-2.5">
-        {cluster.svcCidr ? (
+      <td className="px-3 py-2.5 cursor-text" onDoubleClick={() => setEditingField('svcCidr')} title="더블클릭해서 수정">
+        {editingField === 'svcCidr' ? (
+          <InlineEdit
+            value={cluster.svcCidr ?? ''}
+            onSave={(v) => quickUpdate({ svcCidr: v || undefined })}
+            onCancel={() => setEditingField(null)}
+            placeholder="10.96.0.0/12"
+            inputClassName="text-xs font-mono"
+          />
+        ) : cluster.svcCidr ? (
           <div>
             <p className="text-xs font-mono text-foreground">{cluster.svcCidr}</p>
             {(cluster.svcFirstHost || cluster.svcLastHost) && (

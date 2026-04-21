@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, useQueries } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
   GitCommit, RefreshCw, Loader2, Clock, Share2, X, ChevronDown, ChevronUp,
-  Server, Cpu, Network, Settings2,
+  Server, Cpu, Network, Settings2, ArrowLeft,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { versionsApi, type ComponentSnapshot } from '@/services/api';
@@ -218,11 +218,18 @@ function DiffPanel({
 export function VersionsPage() {
   const queryClient = useQueryClient();
   const { data: clusters = [] } = useClusters();
+  // 1차: 카드 선택. 선택 안 되면 null → 카드 그리드 표시.
   const [clusterId, setClusterId] = useState<string>('');
 
-  useEffect(() => {
-    if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
-  }, [clusters, clusterId]);
+  // 모든 클러스터의 컴포넌트 수 미리 가져와서 카드에 표시
+  const cardQueries = useQueries({
+    queries: clusters.map((c) => ({
+      queryKey: ['versions', 'current', c.id],
+      queryFn: () => versionsApi.current(c.id).then((r) => r.data),
+      staleTime: 60_000,
+      retry: false,
+    })),
+  });
 
   const { data: current, isLoading } = useQuery({
     queryKey: ['versions', 'current', clusterId],
@@ -276,55 +283,134 @@ export function VersionsPage() {
         {/* 헤더 */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
+            {clusterId && (
+              <button
+                onClick={() => setClusterId('')}
+                className="p-2 hover:bg-secondary rounded-lg text-muted-foreground"
+                title="클러스터 선택으로"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+            )}
             <GitCommit className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">버전 / 설정 관리</h1>
-            {current?.components && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
-                {current.components.length}개 컴포넌트
-              </span>
+            {clusterId && current?.components && (
+              <>
+                <span className="text-xs font-mono text-muted-foreground">· {clusters.find((c) => c.id === clusterId)?.name}</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
+                  {current.components.length}개 컴포넌트
+                </span>
+              </>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <select
-              value={clusterId}
-              onChange={(e) => setClusterId(e.target.value)}
-              className="px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              {clusters.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            <Link
-              to={clusterId ? `/versions/${clusterId}/graph` : '/versions'}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors"
-              title="3D 관계 그래프"
-            >
-              <Share2 className="w-4 h-4" />
-              3D 그래프
-            </Link>
-            <button
-              onClick={() => collect.mutate()}
-              disabled={!clusterId || collect.isPending}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
-            >
-              {collect.isPending
-                ? <Loader2 className="w-4 h-4 animate-spin" />
-                : <RefreshCw className="w-4 h-4" />}
-              지금 수집
-            </button>
-          </div>
+          {clusterId && (
+            <div className="flex items-center gap-2">
+              <Link
+                to={`/versions/${clusterId}/graph`}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors"
+                title="3D 관계 그래프"
+              >
+                <Share2 className="w-4 h-4" />
+                3D 그래프
+              </Link>
+              <button
+                onClick={() => collect.mutate()}
+                disabled={collect.isPending}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
+              >
+                {collect.isPending
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <RefreshCw className="w-4 h-4" />}
+                지금 수집
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* 안내 */}
-        <div className="bg-card border border-border rounded-xl p-4 mb-5 text-xs text-muted-foreground leading-relaxed">
-          kubeconfig 를 통해 K8s/Cilium 버전, core component image tag, command/args 플래그, cilium-config ConfigMap 을 수집합니다.
-          동일 hash 가 감지되면 저장하지 않으므로 반복 실행해도 안전. 변경이 발생한 시점에만 히스토리에 새 레코드가 생깁니다.
-        </div>
+        {/* 1차 선택: 클러스터 카드 그리드 */}
+        {!clusterId && (
+          <>
+            <div className="bg-card border border-border rounded-xl p-4 mb-5 text-xs text-muted-foreground">
+              클러스터를 선택하면 해당 클러스터의 K8s/Cilium 버전, core component image tag, command/args 플래그, cilium-config 스냅샷을 볼 수 있습니다.
+            </div>
+            {clusters.length === 0 ? (
+              <p className="text-center text-muted-foreground py-20">등록된 클러스터가 없습니다.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {clusters.map((c, idx) => {
+                  const q = cardQueries[idx];
+                  const snap = q?.data as { components: ComponentSnapshot[] } | undefined;
+                  const count = snap?.components?.length ?? 0;
+                  const ctrlPlane = snap?.components?.find((x) => x.component === 'k8s_server');
+                  const cilium = snap?.components?.find((x) => x.component === 'cilium_agent');
+                  const latest = snap?.components?.reduce<string | null>((acc, x) => {
+                    if (!acc) return x.collectedAt;
+                    return x.collectedAt > acc ? x.collectedAt : acc;
+                  }, null);
+
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => setClusterId(c.id)}
+                      className="bg-card border border-border hover:border-primary/40 hover:shadow-md rounded-xl p-5 text-left transition-all group"
+                    >
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <Server className="w-4 h-4 text-primary" />
+                        </div>
+                        <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors">{c.name}</p>
+                      </div>
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">수집된 컴포넌트</span>
+                          <span className={`font-mono font-semibold ${count > 0 ? 'text-foreground' : 'text-muted-foreground/60'}`}>
+                            {count}
+                          </span>
+                        </div>
+                        {ctrlPlane?.version && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">K8s</span>
+                            <span className="font-mono text-foreground">{ctrlPlane.version}</span>
+                          </div>
+                        )}
+                        {cilium?.version && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Cilium</span>
+                            <span className="font-mono text-foreground">{cilium.version}</span>
+                          </div>
+                        )}
+                        {latest && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">마지막 수집</span>
+                            <span className="font-mono text-muted-foreground text-[11px]">{formatDateTime(latest)}</span>
+                          </div>
+                        )}
+                        {count === 0 && !q?.isLoading && (
+                          <div className="mt-2 pt-2 border-t border-border/50">
+                            <p className="text-[11px] text-muted-foreground/70">아직 수집 안 됨 — 클릭해서 수집 시작</p>
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* 선택된 클러스터 상세 */}
+        {clusterId && (
+          <>
+            <div className="bg-card border border-border rounded-xl p-4 mb-5 text-xs text-muted-foreground leading-relaxed">
+              kubeconfig 를 통해 K8s/Cilium 버전, core component image tag, command/args 플래그, cilium-config ConfigMap 을 수집합니다.
+              동일 hash 가 감지되면 저장하지 않으므로 반복 실행해도 안전. 변경이 발생한 시점에만 히스토리에 새 레코드가 생깁니다.
+            </div>
+          </>
+        )}
 
         {/* 본문 */}
-        {!clusterId ? (
-          <p className="text-muted-foreground text-center py-20">클러스터를 선택하세요.</p>
-        ) : isLoading ? (
+        {!clusterId ? null : isLoading ? (
           <p className="text-muted-foreground text-center py-20">불러오는 중…</p>
         ) : (current?.components.length ?? 0) === 0 ? (
           <div className="text-center py-20">

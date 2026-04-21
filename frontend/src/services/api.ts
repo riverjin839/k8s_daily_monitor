@@ -639,6 +639,13 @@ export const trendsApi = {
   listSources: () => api.get<TrendSource[]>('/trends/sources'),
   toggleSource: (id: string, enabled: boolean) =>
     api.patch<TrendSource>(`/trends/sources/${id}`, { enabled }),
+  createSource: (data: {
+    name: string; sourceType: 'github_release' | 'rss'; url: string; category: string; enabled?: boolean;
+  }) => api.post<TrendSource>('/trends/sources', data),
+  updateSource: (id: string, data: Partial<{
+    name: string; sourceType: 'github_release' | 'rss'; url: string; category: string; enabled: boolean;
+  }>) => api.put<TrendSource>(`/trends/sources/${id}`, data),
+  deleteSource: (id: string) => api.delete(`/trends/sources/${id}`),
 };
 
 export default api;

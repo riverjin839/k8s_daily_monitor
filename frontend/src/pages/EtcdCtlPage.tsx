@@ -1,0 +1,475 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import {
+  Database, Play, Loader2, CheckCircle, XCircle, Key, FileText, Terminal,
+  ShieldAlert, Wifi, Clock, ScrollText,
+} from 'lucide-react';
+import { useClusters } from '@/hooks/useCluster';
+import {
+  etcdctlApi, type EtcdPreset, type EtcdMasterCandidate, type EtcdCtlRunResponse,
+} from '@/services/api';
+
+const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }> = {
+  ok:            { label: '정상',     cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',  icon: CheckCircle },
+  error:         { label: '에러',     cls: 'bg-red-500/10 text-red-400 border-red-500/30',              icon: XCircle },
+  timeout:       { label: '타임아웃', cls: 'bg-amber-500/10 text-amber-400 border-amber-500/30',        icon: Clock },
+  auth_error:    { label: '인증 실패', cls: 'bg-orange-500/10 text-orange-400 border-orange-500/30',    icon: ShieldAlert },
+  connect_error: { label: '연결 실패', cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30',       icon: Wifi },
+};
+
+function ResultPanel({ result }: { result: EtcdCtlRunResponse }) {
+  const meta = STATUS_META[result.status];
+  const Icon = meta.icon;
+  return (
+    <section className="bg-card border border-border rounded-xl overflow-hidden mt-5">
+      <header className="px-5 py-3 border-b border-border flex items-center justify-between bg-muted/20">
+        <div className="flex items-center gap-3">
+          <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
+            <Icon className="w-3 h-3" />
+            {meta.label}
+          </span>
+          <span className="text-xs font-mono text-muted-foreground">{result.host}</span>
+          {result.exitCode !== null && result.exitCode !== undefined && (
+            <span className="text-xs font-mono text-muted-foreground">exit {result.exitCode}</span>
+          )}
+          <span className="text-xs font-mono text-muted-foreground">{result.durationMs}ms</span>
+        </div>
+        {result.error && (
+          <span className="text-xs text-red-400">⚠ {result.error}</span>
+        )}
+      </header>
+      <div className="px-5 py-3">
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">executed</p>
+        <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 mb-3 overflow-auto whitespace-pre-wrap">
+          {result.executedCommand || '(not provided)'}
+        </pre>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
+            <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-[420px] overflow-auto whitespace-pre-wrap">
+              {result.stdout || '(empty)'}
+            </pre>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
+            <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-[420px] overflow-auto whitespace-pre-wrap text-red-400/90">
+              {result.stderr || '(empty)'}
+            </pre>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+type Tab = 'run' | 'logs';
+
+export function EtcdCtlPage() {
+  const { data: clusters = [] } = useClusters();
+  const [clusterId, setClusterId] = useState('');
+  useEffect(() => {
+    if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
+  }, [clusters, clusterId]);
+
+  const mastersQ = useQuery({
+    queryKey: ['etcdctl', 'masters', clusterId],
+    queryFn: () => etcdctlApi.masters(clusterId).then((r) => r.data),
+    enabled: !!clusterId,
+  });
+  const presetsQ = useQuery({
+    queryKey: ['etcdctl', 'presets', clusterId],
+    queryFn: () => etcdctlApi.presets(clusterId).then((r) => r.data),
+    enabled: !!clusterId,
+  });
+
+  // 타겟 호스트 선택
+  const [selectedMasterName, setSelectedMasterName] = useState('');
+  const [customHost, setCustomHost] = useState('');
+  useEffect(() => {
+    if (!mastersQ.data) return;
+    if (!selectedMasterName && mastersQ.data.candidates.length > 0) {
+      setSelectedMasterName(mastersQ.data.candidates[0].name);
+    }
+  }, [mastersQ.data, selectedMasterName]);
+
+  const effectiveHost = useMemo(() => {
+    if (customHost.trim()) return customHost.trim();
+    const m = (mastersQ.data?.candidates ?? []).find((c: EtcdMasterCandidate) => c.name === selectedMasterName);
+    return m?.internalIp || m?.externalIp || m?.name || '';
+  }, [customHost, mastersQ.data, selectedMasterName]);
+
+  // SSH 인증
+  const [port, setPort] = useState(22);
+  const [username, setUsername] = useState('root');
+  const [authMode, setAuthMode] = useState<'password' | 'key'>('password');
+  const [password, setPassword] = useState('');
+  const [privateKey, setPrivateKey] = useState('');
+
+  // etcdctl 구성
+  const [args, setArgs] = useState('endpoint health --write-out=table');
+  const [envFile, setEnvFile] = useState('/etc/etcd.env');
+  const [useEnv, setUseEnv] = useState(true);
+  const [etcdctlPath, setEtcdctlPath] = useState('etcdctl');
+  const [timeout, setTimeoutSec] = useState(30);
+
+  // Logs 구성
+  const [unit, setUnit] = useState('etcd.service');
+  const [tail, setTail] = useState(200);
+  const [since, setSince] = useState('');
+  const [grep, setGrep] = useState('');
+
+  const [tab, setTab] = useState<Tab>('run');
+  const [result, setResult] = useState<EtcdCtlRunResponse | null>(null);
+
+  const runMut = useMutation({
+    mutationFn: async () => {
+      const res = await etcdctlApi.run(clusterId, {
+        host: effectiveHost,
+        port,
+        username,
+        password: authMode === 'password' ? password : undefined,
+        privateKey: authMode === 'key' ? privateKey : undefined,
+        args,
+        envFile,
+        useEnv,
+        etcdctlPath,
+        timeout,
+      });
+      return res.data;
+    },
+    onSuccess: (d) => setResult(d),
+  });
+
+  const logsMut = useMutation({
+    mutationFn: async () => {
+      const res = await etcdctlApi.logs(clusterId, {
+        host: effectiveHost,
+        port,
+        username,
+        password: authMode === 'password' ? password : undefined,
+        privateKey: authMode === 'key' ? privateKey : undefined,
+        unit,
+        tail,
+        since: since.trim() || undefined,
+        grep: grep.trim() || undefined,
+      });
+      return res.data;
+    },
+    onSuccess: (d) => setResult(d),
+  });
+
+  const baseReady = !!clusterId && !!effectiveHost
+    && (authMode === 'password' ? !!password : !!privateKey.trim());
+  const canRunEtcdctl = baseReady && !!args.trim();
+  const canRunLogs = baseReady && !!unit.trim();
+
+  const runError = (tab === 'run' ? runMut.error : logsMut.error) as
+    { response?: { data?: { detail?: string } }; message?: string } | null;
+
+  return (
+    <div className="min-h-screen bg-background">
+      <main className="max-w-[1600px] mx-auto px-8 py-8">
+        {/* 헤더 */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Database className="w-6 h-6 text-primary" />
+            <h1 className="text-xl font-bold">etcdctl 콘솔</h1>
+            {effectiveHost && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30 font-mono">
+                → {effectiveHost}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={clusterId}
+              onChange={(e) => { setClusterId(e.target.value); setResult(null); setSelectedMasterName(''); }}
+              className="px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="">— 클러스터 선택 —</option>
+              {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* 안내 */}
+        <div className="bg-card border border-border rounded-xl p-4 mb-5 text-xs text-muted-foreground leading-relaxed">
+          기본 가정: control-plane(master1) 서버에 <code className="font-mono text-foreground">etcd.service</code> 가 systemd 로 동작하고
+          <code className="font-mono text-foreground"> /etc/etcd.env</code> 에 <code className="font-mono text-foreground">ETCDCTL_*</code> 환경변수가 정의됨.
+          다르면 "env 파일" 경로를 바꾸거나 env 로드를 끄고 extra env 로 직접 지정 가능.
+          SSH 인증정보는 이 실행에만 사용되고 저장되지 않습니다.
+        </div>
+
+        {/* 탭 */}
+        <div className="flex items-center gap-1 mb-5">
+          {(['run', 'logs'] as Tab[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => { setTab(t); setResult(null); }}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 ${
+                tab === t
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {t === 'run' ? <><Terminal className="w-3.5 h-3.5" />etcdctl 실행</>
+                           : <><ScrollText className="w-3.5 h-3.5" />etcd 서비스 로그</>}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          {/* 좌: 타겟 + 인증 */}
+          <section className="bg-card border border-border rounded-xl p-5 space-y-4">
+            <h2 className="text-sm font-semibold mb-1">타겟</h2>
+
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">master 노드 후보</label>
+              <select
+                value={selectedMasterName}
+                onChange={(e) => { setSelectedMasterName(e.target.value); setCustomHost(''); }}
+                disabled={!mastersQ.data?.candidates?.length}
+                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+              >
+                {mastersQ.isLoading && <option>불러오는 중…</option>}
+                {(mastersQ.data?.candidates ?? []).map((c: EtcdMasterCandidate) => (
+                  <option key={c.name} value={c.name}>
+                    {c.name}{c.internalIp ? ` (${c.internalIp})` : ''}
+                  </option>
+                ))}
+                {mastersQ.data && mastersQ.data.candidates.length === 0 && (
+                  <option value="">— control-plane 라벨 노드 없음 —</option>
+                )}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">
+                수동 host override <span className="text-[10px] opacity-60">(비우면 위 드롭다운 사용)</span>
+              </label>
+              <input
+                type="text"
+                value={customHost}
+                onChange={(e) => setCustomHost(e.target.value)}
+                placeholder="예: 192.168.10.11"
+                className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">사용자</label>
+                <input
+                  type="text" value={username} onChange={(e) => setUsername(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">포트</label>
+                <input
+                  type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
+                  className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">인증 방식</label>
+              <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
+                {(['password', 'key'] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setAuthMode(m)}
+                    className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all ${
+                      authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/70 hover:text-foreground'
+                    }`}
+                  >
+                    {m === 'password' ? '비밀번호' : 'Private Key'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {authMode === 'password' ? (
+              <input
+                type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                placeholder="SSH 비밀번호"
+                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            ) : (
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                  <Key className="w-3 h-3" /> Private Key (PEM)
+                </label>
+                <textarea
+                  value={privateKey} onChange={(e) => setPrivateKey(e.target.value)}
+                  placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" rows={4}
+                  className="w-full px-3 py-2 text-[11px] font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                />
+              </div>
+            )}
+          </section>
+
+          {/* 우: 실행 구성 */}
+          <section className="lg:col-span-2 bg-card border border-border rounded-xl p-5 space-y-4">
+            {tab === 'run' ? (
+              <>
+                {/* 프리셋 */}
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1.5">프리셋 — 클릭해서 args 에 채워넣기</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(presetsQ.data?.presets ?? []).map((p: EtcdPreset) => (
+                      <button
+                        key={p.key}
+                        onClick={() => setArgs(p.args)}
+                        className="px-2.5 py-1 text-[11px] rounded border border-border bg-secondary hover:bg-secondary/80 text-foreground"
+                        title={p.args}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* env file */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="md:col-span-2">
+                    <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                      <FileText className="w-3 h-3" /> env file 경로
+                    </label>
+                    <input
+                      type="text" value={envFile} onChange={(e) => setEnvFile(e.target.value)}
+                      disabled={!useEnv}
+                      placeholder="/etc/etcd.env"
+                      className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground pb-2.5">
+                      <input
+                        type="checkbox" checked={useEnv} onChange={(e) => setUseEnv(e.target.checked)}
+                        className="w-3.5 h-3.5 accent-primary"
+                      />
+                      실행 전에 source
+                    </label>
+                  </div>
+                </div>
+
+                {/* args */}
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                    <Terminal className="w-3 h-3" />
+                    etcdctl 인자
+                    <span className="ml-1 text-[10px] opacity-60">(예: endpoint health --write-out=table)</span>
+                  </label>
+                  <textarea
+                    value={args} onChange={(e) => setArgs(e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2 text-[12px] font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                  />
+                </div>
+
+                {/* 기타 */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-muted-foreground mb-1">etcdctl 경로</label>
+                    <input
+                      type="text" value={etcdctlPath} onChange={(e) => setEtcdctlPath(e.target.value)}
+                      className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-muted-foreground mb-1">timeout (s)</label>
+                    <input
+                      type="number" value={timeout} onChange={(e) => setTimeoutSec(Number(e.target.value) || 30)}
+                      min={1} max={300}
+                      className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+
+                {runError && (
+                  <div className="px-3 py-2 text-xs rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+                    {runError.response?.data?.detail ?? runError.message}
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-2 border-t border-border">
+                  <button
+                    onClick={() => runMut.mutate()}
+                    disabled={!canRunEtcdctl || runMut.isPending}
+                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {runMut.isPending
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <Play className="w-4 h-4" />}
+                    etcdctl 실행
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs text-muted-foreground mb-1">systemd unit</label>
+                    <input
+                      type="text" value={unit} onChange={(e) => setUnit(e.target.value)}
+                      className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-muted-foreground mb-1">tail (N 줄)</label>
+                    <input
+                      type="number" value={tail} onChange={(e) => setTail(Number(e.target.value) || 200)}
+                      min={1} max={5000}
+                      className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-muted-foreground mb-1">since (journalctl)</label>
+                    <input
+                      type="text" value={since} onChange={(e) => setSince(e.target.value)}
+                      placeholder="예: 10 min ago"
+                      className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1">
+                    grep 필터 <span className="opacity-60">(대소문자 무시)</span>
+                  </label>
+                  <input
+                    type="text" value={grep} onChange={(e) => setGrep(e.target.value)}
+                    placeholder="예: error 또는 leader"
+                    className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+
+                {runError && (
+                  <div className="px-3 py-2 text-xs rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+                    {runError.response?.data?.detail ?? runError.message}
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-2 border-t border-border">
+                  <button
+                    onClick={() => logsMut.mutate()}
+                    disabled={!canRunLogs || logsMut.isPending}
+                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {logsMut.isPending
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <ScrollText className="w-4 h-4" />}
+                    로그 가져오기
+                  </button>
+                </div>
+              </>
+            )}
+          </section>
+        </div>
+
+        {result && <ResultPanel result={result} />}
+      </main>
+    </div>
+  );
+}

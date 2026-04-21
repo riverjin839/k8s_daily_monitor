@@ -31,6 +31,7 @@ from app.routers import (
     analyze_router,
     trends_router,
     versions_router,
+    bulk_exec_router,
 )
 
 
@@ -453,6 +454,7 @@ app.include_router(ontology_router, prefix="/api/v1")
 app.include_router(analyze_router, prefix="/api/v1")
 app.include_router(trends_router, prefix="/api/v1")
 app.include_router(versions_router, prefix="/api/v1")
+app.include_router(bulk_exec_router, prefix="/api/v1")
 
 
 @app.get("/")

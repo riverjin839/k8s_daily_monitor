@@ -152,6 +152,63 @@ export const versionsApi = {
     }>(`/clusters/${clusterId}/versions/graph`),
 };
 
+// Bulk SSH/SCP API
+export interface NodeSummary {
+  name: string;
+  internalIp?: string | null;
+  externalIp?: string | null;
+  roles: string[];
+  ready: boolean;
+  os?: string | null;
+  kubeletVersion?: string | null;
+}
+
+export interface BulkExecResultItem {
+  host: string;
+  status: 'ok' | 'error' | 'timeout' | 'auth_error' | 'connect_error';
+  exitCode?: number | null;
+  stdout: string;
+  stderr: string;
+  durationMs: number;
+  error?: string | null;
+}
+
+export interface BulkExecResponse {
+  action: 'ssh' | 'scp';
+  mode: 'sequential' | 'parallel';
+  total: number;
+  okCount: number;
+  errorCount: number;
+  totalDurationMs: number;
+  results: BulkExecResultItem[];
+}
+
+export interface BulkExecRequest {
+  clusterId?: string;
+  action: 'ssh' | 'scp';
+  targets: { host: string; username?: string; port?: number }[];
+  username: string;
+  port: number;
+  password?: string;
+  privateKey?: string;
+  command?: string;
+  scpContent?: string;
+  scpRemotePath?: string;
+  mode: 'sequential' | 'parallel';
+  parallelism: number;
+  connectTimeout: number;
+  execTimeout: number;
+}
+
+export const bulkExecApi = {
+  nodeList: (clusterId: string) =>
+    api.get<{ clusterId: string; clusterName: string; nodes: NodeSummary[] }>(
+      `/clusters/${clusterId}/node-list`,
+    ),
+  run: (payload: BulkExecRequest) =>
+    api.post<BulkExecResponse>('/bulk-exec/run', payload),
+};
+
 // Health API
 export const healthApi = {
   runCheck: (clusterId: string) => api.post<ApiResponse<void>>(`/health/check/${clusterId}`),

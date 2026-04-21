@@ -16,6 +16,7 @@ import { ClusterManagePage } from '@/pages/ClusterManagePage';
 import { ClusterMetaFormPage } from '@/pages/ClusterMetaFormPage';
 import { VersionsPage } from '@/pages/VersionsPage';
 import { VersionGraphPage } from '@/pages/VersionGraphPage';
+import { BulkExecPage } from '@/pages/BulkExecPage';
 import { WorkflowBoardPage } from '@/pages/WorkflowBoardPage';
 import { WorkGuidePage } from '@/pages/WorkGuidePage';
 import { OpsNotesPage } from '@/pages/OpsNotesPage';
@@ -63,6 +64,7 @@ function App() {
               <Route path="/cluster-manage/:id/edit" element={<ClusterMetaFormPage />} />
               <Route path="/versions" element={<VersionsPage />} />
               <Route path="/versions/:clusterId/graph" element={<VersionGraphPage />} />
+              <Route path="/bulk-exec" element={<BulkExecPage />} />
               <Route path="/infra-topology" element={<InfraTopologyPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/workflow" element={<WorkflowBoardPage />} />

@@ -21,6 +21,7 @@ from app.routers.ontology import router as ontology_router
 from app.routers.analyze import router as analyze_router
 from app.routers.trends import router as trends_router
 from app.routers.versions import router as versions_router
+from app.routers.bulk_exec import router as bulk_exec_router
 
 __all__ = [
     "clusters_router",
@@ -46,4 +47,5 @@ __all__ = [
     "analyze_router",
     "trends_router",
     "versions_router",
+    "bulk_exec_router",
 ]

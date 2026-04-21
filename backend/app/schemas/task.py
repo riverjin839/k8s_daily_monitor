@@ -24,6 +24,7 @@ class TaskBase(BaseModel):
     effort_hours: Optional[int] = Field(None, ge=1, le=999)
     done_condition: Optional[str] = None
     parent_id: Optional[UUID] = None
+    issue_id: Optional[UUID] = None
 
 
 class TaskCreate(TaskBase):
@@ -48,6 +49,7 @@ class TaskUpdate(BaseModel):
     type_label: Optional[str] = Field(None, pattern="^(feature|bug|chore|docs|security)$")
     effort_hours: Optional[int] = Field(None, ge=1, le=999)
     done_condition: Optional[str] = None
+    issue_id: Optional[UUID] = None
 
 
 class TaskStatusPatch(BaseModel):

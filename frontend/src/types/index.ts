@@ -255,6 +255,7 @@ export interface Task {
   effortHours?: number;
   doneCondition?: string;
   parentId?: string;
+  issueId?: string;       // 연결된 이슈 (optional)
   subtasks?: Task[];
   createdAt: string;
   updatedAt: string;
@@ -289,6 +290,7 @@ export interface TaskCreate {
   effortHours?: number;
   doneCondition?: string;
   parentId?: string;
+  issueId?: string;
 }
 
 export interface TaskUpdate extends Partial<TaskCreate> {}

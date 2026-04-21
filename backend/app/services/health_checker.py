@@ -1,6 +1,8 @@
 import subprocess
 from datetime import datetime
 from uuid import UUID
+
+import httpx
 from sqlalchemy.orm import Session
 
 from app.models import Cluster, Addon, CheckLog, StatusEnum
@@ -8,14 +10,48 @@ from app.config import settings
 from app.services.checkers import CHECKER_REGISTRY, CheckResult
 
 
+_REACHABILITY_TIMEOUT = 5  # seconds
+
+
+def _is_api_server_reachable(cluster: Cluster) -> bool:
+    """API server /healthz 로 빠른 reachability 체크."""
+    endpoint = (cluster.api_endpoint or "").strip()
+    if not endpoint:
+        return False
+    try:
+        url = endpoint.rstrip("/") + "/healthz"
+        with httpx.Client(verify=False, timeout=_REACHABILITY_TIMEOUT) as client:
+            resp = client.get(url)
+        return resp.status_code < 500
+    except Exception:
+        return False
+
+
 class HealthChecker:
     def __init__(self, db: Session):
         self.db = db
 
     def run_check(self, cluster_id: UUID) -> None:
-        """클러스터 전체 헬스 체크 실행"""
+        """클러스터 전체 헬스 체크 실행.
+
+        먼저 API server reachability 를 체크하고 안 되면 addon 체크는
+        skip 하고 cluster.status = pending(미연결) 로 마킹한다.
+        이렇게 해야 "연결 실패"와 "연결은 되는데 addon 문제" 가 구분됨.
+        """
         cluster = self.db.query(Cluster).filter(Cluster.id == cluster_id).first()
         if not cluster:
+            return
+
+        # ── Reachability 선제 체크 ────────────────────────────
+        if not _is_api_server_reachable(cluster):
+            cluster.status = StatusEnum.pending
+            cluster.updated_at = datetime.utcnow()
+            self.db.add(CheckLog(
+                cluster_id=cluster_id,
+                status=StatusEnum.pending,
+                message="Cluster unreachable — API server probe failed (미연결)",
+            ))
+            self.db.commit()
             return
 
         addons = self.db.query(Addon).filter(Addon.cluster_id == cluster_id).all()

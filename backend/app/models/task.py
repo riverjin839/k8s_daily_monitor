@@ -29,12 +29,14 @@ class Task(Base):
     effort_hours = Column(Integer, nullable=True)   # 예상 소요 시간 (h)
     done_condition = Column(Text, nullable=True)    # 완료 조건
     parent_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=True)
+    issue_id = Column(UUID(as_uuid=True), ForeignKey("issues.id", ondelete="SET NULL"), nullable=True)  # 연결된 이슈
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     cluster = relationship("Cluster", back_populates="tasks", foreign_keys=[cluster_id])
     subtasks = relationship("Task", back_populates="parent", foreign_keys="Task.parent_id", cascade="all, delete-orphan")
     parent = relationship("Task", back_populates="subtasks", foreign_keys="Task.parent_id", remote_side="Task.id")
+    issue = relationship("Issue", foreign_keys=[issue_id])
 
     def __repr__(self):
         return f"<Task(assignee={self.assignee}, category={self.task_category})>"

@@ -81,6 +81,31 @@ def _run_migrations():
             if col_name not in columns:
                 with engine.begin() as conn:
                     conn.execute(text(f"ALTER TABLE clusters ADD COLUMN {col_name} {col_type}"))
+
+        # 백필: kubeconfig_content 가 NULL 인 기존 레코드 중 파일이 남아있으면 DB 로 복사
+        # (/tmp 기반 저장소라 재시작 후 파일이 사라지면 영원히 못 살리므로 한 번은 시도)
+        import os as _os
+        try:
+            with engine.begin() as conn:
+                rows = conn.execute(text(
+                    "SELECT id, kubeconfig_path FROM clusters "
+                    "WHERE (kubeconfig_content IS NULL OR kubeconfig_content = '') "
+                    "  AND kubeconfig_path IS NOT NULL AND kubeconfig_path != ''"
+                )).fetchall()
+                for cid, kc_path in rows:
+                    if kc_path and _os.path.exists(kc_path):
+                        try:
+                            with open(kc_path, encoding="utf-8") as f:
+                                kc_content = f.read()
+                            if kc_content.strip():
+                                conn.execute(
+                                    text("UPDATE clusters SET kubeconfig_content = :c WHERE id = :id"),
+                                    {"c": kc_content, "id": cid},
+                                )
+                        except Exception:
+                            pass
+        except Exception:
+            pass
     if "issues" in inspector.get_table_names():
         issue_cols = [col["name"] for col in inspector.get_columns("issues")]
         if "detail_content" not in issue_cols:
@@ -136,6 +161,10 @@ def _run_migrations():
                 conn.execute(text('ALTER TABLE tasks ADD COLUMN parent_id UUID REFERENCES tasks(id) ON DELETE CASCADE'))
             import logging as _logging
             _logging.getLogger(__name__).info("Migration: added tasks.parent_id")
+        # Task: issue_id — 작업에 연결된 이슈 (optional)
+        if "issue_id" not in task_cols:
+            with engine.begin() as conn:
+                conn.execute(text('ALTER TABLE tasks ADD COLUMN issue_id UUID REFERENCES issues(id) ON DELETE SET NULL'))
     # issues: Date → DateTime 마이그레이션
     if "issues" in inspector.get_table_names():
         issue_col_map = {col["name"]: col["type"].__class__.__name__ for col in inspector.get_columns("issues")}

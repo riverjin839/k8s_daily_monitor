@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { ViewModeBar } from '@/components/common';
 import {
-  Server, Trash2, AlertTriangle, Search, ChevronDown,
+  Server, AlertTriangle, Search, ChevronDown,
   LayoutList, LayoutGrid,
 } from 'lucide-react';
 import type { Cluster } from '@/types';

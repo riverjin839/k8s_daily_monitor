@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Cluster, ClusterConfigSnapshot
+from app.services.kubeconfig import ensure_kubeconfig_file as _ensure_kubeconfig_file_for
 
 router = APIRouter(prefix="/clusters", tags=["versions"])
 
@@ -30,22 +31,6 @@ _K8S_TIMEOUT = 10
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
-
-def _ensure_kubeconfig_file_for(cluster: Cluster) -> str | None:
-    """cluster.kubeconfig_content 가 있으면 파일로 재생성. 파일이 이미 있으면 그 경로."""
-    if cluster.kubeconfig_path and os.path.exists(cluster.kubeconfig_path):
-        return cluster.kubeconfig_path
-    if cluster.kubeconfig_content:
-        # clusters.py 의 _save_kubeconfig_content 와 동일 규칙
-        from app.config import settings as app_settings
-        store_dir = app_settings.kubeconfig_store_dir
-        os.makedirs(store_dir, exist_ok=True)
-        path = os.path.join(store_dir, f"{cluster.id}.yaml")
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(cluster.kubeconfig_content)
-        os.chmod(path, 0o600)
-        return path
-    return None
 
 
 def _hash_payload(component: str, version: str | None, data: dict) -> str:

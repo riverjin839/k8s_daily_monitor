@@ -76,10 +76,13 @@ class HealthChecker:
             )
             self.db.add(log)
 
-            # 전체 상태 계산
+            # 전체 상태 계산 — pending(개별 addon 연결 실패) 은 warning 수준.
+            # cluster 전체 pending 은 위에서 reachability 실패 시만 설정.
             if result.status == StatusEnum.critical:
                 overall_status = StatusEnum.critical
             elif result.status == StatusEnum.warning and overall_status != StatusEnum.critical:
+                overall_status = StatusEnum.warning
+            elif result.status == StatusEnum.pending and overall_status == StatusEnum.healthy:
                 overall_status = StatusEnum.warning
 
         # 클러스터 상태 업데이트

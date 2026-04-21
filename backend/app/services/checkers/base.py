@@ -8,6 +8,24 @@ from typing import Any, Optional
 from kubernetes import client, config
 
 from app.models import Cluster, Addon, StatusEnum
+from app.services.kubeconfig import ensure_kubeconfig_file
+
+
+# exception message 에 들어있으면 "연결 문제"로 분류해 pending 처리
+_CONNECTION_ERROR_HINTS = (
+    "connection refused",
+    "no route to host",
+    "timed out",
+    "timeout",
+    "network is unreachable",
+    "nodename nor servname",
+    "temporary failure in name resolution",
+    "ssl:",
+    "max retries exceeded",
+    "connection error",
+    "failed to establish",
+    "certificate verify failed",
+)
 
 
 @dataclass
@@ -31,8 +49,10 @@ class BaseChecker(ABC):
         if self._v1 is not None:
             return self._v1
 
-        if self.cluster.kubeconfig_path and os.path.exists(self.cluster.kubeconfig_path):
-            config.load_kube_config(config_file=self.cluster.kubeconfig_path)
+        # kubeconfig 파일이 없으면 DB content 로 재생성 시도
+        kc_path = ensure_kubeconfig_file(self.cluster)
+        if kc_path and os.path.exists(kc_path):
+            config.load_kube_config(config_file=kc_path)
         else:
             try:
                 config.load_incluster_config()
@@ -55,10 +75,28 @@ class BaseChecker(ABC):
 
     # ── 안전 실행 래퍼 ──────────────────────────────────────
     def safe_check(self) -> CheckResult:
-        """예외를 잡아서 critical 결과로 변환."""
+        """예외를 잡아서 CheckResult 로 변환.
+
+        연결 관련 예외는 pending(미연결)로 분류해서 cluster.status 가
+        critical(빨강)로 오해되지 않도록 한다.
+        """
         try:
             return self.check()
+        except FileNotFoundError as e:
+            # kubectl binary 또는 kubeconfig 파일 부재
+            return CheckResult(
+                status=StatusEnum.pending,
+                message=f"{self.addon.name}: 필수 파일 없음 — {str(e)[:120]}",
+                details={"error": str(e)[:500]},
+            )
         except Exception as e:
+            msg = str(e).lower()
+            if any(h in msg for h in _CONNECTION_ERROR_HINTS):
+                return CheckResult(
+                    status=StatusEnum.pending,
+                    message=f"{self.addon.name}: 연결 실패 — {str(e)[:120]}",
+                    details={"error": str(e)[:500]},
+                )
             return CheckResult(
                 status=StatusEnum.critical,
                 message=f"{self.addon.name} check failed: {str(e)[:200]}",

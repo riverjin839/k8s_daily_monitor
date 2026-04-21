@@ -37,27 +37,11 @@ def _kubeconfig_store_path(cluster_id: UUID) -> str:
     return os.path.join(settings.kubeconfig_store_dir, f"{cluster_id}.yaml")
 
 
-def _save_kubeconfig_content(cluster_id: UUID, content: str) -> str:
-    """kubeconfig YAML 내용을 파일로 저장하고 경로를 반환."""
-    store_dir = settings.kubeconfig_store_dir
-    os.makedirs(store_dir, exist_ok=True)
-    path = _kubeconfig_store_path(cluster_id)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(content)
-    os.chmod(path, 0o600)  # 소유자만 읽기/쓰기
-    return path
-
-
-def _ensure_kubeconfig_file(cluster: Cluster) -> str | None:
-    """DB 에 저장된 kubeconfig_content 가 있으면 파일을 (재)생성하고 경로를 반환.
-    파일이 이미 있으면 그대로, 없으면 컨텐츠로 다시 써준다.
-    둘 다 없으면 None.
-    """
-    if cluster.kubeconfig_path and os.path.exists(cluster.kubeconfig_path):
-        return cluster.kubeconfig_path
-    if cluster.kubeconfig_content:
-        return _save_kubeconfig_content(cluster.id, cluster.kubeconfig_content)
-    return cluster.kubeconfig_path or None
+# kubeconfig 저장/재생성은 app/services/kubeconfig.py 의 공용 헬퍼 사용
+from app.services.kubeconfig import (
+    save_kubeconfig_content as _save_kubeconfig_content,  # noqa: F401  (호환)
+    ensure_kubeconfig_file as _ensure_kubeconfig_file,    # noqa: F401  (호환)
+)
 
 
 def _verify_cluster_connectivity(api_endpoint: str, kubeconfig_path: str | None) -> None:

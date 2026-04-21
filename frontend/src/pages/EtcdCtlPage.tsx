@@ -5,6 +5,7 @@ import {
   ShieldAlert, Wifi, Clock, ScrollText,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
+import { ConfirmDialog, LogViewer } from '@/components/common';
 import {
   etcdctlApi, type EtcdPreset, type EtcdMasterCandidate, type EtcdCtlRunResponse,
 } from '@/services/api';
@@ -38,25 +39,23 @@ function ResultPanel({ result }: { result: EtcdCtlRunResponse }) {
           <span className="text-xs text-red-400">⚠ {result.error}</span>
         )}
       </header>
-      <div className="px-5 py-3">
-        <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">executed</p>
-        <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 mb-3 overflow-auto whitespace-pre-wrap">
-          {result.executedCommand || '(not provided)'}
-        </pre>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
-            <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-[420px] overflow-auto whitespace-pre-wrap">
-              {result.stdout || '(empty)'}
-            </pre>
-          </div>
+      <div className="px-5 py-3 space-y-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">executed</p>
+          <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap text-foreground/80">
+            {result.executedCommand || '(not provided)'}
+          </pre>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
+          <LogViewer text={result.stdout} maxHeight="max-h-[440px]" />
+        </div>
+        {result.stderr && (
           <div>
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
-            <pre className="text-xs font-mono bg-background border border-border rounded p-2 max-h-[420px] overflow-auto whitespace-pre-wrap text-red-400/90">
-              {result.stderr || '(empty)'}
-            </pre>
+            <LogViewer text={result.stderr} maxHeight="max-h-[300px]" asError />
           </div>
-        </div>
+        )}
       </div>
     </section>
   );
@@ -162,6 +161,8 @@ export function EtcdCtlPage() {
     && (authMode === 'password' ? !!password : !!privateKey.trim());
   const canRunEtcdctl = baseReady && !!args.trim();
   const canRunLogs = baseReady && !!unit.trim();
+
+  const [confirmAction, setConfirmAction] = useState<null | 'run' | 'logs'>(null);
 
   const runError = (tab === 'run' ? runMut.error : logsMut.error) as
     { response?: { data?: { detail?: string } }; message?: string } | null;
@@ -396,7 +397,7 @@ export function EtcdCtlPage() {
 
                 <div className="flex justify-end pt-2 border-t border-border">
                   <button
-                    onClick={() => runMut.mutate()}
+                    onClick={() => setConfirmAction('run')}
                     disabled={!canRunEtcdctl || runMut.isPending}
                     className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
                   >
@@ -453,7 +454,7 @@ export function EtcdCtlPage() {
 
                 <div className="flex justify-end pt-2 border-t border-border">
                   <button
-                    onClick={() => logsMut.mutate()}
+                    onClick={() => setConfirmAction('logs')}
                     disabled={!canRunLogs || logsMut.isPending}
                     className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
                   >
@@ -470,6 +471,56 @@ export function EtcdCtlPage() {
 
         {result && <ResultPanel result={result} />}
       </main>
+
+      {/* 실행 확인 모달 */}
+      <ConfirmDialog
+        open={confirmAction !== null}
+        title={confirmAction === 'run' ? 'etcdctl 실행 확인' : 'etcd 서비스 로그 조회 확인'}
+        description={confirmAction === 'run'
+          ? 'master 노드에 SSH 접속 후 etcdctl 명령을 실행합니다. defrag / compact / snapshot 같은 명령은 etcd 에 영향을 줄 수 있습니다.'
+          : 'master 노드에 SSH 접속 후 journalctl 로 로그를 가져옵니다.'}
+        confirmLabel={confirmAction === 'run' ? 'etcdctl 실행' : '로그 가져오기'}
+        danger={confirmAction === 'run' && /\b(defrag|compact|snapshot|move-leader|alarm\s+disarm|member\s+(add|remove|update))\b/i.test(args)}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => {
+          const which = confirmAction;
+          setConfirmAction(null);
+          if (which === 'run') runMut.mutate();
+          else if (which === 'logs') logsMut.mutate();
+        }}
+      >
+        <div className="space-y-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">타겟</p>
+            <p className="font-mono">
+              <span className="text-primary">{username}</span>
+              <span className="text-muted-foreground">@</span>
+              <span className="text-foreground">{effectiveHost}</span>
+              <span className="text-muted-foreground">:{port}</span>
+              <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded border border-border bg-secondary">
+                {authMode === 'password' ? '비밀번호' : 'Private Key'}
+              </span>
+            </p>
+          </div>
+          {confirmAction === 'run' ? (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">실행</p>
+              <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap break-all">
+                {useEnv && envFile ? `source ${envFile} && ` : ''}{etcdctlPath} {args}
+              </pre>
+            </div>
+          ) : (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">journalctl</p>
+              <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap">
+                journalctl -u {unit} -n {tail}
+                {since && ` --since "${since}"`}
+                {grep && ` | grep -i "${grep}"`}
+              </pre>
+            </div>
+          )}
+        </div>
+      </ConfirmDialog>
     </div>
   );
 }

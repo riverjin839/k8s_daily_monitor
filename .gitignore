@@ -51,6 +51,7 @@ htmlcov/
 *.key
 kubeconfig*
 !kubeconfig.example
+!backend/app/services/kubeconfig.py
 
 # Ansible
 *.retry

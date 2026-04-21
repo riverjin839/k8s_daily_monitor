@@ -47,3 +47,36 @@ export function useToggleSource() {
     },
   });
 }
+
+export function useCreateSource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: {
+      name: string; sourceType: 'github_release' | 'rss'; url: string; category: string; enabled?: boolean;
+    }) => trendsApi.createSource(data).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['trends', 'sources'] });
+    },
+  });
+}
+
+export function useUpdateSource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<{ name: string; sourceType: 'github_release' | 'rss'; url: string; category: string; enabled: boolean }> }) =>
+      trendsApi.updateSource(id, data).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['trends', 'sources'] });
+    },
+  });
+}
+
+export function useDeleteSource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => trendsApi.deleteSource(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['trends', 'sources'] });
+    },
+  });
+}

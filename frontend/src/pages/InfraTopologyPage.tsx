@@ -436,24 +436,36 @@ export function InfraTopologyPage() {
   const deleteNode = useDeleteInfraNode();
   const syncNodes = useSyncInfraNodes();
 
-  // 랙별 그룹핑
-  const racks = useMemo(() => {
-    const map = new Map<string, InfraNode[]>();
-    for (const n of nodes) {
-      const rack = n.rackName ?? '(랙 미지정)';
-      if (!map.has(rack)) map.set(rack, []);
-      map.get(rack)!.push(n);
-    }
-    // 랙 내 정렬: role 우선순위
+  // 스위치 → 랙 → 노드 계층형 그룹핑 (네트워크 레벨부터)
+  const switches = useMemo(() => {
     const rolePriority: Record<InfraNodeRole, number> = { master: 0, infra: 1, storage: 2, worker: 3 };
-    return Array.from(map.entries())
+    // 1차: switch 별
+    const swMap = new Map<string, InfraNode[]>();
+    for (const n of nodes) {
+      const sw = n.switchName ?? '(스위치 미지정)';
+      if (!swMap.has(sw)) swMap.set(sw, []);
+      swMap.get(sw)!.push(n);
+    }
+    return Array.from(swMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([rack, rackNodes]) => ({
-        rack,
-        nodes: [...rackNodes].sort((a, b) =>
-          (rolePriority[a.role] ?? 9) - (rolePriority[b.role] ?? 9) || a.hostname.localeCompare(b.hostname),
-        ),
-      }));
+      .map(([sw, swNodes]) => {
+        // 2차: rack 별
+        const rackMap = new Map<string, InfraNode[]>();
+        for (const n of swNodes) {
+          const rack = n.rackName ?? '(랙 미지정)';
+          if (!rackMap.has(rack)) rackMap.set(rack, []);
+          rackMap.get(rack)!.push(n);
+        }
+        const racks = Array.from(rackMap.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([rack, rackNodes]) => ({
+            rack,
+            nodes: [...rackNodes].sort((a, b) =>
+              (rolePriority[a.role] ?? 9) - (rolePriority[b.role] ?? 9) || a.hostname.localeCompare(b.hostname),
+            ),
+          }));
+        return { switchName: sw, nodeCount: swNodes.length, racks };
+      });
   }, [nodes]);
 
   // 요약 통계
@@ -714,41 +726,49 @@ export function InfraTopologyPage() {
                 </button>
               </div>
             ) : (
-              <div className="flex gap-4 overflow-x-auto pb-4">
-                {racks.map(({ rack, nodes: rackNodes }) => (
-                  <div
-                    key={rack}
-                    className="flex-shrink-0 w-56 flex flex-col gap-2"
+              <div className="space-y-5">
+                {switches.map(({ switchName, nodeCount, racks: swRacks }) => (
+                  <section
+                    key={switchName}
+                    className="rounded-xl border border-sky-500/30 bg-sky-500/[0.03] overflow-hidden"
                   >
-                    {/* 랙 헤더 */}
-                    <div className="flex items-center gap-2 px-2 py-1.5 bg-muted/50 rounded-lg border border-border">
-                      <Tag className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                      <span className="text-xs font-semibold text-foreground truncate">{rack}</span>
-                      <span className="ml-auto text-xs text-muted-foreground flex-shrink-0">
-                        {rackNodes.length}
+                    {/* 스위치 헤더 (L2/L3) */}
+                    <header className="flex items-center gap-2 px-4 py-2.5 bg-sky-500/10 border-b border-sky-500/20">
+                      <Network className="w-4 h-4 text-sky-400 flex-shrink-0" />
+                      <span className="text-sm font-semibold text-sky-300">{switchName}</span>
+                      <span className="text-[10px] font-mono text-sky-400/70">ToR / Leaf</span>
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {swRacks.length}개 랙 · {nodeCount}개 노드
                       </span>
-                    </div>
+                    </header>
 
-                    {/* 스위치 표시 (switchName이 있는 경우) */}
-                    {rackNodes[0]?.switchName && (
-                      <div className="flex items-center gap-2 px-2 py-1 bg-sky-500/5 border border-sky-500/20 rounded-lg">
-                        <Network className="w-3 h-3 text-sky-400 flex-shrink-0" />
-                        <span className="text-xs text-sky-400 truncate">{rackNodes[0].switchName}</span>
-                      </div>
-                    )}
-
-                    {/* 노드 카드들 */}
-                    <div className="flex flex-col gap-2">
-                      {rackNodes.map(node => (
-                        <NodeCard
-                          key={node.id}
-                          node={node}
-                          onEdit={n => { setEditTarget(n); setModalOpen(true); }}
-                          onDelete={n => setDeleteTarget(n)}
-                        />
+                    {/* 아래: 해당 스위치에 물린 랙 + 노드 */}
+                    <div className="flex gap-4 overflow-x-auto p-4">
+                      {swRacks.map(({ rack, nodes: rackNodes }) => (
+                        <div key={`${switchName}::${rack}`} className="flex-shrink-0 w-56 flex flex-col gap-2">
+                          {/* 랙 헤더 */}
+                          <div className="flex items-center gap-2 px-2 py-1.5 bg-muted/50 rounded-lg border border-border">
+                            <Tag className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                            <span className="text-xs font-semibold text-foreground truncate">{rack}</span>
+                            <span className="ml-auto text-xs text-muted-foreground flex-shrink-0">
+                              {rackNodes.length}
+                            </span>
+                          </div>
+                          {/* 노드 카드들 */}
+                          <div className="flex flex-col gap-2">
+                            {rackNodes.map(node => (
+                              <NodeCard
+                                key={node.id}
+                                node={node}
+                                onEdit={n => { setEditTarget(n); setModalOpen(true); }}
+                                onDelete={n => setDeleteTarget(n)}
+                              />
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
-                  </div>
+                  </section>
                 ))}
               </div>
             )}

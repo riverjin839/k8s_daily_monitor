@@ -103,6 +103,11 @@ class TrendService:
                 raw = await self._rss.collect(source.url, since)
         except Exception as e:
             logger.warning("소스 수집 실패 %s: %s", source.name, e)
+            # UI 에서 바로 보이도록 소스 행에 기록
+            source.last_status = "error"
+            source.last_message = f"{type(e).__name__}: {str(e)[:500]}"
+            source.last_collected_at = datetime.utcnow()
+            self.db.commit()
             return []
 
         # 이미 수집된 URL은 스킵
@@ -127,6 +132,15 @@ class TrendService:
                 item_type=c.item_type,
                 digest_date=target_date,
             ))
+
+        source.last_status = "ok" if items else "empty"
+        source.last_message = (
+            f"{len(items)}개 신규 수집 (원본 {len(raw)}개, 중복 제외)"
+            if items else f"수집 대상 없음 (since={since.date()}, 원본 {len(raw)}개 확인)"
+        )
+        source.last_item_count = len(items)
+        source.last_collected_at = datetime.utcnow()
+        self.db.commit()
         return items
 
     # ── 조회 ────────────────────────────────────────────────────
@@ -171,3 +185,41 @@ class TrendService:
             self.db.commit()
             self.db.refresh(src)
         return src
+
+    def create_source(
+        self, name: str, source_type: str, url: str, category: str, enabled: bool = True,
+    ) -> TrendSource:
+        src = TrendSource(
+            name=name.strip(), source_type=source_type.strip(),
+            url=url.strip(), category=category.strip(), enabled=enabled,
+        )
+        self.db.add(src)
+        self.db.commit()
+        self.db.refresh(src)
+        return src
+
+    def update_source(
+        self, source_id: str, *,
+        name: str | None = None, source_type: str | None = None,
+        url: str | None = None, category: str | None = None,
+        enabled: bool | None = None,
+    ) -> TrendSource | None:
+        src = self.db.query(TrendSource).filter(TrendSource.id == source_id).first()
+        if not src:
+            return None
+        if name is not None:        src.name = name.strip()
+        if source_type is not None: src.source_type = source_type.strip()
+        if url is not None:         src.url = url.strip()
+        if category is not None:    src.category = category.strip()
+        if enabled is not None:     src.enabled = enabled
+        self.db.commit()
+        self.db.refresh(src)
+        return src
+
+    def delete_source(self, source_id: str) -> bool:
+        src = self.db.query(TrendSource).filter(TrendSource.id == source_id).first()
+        if not src:
+            return False
+        self.db.delete(src)
+        self.db.commit()
+        return True

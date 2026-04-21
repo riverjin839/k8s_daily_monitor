@@ -807,6 +807,18 @@ export interface TrendSource {
   url: string;
   category: TrendCategory;
   enabled: boolean;
+  lastStatus?: 'ok' | 'error' | 'empty' | null;
+  lastMessage?: string | null;
+  lastItemCount?: number;
+  lastCollectedAt?: string | null;
+}
+
+export interface TrendSourceCreate {
+  name: string;
+  sourceType: 'github_release' | 'rss';
+  url: string;
+  category: string;
+  enabled?: boolean;
 }
 
 export interface TrendItem {

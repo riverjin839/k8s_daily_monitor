@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { RefreshCw, ExternalLink, ChevronDown, ChevronRight, Settings2, AlertCircle, Loader2, CheckCircle2, Clock } from 'lucide-react';
-import { useTrendDigests, useTrendItems, useTrendSources, useTriggerCollect, useToggleSource } from '@/hooks/useTrends';
+import { RefreshCw, ExternalLink, ChevronDown, ChevronRight, Settings2, AlertCircle, Loader2, CheckCircle2, Clock, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
+import { useTrendDigests, useTrendItems, useTrendSources, useTriggerCollect, useToggleSource, useCreateSource, useUpdateSource, useDeleteSource } from '@/hooks/useTrends';
 import type { TrendDigest, TrendItem, TrendSource } from '@/types';
 
 // ── 카테고리 색상 ────────────────────────────────────────────────
@@ -183,44 +183,216 @@ function DigestPanel({ digest }: { digest: TrendDigest }) {
 }
 
 // ── 소스 관리 패널 ───────────────────────────────────────────────
+
+const SOURCE_STATUS_CLS: Record<string, string> = {
+  ok:    'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+  empty: 'bg-slate-500/10 text-slate-400 border-slate-500/30',
+  error: 'bg-red-500/10 text-red-400 border-red-500/30',
+};
+
+function formatDateTimeShort(iso?: string | null): string {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function SourceRow({ s }: { s: TrendSource }) {
+  const toggle = useToggleSource();
+  const update = useUpdateSource();
+  const remove = useDeleteSource();
+
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(s.name);
+  const [url, setUrl] = useState(s.url);
+  const [sourceType, setSourceType] = useState(s.sourceType);
+  const [category, setCategory] = useState(s.category);
+
+  const statusKey = s.lastStatus || '';
+  const statusCls = SOURCE_STATUS_CLS[statusKey] ?? 'bg-muted text-muted-foreground';
+
+  if (editing) {
+    return (
+      <div className="p-3 border border-primary/40 rounded-lg bg-card space-y-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름"
+            className="px-2 py-1 text-sm bg-background border border-border rounded" />
+          <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="카테고리 (k8s / cilium / linux ...)"
+            className="px-2 py-1 text-sm bg-background border border-border rounded" />
+          <select value={sourceType} onChange={(e) => setSourceType(e.target.value as TrendSource['sourceType'])}
+            className="px-2 py-1 text-sm bg-background border border-border rounded">
+            <option value="github_release">GitHub Releases (owner/repo)</option>
+            <option value="rss">RSS 피드 (URL)</option>
+          </select>
+          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="url 또는 repo slug"
+            className="px-2 py-1 text-sm font-mono bg-background border border-border rounded md:col-span-2" />
+        </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={() => setEditing(false)}
+            className="flex items-center gap-1 px-2 py-1 text-xs bg-secondary border border-border rounded">
+            <X className="w-3 h-3" />취소
+          </button>
+          <button
+            onClick={() => update.mutate(
+              { id: s.id, data: { name, url, sourceType, category } },
+              { onSuccess: () => setEditing(false) },
+            )}
+            disabled={update.isPending}
+            className="flex items-center gap-1 px-2 py-1 text-xs bg-primary text-primary-foreground rounded disabled:opacity-50">
+            <Check className="w-3 h-3" />저장
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-3 border border-border rounded-lg bg-card">
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-medium">{s.name}</p>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
+              {s.sourceType === 'github_release' ? 'GitHub' : 'RSS'}
+            </span>
+            {s.lastStatus && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded border ${statusCls}`}>
+                {s.lastStatus === 'ok' ? `✓ 최근 +${s.lastItemCount ?? 0}` : s.lastStatus === 'empty' ? '· 수집 없음' : '✗ 실패'}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground font-mono truncate mt-0.5">{s.url}</p>
+          {s.lastMessage && (
+            <p className={`text-[11px] mt-1 break-all ${s.lastStatus === 'error' ? 'text-red-400' : 'text-muted-foreground'}`}
+               title={s.lastMessage}>
+              {s.lastMessage}
+            </p>
+          )}
+          {s.lastCollectedAt && (
+            <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+              마지막: {formatDateTimeShort(s.lastCollectedAt)}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={() => toggle.mutate({ id: s.id, enabled: !s.enabled })}
+            className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${
+              s.enabled ? 'bg-primary' : 'bg-secondary border border-border'
+            }`}
+            title="활성/비활성"
+          >
+            <span className={`inline-block h-4 w-4 mt-0.5 rounded-full bg-white shadow transform transition-transform ${
+              s.enabled ? 'translate-x-4' : 'translate-x-0.5'
+            }`} />
+          </button>
+          <button onClick={() => setEditing(true)}
+            className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-foreground">
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => {
+              if (!confirm(`"${s.name}" 소스를 삭제하시겠습니까? 관련 아이템도 모두 삭제됩니다.`)) return;
+              remove.mutate(s.id);
+            }}
+            className="p-1.5 hover:bg-red-500/10 rounded-md text-muted-foreground hover:text-red-400">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddSourceForm({ onClose }: { onClose: () => void }) {
+  const create = useCreateSource();
+  const [name, setName] = useState('');
+  const [sourceType, setSourceType] = useState<'github_release' | 'rss'>('rss');
+  const [url, setUrl] = useState('');
+  const [category, setCategory] = useState('k8s');
+  const canSubmit = name.trim() && url.trim() && category.trim();
+
+  return (
+    <div className="p-3 border border-primary/40 rounded-lg bg-card space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-primary">새 소스 추가</p>
+        <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름 (예: Istio 블로그)"
+          className="px-2 py-1.5 text-sm bg-background border border-border rounded" />
+        <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="카테고리 (k8s / cilium / linux / cncf ...)"
+          className="px-2 py-1.5 text-sm bg-background border border-border rounded" />
+        <select value={sourceType} onChange={(e) => setSourceType(e.target.value as 'github_release' | 'rss')}
+          className="px-2 py-1.5 text-sm bg-background border border-border rounded">
+          <option value="rss">RSS 피드 (URL 입력)</option>
+          <option value="github_release">GitHub Releases (owner/repo 입력)</option>
+        </select>
+        <input value={url} onChange={(e) => setUrl(e.target.value)}
+          placeholder={sourceType === 'rss' ? 'https://example.com/feed.xml' : 'owner/repo'}
+          className="px-2 py-1.5 text-sm font-mono bg-background border border-border rounded md:col-span-2" />
+      </div>
+      {create.isError && (
+        <p className="text-xs text-red-400">등록 실패: {(create.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? (create.error as Error).message}</p>
+      )}
+      <div className="flex justify-end gap-2">
+        <button onClick={onClose}
+          className="px-2.5 py-1 text-xs bg-secondary border border-border rounded">취소</button>
+        <button
+          onClick={() => create.mutate(
+            { name, sourceType, url, category, enabled: true },
+            { onSuccess: () => onClose() },
+          )}
+          disabled={!canSubmit || create.isPending}
+          className="flex items-center gap-1 px-2.5 py-1 text-xs bg-primary text-primary-foreground rounded disabled:opacity-50">
+          {create.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+          추가
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SourcesPanel() {
   const { data: sources = [] } = useTrendSources();
-  const toggle = useToggleSource();
+  const [adding, setAdding] = useState(false);
 
   const grouped = sources.reduce<Record<string, TrendSource[]>>((acc, s) => {
     (acc[s.category] ??= []).push(s);
     return acc;
   }, {});
 
+  const totalErrors = sources.filter((s) => s.lastStatus === 'error').length;
+
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-muted-foreground">
+          총 {sources.length}개 · 활성 {sources.filter((s) => s.enabled).length}개
+          {totalErrors > 0 && <span className="ml-2 text-red-400">⚠ 수집 실패 {totalErrors}개</span>}
+        </div>
+        {!adding && (
+          <button
+            onClick={() => setAdding(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            소스 추가
+          </button>
+        )}
+      </div>
+
+      {adding && <AddSourceForm onClose={() => setAdding(false)} />}
+
       {Object.entries(grouped).map(([cat, srcs]) => (
         <div key={cat}>
           <p className={`text-xs font-semibold px-2 py-1 rounded mb-2 w-fit ${CATEGORY_COLORS[cat] ?? 'bg-secondary'}`}>
             {CATEGORY_LABEL[cat] ?? cat.toUpperCase()}
           </p>
           <div className="space-y-1.5">
-            {srcs.map((s) => (
-              <div key={s.id} className="flex items-center gap-3 p-3 border border-border rounded-lg bg-card">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">{s.name}</p>
-                  <p className="text-xs text-muted-foreground font-mono truncate">{s.url}</p>
-                  <p className="text-[10px] text-muted-foreground">{s.sourceType === 'github_release' ? 'GitHub Releases' : 'RSS 피드'}</p>
-                </div>
-                <button
-                  onClick={() => toggle.mutate({ id: s.id, enabled: !s.enabled })}
-                  className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors duration-200 ${
-                    s.enabled ? 'bg-primary' : 'bg-secondary border border-border'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 mt-0.5 rounded-full bg-white shadow transform transition-transform duration-200 ${
-                      s.enabled ? 'translate-x-4' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
-              </div>
-            ))}
+            {srcs.map((s) => <SourceRow key={s.id} s={s} />)}
           </div>
         </div>
       ))}

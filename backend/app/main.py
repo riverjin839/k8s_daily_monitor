@@ -108,6 +108,19 @@ def _run_migrations():
                             pass
         except Exception:
             pass
+    # trend_sources: 마지막 수집 상태 컬럼 추가
+    if "trend_sources" in inspector.get_table_names():
+        ts_cols = [c["name"] for c in inspector.get_columns("trend_sources")]
+        for col_name, col_type in [
+            ("last_status", "VARCHAR(20)"),
+            ("last_message", "TEXT"),
+            ("last_item_count", "INTEGER DEFAULT 0"),
+            ("last_collected_at", "TIMESTAMP WITHOUT TIME ZONE"),
+        ]:
+            if col_name not in ts_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE trend_sources ADD COLUMN {col_name} {col_type}"))
+
     if "issues" in inspector.get_table_names():
         issue_cols = [col["name"] for col in inspector.get_columns("issues")]
         if "detail_content" not in issue_cols:

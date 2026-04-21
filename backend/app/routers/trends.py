@@ -21,9 +21,29 @@ class TrendSourceOut(BaseModel):
     url: str
     category: str
     enabled: bool
+    last_status: Optional[str] = None
+    last_message: Optional[str] = None
+    last_item_count: Optional[int] = 0
+    last_collected_at: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+class TrendSourceCreateIn(BaseModel):
+    name: str
+    source_type: str  # "github_release" | "rss"
+    url: str
+    category: str
+    enabled: bool = True
+
+
+class TrendSourceUpdateIn(BaseModel):
+    name: Optional[str] = None
+    source_type: Optional[str] = None
+    url: Optional[str] = None
+    category: Optional[str] = None
+    enabled: Optional[bool] = None
 
 
 class TrendItemOut(BaseModel):
@@ -101,7 +121,7 @@ def list_items(
 @router.get("/sources", response_model=list[TrendSourceOut])
 def list_sources(db: Session = Depends(get_db)):
     svc = TrendService(db)
-    return svc.list_sources()
+    return [_source_out(s) for s in svc.list_sources()]
 
 
 @router.patch("/sources/{source_id}", response_model=TrendSourceOut)
@@ -110,7 +130,40 @@ def toggle_source(source_id: UUID, body: ToggleSourceRequest, db: Session = Depe
     src = svc.toggle_source(str(source_id), body.enabled)
     if not src:
         raise HTTPException(status_code=404, detail="소스를 찾을 수 없습니다")
-    return src
+    return _source_out(src)
+
+
+@router.post("/sources", response_model=TrendSourceOut, status_code=201)
+def create_source(body: TrendSourceCreateIn, db: Session = Depends(get_db)):
+    if body.source_type not in ("github_release", "rss"):
+        raise HTTPException(status_code=422, detail="source_type 은 'github_release' 또는 'rss'")
+    svc = TrendService(db)
+    return _source_out(svc.create_source(
+        name=body.name, source_type=body.source_type,
+        url=body.url, category=body.category, enabled=body.enabled,
+    ))
+
+
+@router.put("/sources/{source_id}", response_model=TrendSourceOut)
+def update_source(source_id: UUID, body: TrendSourceUpdateIn, db: Session = Depends(get_db)):
+    svc = TrendService(db)
+    src = svc.update_source(
+        str(source_id),
+        name=body.name, source_type=body.source_type,
+        url=body.url, category=body.category, enabled=body.enabled,
+    )
+    if not src:
+        raise HTTPException(status_code=404, detail="소스를 찾을 수 없습니다")
+    return _source_out(src)
+
+
+@router.delete("/sources/{source_id}", status_code=204)
+def delete_source(source_id: UUID, db: Session = Depends(get_db)):
+    svc = TrendService(db)
+    ok = svc.delete_source(str(source_id))
+    if not ok:
+        raise HTTPException(status_code=404, detail="소스를 찾을 수 없습니다")
+    return None
 
 
 # ── helpers ─────────────────────────────────────────────────────
@@ -123,6 +176,21 @@ def _digest_out(d) -> dict:
         "item_count": d.item_count,
         "status": d.status,
         "error_message": d.error_message,
+    }
+
+
+def _source_out(s) -> dict:
+    return {
+        "id": s.id,
+        "name": s.name,
+        "source_type": s.source_type,
+        "url": s.url,
+        "category": s.category,
+        "enabled": s.enabled,
+        "last_status": s.last_status,
+        "last_message": s.last_message,
+        "last_item_count": s.last_item_count or 0,
+        "last_collected_at": s.last_collected_at.isoformat() if s.last_collected_at else None,
     }
 
 

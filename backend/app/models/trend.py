@@ -15,6 +15,11 @@ class TrendSource(Base):
     url = Column(String(500), nullable=False)            # repo slug or feed URL
     category = Column(String(50), nullable=False)        # "k8s", "cilium", "linux", "cncf"
     enabled = Column(Boolean, default=True)
+    # 최근 수집 로그 — UI 에서 왜 수집 안 되는지 바로 보이게
+    last_status = Column(String(20), nullable=True)      # "ok", "error", "empty"
+    last_message = Column(Text, nullable=True)           # 에러 메시지 혹은 "N개 수집"
+    last_item_count = Column(Integer, default=0)
+    last_collected_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     items = relationship("TrendItem", back_populates="source", cascade="all, delete-orphan")

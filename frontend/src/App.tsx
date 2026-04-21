@@ -3,13 +3,16 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Dashboard } from '@/pages/Dashboard';
 import { PlaybooksPage } from '@/pages/PlaybooksPage';
 import { IssueBoardPage } from '@/pages/IssueBoardPage';
+import { IssueFormPage } from '@/pages/IssueFormPage';
 import { TaskBoardPage } from '@/pages/TaskBoardPage';
+import { TaskFormPage } from '@/pages/TaskFormPage';
 import { TodoTodayPage } from '@/pages/TodoTodayPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { ClusterLinksPage } from '@/pages/ClusterLinksPage';
 import { NodeLabelsPage } from '@/pages/NodeLabelsPage';
 import { CidrCalculatorPage } from '@/pages/CidrCalculatorPage';
 import { ClusterManagePage } from '@/pages/ClusterManagePage';
+import { ClusterMetaFormPage } from '@/pages/ClusterMetaFormPage';
 import { WorkflowBoardPage } from '@/pages/WorkflowBoardPage';
 import { WorkGuidePage } from '@/pages/WorkGuidePage';
 import { OpsNotesPage } from '@/pages/OpsNotesPage';
@@ -43,12 +46,17 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/playbooks" element={<PlaybooksPage />} />
               <Route path="/issues" element={<IssueBoardPage />} />
+              <Route path="/issues/new" element={<IssueFormPage />} />
+              <Route path="/issues/:id/edit" element={<IssueFormPage />} />
               <Route path="/tasks" element={<TaskBoardPage />} />
+              <Route path="/tasks/new" element={<TaskFormPage />} />
+              <Route path="/tasks/:id/edit" element={<TaskFormPage />} />
               <Route path="/todo-today" element={<TodoTodayPage />} />
               <Route path="/links" element={<ClusterLinksPage />} />
               <Route path="/node-labels" element={<NodeLabelsPage />} />
               <Route path="/cidr" element={<CidrCalculatorPage />} />
               <Route path="/cluster-manage" element={<ClusterManagePage />} />
+              <Route path="/cluster-manage/:id/edit" element={<ClusterMetaFormPage />} />
               <Route path="/infra-topology" element={<InfraTopologyPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/workflow" element={<WorkflowBoardPage />} />

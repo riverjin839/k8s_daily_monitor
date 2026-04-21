@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { AlertTriangle, Filter, Info, Loader2, RefreshCw, Search, Share2, X, Zap } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useOntologyGraph, useAnalyzeImpact } from '@/hooks/useOntology';
-import type { OntologyEntity, OntologyEntityType } from '@/types';
+import type { OntologyEntityType } from '@/types';
 
 // ── 엔티티 타입별 색상 ─────────────────────────────────────────────────────────
 const ENTITY_COLOR: Record<OntologyEntityType, string> = {
@@ -63,10 +63,9 @@ function makeNodeObject(node: NodeObject): THREE.Mesh {
 }
 
 // ── 상세 패널 ─────────────────────────────────────────────────────────────────
-function NodeDetailPanel({ node, onClose, onAnalyzeImpact, clusterId }: {
+function NodeDetailPanel({ node, onClose, onAnalyzeImpact }: {
   node: GNode;
   onClose: () => void;
-  clusterId: string;
   onAnalyzeImpact: (entityId: string) => void;
 }) {
   const color = ENTITY_COLOR[node.entityType] ?? '#888';
@@ -194,7 +193,7 @@ export function OntologyPage() {
   const [dimensions, setDimensions] = useState({ w: 800, h: 600 });
 
   const { data: clustersData } = useClusters();
-  const clusters = clustersData ?? [];
+  const clusters = useMemo(() => clustersData ?? [], [clustersData]);
   const [clusterId, setClusterId] = useState('');
   const [search, setSearch] = useState('');
   const [activeTypes, setActiveTypes] = useState<Set<OntologyEntityType>>(new Set(ALL_TYPES));
@@ -496,7 +495,6 @@ export function OntologyPage() {
           <NodeDetailPanel
             node={selectedNode}
             onClose={() => { setSelectedNode(null); setImpactResult(null); }}
-            clusterId={clusterId}
             onAnalyzeImpact={handleAnalyzeImpact}
           />
         )}

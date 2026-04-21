@@ -71,7 +71,7 @@ export function Sidebar() {
     setCollapsed(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
-      try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...next])); } catch {}
+      try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
       return next;
     });
   };

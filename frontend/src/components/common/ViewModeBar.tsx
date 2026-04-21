@@ -6,7 +6,7 @@ import { useTableViewStore, TS, TableStyleConfig } from '@/stores/tableViewStore
 export interface ViewModeOption {
   id: string;
   label: string;
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
 }
 
 interface ViewModeBarProps {

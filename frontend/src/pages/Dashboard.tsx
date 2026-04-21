@@ -96,8 +96,10 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
                 : '미연결'}
             </div>
 
-            {/* Check counts */}
-            {total > 0 ? (
+            {/* Check counts — 미연결이면 stale 값 대신 안내 */}
+            {cluster.status === 'pending' ? (
+              <p className="text-xs text-slate-400/80 italic">연결 불가로 점검 데이터 없음</p>
+            ) : total > 0 ? (
               <div className="space-y-1.5">
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">전체 점검</span>
@@ -215,6 +217,9 @@ export function Dashboard() {
     ? addons[selectedClusterId] || []
     : Object.values(addons).flat();
 
+  const selectedCluster = selectedClusterId ? clusters.find((c) => c.id === selectedClusterId) : null;
+  const isSelectedDisconnected = selectedCluster?.status === 'pending';
+
   // 이미 등록된 타입을 제외한 missing addons 계산
   const existingTypes = new Set(currentAddons.map((a) => a.type));
   const missingAddons = DEFAULT_ADDONS.filter((a) => !existingTypes.has(a.type));
@@ -319,14 +324,32 @@ export function Dashboard() {
           {selectedClusterId === null ? (
             <ClusterOverviewGrid clusters={clusters} addons={addons} onSelectCluster={setSelectedClusterId} />
           ) : (
-            <AddonGrid
-              addons={currentAddons}
-              isLoading={clustersLoading || addonsLoading}
-              onAddDefaultAddons={clusters.length > 0 && missingAddons.length > 0 ? handleAddDefaultAddons : undefined}
-              onEditAddon={(addon) => { setEditingAddon(addon); setShowAddAddon(true); }}
-              onDeleteAddon={(addon) => { if (confirm(`Delete check "${addon.name}"?`)) deleteAddon.mutate({ addonId: addon.id, clusterId: addon.clusterId }); }}
-              onRunAddon={(addon) => addonHealthCheck.mutate({ clusterId: addon.clusterId, addonId: addon.id })}
-            />
+            <>
+              {isSelectedDisconnected && (
+                <div className="mb-4 px-4 py-3 rounded-xl border border-slate-500/30 bg-slate-500/10 flex items-start gap-3">
+                  <WifiOff className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-300 mb-0.5">
+                      미연결 — 클러스터에 연결할 수 없습니다
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      API 서버 또는 kubeconfig 인증이 실패했습니다. 아래 점검 카드는 마지막 성공 시점의 값으로 <b>비활성화</b> 되어 있습니다.
+                      Settings → "연결 확인"을 실행하거나 kubeconfig 를 점검한 뒤 다시 시도하세요.
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div className={isSelectedDisconnected ? 'opacity-40 pointer-events-none select-none grayscale' : ''}>
+                <AddonGrid
+                  addons={currentAddons}
+                  isLoading={clustersLoading || addonsLoading}
+                  onAddDefaultAddons={!isSelectedDisconnected && clusters.length > 0 && missingAddons.length > 0 ? handleAddDefaultAddons : undefined}
+                  onEditAddon={(addon) => { setEditingAddon(addon); setShowAddAddon(true); }}
+                  onDeleteAddon={(addon) => { if (confirm(`Delete check "${addon.name}"?`)) deleteAddon.mutate({ addonId: addon.id, clusterId: addon.clusterId }); }}
+                  onRunAddon={(addon) => addonHealthCheck.mutate({ clusterId: addon.clusterId, addonId: addon.id })}
+                />
+              </div>
+            </>
           )}
         </MacCard>
 

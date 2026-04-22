@@ -5,7 +5,7 @@ import {
   ShieldAlert, Wifi, Clock, ScrollText,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ConfirmDialog, LogViewer, ClusterSidebar } from '@/components/common';
+import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands } from '@/components/common';
 import {
   etcdctlApi, type EtcdPreset, type EtcdMasterCandidate, type EtcdCtlRunResponse,
 } from '@/services/api';
@@ -363,6 +363,12 @@ export function EtcdCtlPage() {
                     value={args} onChange={(e) => setArgs(e.target.value)}
                     rows={3}
                     className="w-full px-3 py-2 text-[12px] font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                  />
+                  <SavedCommands
+                    className="mt-2"
+                    storageKey="k8s:saved-cmd:etcdctl"
+                    currentValue={args}
+                    onPick={setArgs}
                   />
                 </div>
 

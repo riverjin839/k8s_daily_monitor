@@ -4,7 +4,7 @@ import {
   HardDrive, Play, Loader2, CheckCircle, XCircle, Key, ShieldAlert, Wifi, Clock, Terminal,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ConfirmDialog, LogViewer, ClusterSidebar } from '@/components/common';
+import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands } from '@/components/common';
 import { mcApi, bulkExecApi, type McPreset, type EtcdCtlRunResponse, type NodeSummary } from '@/services/api';
 
 const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }> = {
@@ -257,6 +257,12 @@ export function McClientPage() {
                 </label>
                 <textarea value={args} onChange={(e) => setArgs(e.target.value)} rows={3}
                   className="w-full px-3 py-2 text-[12px] font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
+                <SavedCommands
+                  className="mt-2"
+                  storageKey="k8s:saved-cmd:mc"
+                  currentValue={args}
+                  onPick={setArgs}
+                />
               </div>
 
               <div>

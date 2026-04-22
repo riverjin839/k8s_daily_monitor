@@ -96,8 +96,41 @@ def _verify_cluster_connectivity(api_endpoint: str, kubeconfig_path: str | None)
         _verify_kubeconfig_auth(api_endpoint, kubeconfig_path)
 
 
+def _diagnose_max_retries(kubeconfig_host: str, exc: Exception) -> str:
+    """urllib3 MaxRetryError / ConnectionError 를 사람이 읽을 수 있는 원인 설명으로.
+
+    흔한 시나리오:
+    - kubeconfig server URL 이 private IP (예: 10.x / 192.168.x / cluster.local)
+      인데 백엔드 컨테이너 네트워크에서 라우팅 안 됨 → "대상 호스트 도달 불가"
+    - DNS 실패 (FQDN 이 backend resolver 에서 안 풀림)
+    - TLS/인증서 문제 (self-signed CA 가 kubeconfig 에 없거나 잘못)
+    - 방화벽/보안 그룹 차단 (6443 포트 막힘)
+    """
+    msg = str(exc).lower()
+    hints: list[str] = []
+    if "name or service not known" in msg or "nodename nor servname" in msg or "temporary failure in name resolution" in msg:
+        hints.append("DNS 해석 실패 — kubeconfig server URL 의 도메인을 backend 컨테이너가 resolve 할 수 있는지 확인")
+    if "connection refused" in msg:
+        hints.append("접속 거부 — 대상 호스트의 API 서버 포트(보통 6443)가 살아있는지, 방화벽이 열려있는지 확인")
+    if "no route to host" in msg or "network is unreachable" in msg:
+        hints.append("라우팅 불가 — kubeconfig server 가 internal IP(10.x/192.168.x/cluster.local)인 경우, backend 컨테이너는 기본적으로 그 네트워크에 접근 못 함. 공용 endpoint 또는 jump host 경유 필요")
+    if "timed out" in msg or "timeout" in msg:
+        hints.append("타임아웃 — 네트워크 경로가 느리거나 중간에 패킷이 버려짐")
+    if "certificate verify failed" in msg or "ssl:" in msg:
+        hints.append("TLS/CA 검증 실패 — kubeconfig 의 certificate-authority-data 가 실제 서버 인증서와 매칭되는지 확인")
+    if "max retries exceeded" in msg and not hints:
+        hints.append("urllib3 재시도 소진 — 네트워크 또는 TLS 설정 점검 필요")
+
+    base = f"kubeconfig 서버({kubeconfig_host}) 에 연결할 수 없습니다."
+    if hints:
+        return base + " 가능한 원인: " + " / ".join(hints)
+    return base + f" 원문: {str(exc)[:200]}"
+
+
 def _verify_kubeconfig_auth(api_endpoint: str, kubeconfig_path: str) -> None:
     """kubeconfig 인증/권한 유효성 검증."""
+    api_client = None
+    kubeconfig_host = ""
     try:
         api_client = k8s_config.new_client_from_config(config_file=kubeconfig_path)
         kubeconfig_host = (api_client.configuration.host or "").rstrip("/")
@@ -117,11 +150,25 @@ def _verify_kubeconfig_auth(api_endpoint: str, kubeconfig_path: str) -> None:
         raise
     except ApiException as exc:
         if exc.status in (401, 403):
-            detail = "kubeconfig 인증에 실패했습니다. 토큰/인증서 또는 권한을 확인하세요."
+            detail = f"kubeconfig 인증에 실패했습니다 (HTTP {exc.status}). 토큰/인증서/권한을 확인하세요. 서버: {kubeconfig_host or '(알 수 없음)'}"
         else:
-            detail = f"kubeconfig 검증 실패 (HTTP {exc.status}): {exc.reason}"
+            detail = f"kubeconfig 검증 실패 (HTTP {exc.status}): {exc.reason}. 서버: {kubeconfig_host or '(알 수 없음)'}"
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
     except Exception as exc:
+        # urllib3 MaxRetryError / ConnectionError / SSLError 등 네트워크 계열은
+        # 원인을 추정해서 안내
+        exc_text = str(exc).lower()
+        if (
+            "max retries" in exc_text
+            or "newconnectionerror" in exc_text
+            or "sslerror" in exc_text
+            or "name or service not known" in exc_text
+            or "timed out" in exc_text
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=_diagnose_max_retries(kubeconfig_host or api_endpoint, exc),
+            )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"kubeconfig 검증 실패: {str(exc)[:200]}",

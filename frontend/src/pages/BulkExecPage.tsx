@@ -5,7 +5,7 @@ import {
   Wifi, FileText, ShieldAlert, Zap, Clock,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ConfirmDialog, LogViewer, ClusterSidebar } from '@/components/common';
+import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands } from '@/components/common';
 import { bulkExecApi, type NodeSummary, type BulkExecResponse, type BulkExecResultItem } from '@/services/api';
 
 // ── 상태 색상 ───────────────────────────────────────────────────────────────
@@ -49,7 +49,7 @@ function NodeRow({ node, checked, onToggle }: { node: NodeSummary; checked: bool
 
 // ── Result row ──────────────────────────────────────────────────────────────
 
-function ResultRow({ result }: { result: BulkExecResultItem }) {
+function ResultRow({ result, globalFilter }: { result: BulkExecResultItem; globalFilter: string }) {
   const [expanded, setExpanded] = useState(result.status !== 'ok');
   const meta = STATUS_META[result.status];
   const Icon = meta.icon;
@@ -86,11 +86,15 @@ function ResultRow({ result }: { result: BulkExecResultItem }) {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
-                <LogViewer text={result.stdout} maxHeight="max-h-72" />
+                <LogViewer text={result.stdout} maxHeight="max-h-72"
+                  filterOverride={globalFilter || undefined}
+                  hideToolbar={!!globalFilter.trim()} />
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
-                <LogViewer text={result.stderr} maxHeight="max-h-72" asError />
+                <LogViewer text={result.stderr} maxHeight="max-h-72" asError
+                  filterOverride={globalFilter || undefined}
+                  hideToolbar={!!globalFilter.trim()} />
               </div>
             </div>
             {result.error && (
@@ -191,6 +195,7 @@ export function BulkExecPage() {
   const runError = runMutation.error as { response?: { data?: { detail?: string } }; message?: string } | null;
 
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [globalFilter, setGlobalFilter] = useState('');
 
   return (
     <div className="min-h-screen bg-background">
@@ -385,6 +390,12 @@ export function BulkExecPage() {
                   rows={3}
                   className="w-full px-3 py-2 bg-background border border-border rounded-lg text-[12px] font-mono focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                 />
+                <SavedCommands
+                  className="mt-2"
+                  storageKey="k8s:saved-cmd:bulk-exec-ssh"
+                  currentValue={command}
+                  onPick={setCommand}
+                />
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -497,6 +508,20 @@ export function BulkExecPage() {
                 <span className="text-[11px] text-muted-foreground">
                   총 {runResponse.totalDurationMs}ms · {runResponse.mode} · {runResponse.action}
                 </span>
+                <div className="ml-auto relative">
+                  <input
+                    value={globalFilter}
+                    onChange={(e) => setGlobalFilter(e.target.value)}
+                    placeholder="모든 노드 결과 공통 필터..."
+                    className="pl-2 pr-7 py-1 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-64"
+                  />
+                  {globalFilter && (
+                    <button
+                      onClick={() => setGlobalFilter('')}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >×</button>
+                  )}
+                </div>
               </div>
             </header>
             <div className="overflow-x-auto">
@@ -513,7 +538,7 @@ export function BulkExecPage() {
                 </thead>
                 <tbody>
                   {runResponse.results.map((r) => (
-                    <ResultRow key={r.host} result={r} />
+                    <ResultRow key={r.host} result={r} globalFilter={globalFilter} />
                   ))}
                 </tbody>
               </table>

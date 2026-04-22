@@ -9,6 +9,8 @@ interface LogViewerProps {
   asError?: boolean;          // stderr 느낌으로 (붉은 톤)
   collapsible?: boolean;      // 긴 로그 접기 (기본 false)
   className?: string;
+  filterOverride?: string;    // 외부에서 강제 필터 (상위 페이지의 global filter)
+  hideToolbar?: boolean;      // 툴바 감춤 (상위가 직접 관리할 때)
 }
 
 // ── 포맷 자동 감지 ──────────────────────────────────────────────────────────
@@ -188,11 +190,15 @@ function PlainView({ text }: { text: string }) {
 
 export function LogViewer({
   text, maxHeight = 'max-h-96', asError = false, collapsible = false, className = '',
+  filterOverride, hideToolbar = false,
 }: LogViewerProps) {
   const [wrap, setWrap] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [filter, setFilter] = useState('');
+  const [localFilter, setLocalFilter] = useState('');
   const [collapsed, setCollapsed] = useState(collapsible);
+
+  // 상위가 제어하면 그걸 쓰고, 아니면 자체 필터
+  const filter = filterOverride !== undefined ? filterOverride : localFilter;
 
   const fmt = useMemo(() => detectFormat(text), [text]);
 
@@ -228,21 +234,29 @@ export function LogViewer({
   return (
     <div className={`rounded-md border border-border bg-background overflow-hidden ${className}`}>
       {/* 툴바 */}
+      {!hideToolbar && (
       <div className="flex items-center gap-2 px-2 py-1.5 border-b border-border bg-muted/30 text-[10px]">
         <span className="px-1.5 py-0.5 rounded bg-secondary text-muted-foreground uppercase tracking-wider">
           {formatLabel}
         </span>
         <span className="text-muted-foreground">{lineCount} lines · {text.length}B</span>
+        {filterOverride !== undefined && filterOverride.trim() && (
+          <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/30">
+            global filter: "{filterOverride}"
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-1.5">
-          <div className="relative">
-            <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
-            <input
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              placeholder="필터..."
-              className="pl-6 pr-2 py-0.5 text-[11px] bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary w-32"
-            />
-          </div>
+          {filterOverride === undefined && (
+            <div className="relative">
+              <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+              <input
+                value={localFilter}
+                onChange={(e) => setLocalFilter(e.target.value)}
+                placeholder="필터..."
+                className="pl-6 pr-2 py-0.5 text-[11px] bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary w-32"
+              />
+            </div>
+          )}
           <button
             onClick={() => setWrap((v) => !v)}
             title={wrap ? '줄바꿈 해제' : '줄바꿈'}
@@ -267,6 +281,7 @@ export function LogViewer({
           )}
         </div>
       </div>
+      )}
 
       {/* 본문 */}
       {!collapsed && (

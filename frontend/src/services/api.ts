@@ -259,6 +259,32 @@ export interface EtcdLogsRequest {
   grep?: string;
 }
 
+export interface McPreset {
+  key: string;
+  label: string;
+  args: string;
+}
+
+export interface McRunRequest {
+  host: string;
+  port: number;
+  username: string;
+  password?: string;
+  privateKey?: string;
+  args: string;
+  alias: string;
+  mcPath: string;
+  extraEnv?: Record<string, string>;
+  timeout: number;
+}
+
+export const mcApi = {
+  presets: (clusterId: string) =>
+    api.get<{ presets: McPreset[] }>(`/clusters/${clusterId}/mc/presets`),
+  run: (clusterId: string, payload: McRunRequest) =>
+    api.post<EtcdCtlRunResponse>(`/clusters/${clusterId}/mc/run`, payload),
+};
+
 export const etcdctlApi = {
   presets: (clusterId: string) =>
     api.get<{ presets: EtcdPreset[] }>(`/clusters/${clusterId}/etcdctl/presets`),

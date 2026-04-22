@@ -172,8 +172,8 @@ export function EtcdCtlPage() {
       <main className="max-w-[1800px] mx-auto px-6 py-6 flex gap-5">
         <ClusterSidebar
           clusters={clusters}
-          selectedId={clusterId}
-          onSelect={(id) => { setClusterId(id); setResult(null); setSelectedMasterName(''); }}
+          selectedId={clusterId || null}
+          onSelect={(id) => { setClusterId(id ?? ''); setResult(null); setSelectedMasterName(''); }}
         />
         <div className="flex-1 min-w-0">
         {/* 헤더 */}

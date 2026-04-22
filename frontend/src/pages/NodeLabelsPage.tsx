@@ -3,6 +3,7 @@ import { Tags, Search, LayoutList, Tag, AlertTriangle } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useNodeList, usePatchNodeLabels, NodeInfo } from '@/hooks/useNodeLabels';
 import { NodeLabelEditorModal, NodeLabelsTable } from '@/components/node-labels';
+import { ClusterSidebar } from '@/components/common';
 
 function extractErrorMessage(error: unknown): string {
   if (!error) return '알 수 없는 오류가 발생했습니다.';
@@ -40,7 +41,13 @@ export function NodeLabelsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1500px] mx-auto px-8 py-8">
+      <main className="max-w-[1800px] mx-auto px-6 py-6 flex gap-5">
+        <ClusterSidebar
+          clusters={clusters}
+          selectedId={activeClusterId || null}
+          onSelect={(id) => setSelectedClusterId(id ?? '')}
+        />
+        <div className="flex-1 min-w-0">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
@@ -52,29 +59,6 @@ export function NodeLabelsPage() {
               </span>
             )}
           </div>
-
-          {/* Cluster select */}
-          {clustersLoading ? (
-            <div className="px-3 py-2 bg-card border border-border rounded-lg text-sm text-muted-foreground">
-              Loading clusters...
-            </div>
-          ) : (
-            <select
-              value={activeClusterId}
-              onChange={(e) => setSelectedClusterId(e.target.value)}
-              className="px-3 py-2 bg-card border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-            >
-              {clusters.length === 0 ? (
-                <option value="">No clusters</option>
-              ) : (
-                clusters.map((cluster) => (
-                  <option key={cluster.id} value={cluster.id}>
-                    {cluster.name}
-                  </option>
-                ))
-              )}
-            </select>
-          )}
         </div>
 
         {/* Toolbar: search + view mode */}
@@ -157,6 +141,7 @@ export function NodeLabelsPage() {
             viewMode={viewMode}
           />
         )}
+        </div>
       </main>
 
       <NodeLabelEditorModal

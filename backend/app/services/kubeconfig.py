@@ -28,14 +28,32 @@ def save_kubeconfig_content(cluster_id: UUID, content: str) -> str:
 def ensure_kubeconfig_file(cluster) -> str | None:
     """cluster.kubeconfig_content 가 있고 파일이 없으면 재생성.
 
-    반환: 유효한 파일 경로 (없으면 None). cluster.kubeconfig_path 가
-    업데이트 필요하면 caller 가 commit 해야 함.
+    양방향 보존:
+    - 파일만 있고 DB 가 비어있으면 → DB 에 백필 (메모리만 세팅, caller 가
+      commit 해야 영속화)
+    - DB 만 있고 파일이 없으면 → 파일 재생성
+    둘 다 있으면 파일 경로 그대로 반환.
+    둘 다 없으면 None.
+
+    반환: 유효한 파일 경로 (없으면 None).
     """
-    # 1) 파일이 이미 있으면 그대로
-    if cluster.kubeconfig_path and os.path.exists(cluster.kubeconfig_path):
+    has_content = bool(getattr(cluster, "kubeconfig_content", None))
+    file_ok = bool(cluster.kubeconfig_path) and os.path.exists(cluster.kubeconfig_path)
+
+    # 1) 파일 존재 + DB 비어있음 → DB 로 백필 (영속 저장소 쪽으로 옮김)
+    if file_ok and not has_content:
+        try:
+            with open(cluster.kubeconfig_path, encoding="utf-8") as f:
+                cluster.kubeconfig_content = f.read()
+        except Exception:
+            pass  # 파일 읽기 실패해도 계속 진행
         return cluster.kubeconfig_path
 
-    # 2) DB 에 content 가 있으면 표준 경로로 재생성
+    # 2) 파일 있음 → 그대로 사용
+    if file_ok:
+        return cluster.kubeconfig_path
+
+    # 3) DB 에 content 있음 → 표준 경로로 재생성
     content = getattr(cluster, "kubeconfig_content", None)
     if content:
         try:
@@ -43,5 +61,5 @@ def ensure_kubeconfig_file(cluster) -> str | None:
         except Exception:
             return None
 
-    # 3) 둘 다 없음
+    # 4) 둘 다 없음
     return None

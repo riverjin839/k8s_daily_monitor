@@ -203,8 +203,8 @@ export function BulkExecPage() {
         {/* 좌측: 클러스터 사이드바 */}
         <ClusterSidebar
           clusters={clusters}
-          selectedId={clusterId}
-          onSelect={setClusterId}
+          selectedId={clusterId || null}
+          onSelect={(id) => setClusterId(id ?? '')}
         />
 
         <div className="flex-1 min-w-0">

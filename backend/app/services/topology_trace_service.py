@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 from kubernetes import client, config
@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.cluster import Cluster
 from app.models.infra_node import InfraNode
+from app.services.cilium_policy_analyzer import CiliumPolicyAnalyzer
 
 
 @dataclass
@@ -21,6 +22,23 @@ class PacketFlowRequest:
     host: str
     path: str = "/"
     protocol: str = "https"
+
+
+@dataclass
+class PacketFlowRequestV2:
+    """확장된 패킷 흐름 추적 요청.
+
+    direction=north-south: source 는 external FQDN/IP, destination 은
+      "ingress-host:/path" 또는 "ns/service:port".
+    direction=east-west: source 는 "ns/pod", destination 은 "ns/pod" 또는
+      "ns/service:port".
+    """
+    direction: str               # "north-south" | "east-west"
+    source: str                  # N-S: "internet" | FQDN/IP.  E-W: "ns/pod"
+    destination: str             # "ns/pod" | "ns/service:port" | host+path
+    protocol: str = "tcp"        # "tcp" | "http" | "https" | "grpc" | "udp"
+    port: int | None = None
+    path: str = "/"              # host 기반 ingress 에만 사용
 
 
 class TopologyTraceService:
@@ -429,6 +447,301 @@ class TopologyTraceService:
         )
 
         return hops
+
+
+    # ── v2 — 정책/Identity/Cilium-config 정보가 주입된 확장 trace ────────────
+
+    def _build_hop_v2(
+        self,
+        *,
+        entity_type: str,
+        entity_id: str,
+        name: str,
+        interface: str | None = None,
+        latency_ms: float | None = None,
+        error_count: int | None = None,
+        verdict: str = "info",          # "allow" | "deny" | "warn" | "info"
+        notes: list[str] | None = None,
+        policies: list[dict] | None = None,
+        identity: dict | None = None,
+        refs: list[dict] | None = None,
+    ) -> dict:
+        return {
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "name": name,
+            "interface": interface,
+            "latency_ms": latency_ms,
+            "error_count": error_count,
+            "verdict": verdict,
+            "notes": notes or [],
+            "policies": policies or [],
+            "identity": identity,
+            "refs": refs or [],
+        }
+
+    def _parse_ns_target(self, s: str) -> tuple[str, str, int | None]:
+        """'default/my-svc:80' 또는 'default/pod' → (ns, name, port)."""
+        name_part = s
+        port: int | None = None
+        if ":" in s:
+            name_part, port_s = s.rsplit(":", 1)
+            try:
+                port = int(port_s)
+            except ValueError:
+                port = None
+        if "/" not in name_part:
+            raise ValueError(f"대상은 'namespace/name' 형식이어야 합니다: '{s}'")
+        ns, name = name_part.split("/", 1)
+        return ns, name, port
+
+    def _resolve_pod(self, ns: str, name: str) -> client.V1Pod:
+        core_v1, _ = self._get_clients()
+        try:
+            return core_v1.read_namespaced_pod(name=name, namespace=ns)
+        except ApiException as e:
+            if e.status == 404:
+                raise ValueError(f"pod '{ns}/{name}' 를 찾을 수 없습니다") from e
+            raise
+
+    def _dest_kind(self, dest: str, has_ingress_host_hint: bool) -> str:
+        """대상이 pod / service / ingress-host 중 무엇인지."""
+        if "/" in dest:
+            # ns/xxx[:port] 형식 — pod vs service 는 실제 조회로 판단
+            ns, name, _ = self._parse_ns_target(dest)
+            try:
+                self._get_service(ns, name)
+                return "service"
+            except Exception:
+                return "pod"
+        # "/" 가 없으면 host (ingress)
+        return "ingress-host" if has_ingress_host_hint else "unknown"
+
+    def trace_v2(self, req: PacketFlowRequestV2) -> list[dict]:
+        """확장 패킷 흐름. direction + source + destination 기반.
+
+        반환 hop 은 기존 v1 포맷 상위호환: 추가 필드 verdict/notes/policies/identity/refs.
+        """
+        core_v1, _ = self._get_clients()
+        net_v1 = self._get_networking_client()
+        custom_api = client.CustomObjectsApi()
+        analyzer = CiliumPolicyAnalyzer(core=core_v1, net=net_v1, custom=custom_api)
+        cilium_cfg = analyzer.get_cilium_config()
+
+        def cfg_note() -> list[str]:
+            notes = []
+            kpr = cilium_cfg.get("kube-proxy-replacement")
+            if kpr and kpr.lower() in ("strict", "true", "enabled"):
+                notes.append("Cilium kpr(kubeProxyReplacement) 활성 — kube-proxy 건너뜀")
+            lb_mode = cilium_cfg.get("bpf-lb-mode")
+            if lb_mode:
+                notes.append(f"bpf-lb-mode={lb_mode}")
+            routing = cilium_cfg.get("routing-mode") or cilium_cfg.get("tunnel")
+            if routing:
+                notes.append(f"routing-mode={routing}")
+            return notes
+
+        hops: list[dict] = []
+
+        if req.direction not in ("north-south", "east-west"):
+            raise ValueError("direction 은 'north-south' 또는 'east-west' 여야 합니다")
+
+        # ── N-S: External → DNS → Ingress → Service → Pod → Node → Switch
+        if req.direction == "north-south":
+            # 1. External
+            hops.append(self._build_hop_v2(
+                entity_type="external", entity_id="external-client",
+                name="External Client", interface=req.source or "internet",
+                verdict="info", notes=["외부 네트워크 진입점"],
+            ))
+
+            host_like = ("." in req.destination and "/" not in req.destination) \
+                        or (req.destination.startswith(req.source) if req.source else False)
+            dest_kind = self._dest_kind(req.destination, has_ingress_host_hint=host_like)
+
+            # 2. Ingress host 기반: DNS → Ingress pod → Ingress resource → Service → Pod
+            if dest_kind == "ingress-host" or "." in (req.destination.split("/", 1)[0] if "/" in req.destination else req.destination):
+                host = req.destination.split("/", 1)[0]
+                path = req.path or "/"
+                hops.append(self._build_hop_v2(
+                    entity_type="dns", entity_id=host, name=host,
+                    interface=f"DNS → A/AAAA", verdict="info",
+                ))
+                try:
+                    ing, backend, ing_ns = self._find_ingress_for_host(host, path)
+                except Exception:
+                    ing, backend, ing_ns = None, None, None
+
+                ctrl_pod = self._find_ingress_controller_pod(ing) if ing else None
+                if ctrl_pod:
+                    pol = analyzer.analyze_for_pod(ctrl_pod)
+                    hops.append(self._build_hop_v2(
+                        entity_type="ingress_controller",
+                        entity_id=ctrl_pod.metadata.uid,
+                        name=f"{ctrl_pod.metadata.namespace}/{ctrl_pod.metadata.name}",
+                        interface=ctrl_pod.status.pod_ip if ctrl_pod.status else None,
+                        latency_ms=self._safe_latency_ms(ctrl_pod, None),
+                        error_count=self._safe_error_count(ctrl_pod, None),
+                        verdict="allow",
+                        notes=cfg_note(),
+                        policies=pol["ingress_policies"],
+                        identity=pol["identity"],
+                        refs=[{"kind": "Pod",
+                               "name": f"{ctrl_pod.metadata.namespace}/{ctrl_pod.metadata.name}"}],
+                    ))
+                if ing:
+                    hops.append(self._build_hop_v2(
+                        entity_type="ingress", entity_id=ing.metadata.uid,
+                        name=f"{ing_ns}/{ing.metadata.name}",
+                        interface=f"{host}{path}", verdict="info",
+                        refs=[{"kind": "Ingress", "name": f"{ing_ns}/{ing.metadata.name}"}],
+                    ))
+                if backend and backend.service:
+                    try:
+                        svc = self._get_service(ing_ns, backend.service.name)
+                        entry_label, ext = self._service_entry_info(svc)
+                        port = backend.service.port.number if backend.service.port else None
+                        iface = f"{svc.spec.cluster_ip}:{port}" if port else svc.spec.cluster_ip
+                        hops.append(self._build_hop_v2(
+                            entity_type="service", entity_id=svc.metadata.uid,
+                            name=f"{ing_ns}/{svc.metadata.name} ({entry_label})",
+                            interface=ext or iface, verdict="info",
+                            notes=cfg_note(),
+                            refs=[{"kind": "Service", "name": f"{ing_ns}/{svc.metadata.name}"}],
+                        ))
+                        pod = self._get_service_backend_pod(ing_ns, svc.metadata.name)
+                        self._append_pod_and_node(hops, pod, analyzer)
+                    except Exception as e:
+                        hops.append(self._build_hop_v2(
+                            entity_type="error", entity_id="trace-error",
+                            name="백엔드 추적 실패", interface=str(e)[:120],
+                            verdict="warn",
+                        ))
+                return hops
+
+            # 대상이 service 또는 pod (ns/xxx 형식)
+            ns, name, dst_port = self._parse_ns_target(req.destination)
+            port = req.port or dst_port
+            if dest_kind == "service":
+                svc = self._get_service(ns, name)
+                entry_label, ext = self._service_entry_info(svc)
+                iface = f"{svc.spec.cluster_ip}:{port}" if port else svc.spec.cluster_ip
+                hops.append(self._build_hop_v2(
+                    entity_type="service", entity_id=svc.metadata.uid,
+                    name=f"{ns}/{svc.metadata.name} ({entry_label})",
+                    interface=ext or iface, verdict="info",
+                    notes=cfg_note() + [f"ServiceType={svc.spec.type}"],
+                    refs=[{"kind": "Service", "name": f"{ns}/{svc.metadata.name}"}],
+                ))
+                pod = self._get_service_backend_pod(ns, name)
+            else:
+                pod = self._resolve_pod(ns, name)
+            self._append_pod_and_node(hops, pod, analyzer)
+            return hops
+
+        # ── E-W: Source pod → Cilium agent(src) → [Service?] → Cilium agent(dst) → Dest pod
+        src_ns, src_name, _ = self._parse_ns_target(req.source)
+        src_pod = self._resolve_pod(src_ns, src_name)
+        src_pol = analyzer.analyze_for_pod(src_pod)
+
+        hops.append(self._build_hop_v2(
+            entity_type="pod", entity_id=src_pod.metadata.uid,
+            name=f"{src_ns}/{src_pod.metadata.name}",
+            interface=src_pod.status.pod_ip if src_pod.status else None,
+            verdict="allow" if not src_pol["egress_deny_by_default"] else "warn",
+            notes=["Source pod"] + cfg_note(),
+            policies=src_pol["egress_policies"],
+            identity=src_pol["identity"],
+            refs=[{"kind": "Pod", "name": f"{src_ns}/{src_pod.metadata.name}"}],
+        ))
+
+        dest_kind = self._dest_kind(req.destination, has_ingress_host_hint=False)
+        if dest_kind == "service":
+            ns, name, dst_port = self._parse_ns_target(req.destination)
+            port = req.port or dst_port
+            svc = self._get_service(ns, name)
+            iface = f"{svc.spec.cluster_ip}:{port}" if port else svc.spec.cluster_ip
+            hops.append(self._build_hop_v2(
+                entity_type="service", entity_id=svc.metadata.uid,
+                name=f"{ns}/{svc.metadata.name}",
+                interface=iface, verdict="info",
+                notes=["ClusterIP"] + cfg_note(),
+                refs=[{"kind": "Service", "name": f"{ns}/{svc.metadata.name}"}],
+            ))
+            dst_pod = self._get_service_backend_pod(ns, name)
+        else:
+            ns, name, _ = self._parse_ns_target(req.destination)
+            dst_pod = self._resolve_pod(ns, name)
+
+        dst_pol = analyzer.analyze_for_pod(dst_pod)
+        hops.append(self._build_hop_v2(
+            entity_type="pod", entity_id=dst_pod.metadata.uid,
+            name=f"{dst_pod.metadata.namespace}/{dst_pod.metadata.name}",
+            interface=dst_pod.status.pod_ip if dst_pod.status else None,
+            verdict="allow" if not dst_pol["ingress_deny_by_default"] else "warn",
+            notes=["Destination pod"],
+            policies=dst_pol["ingress_policies"],
+            identity=dst_pol["identity"],
+            refs=[{"kind": "Pod",
+                   "name": f"{dst_pod.metadata.namespace}/{dst_pod.metadata.name}"}],
+        ))
+
+        # 마지막 홉: dest pod 가 올라가 있는 node + switch 정보
+        if dst_pod.spec and dst_pod.spec.node_name:
+            self._append_node_switch(hops, dst_pod)
+
+        return hops
+
+    # ── v2 공통 — pod + node + switch 추가 ────────────────────────────────────
+
+    def _append_pod_and_node(
+        self,
+        hops: list[dict],
+        pod: client.V1Pod,
+        analyzer: CiliumPolicyAnalyzer,
+    ) -> None:
+        pol = analyzer.analyze_for_pod(pod)
+        hops.append(self._build_hop_v2(
+            entity_type="pod", entity_id=pod.metadata.uid,
+            name=f"{pod.metadata.namespace}/{pod.metadata.name}",
+            interface=pod.status.pod_ip if pod.status else None,
+            latency_ms=self._safe_latency_ms(pod, None),
+            error_count=self._safe_error_count(pod, None),
+            verdict="allow" if not pol["ingress_deny_by_default"] else "warn",
+            notes=["Backend pod"],
+            policies=pol["ingress_policies"],
+            identity=pol["identity"],
+            refs=[{"kind": "Pod",
+                   "name": f"{pod.metadata.namespace}/{pod.metadata.name}"}],
+        ))
+        if pod.spec and pod.spec.node_name:
+            self._append_node_switch(hops, pod)
+
+    def _append_node_switch(self, hops: list[dict], pod: client.V1Pod) -> None:
+        core_v1, _ = self._get_clients()
+        try:
+            node = core_v1.read_node(name=pod.spec.node_name)
+        except Exception:
+            return
+        infra = self.db.query(InfraNode).filter(
+            InfraNode.cluster_id == self.cluster.id,
+            InfraNode.hostname == node.metadata.name,
+        ).first()
+        iface = self._resolve_interface(node, infra)
+        hops.append(self._build_hop_v2(
+            entity_type="node", entity_id=node.metadata.uid,
+            name=node.metadata.name, interface=iface,
+            latency_ms=self._safe_latency_ms(None, node),
+            error_count=self._safe_error_count(None, node),
+            verdict="info",
+            refs=[{"kind": "Node", "name": node.metadata.name}],
+        ))
+        sw_name = infra.switch_name if infra and infra.switch_name else "unknown-switch"
+        hops.append(self._build_hop_v2(
+            entity_type="switch", entity_id=sw_name,
+            name=sw_name, interface=iface, verdict="info",
+            notes=["ToR(Top-of-Rack) 스위치"],
+        ))
 
 
 def map_k8s_or_trace_error(e: Exception) -> tuple[int, str]:

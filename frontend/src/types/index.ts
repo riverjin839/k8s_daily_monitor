@@ -686,6 +686,99 @@ export interface PacketFlowResponse {
   hops: TopologyTraceHop[];
 }
 
+// ── Packet Flow v2 (정책 해석 + E-W 지원) ────────────────────────────────
+export type PacketDirection = 'north-south' | 'east-west';
+export type HopVerdict = 'allow' | 'deny' | 'warn' | 'info';
+
+export interface HopPolicy {
+  kind: string;             // "CiliumNetworkPolicy" | "CiliumClusterwideNetworkPolicy" | "NetworkPolicy"
+  name: string;
+  direction: 'ingress' | 'egress';
+  summary: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  selectorLabels?: Record<string, any>;
+}
+
+export interface HopRef {
+  kind: string;
+  name: string;
+  link?: string;
+}
+
+export interface TopologyTraceHopV2 {
+  entityType: string;
+  entityId: string;
+  name: string;
+  interface?: string | null;
+  latencyMs?: number | null;
+  errorCount?: number | null;
+  verdict: HopVerdict;
+  notes: string[];
+  policies: HopPolicy[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  identity?: Record<string, any> | null;
+  refs: HopRef[];
+}
+
+export interface PacketFlowRequestV2 {
+  clusterId: string;
+  direction: PacketDirection;
+  source: string;
+  destination: string;
+  protocol?: 'tcp' | 'udp' | 'http' | 'https' | 'grpc';
+  port?: number;
+  path?: string;
+}
+
+export interface PacketFlowResponseV2 {
+  clusterId: string;
+  direction: PacketDirection;
+  source: string;
+  destination: string;
+  protocol: string;
+  port?: number | null;
+  path: string;
+  hops: TopologyTraceHopV2[];
+}
+
+// ── Hubble flows ────────────────────────────────────────────────────────
+export interface HubbleFlowsRequest {
+  clusterId: string;
+  fromPod?: string;
+  toPod?: string;
+  fromNamespace?: string;
+  toNamespace?: string;
+  toService?: string;
+  protocol?: string;
+  verdict?: string;
+  sinceSeconds?: number;
+  limit?: number;
+  hubbleNamespace?: string;
+  hubbleService?: string;
+  hubblePort?: number;
+}
+
+export interface HubbleFlow {
+  time?: string | null;
+  verdict?: string | null;
+  dropReason?: string | null;
+  source: { namespace?: string | null; podName?: string | null; identity?: number | null; labels?: string[]; ip?: string | null };
+  destination: { namespace?: string | null; podName?: string | null; identity?: number | null; labels?: string[]; ip?: string | null };
+  l4: { protocol?: string; sourcePort?: number; destinationPort?: number; flags?: Record<string, unknown> };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  l7?: Record<string, any> | null;
+  trafficDirection: string;
+  summary: string;
+}
+
+export interface HubbleFlowsResponse {
+  clusterId: string;
+  flows: HubbleFlow[];
+  count: number;
+  error?: string | null;
+  executed?: string | null;
+}
+
 // Ontology Graph
 export type OntologyEntityType =
   | 'node' | 'hardware' | 'os' | 'kernel_param' | 'network'

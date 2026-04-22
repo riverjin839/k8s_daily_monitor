@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pencil, Trash2, CalendarDays, User, Server, ChevronRight, ChevronLeft, Clock, AlertTriangle } from 'lucide-react';
 import type { Task, KanbanStatus } from '@/types';
+import { stripHtml } from '@/lib/utils';
 import {
   KANBAN_COLUMNS,
   KANBAN_STATUS_ORDER,
@@ -132,7 +133,7 @@ function TaskCard({ task, onClick, onEdit, onDelete, onMove }: TaskCardProps) {
 
       {/* 작업 내용 */}
       <p className="text-xs text-foreground/90 line-clamp-2 leading-relaxed mb-2">
-        {task.taskContent}
+        {stripHtml(task.taskContent)}
       </p>
 
       {/* 완료 조건 (in_progress / review_test 에서만 표시) */}

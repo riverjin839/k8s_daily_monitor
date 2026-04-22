@@ -16,7 +16,7 @@
     --secondary: 191 52% 90%;
     --secondary-foreground: 202 39% 18%;
     --muted: 191 45% 92%;
-    --muted-foreground: 197 24% 36%;
+    --muted-foreground: 202 30% 26%;  /* aqua 테마 + 가독성: 36% → 26% 로 진하게 */
     --accent: 183 72% 86%;
     --accent-foreground: 202 39% 18%;
     --destructive: 4 86% 58%;
@@ -72,7 +72,7 @@
     --secondary: 191 52% 90%;
     --secondary-foreground: 202 39% 18%;
     --muted: 191 45% 92%;
-    --muted-foreground: 197 24% 36%;
+    --muted-foreground: 202 30% 26%;  /* aqua + 가독성 */
     --accent: 183 72% 86%;
     --accent-foreground: 202 39% 18%;
     --destructive: 4 86% 58%;
@@ -97,14 +97,16 @@
     background-image: radial-gradient(circle at 20% 0%, hsl(184 90% 82% / 0.28), transparent 34%),
       radial-gradient(circle at 80% 20%, hsl(196 95% 78% / 0.22), transparent 30%);
     font-feature-settings: "rlig" 1, "calt" 1;
-    /* 기본 본문 가독성 — 15px (Tailwind text-base=16px 와 text-sm=14px 사이) */
-    font-size: 15px;
+    /* 기본 본문 가독성 — 16px (Tailwind text-base) */
+    font-size: 16px;
     line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
 /* ── 가독성 개선 — 너무 작은 임의 크기를 floor 처리 ────────────────────────── */
-/* 9~10px 로 쓰인 텍스트가 많아 읽기 어려움. 12px(= Tailwind text-xs) 로 올림. */
+/* 9~10px 로 쓰인 텍스트가 많아 읽기 어려움. 12~13px 로 올림. */
 .text-\[9px\]  { font-size: 12px !important; line-height: 1.4; }
 .text-\[10px\] { font-size: 12px !important; line-height: 1.4; }
 .text-\[11px\] { font-size: 13px !important; line-height: 1.45; }
@@ -115,9 +117,10 @@ code .text-\[11px\], code .text-\[10px\], code .text-\[9px\] {
   font-size: inherit !important;
 }
 
-/* text-xs (12px) 도 더 읽기 쉽게 13px 로 — 기존 text-sm=14px 와 간격 유지 */
+/* text-xs / text-sm 모두 한 단계 올림 — 메타데이터가 잘 보이게 */
 .text-xs { font-size: 13px; line-height: 1.5; }
-/* text-sm 은 기본 유지 (14px) */
+.text-sm { font-size: 14.5px; line-height: 1.55; }
+/* text-base 는 기본 16px */
 
 /* ── macOS-style Card shadow utility ──────────────────────────────────────── */
 .mac-shadow {

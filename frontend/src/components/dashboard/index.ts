@@ -1,7 +1,7 @@
 export { StatusBadge, StatusDot } from './StatusBadge';
 export { SummaryStats } from './SummaryStats';
 export { AddonCard, AddonGrid } from './AddonCard';
-export { ClusterTabs } from './ClusterTabs';
+// ClusterTabs 는 공용 ClusterSidebar 로 대체됨. 파일은 유지하되 export 제거.
 export { HistoryLog } from './HistoryLog';
 export { AddClusterModal } from './AddClusterModal';
 export { AddAddonModal } from './AddAddonModal';

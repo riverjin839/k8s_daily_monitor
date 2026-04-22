@@ -7,6 +7,7 @@ import {
   CheckCircle2, Clock, AlertCircle, Circle, BarChart3,
 } from 'lucide-react';
 import { ViewModeBar } from '@/components/common';
+import { stripHtml } from '@/lib/utils';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -345,7 +346,7 @@ function PersonalGanttView({
                     <div className={`flex items-center gap-1.5 ${row.indent ? 'ml-4' : ''}`}>
                       {row.indent && <span className="text-muted-foreground/40 text-xs flex-shrink-0">└</span>}
                       <StatusIcon status={t.kanbanStatus} type="task" />
-                      <span className={`truncate max-w-[180px] leading-tight ${row.indent ? 'text-muted-foreground text-[11px]' : 'font-medium text-xs'}`}>{t.taskContent}</span>
+                      <span className={`truncate max-w-[180px] leading-tight ${row.indent ? 'text-muted-foreground text-[11px]' : 'font-medium text-xs'}`}>{stripHtml(t.taskContent)}</span>
                     </div>
                     <div className={`text-[10px] text-muted-foreground mt-0.5 truncate ${row.indent ? 'ml-9' : 'ml-4'}`}>
                       {t.taskCategory}
@@ -386,7 +387,7 @@ function PersonalGanttView({
                     style={{ backgroundColor: bgBase }}>
                     <div className="flex items-center gap-1.5">
                       <AlertCircle className={`w-3 h-3 flex-shrink-0 ${issue.resolvedAt ? 'text-green-400' : 'text-red-400'}`} />
-                      <span className="truncate max-w-[180px] font-medium leading-tight">{issue.issueContent}</span>
+                      <span className="truncate max-w-[180px] font-medium leading-tight">{stripHtml(issue.issueContent)}</span>
                     </div>
                     <div className="text-[10px] text-muted-foreground mt-0.5 ml-4">{issue.issueArea}</div>
                   </td>

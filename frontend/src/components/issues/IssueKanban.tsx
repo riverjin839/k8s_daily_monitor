@@ -1,5 +1,6 @@
 import { Pencil, Trash2, CalendarDays, User, Server } from 'lucide-react';
 import type { Issue } from '@/types';
+import { stripHtml } from '@/lib/utils';
 
 // ── 헬퍼 ──────────────────────────────────────────────────────────────────────
 function formatDate(s?: string | null) {
@@ -58,13 +59,13 @@ function IssueCard({ issue, onClick, onEdit, onDelete }: IssueCardProps) {
 
       {/* 내용 */}
       <p className="text-xs text-foreground/90 line-clamp-2 leading-relaxed mb-2">
-        {issue.issueContent}
+        {stripHtml(issue.issueContent)}
       </p>
 
       {/* 조치 내용 */}
       {issue.actionContent && (
         <p className="text-[10px] text-muted-foreground line-clamp-1 mb-2 bg-muted/30 rounded px-1.5 py-0.5">
-          → {issue.actionContent}
+          → {stripHtml(issue.actionContent)}
         </p>
       )}
 

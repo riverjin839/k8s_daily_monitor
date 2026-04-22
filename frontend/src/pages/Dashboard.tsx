@@ -251,7 +251,7 @@ export function Dashboard() {
   return (
     <div className="min-h-screen bg-background">
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-10 px-8 py-3 bg-background/80 backdrop-blur-sm border-b border-border flex items-center justify-between">
+      <div className="sticky top-0 z-20 px-8 py-3 bg-background border-b border-border flex items-center justify-between">
         <div>
           <h1 className="font-bold text-base tracking-tight">K8s Daily Monitor</h1>
           {lastCheckTime && (

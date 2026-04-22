@@ -1,4 +1,5 @@
-import { useMemo, useState, type ComponentType } from 'react';
+import { useMemo, useState, useRef, type ComponentType } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation, Link } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, ClipboardList, ListTodo, CalendarCheck2,
@@ -9,7 +10,8 @@ import {
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
-import { InlineEdit } from '@/components/common';
+import { useSidebarStore, NAV_COLLAPSE_AT } from '@/stores/sidebarStore';
+import { InlineEdit, ResizeHandle } from '@/components/common';
 
 // ── Nav registry ──────────────────────────────────────────────────────────────
 const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ className?: string }> }> = {
@@ -54,22 +56,69 @@ const DEFAULT_TITLE = 'K8s Daily Monitor';
 const THEME_CYCLE: Record<Theme, Theme> = { light: 'dark', dark: 'system', system: 'light' };
 const THEME_LABEL: Record<Theme, string> = { dark: '다크', light: '라이트', system: '시스템' };
 
-// ── Tooltip (우측 hover 박스) ───────────────────────────────────────────────
+// ── Portal tooltip (scroll container overflow 무시) ────────────────────────
 
-function Tooltip({ label, children }: { label: string; children: React.ReactNode }) {
+interface PortalTooltipState {
+  label: string;
+  x: number;   // viewport X (아이콘 오른쪽 끝)
+  y: number;   // viewport Y (아이콘 중앙)
+}
+
+function PortalTooltip({ state }: { state: PortalTooltipState | null }) {
+  if (!state) return null;
+  return createPortal(
+    <div
+      role="tooltip"
+      style={{
+        position: 'fixed',
+        left: state.x + 10,
+        top: state.y,
+        transform: 'translateY(-50%)',
+        zIndex: 9999,
+      }}
+      className="pointer-events-none px-2.5 py-1 bg-card border border-border rounded-md shadow-lg text-xs font-medium text-foreground whitespace-nowrap"
+    >
+      {state.label}
+    </div>,
+    document.body,
+  );
+}
+
+// ── 개별 nav item ───────────────────────────────────────────────────────────
+
+function NavItem({
+  path, label, Icon, isActive, showLabel, onHover, onLeave,
+}: {
+  path: string;
+  label: string;
+  Icon: ComponentType<{ className?: string }>;
+  isActive: boolean;
+  showLabel: boolean;
+  onHover: (e: React.MouseEvent, label: string) => void;
+  onLeave: () => void;
+}) {
   return (
-    <div className="group relative">
-      {children}
-      <span
-        role="tooltip"
-        className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1
-                   bg-card border border-border rounded-md shadow-lg text-xs font-medium text-foreground
-                   whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150
-                   z-50"
-      >
-        {label}
-      </span>
-    </div>
+    <Link
+      to={path}
+      aria-label={label}
+      aria-current={isActive ? 'page' : undefined}
+      onMouseEnter={(e) => onHover(e, label)}
+      onMouseLeave={onLeave}
+      className={`relative flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+        isActive
+          ? 'bg-primary/15 text-primary font-semibold'
+          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+      }`}
+    >
+      {isActive && (
+        <span
+          aria-hidden="true"
+          className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-[3px] w-1 h-5 bg-primary rounded-r"
+        />
+      )}
+      <Icon className="w-[18px] h-[18px] flex-shrink-0" />
+      {showLabel && <span className="flex-1 min-w-0 truncate text-sm">{label}</span>}
+    </Link>
   );
 }
 
@@ -81,9 +130,17 @@ export function Sidebar() {
   const { data: settings } = useUiSettings();
   const updateSettings = useUpdateUiSettings();
 
-  const [editMode, setEditMode] = useState(false);          // 편집 패널 오버레이
+  const navWidth = useSidebarStore((s) => s.navWidth);
+  const setNavWidth = useSidebarStore((s) => s.setNavWidth);
+  const resetNav = useSidebarStore((s) => s.resetNav);
+
+  const iconOnly = navWidth < NAV_COLLAPSE_AT;
+
+  const [editMode, setEditMode] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editingNavPath, setEditingNavPath] = useState<string | null>(null);
+  const [tooltip, setTooltip] = useState<PortalTooltipState | null>(null);
+  const hoverTimerRef = useRef<number | null>(null);
 
   const title = settings?.appTitle || DEFAULT_TITLE;
   const navLabels = useMemo(() => settings?.navLabels || {}, [settings?.navLabels]);
@@ -101,55 +158,71 @@ export function Sidebar() {
     setEditingNavPath(null);
   };
 
+  // icon-only 모드일 때만 포털 tooltip (inline label 이 이미 있으면 불필요)
+  const onNavHover = (e: React.MouseEvent, label: string) => {
+    if (!iconOnly) return;
+    if (hoverTimerRef.current) window.clearTimeout(hoverTimerRef.current);
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    hoverTimerRef.current = window.setTimeout(() => {
+      setTooltip({
+        label,
+        x: rect.right,
+        y: rect.top + rect.height / 2,
+      });
+    }, 150);
+  };
+  const onNavLeave = () => {
+    if (hoverTimerRef.current) {
+      window.clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    setTooltip(null);
+  };
+
   return (
     <>
-      {/* ── 아이콘 레일 (항상 표시, w-16) ──────────────────────────────────── */}
-      <aside className="fixed top-0 left-0 h-full w-16 bg-card border-r border-border flex flex-col z-40">
-        {/* 타이틀 (앱 아이콘) */}
-        <div className="py-4 flex flex-col items-center border-b border-border">
-          <Tooltip label={title}>
-            <div className="w-10 h-10 bg-gradient-to-br from-primary to-blue-700 rounded-xl flex items-center justify-center text-white text-lg shadow-sm">
-              ☸
-            </div>
-          </Tooltip>
+      <aside
+        style={{ width: navWidth }}
+        className="fixed top-0 left-0 h-full bg-card border-r border-border flex flex-col z-40"
+      >
+        {/* 타이틀 */}
+        <div className={`flex items-center ${iconOnly ? 'justify-center py-4' : 'gap-2 px-3 py-4'} border-b border-border flex-shrink-0`}>
+          <div className="w-10 h-10 bg-gradient-to-br from-primary to-blue-700 rounded-xl flex items-center justify-center text-white text-lg shadow-sm flex-shrink-0">
+            ☸
+          </div>
+          {!iconOnly && (
+            <span className="font-bold text-sm truncate text-foreground flex-1" title={title}>{title}</span>
+          )}
         </div>
 
-        {/* 네비 아이콘 */}
-        <nav className="flex-1 py-2 overflow-y-auto" aria-label="메인 네비게이션">
-          {NAV_GROUPS.map(({ id, paths }, groupIdx) => {
+        {/* 네비 */}
+        <nav className="flex-1 py-2 overflow-y-auto overflow-x-visible" aria-label="메인 네비게이션">
+          {NAV_GROUPS.map(({ id, label, paths }, groupIdx) => {
             const validPaths = paths.filter((p) => NAV_MAP[p]);
             if (validPaths.length === 0) return null;
             return (
               <div key={id}>
-                {groupIdx > 0 && <div className="mx-3 my-1.5 border-t border-border/40" aria-hidden="true" />}
-                <div className="flex flex-col items-center gap-0.5 px-1.5 py-1">
-                  {validPaths.map((path) => {
-                    const { icon: Icon } = NAV_MAP[path];
-                    const isActive = location.pathname === path;
-                    const itemLabel = getLabel(path);
-                    return (
-                      <Tooltip key={path} label={itemLabel}>
-                        <Link
-                          to={path}
-                          aria-label={itemLabel}
-                          aria-current={isActive ? 'page' : undefined}
-                          className={`relative flex items-center justify-center w-11 h-11 rounded-xl transition-all ${
-                            isActive
-                              ? 'bg-primary/15 text-primary'
-                              : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                          }`}
-                        >
-                          {isActive && (
-                            <span
-                              aria-hidden="true"
-                              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-[3px] w-1 h-5 bg-primary rounded-r"
-                            />
-                          )}
-                          <Icon className="w-[18px] h-[18px]" />
-                        </Link>
-                      </Tooltip>
-                    );
-                  })}
+                {iconOnly
+                  ? (groupIdx > 0 && <div className="mx-3 my-1.5 border-t border-border/40" aria-hidden="true" />)
+                  : (
+                    <p className={`${groupIdx > 0 ? 'mt-3' : ''} px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70`}>
+                      {label}
+                    </p>
+                  )
+                }
+                <div className={`flex flex-col gap-0.5 ${iconOnly ? 'px-1.5' : 'px-2'}`}>
+                  {validPaths.map((path) => (
+                    <NavItem
+                      key={path}
+                      path={path}
+                      label={getLabel(path)}
+                      Icon={NAV_MAP[path].icon}
+                      isActive={location.pathname === path}
+                      showLabel={!iconOnly}
+                      onHover={onNavHover}
+                      onLeave={onNavLeave}
+                    />
+                  ))}
                 </div>
               </div>
             );
@@ -157,34 +230,40 @@ export function Sidebar() {
         </nav>
 
         {/* 푸터 */}
-        <div className="py-2 border-t border-border flex flex-col items-center gap-1">
-          <Tooltip label="메뉴 이름 편집">
-            <button
-              onClick={() => setEditMode((v) => !v)}
-              className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${
-                editMode
-                  ? 'bg-primary/15 text-primary'
-                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-              }`}
-            >
-              <PanelLeftOpen className="w-[18px] h-[18px]" />
-            </button>
-          </Tooltip>
-          <Tooltip label={`테마: ${THEME_LABEL[theme]} (클릭하여 변경)`}>
-            <button
-              onClick={() => setTheme(THEME_CYCLE[theme])}
-              className="w-11 h-11 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              aria-label="테마 변경"
-            >
-              {theme === 'dark' && <Moon className="w-[18px] h-[18px]" />}
-              {theme === 'light' && <Sun className="w-[18px] h-[18px]" />}
-              {theme === 'system' && <Monitor className="w-[18px] h-[18px]" />}
-            </button>
-          </Tooltip>
+        <div className={`flex-shrink-0 border-t border-border py-2 ${iconOnly ? 'flex flex-col items-center gap-1' : 'px-2 space-y-1'}`}>
+          <button
+            onClick={() => setEditMode((v) => !v)}
+            onMouseEnter={(e) => onNavHover(e, '메뉴 이름 편집')}
+            onMouseLeave={onNavLeave}
+            className={`${iconOnly ? 'w-11 h-11 justify-center' : 'w-full gap-3 px-3 py-2'} rounded-lg flex items-center transition-colors ${
+              editMode ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+            }`}
+          >
+            <PanelLeftOpen className="w-[18px] h-[18px] flex-shrink-0" />
+            {!iconOnly && <span className="text-sm">메뉴 이름 편집</span>}
+          </button>
+          <button
+            onClick={() => setTheme(THEME_CYCLE[theme])}
+            onMouseEnter={(e) => onNavHover(e, `테마: ${THEME_LABEL[theme]}`)}
+            onMouseLeave={onNavLeave}
+            className={`${iconOnly ? 'w-11 h-11 justify-center' : 'w-full gap-3 px-3 py-2'} rounded-lg flex items-center text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors`}
+            aria-label="테마 변경"
+          >
+            {theme === 'dark' && <Moon className="w-[18px] h-[18px] flex-shrink-0" />}
+            {theme === 'light' && <Sun className="w-[18px] h-[18px] flex-shrink-0" />}
+            {theme === 'system' && <Monitor className="w-[18px] h-[18px] flex-shrink-0" />}
+            {!iconOnly && <span className="text-sm">테마: {THEME_LABEL[theme]}</span>}
+          </button>
         </div>
+
+        {/* 리사이즈 핸들 */}
+        <ResizeHandle width={navWidth} onResize={setNavWidth} onReset={resetNav} />
       </aside>
 
-      {/* ── 편집 오버레이 패널 (아이콘 레일 우측에 붙음) ─────────────────────── */}
+      {/* Portal tooltip (icon-only 모드 한정) */}
+      <PortalTooltip state={iconOnly ? tooltip : null} />
+
+      {/* ── 편집 오버레이 패널 ───────────────────────────────────────────── */}
       {editMode && (
         <>
           <div
@@ -192,12 +271,15 @@ export function Sidebar() {
             onClick={() => setEditMode(false)}
             aria-hidden="true"
           />
-          <aside className="fixed top-0 left-16 h-full w-60 bg-card border-r border-border shadow-2xl flex flex-col z-40">
+          <aside
+            style={{ left: navWidth }}
+            className="fixed top-0 h-full w-72 bg-card border-r border-border shadow-2xl flex flex-col z-40"
+          >
             <div className="px-4 py-3 border-b border-border flex items-center gap-2">
               <span className="text-sm font-semibold flex-1">메뉴 편집</span>
               <button onClick={() => setEditMode(false)}
                 className="p-1 rounded hover:bg-secondary text-muted-foreground"
-                title="닫기 (Esc)">
+                title="닫기">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -217,7 +299,7 @@ export function Sidebar() {
             <nav className="flex-1 py-2 px-2 overflow-y-auto">
               {NAV_GROUPS.map(({ id, label, paths }) => (
                 <div key={id} className="mb-3">
-                  <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">{label}</p>
+                  <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">{label}</p>
                   <div className="space-y-0.5">
                     {paths.map((path) => {
                       const navItem = NAV_MAP[path];
@@ -248,7 +330,7 @@ export function Sidebar() {
               ))}
             </nav>
             <div className="px-3 py-2 border-t border-border text-[10px] text-muted-foreground">
-              이름만 수정됩니다. 외부 클릭으로 닫기.
+              외부 클릭으로 닫기. 이름만 수정됩니다.
             </div>
           </aside>
         </>

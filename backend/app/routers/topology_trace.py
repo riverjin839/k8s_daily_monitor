@@ -7,12 +7,15 @@ from app.database import get_db
 from app.models.cluster import Cluster
 from app.schemas.topology_trace import (
     PacketFlowRequest,
+    PacketFlowRequestV2,
     PacketFlowResponse,
+    PacketFlowResponseV2,
     TopologyTraceRequest,
     TopologyTraceResponse,
 )
 from app.services.topology_trace_service import (
     PacketFlowRequest as PacketFlowReqDC,
+    PacketFlowRequestV2 as PacketFlowReqV2DC,
     TopologyTraceService,
     TraceTarget,
     map_k8s_or_trace_error,
@@ -67,5 +70,40 @@ def packet_flow(payload: PacketFlowRequest, db: Session = Depends(get_db)):
         host=payload.host,
         path=payload.path,
         protocol=payload.protocol,
+        hops=hops,
+    )
+
+
+@router.post("/packet-flow-v2", response_model=PacketFlowResponseV2)
+def packet_flow_v2(payload: PacketFlowRequestV2, db: Session = Depends(get_db)):
+    """v2 — CiliumNetworkPolicy / KubernetesNetworkPolicy / Identity 해석 포함.
+    direction=north-south|east-west 지원.
+    """
+    cluster = db.query(Cluster).filter(Cluster.id == UUID(str(payload.cluster_id))).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    service = TopologyTraceService(db=db, cluster=cluster)
+    try:
+        hops = service.trace_v2(PacketFlowReqV2DC(
+            direction=payload.direction,
+            source=payload.source,
+            destination=payload.destination,
+            protocol=payload.protocol,
+            port=payload.port,
+            path=payload.path,
+        ))
+    except Exception as e:
+        status_code, detail = map_k8s_or_trace_error(e)
+        raise HTTPException(status_code=status_code, detail=detail) from e
+
+    return PacketFlowResponseV2(
+        cluster_id=payload.cluster_id,
+        direction=payload.direction,
+        source=payload.source,
+        destination=payload.destination,
+        protocol=payload.protocol,
+        port=payload.port,
+        path=payload.path,
         hops=hops,
     )

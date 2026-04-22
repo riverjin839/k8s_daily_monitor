@@ -615,6 +615,8 @@ export const topologyTraceApi = {
     api.post<TopologyTraceResponse>('/topology-trace', payload),
   packetFlow: (payload: import('@/types').PacketFlowRequest) =>
     api.post<import('@/types').PacketFlowResponse>('/topology-trace/packet-flow', payload),
+  packetFlowV2: (payload: import('@/types').PacketFlowRequestV2) =>
+    api.post<import('@/types').PacketFlowResponseV2>('/topology-trace/packet-flow-v2', payload),
 };
 
 // Assignees API (담당자 관리)

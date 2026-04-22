@@ -686,6 +686,61 @@ export interface PacketFlowResponse {
   hops: TopologyTraceHop[];
 }
 
+// ── Packet Flow v2 (정책 해석 + E-W 지원) ────────────────────────────────
+export type PacketDirection = 'north-south' | 'east-west';
+export type HopVerdict = 'allow' | 'deny' | 'warn' | 'info';
+
+export interface HopPolicy {
+  kind: string;             // "CiliumNetworkPolicy" | "CiliumClusterwideNetworkPolicy" | "NetworkPolicy"
+  name: string;
+  direction: 'ingress' | 'egress';
+  summary: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  selectorLabels?: Record<string, any>;
+}
+
+export interface HopRef {
+  kind: string;
+  name: string;
+  link?: string;
+}
+
+export interface TopologyTraceHopV2 {
+  entityType: string;
+  entityId: string;
+  name: string;
+  interface?: string | null;
+  latencyMs?: number | null;
+  errorCount?: number | null;
+  verdict: HopVerdict;
+  notes: string[];
+  policies: HopPolicy[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  identity?: Record<string, any> | null;
+  refs: HopRef[];
+}
+
+export interface PacketFlowRequestV2 {
+  clusterId: string;
+  direction: PacketDirection;
+  source: string;
+  destination: string;
+  protocol?: 'tcp' | 'udp' | 'http' | 'https' | 'grpc';
+  port?: number;
+  path?: string;
+}
+
+export interface PacketFlowResponseV2 {
+  clusterId: string;
+  direction: PacketDirection;
+  source: string;
+  destination: string;
+  protocol: string;
+  port?: number | null;
+  path: string;
+  hops: TopologyTraceHopV2[];
+}
+
 // Ontology Graph
 export type OntologyEntityType =
   | 'node' | 'hardware' | 'os' | 'kernel_param' | 'network'

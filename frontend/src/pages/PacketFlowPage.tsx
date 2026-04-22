@@ -1,268 +1,320 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import {
-  Activity,
-  AlertTriangle,
-  ArrowRight,
-  Box,
-  Cloud,
-  Globe,
-  Loader2,
-  Network,
-  Route,
-  Search,
-  Server,
-  Share2,
-  Shield,
+  Route, Play, Loader2, ArrowRight, Globe, Network, Share2, Server, Box,
+  AlertTriangle, Info, Construction,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { usePacketFlow } from '@/hooks/usePacketFlow';
-import type { PacketProtocol, TopologyTraceHop } from '@/types';
+import { ClusterSidebar } from '@/components/common';
+import { topologyTraceApi } from '@/services/api';
+import type {
+  PacketFlowResponseV2, TopologyTraceHopV2, PacketDirection,
+} from '@/types';
+import { FlowGraph3D } from '@/components/packet-flow/FlowGraph3D';
+import { HopDetailPanel } from '@/components/packet-flow/HopDetailPanel';
 
-const HOP_STYLE: Record<string, { icon: typeof Globe; color: string; bg: string; border: string; label: string }> = {
-  client:             { icon: Globe,   color: 'text-sky-400',     bg: 'bg-sky-500/10',     border: 'border-sky-500/40',     label: 'Client'            },
-  dns:                { icon: Cloud,   color: 'text-indigo-400',  bg: 'bg-indigo-500/10',  border: 'border-indigo-500/40',  label: 'DNS'               },
-  ingress_controller: { icon: Shield,  color: 'text-violet-400',  bg: 'bg-violet-500/10',  border: 'border-violet-500/40',  label: 'Ingress Controller'},
-  ingress:            { icon: Route,   color: 'text-purple-400',  bg: 'bg-purple-500/10',  border: 'border-purple-500/40',  label: 'Ingress'           },
-  service:            { icon: Share2,  color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/40', label: 'Service'           },
-  pod:                { icon: Box,     color: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'border-amber-500/40',   label: 'Pod'               },
-  node:               { icon: Server,  color: 'text-orange-400',  bg: 'bg-orange-500/10',  border: 'border-orange-500/40',  label: 'Node'              },
-  switch:             { icon: Network, color: 'text-rose-400',    bg: 'bg-rose-500/10',    border: 'border-rose-500/40',    label: 'Switch'            },
-  link:               { icon: Network, color: 'text-slate-400',   bg: 'bg-slate-500/10',   border: 'border-slate-500/40',   label: 'Link'              },
+type Tab = 'graph' | 'hubble' | 'tcpdump';
+
+const ENTITY_LABEL: Record<string, { icon: typeof Globe; label: string; color: string }> = {
+  external:           { icon: Globe,   label: 'External',  color: 'text-sky-400' },
+  dns:                { icon: Globe,   label: 'DNS',       color: 'text-indigo-400' },
+  ingress_controller: { icon: Share2,  label: 'Ingress Pod', color: 'text-violet-400' },
+  ingress:            { icon: Route,   label: 'Ingress',   color: 'text-purple-400' },
+  service:            { icon: Share2,  label: 'Service',   color: 'text-emerald-400' },
+  pod:                { icon: Box,     label: 'Pod',       color: 'text-amber-400' },
+  node:               { icon: Server,  label: 'Node',      color: 'text-orange-400' },
+  switch:             { icon: Network, label: 'Switch',    color: 'text-rose-400' },
+  error:              { icon: AlertTriangle, label: 'Error', color: 'text-red-400' },
 };
 
-function HopCard({ hop, index }: { hop: TopologyTraceHop; index: number }) {
-  const style = HOP_STYLE[hop.entityType] ?? HOP_STYLE.link;
-  const HopIcon = style.icon;
-  const hasWarning = (hop.errorCount ?? 0) > 0;
-
+function HopBreadcrumb({
+  hops, selectedIndex, onSelect,
+}: { hops: TopologyTraceHopV2[]; selectedIndex: number | null; onSelect: (i: number) => void }) {
   return (
-    <div className={`flex-shrink-0 w-[240px] rounded-xl border ${style.border} ${style.bg} p-4 relative`}>
-      <div className="absolute -top-2 -left-2 w-6 h-6 rounded-full bg-background border border-border flex items-center justify-center text-[10px] font-bold text-muted-foreground">
-        {index + 1}
-      </div>
-      {hasWarning && (
-        <AlertTriangle className="absolute top-3 right-3 w-4 h-4 text-amber-400" />
-      )}
-      <div className="flex items-center gap-2 mb-2">
-        <HopIcon className={`w-4 h-4 flex-shrink-0 ${style.color}`} />
-        <p className={`text-[10px] font-bold uppercase tracking-wider ${style.color}`}>{style.label}</p>
-      </div>
-      <p className="text-sm font-semibold text-foreground truncate mb-1" title={hop.name}>
-        {hop.name}
-      </p>
-      {hop.interface && (
-        <p className="text-[11px] font-mono text-muted-foreground truncate" title={hop.interface}>
-          {hop.interface}
-        </p>
-      )}
-      <div className="flex items-center gap-3 mt-2 pt-2 border-t border-border/40">
-        {hop.latencyMs !== null && hop.latencyMs !== undefined && (
-          <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Activity className="w-3 h-3" />
-            {hop.latencyMs.toFixed(1)}ms
-          </span>
-        )}
-        {hop.errorCount !== null && hop.errorCount !== undefined && hop.errorCount > 0 && (
-          <span className="text-[10px] text-amber-400 font-medium">
-            errors: {hop.errorCount}
-          </span>
-        )}
-      </div>
+    <div className="flex items-center gap-1 overflow-x-auto pb-2">
+      {hops.map((h, i) => {
+        const meta = ENTITY_LABEL[h.entityType] ?? ENTITY_LABEL.external;
+        const Icon = meta.icon;
+        const verdictCls =
+          h.verdict === 'allow' ? 'border-emerald-500/40'
+          : h.verdict === 'deny' ? 'border-red-500/50'
+          : h.verdict === 'warn' ? 'border-amber-500/50'
+          : 'border-border';
+        const active = selectedIndex === i;
+        return (
+          <div key={i} className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={() => onSelect(i)}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] transition-colors ${
+                active ? 'bg-primary/10 text-primary border-primary/40' : `bg-card ${verdictCls} hover:bg-muted/30`
+              }`}
+              title={h.name}
+            >
+              <Icon className={`w-3 h-3 ${meta.color}`} />
+              <span className="font-medium">{i + 1}</span>
+              <span className="text-muted-foreground">·</span>
+              <span className="font-mono max-w-[120px] truncate">{h.name.split('/').pop()}</span>
+            </button>
+            {i < hops.length - 1 && <ArrowRight className="w-3 h-3 text-muted-foreground/50" />}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 export function PacketFlowPage() {
-  const { data: clustersData } = useClusters();
-  const clusters = clustersData ?? [];
-  const { mutate: traceFlow, isPending, data: result, error, reset } = usePacketFlow();
-
+  const { data: clusters = [] } = useClusters();
   const [clusterId, setClusterId] = useState('');
-  const [host, setHost]     = useState('');
-  const [path, setPath]     = useState('/');
-  const [protocol, setProtocol] = useState<PacketProtocol>('https');
+  useEffect(() => {
+    if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
+  }, [clusters, clusterId]);
 
-  const ic = 'w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary';
-  const lc = 'block text-xs font-medium text-muted-foreground mb-1';
+  // Target 구성 — 방향 + source + destination
+  const [direction, setDirection] = useState<PacketDirection>('north-south');
+  const [source, setSource] = useState('internet');
+  const [destination, setDestination] = useState('');
+  const [protocol, setProtocol] = useState<'tcp' | 'http' | 'https' | 'grpc'>('https');
+  const [port, setPort] = useState<string>('');
+  const [path, setPath] = useState('/');
 
-  const canSubmit = !!clusterId && !!host.trim();
+  // direction 전환 시 placeholder 자동 갱신
+  useEffect(() => {
+    if (direction === 'north-south') {
+      if (!source || source.startsWith('default/')) setSource('internet');
+      if (destination && destination.startsWith('default/') && !destination.includes('.')) {
+        // 유지 — 사용자 입력 그대로
+      }
+    } else {
+      if (source === 'internet') setSource('default/client-pod');
+      if (!destination) setDestination('default/backend:8080');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [direction]);
 
-  const handleSubmit = () => {
-    if (!canSubmit) return;
-    reset();
-    traceFlow({ clusterId, host: host.trim(), path: path.trim() || '/', protocol });
-  };
+  const [tab, setTab] = useState<Tab>('graph');
+  const [response, setResponse] = useState<PacketFlowResponseV2 | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
-  const errorMsg = (() => {
-    if (!error) return null;
-    const err = error as { response?: { data?: { detail?: string } }; message?: string };
-    return err.response?.data?.detail ?? err.message ?? '추적에 실패했습니다';
-  })();
+  const runMut = useMutation({
+    mutationFn: async () => {
+      const r = await topologyTraceApi.packetFlowV2({
+        clusterId,
+        direction,
+        source: source.trim(),
+        destination: destination.trim(),
+        protocol,
+        port: port ? Number(port) : undefined,
+        path: path.trim() || '/',
+      });
+      return r.data;
+    },
+    onSuccess: (d) => { setResponse(d); setSelectedIdx(null); },
+  });
 
-  const totalLatency = result?.hops
-    .map((h) => h.latencyMs ?? 0)
-    .reduce((a, b) => a + b, 0);
-  const errorHops = result?.hops.filter((h) => (h.errorCount ?? 0) > 0).length ?? 0;
+  const canRun = !!clusterId && !!source.trim() && !!destination.trim() && !runMut.isPending;
+
+  const runError = runMut.error as { response?: { data?: { detail?: string } }; message?: string } | null;
+
+  // 그래프 컨테이너 사이즈 측정
+  const graphBoxRef = useRef<HTMLDivElement>(null);
+  const [graphDim, setGraphDim] = useState({ w: 800, h: 520 });
+  useEffect(() => {
+    const ro = new ResizeObserver(() => {
+      if (graphBoxRef.current) {
+        setGraphDim({
+          w: graphBoxRef.current.clientWidth,
+          h: graphBoxRef.current.clientHeight,
+        });
+      }
+    });
+    if (graphBoxRef.current) ro.observe(graphBoxRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const selectedHop = useMemo(() => {
+    if (response && selectedIdx != null && selectedIdx >= 0 && selectedIdx < response.hops.length) {
+      return response.hops[selectedIdx];
+    }
+    return null;
+  }, [response, selectedIdx]);
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1600px] mx-auto px-6 py-8">
+      <main className="max-w-[1800px] mx-auto px-6 py-6 flex gap-5">
+        <ClusterSidebar
+          clusters={clusters}
+          selectedId={clusterId || null}
+          onSelect={(id) => { setClusterId(id ?? ''); setResponse(null); setSelectedIdx(null); }}
+        />
 
-        {/* 헤더 */}
-        <div className="flex items-center gap-3 mb-6">
-          <Route className="w-6 h-6 text-primary" />
-          <h1 className="text-xl font-bold">E2E 패킷 흐름 분석</h1>
-          <span className="text-xs text-muted-foreground">
-            외부 클라이언트 → Ingress → Service → Pod → Node → Switch
-          </span>
-        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 mb-5">
+            <Route className="w-6 h-6 text-primary" />
+            <h1 className="text-xl font-bold">패킷 흐름 분석</h1>
+            <p className="text-xs text-muted-foreground">외부 → Ingress → Service → Pod / Pod ↔ Pod</p>
+          </div>
 
-        {/* 입력 패널 */}
-        <div className="bg-card border border-border rounded-xl p-5 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_1fr_120px_auto] gap-3 items-end">
-            <div>
-              <label className={lc}>클러스터</label>
-              <select value={clusterId} onChange={(e) => setClusterId(e.target.value)} className={ic}>
-                <option value="">— 선택 —</option>
-                {clusters.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+          {/* Target 구성 바 */}
+          <section className="bg-card border border-border rounded-xl p-4 mb-4 space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
+                {(['north-south', 'east-west'] as PacketDirection[]).map((d) => (
+                  <button key={d} onClick={() => setDirection(d)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                      direction === d ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/80 hover:text-foreground'
+                    }`}>
+                    {d === 'north-south' ? '외부 → Pod (N-S)' : 'Pod ↔ Pod (E-W)'}
+                  </button>
                 ))}
-              </select>
-            </div>
-            <div>
-              <label className={lc}>Host</label>
-              <input type="text" value={host} onChange={(e) => setHost(e.target.value)}
-                placeholder="api.example.com" className={`${ic} font-mono`} />
-            </div>
-            <div>
-              <label className={lc}>Path</label>
-              <input type="text" value={path} onChange={(e) => setPath(e.target.value)}
-                placeholder="/" className={`${ic} font-mono`} />
-            </div>
-            <div>
-              <label className={lc}>Protocol</label>
-              <select value={protocol} onChange={(e) => setProtocol(e.target.value as PacketProtocol)} className={ic}>
-                <option value="https">https</option>
-                <option value="http">http</option>
-                <option value="grpc">grpc</option>
-                <option value="tcp">tcp</option>
-              </select>
-            </div>
-            <button
-              onClick={handleSubmit}
-              disabled={!canSubmit || isPending}
-              className="flex items-center justify-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-semibold transition-colors disabled:opacity-60 h-[38px]"
-            >
-              {isPending
-                ? <><Loader2 className="w-4 h-4 animate-spin" />추적 중</>
-                : <><Search className="w-4 h-4" />추적 시작</>}
-            </button>
-          </div>
-        </div>
-
-        {/* 결과 */}
-        {errorMsg && (
-          <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 mb-6 flex items-start gap-2">
-            <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold text-red-400">추적 실패</p>
-              <p className="text-xs text-muted-foreground mt-1">{errorMsg}</p>
-            </div>
-          </div>
-        )}
-
-        {result && (
-          <div className="space-y-4">
-            {/* 요약 배너 */}
-            <div className="bg-card border border-border rounded-xl p-4 flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">요청:</span>
-                <span className="font-mono text-foreground">{result.protocol}://{result.host}{result.path}</span>
               </div>
-              <div className="h-5 w-px bg-border" />
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">홉:</span>
-                <span className="font-semibold text-foreground">{result.hops.length}</span>
+              <div className="flex items-center gap-1 ml-auto">
+                <button
+                  onClick={() => runMut.mutate()}
+                  disabled={!canRun}
+                  className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {runMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                  추적
+                </button>
               </div>
-              {totalLatency !== undefined && totalLatency > 0 && (
-                <>
-                  <div className="h-5 w-px bg-border" />
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-muted-foreground">누적 지연:</span>
-                    <span className="font-semibold text-foreground">{totalLatency.toFixed(1)}ms</span>
-                  </div>
-                </>
-              )}
-              {errorHops > 0 && (
-                <>
-                  <div className="h-5 w-px bg-border" />
-                  <div className="flex items-center gap-2 text-sm text-amber-400">
-                    <AlertTriangle className="w-4 h-4" />
-                    이상 홉 {errorHops}건
-                  </div>
-                </>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1 block">
+                  {direction === 'north-south' ? 'Source (외부)' : 'Source Pod'}
+                </label>
+                <input
+                  type="text" value={source} onChange={(e) => setSource(e.target.value)}
+                  placeholder={direction === 'north-south' ? 'internet 또는 203.0.113.5' : 'default/client-pod'}
+                  className="w-full px-3 py-1.5 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1 block">
+                  Destination {direction === 'north-south' ? '(Ingress-host / ns/service / ns/pod)' : '(ns/pod 또는 ns/service:port)'}
+                </label>
+                <input
+                  type="text" value={destination} onChange={(e) => setDestination(e.target.value)}
+                  placeholder={direction === 'north-south' ? 'api.example.com 또는 default/api:80' : 'default/backend:8080'}
+                  className="w-full px-3 py-1.5 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1 block">Protocol</label>
+                <select value={protocol} onChange={(e) => setProtocol(e.target.value as typeof protocol)}
+                  className="w-full px-3 py-1.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
+                  <option value="http">http</option>
+                  <option value="https">https</option>
+                  <option value="grpc">grpc</option>
+                  <option value="tcp">tcp</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1 block">Port (선택)</label>
+                <input
+                  type="number" value={port} onChange={(e) => setPort(e.target.value)}
+                  placeholder="443"
+                  className="w-full px-3 py-1.5 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              {direction === 'north-south' && (
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-1 block">Path</label>
+                  <input
+                    type="text" value={path} onChange={(e) => setPath(e.target.value)}
+                    placeholder="/"
+                    className="w-full px-3 py-1.5 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
               )}
             </div>
 
-            {/* 홉 플로우 시각화 */}
-            <div className="overflow-x-auto pb-4">
-              <div className="flex items-stretch gap-2 min-w-max px-2">
-                {result.hops.map((hop, i) => (
-                  <div key={`${hop.entityType}-${hop.entityId}-${i}`} className="flex items-center gap-2">
-                    <HopCard hop={hop} index={i} />
-                    {i < result.hops.length - 1 && (
-                      <ArrowRight className="w-5 h-5 text-muted-foreground/60 flex-shrink-0" />
+            {runError && (
+              <div className="px-3 py-2 text-xs rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
+                {runError.response?.data?.detail ?? runError.message}
+              </div>
+            )}
+          </section>
+
+          {/* 탭 */}
+          <div className="flex items-center gap-1 mb-3 border-b border-border">
+            {([
+              { id: 'graph',   label: '경로 그래프' },
+              { id: 'hubble',  label: 'Hubble 플로우' },
+              { id: 'tcpdump', label: '원격 tcpdump' },
+            ] as { id: Tab; label: string }[]).map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  tab === t.id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* 탭 콘텐츠 */}
+          {tab === 'graph' && (
+            <>
+              {!response ? (
+                <div className="bg-card border border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
+                  <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+                  source/destination 를 입력하고 "추적" 을 눌러 경로를 그래프로 확인하세요.
+                </div>
+              ) : (
+                <>
+                  <HopBreadcrumb hops={response.hops} selectedIndex={selectedIdx} onSelect={setSelectedIdx} />
+                  <div
+                    ref={graphBoxRef}
+                    className="relative bg-card border border-border rounded-xl overflow-hidden"
+                    style={{ height: 560 }}
+                  >
+                    <FlowGraph3D
+                      hops={response.hops}
+                      onSelectHop={setSelectedIdx}
+                      selectedIndex={selectedIdx}
+                      width={graphDim.w}
+                      height={graphDim.h}
+                    />
+                    {selectedHop && (
+                      <HopDetailPanel
+                        hop={selectedHop}
+                        index={selectedIdx!}
+                        totalHops={response.hops.length}
+                        onClose={() => setSelectedIdx(null)}
+                      />
                     )}
                   </div>
-                ))}
-              </div>
-            </div>
+                  <p className="text-[11px] text-muted-foreground mt-2">
+                    노드 클릭 → 해당 홉의 적용 정책(CNP/KNP), Cilium Identity, 관련 리소스 확인.
+                  </p>
+                </>
+              )}
+            </>
+          )}
 
-            {/* 상세 테이블 */}
-            <div className="rounded-xl border border-border overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-secondary/50">
-                  <tr className="border-b border-border">
-                    {['#', '타입', '이름', '인터페이스/주소', '지연(ms)', '에러'].map((h) => (
-                      <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.hops.map((hop, i) => {
-                    const style = HOP_STYLE[hop.entityType] ?? HOP_STYLE.link;
-                    return (
-                      <tr key={`${hop.entityId}-${i}`} className="border-b border-border/40 hover:bg-secondary/20">
-                        <td className="px-3 py-2 text-xs text-muted-foreground">{i + 1}</td>
-                        <td className="px-3 py-2">
-                          <span className={`text-[11px] font-semibold ${style.color}`}>{style.label}</span>
-                        </td>
-                        <td className="px-3 py-2 text-xs text-foreground">{hop.name}</td>
-                        <td className="px-3 py-2 text-xs font-mono text-muted-foreground">{hop.interface ?? '-'}</td>
-                        <td className="px-3 py-2 text-xs text-muted-foreground">
-                          {hop.latencyMs !== null && hop.latencyMs !== undefined ? hop.latencyMs.toFixed(1) : '-'}
-                        </td>
-                        <td className="px-3 py-2 text-xs">
-                          {(hop.errorCount ?? 0) > 0
-                            ? <span className="text-amber-400 font-semibold">{hop.errorCount}</span>
-                            : <span className="text-muted-foreground">-</span>}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          {tab === 'hubble' && (
+            <div className="bg-card border border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
+              <Construction className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+              <p className="font-medium text-foreground mb-1">Hubble 라이브 플로우</p>
+              <p>이 탭은 곧 제공됩니다 — Cilium Hubble Relay 가 클러스터에 배포된 경우 실시간 패킷 플로우를 보여줍니다.</p>
             </div>
-          </div>
-        )}
+          )}
 
-        {!result && !errorMsg && !isPending && (
-          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground/50 rounded-xl border border-dashed border-border">
-            <Route className="w-12 h-12 mb-3" />
-            <p className="text-sm">클러스터와 host를 입력하고 추적을 시작하세요</p>
-            <p className="text-xs mt-1">예: api.example.com, /api/v1/users, https</p>
-          </div>
-        )}
+          {tab === 'tcpdump' && (
+            <div className="bg-card border border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
+              <Construction className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+              <p className="font-medium text-foreground mb-1">원격 tcpdump 캡처</p>
+              <p>이 탭은 곧 제공됩니다 — 경로 상의 노드에 SSH 로 접속해 실제 패킷을 캡처합니다.</p>
+            </div>
+          )}
+        </div>
       </main>
     </div>
   );

@@ -12,6 +12,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { tasksApi } from '@/services/api';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
+import { stripHtml } from '@/lib/utils';
 import { Task, TaskModule } from '@/types';
 
 function formatDate(dateStr?: string | null): string {
@@ -532,7 +533,7 @@ export function TaskBoardPage() {
                         </td>
                         <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => setSelectedTask(task)}>
                           <div className="flex items-start gap-1.5">
-                            <p className="line-clamp-2 text-foreground/90">{task.taskContent}</p>
+                            <p className="line-clamp-2 text-foreground/90">{stripHtml(task.taskContent)}</p>
                             {hasImages && (
                               <span title="이미지 첨부 있음"><ImagePlus className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" /></span>
                             )}
@@ -540,7 +541,7 @@ export function TaskBoardPage() {
                         </td>
                         <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => setSelectedTask(task)}>
                           <p className="line-clamp-2 text-muted-foreground">
-                            {task.resultContent || '-'}
+                            {stripHtml(task.resultContent) || '-'}
                           </p>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedTask(task)}>

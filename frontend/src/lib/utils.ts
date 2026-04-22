@@ -6,6 +6,21 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** RichTextEditor 가 만든 HTML 을 테이블/칸반 미리보기용 plain text 로.
+ *  &nbsp; 같은 entity 는 단순 디코딩 (브라우저 textarea 트릭).
+ */
+export function stripHtml(html?: string | null): string {
+  if (!html) return '';
+  const noTags = String(html).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+  // 흔한 HTML entity 디코딩
+  if (typeof document !== 'undefined' && /&[a-z#0-9]+;/i.test(noTags)) {
+    const ta = document.createElement('textarea');
+    ta.innerHTML = noTags;
+    return ta.value.trim();
+  }
+  return noTags.trim();
+}
+
 /**
  * 폐쇄망(HTTP) 및 구형 브라우저 호환 UUID v4 생성
  *

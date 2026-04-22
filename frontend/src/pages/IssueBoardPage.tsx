@@ -11,6 +11,7 @@ import { useLocalOrder } from '@/hooks/useLocalOrder';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { issuesApi } from '@/services/api';
+import { stripHtml } from '@/lib/utils';
 import { Issue } from '@/types';
 
 function formatDate(dateStr?: string | null): string {
@@ -446,7 +447,7 @@ export function IssueBoardPage() {
                         </td>
                         <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => setSelectedIssue(issue)}>
                           <div className="flex items-start gap-1.5">
-                            <p className="line-clamp-2 text-foreground/90">{issue.issueContent}</p>
+                            <p className="line-clamp-2 text-foreground/90">{stripHtml(issue.issueContent)}</p>
                             {hasImages && (
                               <span title="이미지 첨부 있음"><ImagePlus className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" /></span>
                             )}
@@ -454,7 +455,7 @@ export function IssueBoardPage() {
                         </td>
                         <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => setSelectedIssue(issue)}>
                           <p className="line-clamp-2 text-muted-foreground">
-                            {issue.actionContent || '-'}
+                            {stripHtml(issue.actionContent) || '-'}
                           </p>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedIssue(issue)}>

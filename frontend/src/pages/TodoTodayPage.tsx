@@ -16,6 +16,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { todayTasksApi, tasksApi, TodayTaskGroup } from '@/services/api';
+import { stripHtml } from '@/lib/utils';
 import { Task, KanbanStatus } from '@/types';
 import { useClusters } from '@/hooks/useCluster';
 
@@ -107,7 +108,7 @@ function TaskCard({ task, onStatusChange, onEdit, isUpdating, highlight }: TaskC
       {/* 작업 내용 */}
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm text-foreground leading-snug flex-1 min-w-0">
-          {task.taskContent}
+          {stripHtml(task.taskContent)}
         </p>
         <button
           onClick={() => onEdit(task)}

@@ -79,3 +79,41 @@ class PacketFlowResponseV2(BaseModel):
     port: int | None = None
     path: str
     hops: list[TopologyHopV2]
+
+
+# ── Hubble flows ─────────────────────────────────────────────────────────────
+
+class HubbleFlowsRequest(BaseModel):
+    cluster_id: UUID
+    from_pod: str | None = None          # "ns/name"
+    to_pod: str | None = None
+    from_namespace: str | None = None
+    to_namespace: str | None = None
+    to_service: str | None = None        # "ns/name"
+    protocol: str | None = None
+    verdict: str | None = None
+    since_seconds: int = Field(default=60, ge=1, le=3600)
+    limit: int = Field(default=200, ge=1, le=5000)
+    hubble_namespace: str = Field(default="kube-system")
+    hubble_service: str = Field(default="hubble-relay")
+    hubble_port: int = Field(default=80, ge=1, le=65535)
+
+
+class HubbleFlow(BaseModel):
+    time: str | None = None
+    verdict: str | None = None
+    drop_reason: str | None = None
+    source: dict
+    destination: dict
+    l4: dict = Field(default_factory=dict)
+    l7: dict | None = None
+    traffic_direction: str = "UNKNOWN"
+    summary: str = ""
+
+
+class HubbleFlowsResponse(BaseModel):
+    cluster_id: UUID
+    flows: list[HubbleFlow]
+    count: int = 0
+    error: str | None = None
+    executed: str | None = None

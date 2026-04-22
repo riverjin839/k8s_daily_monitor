@@ -12,6 +12,7 @@ import type {
 } from '@/types';
 import { FlowGraph3D } from '@/components/packet-flow/FlowGraph3D';
 import { HopDetailPanel } from '@/components/packet-flow/HopDetailPanel';
+import { HubbleTimeline } from '@/components/packet-flow/HubbleTimeline';
 
 type Tab = 'graph' | 'hubble' | 'tcpdump';
 
@@ -138,6 +139,27 @@ export function PacketFlowPage() {
     }
     return null;
   }, [response, selectedIdx]);
+
+  // Hubble 탭 자동 프리필 — Phase A 의 source/destination 에서 파생
+  const hubblePrefill = useMemo(() => {
+    const podRe = /^[a-z0-9-]+\/[a-z0-9-]+$/i;
+    const svcRe = /^([a-z0-9-]+\/[a-z0-9-]+):(\d+)$/i;
+    let fromPod: string | undefined;
+    let toPod: string | undefined;
+    let toService: string | undefined;
+
+    if (direction === 'east-west' && podRe.test(source.trim())) {
+      fromPod = source.trim();
+    }
+    const dst = destination.trim();
+    const svcMatch = dst.match(svcRe);
+    if (svcMatch) {
+      toService = svcMatch[1];
+    } else if (podRe.test(dst)) {
+      toPod = dst;
+    }
+    return { fromPod, toPod, toService };
+  }, [direction, source, destination]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -300,11 +322,19 @@ export function PacketFlowPage() {
           )}
 
           {tab === 'hubble' && (
-            <div className="bg-card border border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
-              <Construction className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
-              <p className="font-medium text-foreground mb-1">Hubble 라이브 플로우</p>
-              <p>이 탭은 곧 제공됩니다 — Cilium Hubble Relay 가 클러스터에 배포된 경우 실시간 패킷 플로우를 보여줍니다.</p>
-            </div>
+            clusterId ? (
+              <HubbleTimeline
+                clusterId={clusterId}
+                initialFromPod={hubblePrefill.fromPod}
+                initialToPod={hubblePrefill.toPod}
+                initialToService={hubblePrefill.toService}
+              />
+            ) : (
+              <div className="bg-card border border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
+                <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+                왼쪽에서 클러스터를 선택하세요.
+              </div>
+            )
           )}
 
           {tab === 'tcpdump' && (

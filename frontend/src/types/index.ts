@@ -741,6 +741,44 @@ export interface PacketFlowResponseV2 {
   hops: TopologyTraceHopV2[];
 }
 
+// ── Hubble flows ────────────────────────────────────────────────────────
+export interface HubbleFlowsRequest {
+  clusterId: string;
+  fromPod?: string;
+  toPod?: string;
+  fromNamespace?: string;
+  toNamespace?: string;
+  toService?: string;
+  protocol?: string;
+  verdict?: string;
+  sinceSeconds?: number;
+  limit?: number;
+  hubbleNamespace?: string;
+  hubbleService?: string;
+  hubblePort?: number;
+}
+
+export interface HubbleFlow {
+  time?: string | null;
+  verdict?: string | null;
+  dropReason?: string | null;
+  source: { namespace?: string | null; podName?: string | null; identity?: number | null; labels?: string[]; ip?: string | null };
+  destination: { namespace?: string | null; podName?: string | null; identity?: number | null; labels?: string[]; ip?: string | null };
+  l4: { protocol?: string; sourcePort?: number; destinationPort?: number; flags?: Record<string, unknown> };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  l7?: Record<string, any> | null;
+  trafficDirection: string;
+  summary: string;
+}
+
+export interface HubbleFlowsResponse {
+  clusterId: string;
+  flows: HubbleFlow[];
+  count: number;
+  error?: string | null;
+  executed?: string | null;
+}
+
 // Ontology Graph
 export type OntologyEntityType =
   | 'node' | 'hardware' | 'os' | 'kernel_param' | 'network'

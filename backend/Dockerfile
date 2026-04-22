@@ -12,6 +12,8 @@ ARG PIP_INDEX_URL=""
 ARG PIP_TRUSTED_HOST=""
 ARG KUBECTL_VERSION="v1.30.0"
 ARG KUBECTL_MIRROR_URL=""
+ARG HUBBLE_VERSION="v1.16.3"
+ARG HUBBLE_MIRROR_URL=""
 ARG TARGETARCH="amd64"
 
 # Alpine apk 미러를 Nexus 프록시로 변경 (폐쇄망)
@@ -31,6 +33,21 @@ RUN set -eux; \
         "${BASE}/${KUBECTL_VERSION}/bin/linux/${TARGETARCH}/kubectl"; \
     chmod +x /usr/local/bin/kubectl; \
     kubectl version --client --output=yaml || true
+
+# hubble CLI 설치 — Cilium Hubble Relay 로부터 flow 조회용
+# 폐쇄망이면 HUBBLE_MIRROR_URL 로 Nexus raw 저장소를 가리키게 함
+RUN set -eux; \
+    BASE="${HUBBLE_MIRROR_URL:-https://github.com/cilium/hubble/releases/download}"; \
+    curl -fsSL -o /tmp/hubble.tar.gz \
+        "${BASE}/${HUBBLE_VERSION}/hubble-linux-${TARGETARCH}.tar.gz" \
+        || curl -fsSL -o /usr/local/bin/hubble \
+            "${BASE}/${HUBBLE_VERSION}/hubble-linux-${TARGETARCH}"; \
+    if [ -f /tmp/hubble.tar.gz ]; then \
+        tar -xzf /tmp/hubble.tar.gz -C /usr/local/bin hubble \
+        && rm -f /tmp/hubble.tar.gz; \
+    fi; \
+    chmod +x /usr/local/bin/hubble; \
+    hubble version || true
 
 # pip 프록시 설정 (폐쇄망)
 RUN if [ -n "${PIP_INDEX_URL}" ]; then \

@@ -20,6 +20,11 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 | 노드 일괄 SSH/SCP 실행 | `backend/app/routers/bulk_exec.py` + `backend/app/services/ssh_runner.py` (paramiko) | `frontend/src/pages/BulkExecPage.tsx` |
 | 클러스터 노드 목록 조회 (선택용) | `GET /clusters/{id}/node-list` in `bulk_exec.py` | `bulkExecApi.nodeList` |
 | etcdctl 원격 실행 + journal 로그 | `backend/app/routers/etcdctl.py` (SSH 경유, `/etc/etcd.env` source) | `frontend/src/pages/EtcdCtlPage.tsx` |
+| mc (MinIO) 원격 실행 | `backend/app/routers/mc_client.py` | `frontend/src/pages/McClientPage.tsx` |
+| OS / 커널 파라미터 조회 | bulk-exec 재사용 + 프리셋 라이브러리 | `frontend/src/pages/KernelParamsPage.tsx` |
+| 공용 UI: 클러스터 좌측 사이드바 | — | `frontend/src/components/common/ClusterSidebar.tsx` |
+| 공용 UI: 실행 확인 모달 | — | `frontend/src/components/common/ConfirmDialog.tsx` |
+| 공용 UI: 로그 뷰어 (JSON/journal/table 자동감지) | — | `frontend/src/components/common/LogViewer.tsx` |
 | 연결 검증 + status 반영 | `POST /clusters/{id}/verify` (clusters.py) | `clustersApi.verify` |
 | Cilium 설정 조회 | `GET /clusters/{id}/cilium-config` | `CiliumConfigModal.tsx` |
 | 클러스터 등록 위저드 (3-step) | — | `frontend/src/components/dashboard/AddClusterModal.tsx` |

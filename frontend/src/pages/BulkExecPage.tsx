@@ -5,7 +5,7 @@ import {
   Wifi, FileText, ShieldAlert, Zap, Clock,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ConfirmDialog, LogViewer } from '@/components/common';
+import { ConfirmDialog, LogViewer, ClusterSidebar } from '@/components/common';
 import { bulkExecApi, type NodeSummary, type BulkExecResponse, type BulkExecResultItem } from '@/services/api';
 
 // ── 상태 색상 ───────────────────────────────────────────────────────────────
@@ -194,7 +194,15 @@ export function BulkExecPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1600px] mx-auto px-8 py-8">
+      <main className="max-w-[1800px] mx-auto px-6 py-6 flex gap-5">
+        {/* 좌측: 클러스터 사이드바 */}
+        <ClusterSidebar
+          clusters={clusters}
+          selectedId={clusterId}
+          onSelect={setClusterId}
+        />
+
+        <div className="flex-1 min-w-0">
         {/* 헤더 */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -206,24 +214,14 @@ export function BulkExecPage() {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <select
-              value={clusterId}
-              onChange={(e) => setClusterId(e.target.value)}
-              className="px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="">— 클러스터 선택 —</option>
-              {clusters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <button
-              onClick={() => nodesQ.refetch()}
-              disabled={!clusterId}
-              className="p-2 bg-secondary hover:bg-secondary/80 rounded-lg text-muted-foreground disabled:opacity-50"
-              title="노드 목록 새로고침"
-            >
-              <RefreshCw className={`w-4 h-4 ${nodesQ.isFetching ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
+          <button
+            onClick={() => nodesQ.refetch()}
+            disabled={!clusterId}
+            className="p-2 bg-secondary hover:bg-secondary/80 rounded-lg text-muted-foreground disabled:opacity-50"
+            title="노드 목록 새로고침"
+          >
+            <RefreshCw className={`w-4 h-4 ${nodesQ.isFetching ? 'animate-spin' : ''}`} />
+          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -522,6 +520,7 @@ export function BulkExecPage() {
             </div>
           </section>
         )}
+        </div>
       </main>
 
       {/* 실행 확인 모달 */}

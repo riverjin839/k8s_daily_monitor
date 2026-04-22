@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient, useQueries } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
   GitCommit, RefreshCw, Loader2, Clock, Share2, X, ChevronDown, ChevronUp,
-  Server, Cpu, Network, Settings2, ArrowLeft,
+  Server, Cpu, Network, Settings2,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
+import { ClusterSidebar } from '@/components/common';
 import { versionsApi, type ComponentSnapshot } from '@/services/api';
 
 // ── 유틸 ────────────────────────────────────────────────────────────────────
@@ -218,18 +219,12 @@ function DiffPanel({
 export function VersionsPage() {
   const queryClient = useQueryClient();
   const { data: clusters = [] } = useClusters();
-  // 1차: 카드 선택. 선택 안 되면 null → 카드 그리드 표시.
   const [clusterId, setClusterId] = useState<string>('');
 
-  // 모든 클러스터의 컴포넌트 수 미리 가져와서 카드에 표시
-  const cardQueries = useQueries({
-    queries: clusters.map((c) => ({
-      queryKey: ['versions', 'current', c.id],
-      queryFn: () => versionsApi.current(c.id).then((r) => r.data),
-      staleTime: 60_000,
-      retry: false,
-    })),
-  });
+  // 사이드바 진입 시 자동으로 첫 클러스터 선택
+  useEffect(() => {
+    if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
+  }, [clusters, clusterId]);
 
   const { data: current, isLoading } = useQuery({
     queryKey: ['versions', 'current', clusterId],
@@ -279,19 +274,16 @@ export function VersionsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1600px] mx-auto px-8 py-8">
+      <main className="max-w-[1800px] mx-auto px-6 py-6 flex gap-5">
+        <ClusterSidebar
+          clusters={clusters}
+          selectedId={clusterId || null}
+          onSelect={(id) => setClusterId(id ?? '')}
+        />
+        <div className="flex-1 min-w-0">
         {/* 헤더 */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            {clusterId && (
-              <button
-                onClick={() => setClusterId('')}
-                className="p-2 hover:bg-secondary rounded-lg text-muted-foreground"
-                title="클러스터 선택으로"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-            )}
             <GitCommit className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">버전 / 설정 관리</h1>
             {clusterId && current?.components && (
@@ -327,76 +319,8 @@ export function VersionsPage() {
           )}
         </div>
 
-        {/* 1차 선택: 클러스터 카드 그리드 */}
-        {!clusterId && (
-          <>
-            <div className="bg-card border border-border rounded-xl p-4 mb-5 text-xs text-muted-foreground">
-              클러스터를 선택하면 해당 클러스터의 K8s/Cilium 버전, core component image tag, command/args 플래그, cilium-config 스냅샷을 볼 수 있습니다.
-            </div>
-            {clusters.length === 0 ? (
-              <p className="text-center text-muted-foreground py-20">등록된 클러스터가 없습니다.</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {clusters.map((c, idx) => {
-                  const q = cardQueries[idx];
-                  const snap = q?.data as { components: ComponentSnapshot[] } | undefined;
-                  const count = snap?.components?.length ?? 0;
-                  const ctrlPlane = snap?.components?.find((x) => x.component === 'k8s_server');
-                  const cilium = snap?.components?.find((x) => x.component === 'cilium_agent');
-                  const latest = snap?.components?.reduce<string | null>((acc, x) => {
-                    if (!acc) return x.collectedAt;
-                    return x.collectedAt > acc ? x.collectedAt : acc;
-                  }, null);
-
-                  return (
-                    <button
-                      key={c.id}
-                      onClick={() => setClusterId(c.id)}
-                      className="bg-card border border-border hover:border-primary/40 hover:shadow-md rounded-xl p-5 text-left transition-all group"
-                    >
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                          <Server className="w-4 h-4 text-primary" />
-                        </div>
-                        <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors">{c.name}</p>
-                      </div>
-                      <div className="space-y-1.5 text-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">수집된 컴포넌트</span>
-                          <span className={`font-mono font-semibold ${count > 0 ? 'text-foreground' : 'text-muted-foreground/60'}`}>
-                            {count}
-                          </span>
-                        </div>
-                        {ctrlPlane?.version && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-muted-foreground">K8s</span>
-                            <span className="font-mono text-foreground">{ctrlPlane.version}</span>
-                          </div>
-                        )}
-                        {cilium?.version && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-muted-foreground">Cilium</span>
-                            <span className="font-mono text-foreground">{cilium.version}</span>
-                          </div>
-                        )}
-                        {latest && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-muted-foreground">마지막 수집</span>
-                            <span className="font-mono text-muted-foreground text-[11px]">{formatDateTime(latest)}</span>
-                          </div>
-                        )}
-                        {count === 0 && !q?.isLoading && (
-                          <div className="mt-2 pt-2 border-t border-border/50">
-                            <p className="text-[11px] text-muted-foreground/70">아직 수집 안 됨 — 클릭해서 수집 시작</p>
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </>
+        {!clusterId && clusters.length === 0 && (
+          <p className="text-center text-muted-foreground py-20">등록된 클러스터가 없습니다.</p>
         )}
 
         {/* 선택된 클러스터 상세 */}
@@ -495,6 +419,7 @@ export function VersionsPage() {
             )}
           </div>
         )}
+        </div>
       </main>
     </div>
   );

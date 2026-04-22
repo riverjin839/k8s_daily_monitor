@@ -3,7 +3,6 @@ import { Download, BookOpen, Plus, Activity, RefreshCw, CheckCircle, AlertTriang
 import { formatDateTime } from '@/lib/utils';
 import {
   SummaryStats,
-  ClusterTabs,
   AddonGrid,
   HistoryLog,
   AddClusterModal,
@@ -15,6 +14,7 @@ import {
 } from '@/components/dashboard';
 import { PlaybookCard, AddPlaybookModal } from '@/components/playbooks';
 import { MacCard } from '@/components/ui/MacCard';
+import { ClusterSidebar } from '@/components/common';
 import { useClusterStore } from '@/stores/clusterStore';
 import { usePlaybookStore } from '@/stores/playbookStore';
 import { useClusters, useSummary, useAddons, useLogs, useHealthCheck, useCreateAddon, useDeleteAddon, useAddonHealthCheck } from '@/hooks/useCluster';
@@ -270,7 +270,16 @@ export function Dashboard() {
         </button>
       </div>
 
-      <main className="max-w-[1600px] mx-auto px-8 py-7 space-y-5">
+      <div className="max-w-[1800px] mx-auto px-6 py-6 flex gap-5">
+        <ClusterSidebar
+          clusters={clusters}
+          selectedId={selectedClusterId}
+          onSelect={setSelectedClusterId}
+          allowAll
+          allLabel="전체 현황"
+        />
+
+      <main className="flex-1 min-w-0 space-y-5">
 
         {/* ── Summary Stats ──────────────────────────────────────────────── */}
         <SummaryStats
@@ -318,7 +327,6 @@ export function Dashboard() {
                 <Download className="w-3 h-3" /> .csv
               </button>
             </div>
-            <ClusterTabs clusters={clusters} selectedId={selectedClusterId} onSelect={setSelectedClusterId} />
           </div>
 
           {selectedClusterId === null ? (
@@ -424,6 +432,7 @@ export function Dashboard() {
         </MacCard>
 
       </main>
+      </div>
 
       {/* Add Cluster Modal */}
       <AddClusterModal

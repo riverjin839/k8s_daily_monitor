@@ -48,7 +48,7 @@ function App() {
       <BrowserRouter>
         <div className="flex min-h-screen bg-background">
           <Sidebar />
-          <div className="flex-1 min-w-0 ml-[220px]">
+          <div className="flex-1 min-w-0 ml-16">
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/playbooks" element={<PlaybooksPage />} />

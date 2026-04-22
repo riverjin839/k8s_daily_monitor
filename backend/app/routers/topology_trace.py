@@ -12,11 +12,20 @@ from app.schemas.topology_trace import (
     PacketFlowRequestV2,
     PacketFlowResponse,
     PacketFlowResponseV2,
+    TcpdumpCaptureRequest,
+    TcpdumpCaptureResponse,
+    TcpdumpInterfacesRequest,
+    TcpdumpInterfacesResponse,
     TopologyTraceRequest,
     TopologyTraceResponse,
 )
 from app.services.hubble_client import HubbleFilter, fetch_flows
 from app.services.kubeconfig import ensure_kubeconfig_file
+from app.services.ssh_runner import SSHTarget
+from app.services.tcpdump_runner import (
+    capture as tcpdump_capture,
+    list_remote_interfaces,
+)
 from app.services.topology_trace_service import (
     PacketFlowRequest as PacketFlowReqDC,
     PacketFlowRequestV2 as PacketFlowReqV2DC,
@@ -151,3 +160,48 @@ def hubble_flows(payload: HubbleFlowsRequest, db: Session = Depends(get_db)):
         error=result.get("error"),
         executed=result.get("executed"),
     )
+
+
+@router.post("/tcpdump", response_model=TcpdumpCaptureResponse)
+def tcpdump_run(payload: TcpdumpCaptureRequest):
+    """선택한 원격 호스트(노드)에 SSH 로 붙어 tcpdump 를 1회 수행.
+
+    - 자격증명은 요청에만 존재, DB 저장 안 함 (bulk-exec 와 동일 패턴).
+    - BPF 필터는 shlex.quote 로 감싸서 전달.
+    """
+    if not payload.password and not payload.private_key:
+        raise HTTPException(
+            status_code=422,
+            detail="password 또는 private_key 중 하나는 필수입니다.",
+        )
+
+    target = SSHTarget(
+        host=payload.host, port=payload.port, username=payload.username,
+        password=payload.password, private_key=payload.private_key,
+    )
+    result = tcpdump_capture(
+        target,
+        interface=payload.interface,
+        bpf_filter=payload.bpf_filter,
+        duration_sec=payload.duration_sec,
+        packet_count=payload.packet_count,
+        use_sudo=payload.use_sudo,
+        connect_timeout=payload.connect_timeout,
+    )
+    return TcpdumpCaptureResponse(**result.to_dict())
+
+
+@router.post("/tcpdump/interfaces", response_model=TcpdumpInterfacesResponse)
+def tcpdump_interfaces(payload: TcpdumpInterfacesRequest):
+    """원격 호스트의 네트워크 인터페이스 목록 조회 (`ip -o link show`)."""
+    if not payload.password and not payload.private_key:
+        raise HTTPException(
+            status_code=422,
+            detail="password 또는 private_key 중 하나는 필수입니다.",
+        )
+    target = SSHTarget(
+        host=payload.host, port=payload.port, username=payload.username,
+        password=payload.password, private_key=payload.private_key,
+    )
+    ifaces = list_remote_interfaces(target, connect_timeout=payload.connect_timeout)
+    return TcpdumpInterfacesResponse(host=payload.host, interfaces=ifaces)

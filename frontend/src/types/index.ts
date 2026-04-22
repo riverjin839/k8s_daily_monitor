@@ -779,6 +779,58 @@ export interface HubbleFlowsResponse {
   executed?: string | null;
 }
 
+// ── tcpdump ────────────────────────────────────────────────────────────
+export interface TcpdumpCaptureRequest {
+  clusterId?: string;
+  host: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  interface: string;
+  bpfFilter?: string;
+  durationSec?: number;
+  packetCount?: number;
+  useSudo?: boolean;
+  connectTimeout?: number;
+}
+
+export interface TcpdumpPacketRow {
+  timestamp: string;
+  src?: string | null;
+  dst?: string | null;
+  proto?: string | null;
+  flags?: string | null;
+  length?: number | null;
+  summary: string;
+}
+
+export interface TcpdumpCaptureResponse {
+  host: string;
+  status: string;
+  executed: string;
+  exitCode?: number | null;
+  durationMs: number;
+  packets: TcpdumpPacketRow[];
+  stderr: string;
+  raw: string;
+  error?: string | null;
+}
+
+export interface TcpdumpInterfacesRequest {
+  host: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  connectTimeout?: number;
+}
+
+export interface TcpdumpInterfacesResponse {
+  host: string;
+  interfaces: string[];
+}
+
 // Ontology Graph
 export type OntologyEntityType =
   | 'node' | 'hardware' | 'os' | 'kernel_param' | 'network'

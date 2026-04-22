@@ -117,3 +117,60 @@ class HubbleFlowsResponse(BaseModel):
     count: int = 0
     error: str | None = None
     executed: str | None = None
+
+
+# ── 원격 tcpdump ──────────────────────────────────────────────────────────
+
+class TcpdumpCaptureRequest(BaseModel):
+    cluster_id: UUID | None = None
+
+    # 대상 노드 (IP 또는 FQDN)
+    host: str = Field(..., min_length=1, max_length=253)
+    port: int = Field(default=22, ge=1, le=65535)
+    username: str = Field(default="root", min_length=1, max_length=64)
+    password: str | None = None
+    private_key: str | None = None
+
+    interface: str = Field(..., min_length=1, max_length=40,
+                           description="캡처 인터페이스 (예: bond0, eth0, cilium_host)")
+    bpf_filter: str = Field(default="", max_length=500)
+    duration_sec: int = Field(default=10, ge=1, le=120)
+    packet_count: int = Field(default=200, ge=1, le=5000)
+    use_sudo: bool = True
+    connect_timeout: int = Field(default=8, ge=1, le=60)
+
+
+class TcpdumpPacketRow(BaseModel):
+    timestamp: str
+    src: str | None = None
+    dst: str | None = None
+    proto: str | None = None
+    flags: str | None = None
+    length: int | None = None
+    summary: str
+
+
+class TcpdumpCaptureResponse(BaseModel):
+    host: str
+    status: str
+    executed: str
+    exit_code: int | None = None
+    duration_ms: int = 0
+    packets: list[TcpdumpPacketRow] = Field(default_factory=list)
+    stderr: str = ""
+    raw: str = ""
+    error: str | None = None
+
+
+class TcpdumpInterfacesRequest(BaseModel):
+    host: str = Field(..., min_length=1, max_length=253)
+    port: int = Field(default=22, ge=1, le=65535)
+    username: str = Field(default="root", min_length=1, max_length=64)
+    password: str | None = None
+    private_key: str | None = None
+    connect_timeout: int = Field(default=6, ge=1, le=30)
+
+
+class TcpdumpInterfacesResponse(BaseModel):
+    host: str
+    interfaces: list[str]

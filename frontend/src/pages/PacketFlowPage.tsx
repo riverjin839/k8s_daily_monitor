@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import {
   Route, Play, Loader2, ArrowRight, Globe, Network, Share2, Server, Box,
-  AlertTriangle, Info, Construction,
+  AlertTriangle, Info,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { ClusterSidebar } from '@/components/common';
@@ -13,6 +13,7 @@ import type {
 import { FlowGraph3D } from '@/components/packet-flow/FlowGraph3D';
 import { HopDetailPanel } from '@/components/packet-flow/HopDetailPanel';
 import { HubbleTimeline } from '@/components/packet-flow/HubbleTimeline';
+import { TcpdumpPanel } from '@/components/packet-flow/TcpdumpPanel';
 
 type Tab = 'graph' | 'hubble' | 'tcpdump';
 
@@ -338,11 +339,14 @@ export function PacketFlowPage() {
           )}
 
           {tab === 'tcpdump' && (
-            <div className="bg-card border border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
-              <Construction className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
-              <p className="font-medium text-foreground mb-1">원격 tcpdump 캡처</p>
-              <p>이 탭은 곧 제공됩니다 — 경로 상의 노드에 SSH 로 접속해 실제 패킷을 캡처합니다.</p>
-            </div>
+            clusterId ? (
+              <TcpdumpPanel clusterId={clusterId} />
+            ) : (
+              <div className="bg-card border border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
+                <Info className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
+                왼쪽에서 클러스터를 선택하세요.
+              </div>
+            )
           )}
         </div>
       </main>

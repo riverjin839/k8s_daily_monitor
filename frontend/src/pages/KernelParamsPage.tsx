@@ -5,7 +5,7 @@ import {
   ShieldAlert, Wifi, Terminal, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ConfirmDialog, LogViewer, ClusterSidebar } from '@/components/common';
+import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands } from '@/components/common';
 import {
   bulkExecApi, type NodeSummary, type BulkExecResultItem, type BulkExecResponse,
 } from '@/services/api';
@@ -144,7 +144,9 @@ function NodeRow({ node, checked, onToggle }: { node: NodeSummary; checked: bool
 
 // ── 결과 카드 (노드별) ──────────────────────────────────────────────────────
 
-function ResultCard({ result, command }: { result: BulkExecResultItem; command: string }) {
+function ResultCard({
+  result, command, globalFilter,
+}: { result: BulkExecResultItem; command: string; globalFilter: string }) {
   const [open, setOpen] = useState(result.status === 'ok');
   const meta = STATUS_META[result.status];
   const Icon = meta.icon;
@@ -173,11 +175,11 @@ function ResultCard({ result, command }: { result: BulkExecResultItem; command: 
             {command}
           </pre>
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground">stdout</p>
-          <LogViewer text={result.stdout} maxHeight="max-h-96" />
+          <LogViewer text={result.stdout} maxHeight="max-h-96" filterOverride={globalFilter || undefined} hideToolbar={!!globalFilter.trim()} />
           {result.stderr && (
             <>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">stderr</p>
-              <LogViewer text={result.stderr} maxHeight="max-h-40" asError />
+              <LogViewer text={result.stderr} maxHeight="max-h-40" asError filterOverride={globalFilter || undefined} hideToolbar={!!globalFilter.trim()} />
             </>
           )}
           {result.error && <p className="text-xs text-red-400">⚠ {result.error}</p>}
@@ -238,6 +240,7 @@ export function KernelParamsPage() {
 
   const [runResponse, setRunResponse] = useState<BulkExecResponse | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [globalFilter, setGlobalFilter] = useState('');
 
   const runMut = useMutation({
     mutationFn: async () => {
@@ -359,6 +362,12 @@ export function KernelParamsPage() {
                     rows={3}
                     className="w-full px-3 py-2 text-[12px] font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                   />
+                  <SavedCommands
+                    className="mt-2"
+                    storageKey="k8s:saved-cmd:kernel-params"
+                    currentValue={customCmd}
+                    onPick={(v) => { setCustomCmd(v); setPresetKey('custom'); }}
+                  />
                 </div>
               )}
 
@@ -443,7 +452,7 @@ export function KernelParamsPage() {
           {/* 결과: 노드별 카드 */}
           {runResponse && (
             <section className="mt-6 space-y-3">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-sm font-semibold">결과 — {runResponse.total}개 노드</h2>
                 <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                   정상 {runResponse.okCount}
@@ -456,9 +465,28 @@ export function KernelParamsPage() {
                 <span className="text-[11px] text-muted-foreground">
                   {runResponse.totalDurationMs}ms · {runResponse.mode}
                 </span>
+                {/* 전 노드 공통 필터 */}
+                <div className="ml-auto flex items-center gap-1.5">
+                  <div className="relative">
+                    <input
+                      value={globalFilter}
+                      onChange={(e) => setGlobalFilter(e.target.value)}
+                      placeholder="모든 노드 결과 공통 필터..."
+                      className="pl-2 pr-7 py-1 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-64"
+                    />
+                    {globalFilter && (
+                      <button
+                        onClick={() => setGlobalFilter('')}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
               {runResponse.results.map((r) => (
-                <ResultCard key={r.host} result={r} command={commandToRun} />
+                <ResultCard key={r.host} result={r} command={commandToRun} globalFilter={globalFilter} />
               ))}
             </section>
           )}

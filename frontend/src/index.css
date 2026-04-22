@@ -16,7 +16,7 @@
     --secondary: 0 0% 93%;           /* #EDEDED */
     --secondary-foreground: 0 0% 11%;
     --muted: 0 0% 93%;
-    --muted-foreground: 0 0% 42%;    /* #6B6B6B */
+    --muted-foreground: 0 0% 30%;    /* #4D4D4D — was 42%, 너무 흐려서 가독성 낮음 */
     --accent: 0 0% 93%;
     --accent-foreground: 0 0% 11%;
     --destructive: 4 86% 58%;
@@ -74,7 +74,7 @@
     --secondary: 0 0% 93%;
     --secondary-foreground: 0 0% 11%;
     --muted: 0 0% 93%;
-    --muted-foreground: 0 0% 42%;
+    --muted-foreground: 0 0% 30%;
     --accent: 0 0% 93%;
     --accent-foreground: 0 0% 11%;
     --destructive: 4 86% 58%;
@@ -97,14 +97,16 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
-    /* 기본 본문 가독성 — 15px (Tailwind text-base=16px 와 text-sm=14px 사이) */
-    font-size: 15px;
+    /* 기본 본문 가독성 — 16px (Tailwind text-base) */
+    font-size: 16px;
     line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
 /* ── 가독성 개선 — 너무 작은 임의 크기를 floor 처리 ────────────────────────── */
-/* 9~10px 로 쓰인 텍스트가 많아 읽기 어려움. 12px(= Tailwind text-xs) 로 올림. */
+/* 9~10px 로 쓰인 텍스트가 많아 읽기 어려움. 12~13px 로 올림. */
 .text-\[9px\]  { font-size: 12px !important; line-height: 1.4; }
 .text-\[10px\] { font-size: 12px !important; line-height: 1.4; }
 .text-\[11px\] { font-size: 13px !important; line-height: 1.45; }
@@ -115,9 +117,10 @@ code .text-\[11px\], code .text-\[10px\], code .text-\[9px\] {
   font-size: inherit !important;
 }
 
-/* text-xs (12px) 도 더 읽기 쉽게 13px 로 — 기존 text-sm=14px 와 간격 유지 */
+/* text-xs / text-sm 모두 한 단계 올림 — 메타데이터가 잘 보이게 */
 .text-xs { font-size: 13px; line-height: 1.5; }
-/* text-sm 은 기본 유지 (14px) */
+.text-sm { font-size: 14.5px; line-height: 1.55; }
+/* text-base 는 기본 16px */
 
 /* ── macOS-style Card shadow utility ──────────────────────────────────────── */
 .mac-shadow {

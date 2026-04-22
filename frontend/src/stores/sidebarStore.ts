@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 
-const NAV_KEY = 'k8s:sidebar-width';
+// 스토리지 키에 v2 suffix — 이전 저장값(기본 220) 을 무시하고 새 기본값(icon-only) 적용
+const NAV_KEY = 'k8s:sidebar-width-v2';
 const CLUSTER_KEY = 'k8s:cluster-sidebar-width';
 
-export const NAV_DEFAULT = 220;
+export const NAV_DEFAULT = 64;        // 기본은 icon-only, hover 시 portal tooltip
 export const NAV_MIN = 56;            // 아이콘만 보이는 최소
 export const NAV_COLLAPSE_AT = 110;   // 이 이하 = icon-only 모드
 export const NAV_MAX = 360;

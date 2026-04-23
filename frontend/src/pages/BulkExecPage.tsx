@@ -8,6 +8,7 @@ import {
 import { useClusters } from '@/hooks/useCluster';
 import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands, DebugLogPanel } from '@/components/common';
 import { bulkExecApi, type NodeSummary, type BulkExecResponse, type BulkExecResultItem } from '@/services/api';
+import { formatApiError } from '@/lib/utils';
 
 // ── 상태 색상 ───────────────────────────────────────────────────────────────
 
@@ -512,7 +513,7 @@ export function BulkExecPage() {
 
             {runError && (
               <div className="px-3 py-2 text-xs rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
-                {runError.response?.data?.detail ?? runError.message ?? '실행 중 오류'}
+                {formatApiError(runError, '실행 중 오류')}
               </div>
             )}
 

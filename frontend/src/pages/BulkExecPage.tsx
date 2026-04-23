@@ -6,7 +6,7 @@ import {
   Wifi, FileText, ShieldAlert, Zap, Clock, Download, LayoutList, Rows,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands, DebugLogPanel } from '@/components/common';
+import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands, DebugLogPanel, Skeleton, EmptyState } from '@/components/common';
 import { bulkExecApi, type NodeSummary, type BulkExecResponse, type BulkExecResultItem } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
 
@@ -443,15 +443,28 @@ export function BulkExecPage() {
             </header>
             <div className="max-h-[520px] overflow-y-auto">
               {!clusterId ? (
-                <p className="text-center text-muted-foreground text-sm py-10">클러스터를 선택하세요.</p>
+                <EmptyState compact title="클러스터를 선택하세요"
+                  description="왼쪽 사이드바에서 대상 클러스터를 먼저 고르세요." />
               ) : nodesQ.isLoading ? (
-                <p className="text-center text-muted-foreground text-sm py-10">불러오는 중…</p>
+                <div className="p-3 space-y-2">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 py-1.5">
+                      <Skeleton width={14} height={14} />
+                      <Skeleton width={160} height={12} />
+                      <Skeleton width={100} height={10} />
+                      <Skeleton width={60} height={10} className="ml-auto" />
+                    </div>
+                  ))}
+                </div>
               ) : nodesQ.isError ? (
-                <p className="text-center text-red-400 text-sm py-10 px-4">
-                  {(nodesQ.error as Error)?.message ?? '노드 조회 실패'}
-                </p>
+                <EmptyState compact
+                  title="노드 조회 실패"
+                  description={(nodesQ.error as Error)?.message ?? '연결 오류'}
+                  action={{ label: '다시 시도', onClick: () => nodesQ.refetch(), variant: 'secondary' }}
+                />
               ) : (nodesQ.data?.nodes ?? []).length === 0 ? (
-                <p className="text-center text-muted-foreground text-sm py-10">노드 없음</p>
+                <EmptyState compact title="노드 없음"
+                  description="이 클러스터에서 가져올 수 있는 노드가 없습니다." />
               ) : (
                 (nodesQ.data!.nodes).map((n) => (
                   <NodeRow key={n.name} node={n} checked={selected.has(n.name)} onToggle={() => toggle(n.name)} />

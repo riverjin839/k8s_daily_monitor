@@ -8,6 +8,8 @@ import { RichTextEditor, RichContent } from '@/components/editor';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { workGuidesApi, workflowsApi } from '@/services/api';
 import type { WorkGuide, WorkGuideCreate, WorkGuideUpdate } from '@/types';
+import { useToast } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const CATEGORIES = ['배포', '트러블슈팅', '모니터링', '보안', '기타'];
@@ -503,6 +505,7 @@ function PageView({ guide, allGuides, onSelect, onEdit, onAddChild, onAddToWorkf
 // ── Main page ─────────────────────────────────────────────────────────────────
 export function WorkGuidePage() {
   const qc = useQueryClient();
+  const toast = useToast();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showForm, setShowForm]     = useState(false);
@@ -530,8 +533,9 @@ export function WorkGuidePage() {
       await workGuidesApi.delete(guide.id);
       qc.invalidateQueries({ queryKey: ['work-guides'] });
       if (selectedId === guide.id) setSelectedId(null);
-    } catch {
-      alert('삭제에 실패했습니다.');
+      toast.success('페이지 삭제됨', guide.title);
+    } catch (e) {
+      toast.error('삭제 실패', formatApiError(e));
     }
   };
 

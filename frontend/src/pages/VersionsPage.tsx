@@ -6,7 +6,8 @@ import {
   Server, Cpu, Network, Settings2,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, DebugLogPanel } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, SkeletonCard } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 import { versionsApi, type ComponentSnapshot } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { EtcdSystemdModal } from '@/components/versions';
@@ -222,6 +223,7 @@ function DiffPanel({
 export function VersionsPage() {
   const queryClient = useQueryClient();
   const { data: clusters = [] } = useClusters();
+  const toast = useToast();
   const [clusterId, setClusterId] = useState<string>('');
   const [etcdModalOpen, setEtcdModalOpen] = useState(false);
 
@@ -242,12 +244,14 @@ export function VersionsPage() {
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['versions'] });
       const { changed, errors } = res.data;
-      const msg = `${changed}개 변경 감지됨.`;
-      alert(errors.length > 0 ? `${msg}\n\n경고:\n${errors.join('\n')}` : msg);
+      if (errors.length > 0) {
+        toast.warning(`${changed}개 변경 감지됨 · 경고 ${errors.length}건`, errors.slice(0, 3).join('\n'));
+      } else {
+        toast.success(`${changed}개 변경 감지됨`, '스냅샷 갱신 완료');
+      }
     },
     onError: (err: unknown) => {
-      const e = err as { response?: { data?: { detail?: string } }; message?: string };
-      alert(`수집 실패: ${e.response?.data?.detail ?? e.message ?? '알 수 없는 오류'}`);
+      toast.error('수집 실패', formatApiError(err));
     },
   });
 
@@ -355,19 +359,16 @@ export function VersionsPage() {
 
         {/* 본문 */}
         {!clusterId ? null : isLoading ? (
-          <p className="text-muted-foreground text-center py-20">불러오는 중…</p>
-        ) : (current?.components.length ?? 0) === 0 ? (
-          <div className="text-center py-20">
-            <Clock className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
-            <p className="text-muted-foreground mb-4">아직 수집된 스냅샷이 없습니다.</p>
-            <button
-              onClick={() => collect.mutate()}
-              disabled={collect.isPending}
-              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
-            >
-              지금 수집
-            </button>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
           </div>
+        ) : (current?.components.length ?? 0) === 0 ? (
+          <EmptyState
+            icon={Clock}
+            title="아직 수집된 스냅샷이 없습니다"
+            description="kubeconfig 에 연결해 현재 K8s 버전/설정을 스냅샷으로 저장합니다."
+            action={{ label: '지금 수집', onClick: () => collect.mutate() }}
+          />
         ) : (
           <div className="space-y-5">
             {grouped.map(({ category, items }) => {

@@ -6,6 +6,8 @@ import { RichTextEditor, RichContent } from '@/components/editor';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsNotesApi } from '@/services/api';
 import type { OpsNote, OpsNoteCreate, OpsNoteColor, OpsNoteUpdate } from '@/types';
+import { useToast } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 
 // ── 서비스 목록 ───────────────────────────────────────────────────────────────
 const SERVICES = [
@@ -353,6 +355,7 @@ function StickyNote({ note, onEdit, onDelete, onTogglePin }: StickyNoteProps) {
 // ── 메인 페이지 ───────────────────────────────────────────────────────────────
 export function OpsNotesPage() {
   const qc = useQueryClient();
+  const toast = useToast();
 
   const [filterService, setFilterService] = useState('');
   const [search, setSearch]               = useState('');
@@ -393,8 +396,9 @@ export function OpsNotesPage() {
     try {
       await opsNotesApi.delete(note.id);
       qc.invalidateQueries({ queryKey: ['ops-notes'] });
-    } catch {
-      alert('삭제에 실패했습니다.');
+      toast.success('메모 삭제됨');
+    } catch (e) {
+      toast.error('삭제 실패', formatApiError(e));
     } finally {
       setDeletingId(null);
     }
@@ -404,8 +408,8 @@ export function OpsNotesPage() {
     try {
       await opsNotesApi.update(note.id, { pinned: !note.pinned });
       qc.invalidateQueries({ queryKey: ['ops-notes'] });
-    } catch {
-      alert('수정에 실패했습니다.');
+    } catch (e) {
+      toast.error('수정 실패', formatApiError(e));
     }
   };
 

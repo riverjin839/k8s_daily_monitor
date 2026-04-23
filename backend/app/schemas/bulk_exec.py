@@ -31,7 +31,7 @@ class BulkExecRequest(BaseModel):
     cluster_id: Optional[UUID] = None  # 참조용 (선택)
 
     action: Literal["ssh", "scp"] = "ssh"
-    targets: list[SSHTargetIn] = Field(..., min_length=1, max_length=200)
+    targets: list[SSHTargetIn] = Field(..., min_length=1, max_length=2000)
 
     # SSH / SCP 공용 인증
     username: str = Field(default="root", min_length=1, max_length=64)

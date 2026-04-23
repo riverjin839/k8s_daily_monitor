@@ -272,7 +272,7 @@ class EtcdSystemdCollectRequest(BaseModel):
     `etcdctl endpoint health` 결과를 모아 1건의 스냅샷으로 저장한다.
     자격증명은 요청에만 존재하고 DB 에 저장하지 않는다.
     """
-    hosts: list[str] = Field(..., min_length=1, max_length=30)
+    hosts: list[str] = Field(..., min_length=1, max_length=2000)
     port: int = Field(default=22, ge=1, le=65535)
     username: str = Field(default="root", min_length=1, max_length=64)
     password: str | None = None
@@ -416,7 +416,7 @@ class KernelParamsCollectRequest(BaseModel):
     `kernel_params:{host}` component 키로 저장, 내용 해시가 이전과 같으면
     저장 생략 (최신 일자 기준 uniq).
     """
-    hosts: list[str] = Field(..., min_length=1, max_length=200)
+    hosts: list[str] = Field(..., min_length=1, max_length=2000)
     port: int = Field(default=22, ge=1, le=65535)
     username: str = Field(default="root", min_length=1, max_length=64)
     password: str | None = None
@@ -529,7 +529,7 @@ class EtcdctlConfigCollectRequest(BaseModel):
     """etcd 가 systemd 로 동작 중일 때 `/etc/etcd.env` 등 설정 파일과 endpoint
     status 를 수집해 스냅샷 저장. 내용 해시 기준 dedup.
     """
-    hosts: list[str] = Field(..., min_length=1, max_length=30)
+    hosts: list[str] = Field(..., min_length=1, max_length=2000)
     port: int = Field(default=22, ge=1, le=65535)
     username: str = Field(default="root", min_length=1, max_length=64)
     password: str | None = None

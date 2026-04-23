@@ -6,6 +6,7 @@ import {
 import { useClusters } from '@/hooks/useCluster';
 import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands } from '@/components/common';
 import { mcApi, bulkExecApi, type McPreset, type EtcdCtlRunResponse, type NodeSummary } from '@/services/api';
+import { formatApiError } from '@/lib/utils';
 
 const STATUS_META: Record<EtcdCtlRunResponse['status'], { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }> = {
   ok:            { label: '정상',     cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',  icon: CheckCircle },
@@ -274,7 +275,7 @@ export function McClientPage() {
 
               {runError && (
                 <div className="px-3 py-2 text-xs rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
-                  {runError.response?.data?.detail ?? runError.message}
+                  {formatApiError(runError)}
                 </div>
               )}
 

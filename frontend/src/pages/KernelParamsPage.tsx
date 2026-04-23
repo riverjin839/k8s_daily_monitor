@@ -10,6 +10,7 @@ import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands } from '@/compo
 import {
   bulkExecApi, type NodeSummary, type BulkExecResultItem, type BulkExecResponse,
 } from '@/services/api';
+import { formatApiError } from '@/lib/utils';
 
 // ── 커널/OS 파라미터 조회 프리셋 ─────────────────────────────────────────────
 
@@ -433,7 +434,7 @@ export function KernelParamsPage() {
 
               {runError && (
                 <div className="px-3 py-2 text-xs rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
-                  {runError.response?.data?.detail ?? runError.message}
+                  {formatApiError(runError)}
                 </div>
               )}
 

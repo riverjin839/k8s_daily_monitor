@@ -7,6 +7,7 @@ import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useClusters } from '@/hooks/useCluster';
 import { ClusterSidebar, DebugLogPanel } from '@/components/common';
 import { topologyTraceApi } from '@/services/api';
+import { formatApiError } from '@/lib/utils';
 import type {
   PacketFlowResponseV2, TopologyTraceHopV2, PacketDirection,
 } from '@/types';
@@ -269,7 +270,7 @@ export function PacketFlowPage() {
 
             {runError && (
               <div className="px-3 py-2 text-xs rounded-lg bg-destructive/10 text-destructive border border-destructive/30">
-                {runError.response?.data?.detail ?? runError.message}
+                {formatApiError(runError)}
               </div>
             )}
           </section>

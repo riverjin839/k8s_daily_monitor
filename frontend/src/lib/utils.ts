@@ -133,3 +133,54 @@ export function formatRelativeTime(dateString: string): string {
   if (diffHour < 24) return `${diffHour}시간 전`;
   return `${diffDay}일 전`;
 }
+
+/**
+ * axios 에러를 **항상 문자열**로 변환. JSX 에서 직접 렌더 가능.
+ *
+ * FastAPI 422 는 `detail` 이 객체 배열 형태 (`[{type, loc, msg, input, ctx}, ...]`) 로
+ * 돌아옴. JSX 에 객체를 그대로 넣으면 React error #31 발생 → 이 함수를 통해
+ * 안전하게 문자열화.
+ */
+export function formatApiError(err: unknown, fallback = '요청 실패'): string {
+  if (!err) return fallback;
+  const e = err as {
+    response?: { data?: { detail?: unknown; message?: unknown } };
+    message?: string;
+    name?: string;
+    code?: string;
+  };
+  // axios CanceledError (사용자 취소)
+  if (e.name === 'CanceledError' || e.code === 'ERR_CANCELED' || e.name === 'AbortError') {
+    return '취소됨';
+  }
+  const detail = e?.response?.data?.detail;
+  if (typeof detail === 'string') return detail;
+
+  if (Array.isArray(detail)) {
+    // FastAPI validation: [{type, loc, msg, input, ctx}, ...]
+    const parts = detail.map((d): string => {
+      if (typeof d === 'string') return d;
+      if (d && typeof d === 'object') {
+        const dd = d as { msg?: string; loc?: unknown[]; type?: string; ctx?: Record<string, unknown> };
+        const loc = Array.isArray(dd.loc) ? dd.loc.filter((x) => x !== 'body').join('.') : '';
+        const ctxNote =
+          dd.ctx && typeof dd.ctx === 'object'
+            ? ' (' + Object.entries(dd.ctx).map(([k, v]) => `${k}=${String(v)}`).join(', ') + ')'
+            : '';
+        const msg = dd.msg ?? dd.type ?? JSON.stringify(d);
+        return `${loc ? `${loc}: ` : ''}${msg}${ctxNote}`;
+      }
+      return String(d);
+    });
+    return parts.join(' · ');
+  }
+
+  if (detail && typeof detail === 'object') {
+    try { return JSON.stringify(detail); } catch { /* ignore */ }
+  }
+
+  const bodyMsg = e?.response?.data?.message;
+  if (typeof bodyMsg === 'string') return bodyMsg;
+
+  return e.message ?? fallback;
+}

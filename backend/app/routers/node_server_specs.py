@@ -17,6 +17,10 @@ from app.schemas.node_server_spec import (
     NodeServerSpecList,
     NodeServerSpecOut,
     NodeServerSpecUpdate,
+    NodeSpecCsvApplyResponse,
+    NodeSpecCsvDiff,
+    NodeSpecCsvPreviewResponse,
+    NodeSpecCsvUploadRequest,
     NodeSpecImportRequest,
     NodeSpecImportResult,
 )
@@ -291,4 +295,154 @@ def import_from_cluster(
         skipped=skipped,
         errors=errors,
         items=[_to_out(s) for s in out_items],
+    )
+
+
+# ── CSV 업로드 (dry-run diff + apply) ──────────────────────────────────────
+
+_CSV_SKIP_KEYS_ON_APPLY = {"hostname"}  # unique key — update 시 건너뜀
+
+
+def _coerce_empty_to_none(v):
+    """빈 문자열을 None 으로 정규화. bool/int 등 비문자열은 그대로."""
+    if isinstance(v, str) and v.strip() == "":
+        return None
+    return v
+
+
+def _compute_diffs(
+    payload: NodeSpecCsvUploadRequest,
+    db: Session,
+) -> tuple[list[NodeSpecCsvDiff], list[tuple[NodeSpecCsvDiff, dict, Optional[NodeServerSpec]]]]:
+    """업로드 요청을 받아 행별 diff 를 계산.
+
+    반환:
+      - diffs: 응답용 요약 diff 목록
+      - actions: (diff, clean_payload_dict, existing_or_None) — apply 시 사용
+    """
+    diffs: list[NodeSpecCsvDiff] = []
+    actions: list[tuple[NodeSpecCsvDiff, dict, Optional[NodeServerSpec]]] = []
+
+    # 클러스터 캐시 (행마다 재조회 방지)
+    cluster_cache: dict = {}
+
+    for idx, row in enumerate(payload.rows):
+        diff = NodeSpecCsvDiff(row_index=idx, hostname=row.hostname, action="skip")
+        row_dict = row.model_dump(exclude_unset=False)
+        # 빈 문자열 → None 정규화
+        row_dict = {k: _coerce_empty_to_none(v) for k, v in row_dict.items()}
+
+        # cluster_id 유효성
+        cid = row_dict.get("cluster_id")
+        if cid is not None:
+            if cid not in cluster_cache:
+                cluster_cache[cid] = db.query(Cluster).filter(Cluster.id == cid).first()
+            if cluster_cache[cid] is None:
+                diff.action = "error"
+                diff.error = f"존재하지 않는 cluster_id: {cid}"
+                diffs.append(diff)
+                actions.append((diff, row_dict, None))
+                continue
+
+        # 기존 매칭
+        q = db.query(NodeServerSpec).filter(NodeServerSpec.hostname == row.hostname)
+        if payload.match_cluster_scope:
+            q = q.filter(NodeServerSpec.cluster_id == cid)
+        existing = q.first()
+
+        if existing is None:
+            diff.action = "insert"
+            # 신규는 전부 추가로 본다 — changes 에 new 값만 표시
+            for k, v in row_dict.items():
+                if v is None or v == "":
+                    continue
+                diff.changes[k] = {"old": None, "new": v}
+        else:
+            diff.existing_id = existing.id
+            changed = False
+            for k, v in row_dict.items():
+                if k in _CSV_SKIP_KEYS_ON_APPLY:
+                    continue
+                old = getattr(existing, k, None)
+                # date 객체 비교를 위해 문자열로 변환
+                old_cmp = old.isoformat() if hasattr(old, "isoformat") else old
+                new_cmp = v.isoformat() if hasattr(v, "isoformat") else v
+                if payload.ignore_empty_on_update and (v is None or v == ""):
+                    continue
+                if old_cmp != new_cmp:
+                    changed = True
+                    diff.changes[k] = {"old": old_cmp, "new": new_cmp}
+            diff.action = "update" if changed else "skip"
+
+        diffs.append(diff)
+        actions.append((diff, row_dict, existing))
+
+    return diffs, actions
+
+
+@router.post("/csv/preview", response_model=NodeSpecCsvPreviewResponse)
+def csv_preview(payload: NodeSpecCsvUploadRequest, db: Session = Depends(get_db)):
+    """CSV 업로드 dry-run — 어떤 행이 insert/update 될지 diff 만 돌려준다."""
+    # dry_run 은 preview 엔드포인트 자체가 읽기전용이므로 강제
+    payload.dry_run = True
+    diffs, _ = _compute_diffs(payload, db)
+    return NodeSpecCsvPreviewResponse(
+        dry_run=True,
+        insert_count=sum(1 for d in diffs if d.action == "insert"),
+        update_count=sum(1 for d in diffs if d.action == "update"),
+        skip_count=sum(1 for d in diffs if d.action == "skip"),
+        error_count=sum(1 for d in diffs if d.action == "error"),
+        diffs=diffs,
+    )
+
+
+@router.post("/csv/apply", response_model=NodeSpecCsvApplyResponse)
+def csv_apply(payload: NodeSpecCsvUploadRequest, db: Session = Depends(get_db)):
+    """CSV 업로드 실제 반영 — preview 와 동일한 로직으로 insert/update."""
+    payload.dry_run = False
+    diffs, actions = _compute_diffs(payload, db)
+
+    inserted = 0
+    updated = 0
+    skipped = 0
+    errors: list[str] = []
+    applied: list[NodeServerSpec] = []
+
+    for diff, row_dict, existing in actions:
+        try:
+            if diff.action == "error":
+                errors.append(f"행 {diff.row_index} ({diff.hostname}): {diff.error}")
+                continue
+            if diff.action == "skip":
+                skipped += 1
+                continue
+            if diff.action == "insert":
+                clean = {k: v for k, v in row_dict.items() if v is not None and v != ""}
+                spec = NodeServerSpec(**clean)
+                db.add(spec)
+                db.flush()
+                applied.append(spec)
+                inserted += 1
+            elif diff.action == "update" and existing is not None:
+                for k, chg in diff.changes.items():
+                    if k in _CSV_SKIP_KEYS_ON_APPLY:
+                        continue
+                    # row_dict 에서 원본 값(타입 보존) 가져오기
+                    setattr(existing, k, row_dict.get(k))
+                applied.append(existing)
+                updated += 1
+        except Exception as e:
+            errors.append(f"행 {diff.row_index} ({diff.hostname}): {str(e)[:160]}")
+
+    if inserted or updated:
+        db.commit()
+        for s in applied:
+            db.refresh(s)
+
+    return NodeSpecCsvApplyResponse(
+        inserted=inserted,
+        updated=updated,
+        skipped=skipped,
+        errors=errors,
+        items=[_to_out(s) for s in applied],
     )

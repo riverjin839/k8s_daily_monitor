@@ -699,6 +699,16 @@ export const nodeSpecsApi = {
     signal?: AbortSignal,
   ) =>
     api.post<import('@/types').NodeSpecImportResult>(`/node-specs/import/${clusterId}`, payload, { signal }),
+  csvPreview: (
+    payload: import('@/types').NodeSpecCsvUploadRequest,
+    signal?: AbortSignal,
+  ) =>
+    api.post<import('@/types').NodeSpecCsvPreviewResponse>('/node-specs/csv/preview', payload, { signal }),
+  csvApply: (
+    payload: import('@/types').NodeSpecCsvUploadRequest,
+    signal?: AbortSignal,
+  ) =>
+    api.post<import('@/types').NodeSpecCsvApplyResponse>('/node-specs/csv/apply', payload, { signal }),
 };
 
 

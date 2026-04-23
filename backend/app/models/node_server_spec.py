@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime, date
 
 from sqlalchemy import (
-    Column, String, Text, DateTime, Date, Integer,
+    Column, String, Text, DateTime, Date, Integer, Boolean,
     ForeignKey, UniqueConstraint, Index,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -63,6 +63,8 @@ class NodeServerSpec(Base):
     raid_config = Column(String(64), nullable=True)             # RAID10, JBOD
     gpu_model = Column(String(128), nullable=True)
     gpu_count = Column(Integer, nullable=True)
+    is_ssd = Column(Boolean, nullable=True)                     # SSD 여부 (O/X)
+    is_vm = Column(Boolean, nullable=True)                      # VM 여부 (O/X)
 
     # ── 위치 ────────────────────────────────────────────────────────────────
     datacenter = Column(String(64), nullable=True)              # DC1
@@ -81,6 +83,8 @@ class NodeServerSpec(Base):
     purchase_date = Column(Date, nullable=True)
     warranty_end = Column(Date, nullable=True)
     owner = Column(String(64), nullable=True)                   # 담당자/팀
+    current_usage = Column(String(255), nullable=True)          # 현재 용도 (예: NEW K8S MASTER)
+    purchase_purpose = Column(String(255), nullable=True)       # 구입 목적 (예: 장비 분석용)
 
     # ── 메모 ────────────────────────────────────────────────────────────────
     description = Column(Text, nullable=True)

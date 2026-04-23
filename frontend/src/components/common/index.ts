@@ -7,3 +7,5 @@ export { ClusterSidebar } from './ClusterSidebar';
 export { SavedCommands } from './SavedCommands';
 export { ResizeHandle } from './ResizeHandle';
 export { DebugLogPanel } from './DebugLogPanel';
+export { GridCell } from './GridCell';
+export { InlineTextCell } from './InlineTextCell';

@@ -6,7 +6,7 @@ import {
   Settings, Link2, Tags, Calculator, Server, GitFork, BookMarked, Layers,
   Pencil, Moon, Sun, Monitor, Map, BarChart3, Network,
   Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
-  PanelLeftOpen, X,
+  PanelLeftOpen, X, ClipboardCheck,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
@@ -28,6 +28,7 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
   '/mc':                 { defaultLabel: 'mc 클라이언트',  icon: HardDrive },
   '/kernel-params':      { defaultLabel: '커널 파라미터',  icon: Cpu },
   '/infra-topology':     { defaultLabel: '인프라 토폴로지', icon: Network },
+  '/node-specs':         { defaultLabel: '노드 서버스펙',  icon: ClipboardCheck },
   '/links':              { defaultLabel: '클러스터 링크',  icon: Link2 },
   '/node-labels':        { defaultLabel: '노드 라벨',      icon: Tags },
   '/cidr':               { defaultLabel: 'CIDR 계산기',    icon: Calculator },
@@ -46,7 +47,7 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
 const NAV_GROUPS: Array<{ id: string; label: string; paths: string[] }> = [
   { id: 'monitoring', label: '모니터링',   paths: ['/', '/playbooks'] },
   { id: 'work',       label: '작업관리',   paths: ['/issues', '/tasks', '/todo-today', '/members'] },
-  { id: 'cluster',    label: '클러스터',   paths: ['/cluster-manage', '/versions', '/bulk-exec', '/etcdctl', '/mc', '/kernel-params', '/infra-topology', '/links', '/node-labels', '/cidr'] },
+  { id: 'cluster',    label: '클러스터',   paths: ['/cluster-manage', '/node-specs', '/versions', '/bulk-exec', '/etcdctl', '/mc', '/kernel-params', '/infra-topology', '/links', '/node-labels', '/cidr'] },
   { id: 'analysis',   label: 'AI 분석',    paths: ['/incident-analysis', '/packet-flow', '/ontology', '/trends'] },
   { id: 'docs',       label: '운영/문서',  paths: ['/work-guides', '/ops-notes', '/wbs', '/mindmap', '/workflow'] },
   { id: 'system',     label: '시스템',     paths: ['/settings'] },

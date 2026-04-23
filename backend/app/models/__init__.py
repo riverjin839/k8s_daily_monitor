@@ -15,6 +15,7 @@ from app.models.infra_node import InfraNode
 from app.models.topology_audit_log import TopologyAuditLog
 from app.models.ontology import OntologyEntity, OntologyRelationship, OntologyEvent, OntologyEntityType
 from app.models.config_snapshot import ClusterConfigSnapshot
+from app.models.node_server_spec import NodeServerSpec
 
 __all__ = [
     "Cluster",
@@ -42,4 +43,5 @@ __all__ = [
     "OntologyEvent",
     "OntologyEntityType",
     "ClusterConfigSnapshot",
+    "NodeServerSpec",
 ]

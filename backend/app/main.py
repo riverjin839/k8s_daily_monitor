@@ -34,6 +34,7 @@ from app.routers import (
     bulk_exec_router,
     etcdctl_router,
     mc_client_router,
+    node_server_specs_router,
 )
 
 
@@ -475,6 +476,7 @@ app.include_router(versions_router, prefix="/api/v1")
 app.include_router(bulk_exec_router, prefix="/api/v1")
 app.include_router(etcdctl_router, prefix="/api/v1")
 app.include_router(mc_client_router, prefix="/api/v1")
+app.include_router(node_server_specs_router, prefix="/api/v1")
 
 
 @app.get("/")

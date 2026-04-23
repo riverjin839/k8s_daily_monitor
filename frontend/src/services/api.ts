@@ -671,6 +671,35 @@ export const infraNodesApi = {
     api.post<import('@/types').InfraSyncResult>(`/infra-nodes/sync/${clusterId}`, undefined, { headers: { 'X-API-Scopes': 'infra_topology.sync' } }),
 };
 
+// Node Server Spec (자산 관리 대장)
+export const nodeSpecsApi = {
+  list: (params?: { clusterId?: string; status?: string; role?: string; search?: string }, signal?: AbortSignal) =>
+    api.get<import('@/types').NodeServerSpecListResponse>('/node-specs', {
+      params: params
+        ? {
+            cluster_id: params.clusterId,
+            status: params.status,
+            role: params.role,
+            search: params.search,
+          }
+        : undefined,
+      signal,
+    }),
+  getById: (id: string) =>
+    api.get<import('@/types').NodeServerSpec>(`/node-specs/${id}`),
+  create: (data: import('@/types').NodeServerSpecCreate) =>
+    api.post<import('@/types').NodeServerSpec>('/node-specs', data),
+  update: (id: string, data: import('@/types').NodeServerSpecUpdate) =>
+    api.put<import('@/types').NodeServerSpec>(`/node-specs/${id}`, data),
+  delete: (id: string) =>
+    api.delete(`/node-specs/${id}`),
+  importFromCluster: (
+    clusterId: string,
+    payload: import('@/types').NodeSpecImportRequest = {},
+    signal?: AbortSignal,
+  ) =>
+    api.post<import('@/types').NodeSpecImportResult>(`/node-specs/import/${clusterId}`, payload, { signal }),
+};
 
 
 // Topology Trace API

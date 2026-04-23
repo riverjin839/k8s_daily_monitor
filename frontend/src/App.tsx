@@ -26,6 +26,7 @@ import { OpsNotesPage } from '@/pages/OpsNotesPage';
 import { MindMapPage } from '@/pages/MindMapPage';
 import { WbsFlowPage } from '@/pages/WbsFlowPage';
 import { InfraTopologyPage } from '@/pages/InfraTopologyPage';
+import { NodeSpecPage } from '@/pages/NodeSpecPage';
 import { IncidentAnalysisPage } from '@/pages/IncidentAnalysisPage';
 import { PacketFlowPage } from '@/pages/PacketFlowPage';
 import { OntologyPage } from '@/pages/OntologyPage';
@@ -75,6 +76,7 @@ function AppShell() {
               <Route path="/kernel-params" element={<KernelParamsPage />} />
               <Route path="/mc" element={<McClientPage />} />
               <Route path="/infra-topology" element={<InfraTopologyPage />} />
+              <Route path="/node-specs" element={<NodeSpecPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/workflow" element={<WorkflowBoardPage />} />
               <Route path="/work-guides" element={<WorkGuidePage />} />

@@ -873,6 +873,84 @@ export interface EtcdctlConfigCollectResponse {
   errors: string[];
 }
 
+// ── 노드 서버스펙 관리 대장 ────────────────────────────────────────────
+export type NodeSpecStatus = 'active' | 'spare' | 'maintenance' | 'decommission';
+
+export interface NodeServerSpec {
+  id: string;
+  clusterId?: string | null;
+  clusterName?: string | null;
+  hostname: string;
+  nodeName?: string | null;
+  role?: string | null;
+  status: NodeSpecStatus | string;
+  // 네트워크
+  internalIp?: string | null;
+  externalIp?: string | null;
+  bmcIp?: string | null;
+  bond0Ip?: string | null;
+  bond0Mac?: string | null;
+  bond0Speed?: string | null;
+  bond1Ip?: string | null;
+  bond1Mac?: string | null;
+  bond1Speed?: string | null;
+  // 하드웨어
+  vendor?: string | null;
+  model?: string | null;
+  serialNumber?: string | null;
+  cpuModel?: string | null;
+  cpuSockets?: number | null;
+  cpuCores?: number | null;
+  cpuThreads?: number | null;
+  memoryGb?: number | null;
+  memoryModules?: string | null;
+  diskTotalGb?: number | null;
+  diskType?: string | null;
+  diskCount?: number | null;
+  raidConfig?: string | null;
+  gpuModel?: string | null;
+  gpuCount?: number | null;
+  // 위치
+  datacenter?: string | null;
+  room?: string | null;
+  rack?: string | null;
+  rackUnit?: string | null;
+  // 소프트웨어
+  osImage?: string | null;
+  kernelVersion?: string | null;
+  kubeletVersion?: string | null;
+  containerRuntime?: string | null;
+  // 자산/계약
+  assetTag?: string | null;
+  purchaseDate?: string | null;
+  warrantyEnd?: string | null;
+  owner?: string | null;
+  description?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type NodeServerSpecCreate = Omit<NodeServerSpec, 'id' | 'createdAt' | 'updatedAt' | 'clusterName'>;
+export type NodeServerSpecUpdate = Partial<NodeServerSpecCreate>;
+
+export interface NodeServerSpecListResponse {
+  data: NodeServerSpec[];
+  total: number;
+}
+
+export interface NodeSpecImportRequest {
+  upsert?: boolean;
+  overwriteUserFields?: boolean;
+}
+
+export interface NodeSpecImportResult {
+  inserted: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
+  items: NodeServerSpec[];
+}
+
 // ── tcpdump ────────────────────────────────────────────────────────────
 export interface TcpdumpCaptureRequest {
   clusterId?: string;

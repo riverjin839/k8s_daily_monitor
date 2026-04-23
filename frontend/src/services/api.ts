@@ -278,6 +278,9 @@ export interface BulkExecRequest {
   parallelism: number;
   connectTimeout: number;
   execTimeout: number;
+  /** 청크 단위 병렬 실행 — 대규모 배치에서 메모리/베스천 부담 완화 */
+  chunkSize?: number;
+  chunkPauseMs?: number;
 }
 
 export const bulkExecApi = {
@@ -285,8 +288,16 @@ export const bulkExecApi = {
     api.get<{ clusterId: string; clusterName: string; nodes: NodeSummary[] }>(
       `/clusters/${clusterId}/node-list`,
     ),
-  run: (payload: BulkExecRequest, signal?: AbortSignal) =>
-    api.post<BulkExecResponse>('/bulk-exec/run', payload, { signal }),
+  run: (payload: BulkExecRequest, signal?: AbortSignal) => {
+    // 대규모 호스트 실행 시간 추정: 청크 수 × (exec_timeout+connect_timeout+pause) + 여유.
+    // 기본 30초 timeout 은 100+ 호스트에서 바로 끊겨 에러가 됨.
+    const n = payload.targets?.length ?? 0;
+    const chunk = (payload as { chunkSize?: number }).chunkSize ?? 30;
+    const perChunk = (payload.connectTimeout + payload.execTimeout) * 1000 + 500;
+    const estimate = Math.ceil(n / chunk) * perChunk + 10_000;
+    const timeout = Math.max(60_000, Math.min(estimate, 30 * 60_000));   // 1분~30분 범위
+    return api.post<BulkExecResponse>('/bulk-exec/run', payload, { signal, timeout });
+  },
 };
 
 // etcdctl API

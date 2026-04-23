@@ -50,6 +50,11 @@ class BulkExecRequest(BaseModel):
     parallelism: int = Field(default=10, ge=1, le=50)
     connect_timeout: int = Field(default=8, ge=1, le=60)
     exec_timeout: int = Field(default=60, ge=1, le=600)
+    # 대규모 (100+ 호스트) 안정성 — 청크 단위로 처리해 베스천/메모리 부담 완화
+    chunk_size: int = Field(default=30, ge=1, le=200,
+                            description="한 청크에서 병렬 실행할 호스트 수 (parallelism 이 실제 동시실행 상한)")
+    chunk_pause_ms: int = Field(default=200, ge=0, le=5000,
+                                description="청크 사이 휴지 시간 (ms). 베스천 burst 부하 완화")
 
 
 class BulkExecResultItem(BaseModel):

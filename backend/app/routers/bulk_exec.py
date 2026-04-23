@@ -137,6 +137,8 @@ async def bulk_exec_run(payload: BulkExecRequest):
         connect_timeout=payload.connect_timeout,
         exec_timeout=payload.exec_timeout,
         parallelism=payload.parallelism,
+        chunk_size=payload.chunk_size,
+        chunk_pause_ms=payload.chunk_pause_ms,
     )
     total_elapsed = int((time.monotonic() - start) * 1000)
 

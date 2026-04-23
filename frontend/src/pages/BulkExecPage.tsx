@@ -153,6 +153,8 @@ export function BulkExecPage() {
   const [parallelism, setParallelism] = useState(10);
   const [connectTimeout, setConnectTimeout] = useState(8);
   const [execTimeout, setExecTimeout] = useState(60);
+  const [chunkSize, setChunkSize] = useState(30);
+  const [chunkPauseMs, setChunkPauseMs] = useState(200);
 
   const selectedHosts = useMemo(() => {
     const byName = new Map((nodesQ.data?.nodes ?? []).map((n) => [n.name, n]));
@@ -181,6 +183,8 @@ export function BulkExecPage() {
         parallelism,
         connectTimeout,
         execTimeout,
+        chunkSize,
+        chunkPauseMs,
       }, signal);
       return res.data;
     },
@@ -468,7 +472,43 @@ export function BulkExecPage() {
                   className="w-16 px-2 py-1 bg-background border border-border rounded text-xs"
                 />s
               </label>
+              <span className="text-border">·</span>
+              <label className="flex items-center gap-1.5" title="한 청크에서 병렬 실행할 호스트 수. 청크 완료 후 휴지 → 다음 청크.">
+                chunk
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={chunkSize}
+                  onChange={(e) => setChunkSize(Number(e.target.value) || 30)}
+                  className="w-14 px-2 py-1 bg-background border border-border rounded text-xs"
+                />개
+              </label>
+              <label className="flex items-center gap-1.5" title="청크 사이 휴지 시간 (ms). 베스천/게이트웨이 burst 부하 완화.">
+                pause
+                <input
+                  type="number"
+                  min={0}
+                  max={5000}
+                  step={50}
+                  value={chunkPauseMs}
+                  onChange={(e) => setChunkPauseMs(Number(e.target.value) || 0)}
+                  className="w-16 px-2 py-1 bg-background border border-border rounded text-xs"
+                />ms
+              </label>
             </div>
+
+            {/* 대규모 실행 예상 시간 힌트 */}
+            {selected.size >= 50 && (
+              <div className="px-3 py-2 text-[11px] rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 flex items-start gap-2">
+                <Clock className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                <div>
+                  선택 {selected.size}개 호스트 · parallelism {parallelism} / chunk {chunkSize}개 ·
+                  예상 소요 시간 <strong className="font-mono">최소 {Math.ceil(selected.size / chunkSize) * Math.ceil(execTimeout / 10)}초 ~ 최대 {Math.ceil(selected.size / chunkSize) * (execTimeout + connectTimeout)}초</strong>.
+                  실행 중 버튼이 "중지"로 바뀌며 언제든 취소 가능.
+                </div>
+              </div>
+            )}
 
             {runError && (
               <div className="px-3 py-2 text-xs rounded-lg bg-destructive/10 text-destructive border border-destructive/30">

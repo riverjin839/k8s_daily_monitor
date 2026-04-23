@@ -35,6 +35,10 @@ export interface Cluster {
   hostname?: string;
   bgpEnabled?: boolean;
   asNumber?: string;
+  // 자동 수집 확장
+  k8sVersion?: string;
+  ciliumVersion?: string;
+  nodeIps?: string;   // JSON 문자열: [{name, ip, master}]
   createdAt: string;
   updatedAt: string;
 }
@@ -809,6 +813,63 @@ export interface EtcdSystemdCollectResponse {
   changed: number;
   hosts: EtcdSystemdPerHost[];
   componentKey?: string;
+  errors: string[];
+}
+
+// ── kernel params / etcdctl config 수집 ─────────────────────────────
+export interface KernelParamsCollectRequest {
+  hosts: string[];
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  useSudo?: boolean;
+  connectTimeout?: number;
+  params?: string[];
+  defaultPrefixes?: string[];
+}
+
+export interface KernelParamsPerHost {
+  host: string;
+  status: string;
+  paramCount?: number;
+  stored?: boolean;
+  error?: string | null;
+}
+
+export interface KernelParamsCollectResponse {
+  clusterId: string;
+  changed: number;
+  hosts: KernelParamsPerHost[];
+  errors: string[];
+}
+
+export interface EtcdctlConfigCollectRequest {
+  hosts: string[];
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  useSudo?: boolean;
+  connectTimeout?: number;
+  envFiles?: string[];
+  queryEndpointStatus?: boolean;
+  etcdctlPath?: string;
+  sourceEnvFile?: string | null;
+}
+
+export interface EtcdctlConfigPerHost {
+  host: string;
+  envFile?: string | null;
+  hasEndpointStatus: boolean;
+  stored?: boolean;
+  error?: string | null;
+}
+
+export interface EtcdctlConfigCollectResponse {
+  clusterId: string;
+  changed: number;
+  hosts: EtcdctlConfigPerHost[];
   errors: string[];
 }
 

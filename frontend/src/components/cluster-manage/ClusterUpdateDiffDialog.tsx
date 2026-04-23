@@ -31,11 +31,22 @@ const FIELD_LABELS: Record<string, string> = {
   ciliumConfig: 'Cilium Config',
   bgpEnabled: 'BGP 활성화',
   asNumber: 'AS Number',
+  k8sVersion: 'Kubernetes 버전',
+  ciliumVersion: 'Cilium 버전',
+  nodeIps: '노드 IP 목록',
 };
 
-function renderValue(v: unknown): string {
+function renderValue(v: unknown, field?: string): string {
   if (v === null || v === undefined || v === '') return '—';
   if (typeof v === 'boolean') return v ? 'true' : 'false';
+  if (field === 'nodeIps' && typeof v === 'string') {
+    try {
+      const arr = JSON.parse(v) as { name: string; ip?: string }[];
+      if (Array.isArray(arr)) {
+        return `${arr.length} 노드 · ` + arr.slice(0, 3).map((n) => `${n.name}(${n.ip ?? '?'})`).join(', ') + (arr.length > 3 ? ' …' : '');
+      }
+    } catch { /* JSON 아님 */ }
+  }
   if (typeof v === 'object') return JSON.stringify(v);
   return String(v);
 }
@@ -110,13 +121,13 @@ export function ClusterUpdateDiffDialog({
                         {FIELD_LABELS[d.field] ?? d.field}
                       </td>
                       <td className="py-1.5 pr-2 font-mono text-[11px] text-muted-foreground max-w-[200px] truncate"
-                        title={renderValue(d.current)}>
-                        {renderValue(d.current)}
+                        title={renderValue(d.current, d.field)}>
+                        {renderValue(d.current, d.field)}
                       </td>
                       <td className="py-1.5"><ArrowRight className="w-3 h-3 text-muted-foreground/50" /></td>
                       <td className="py-1.5 font-mono text-[11px] text-primary max-w-[260px] truncate"
-                        title={renderValue(d.proposed)}>
-                        {renderValue(d.proposed)}
+                        title={renderValue(d.proposed, d.field)}>
+                        {renderValue(d.proposed, d.field)}
                       </td>
                     </tr>
                   ))}
@@ -133,7 +144,7 @@ export function ClusterUpdateDiffDialog({
               <ul className="mt-2 text-[11px] text-muted-foreground/80 space-y-0.5 font-mono">
                 {unchanged.map((d) => (
                   <li key={d.field}>
-                    {FIELD_LABELS[d.field] ?? d.field}: {renderValue(d.current)}
+                    {FIELD_LABELS[d.field] ?? d.field}: {renderValue(d.current, d.field)}
                   </li>
                 ))}
               </ul>

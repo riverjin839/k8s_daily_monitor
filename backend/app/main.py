@@ -79,6 +79,9 @@ def _run_migrations():
             ("bgp_enabled", "BOOLEAN DEFAULT FALSE"),
             ("as_number", "VARCHAR(20)"),
             ("kubeconfig_content", "TEXT"),
+            ("k8s_version", "VARCHAR(32)"),
+            ("cilium_version", "VARCHAR(32)"),
+            ("node_ips", "TEXT"),
         ]
         for col_name, col_type in new_cluster_cols:
             if col_name not in columns:

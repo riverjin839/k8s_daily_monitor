@@ -529,6 +529,9 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
         ("ciliumConfig", "cilium_config"),
         ("bgpEnabled", "bgp_enabled"),
         ("asNumber", "as_number"),
+        ("k8sVersion", "k8s_version"),
+        ("ciliumVersion", "cilium_version"),
+        ("nodeIps", "node_ips"),
     ]
     current: dict[str, object] = {
         camel: getattr(cluster, snake) for camel, snake in _DIFF_FIELDS
@@ -544,13 +547,44 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
 
     v1 = k8s_client.CoreV1Api(api_client)
     custom = k8s_client.CustomObjectsApi(api_client)
+    version_api = k8s_client.VersionApi(api_client)
 
-    # 1. nodes → node_count, hostname(master), max_pod, pod_cidr (node.spec.podCIDR 기반)
+    # 0. k8s server version (VersionApi)
+    try:
+        ver = version_api.get_code(_request_timeout=_K8S_AUTH_TIMEOUT)
+        k8s_ver = getattr(ver, "git_version", None) or getattr(ver, "major", None)
+        if k8s_ver:
+            cluster.k8s_version = k8s_ver
+            updated["k8sVersion"] = k8s_ver
+    except Exception as e:
+        warnings.append(f"k8s 버전 조회 실패: {str(e)[:120]}")
+
+    # 1. nodes → node_count, hostname(master), max_pod, node_ips
     try:
         nodes = v1.list_node(_request_timeout=_K8S_AUTH_TIMEOUT * 2)
         items = nodes.items
         cluster.node_count = len(items)
         updated["nodeCount"] = len(items)
+
+        # InternalIP 목록 수집 → node_ips (JSON 문자열)
+        import json as _json
+        ip_list: list[dict] = []
+        for n in items:
+            internal_ip = None
+            for addr in (n.status.addresses or []) if n.status else []:
+                if addr.type == "InternalIP":
+                    internal_ip = addr.address
+                    break
+            labels = n.metadata.labels or {}
+            is_master = any(l in labels for l in (
+                "node-role.kubernetes.io/control-plane", "node-role.kubernetes.io/master",
+            ))
+            ip_list.append({"name": n.metadata.name, "ip": internal_ip, "master": is_master})
+        # 정렬: master 먼저, 그 다음 이름
+        ip_list.sort(key=lambda x: (not x["master"], x["name"]))
+        node_ips_json = _json.dumps(ip_list, ensure_ascii=False)
+        cluster.node_ips = node_ips_json
+        updated["nodeIps"] = node_ips_json
 
         master_labels = ("node-role.kubernetes.io/control-plane", "node-role.kubernetes.io/master")
         master_nodes = [n for n in items if any(l in (n.metadata.labels or {}) for l in master_labels)]
@@ -619,11 +653,36 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
         if data.get("enable-bgp-control-plane", "").lower() == "true":
             cluster.bgp_enabled = True
             updated["bgpEnabled"] = True
+        # Cilium 버전 — ConfigMap 에 cilium-version 키 있으면 우선
+        cv = data.get("cilium-version") or data.get("cni-version")
+        if cv:
+            cluster.cilium_version = cv.strip()
+            updated["ciliumVersion"] = cluster.cilium_version
     except ApiException as e:
         if e.status != 404:
             warnings.append(f"cilium-config 조회 실패: HTTP {e.status}")
     except Exception as e:
         warnings.append(f"cilium-config 조회 실패: {str(e)[:120]}")
+
+    # 3.5 Cilium 버전 — ConfigMap 에 없으면 cilium-agent 이미지 태그로 fallback
+    if not updated.get("ciliumVersion"):
+        try:
+            cpods = v1.list_namespaced_pod(
+                "kube-system",
+                label_selector="k8s-app=cilium",
+                _request_timeout=_K8S_AUTH_TIMEOUT,
+            )
+            agent_pod = next((p for p in cpods.items if p.spec and p.spec.containers), None)
+            if agent_pod:
+                img = agent_pod.spec.containers[0].image or ""
+                # `quay.io/cilium/cilium:v1.16.3` → `v1.16.3`
+                last = img.rsplit("/", 1)[-1]
+                if ":" in last:
+                    tag = last.rsplit(":", 1)[1]
+                    cluster.cilium_version = tag
+                    updated["ciliumVersion"] = tag
+        except Exception:
+            pass  # cilium 미설치 환경
 
     # 4. Cilium BGP — CiliumBGPClusterConfig (신규) 또는 CiliumBGPPeeringPolicy (구) CR
     try:

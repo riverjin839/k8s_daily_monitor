@@ -409,6 +409,246 @@ def collect_etcd_systemd(
     }
 
 
+# ── kernel params 수집 ───────────────────────────────────────────────────────
+
+class KernelParamsCollectRequest(BaseModel):
+    """각 노드에 SSH 로 접속해 sysctl 결과를 수집해 스냅샷 저장. 각 노드별로
+    `kernel_params:{host}` component 키로 저장, 내용 해시가 이전과 같으면
+    저장 생략 (최신 일자 기준 uniq).
+    """
+    hosts: list[str] = Field(..., min_length=1, max_length=200)
+    port: int = Field(default=22, ge=1, le=65535)
+    username: str = Field(default="root", min_length=1, max_length=64)
+    password: str | None = None
+    private_key: str | None = None
+    use_sudo: bool = False
+    connect_timeout: int = Field(default=8, ge=1, le=60)
+    # 수집 대상. 비어있으면 아래 기본 prefix 들만 긁는다.
+    params: list[str] = Field(default_factory=list, max_length=200)
+    # 비어있을 때 사용할 prefix 목록
+    default_prefixes: list[str] = Field(default_factory=lambda: [
+        "net.ipv4", "net.bridge", "net.core", "vm",
+        "fs.file-max", "fs.nr_open", "kernel.pid_max",
+    ])
+
+
+def _parse_sysctl(text: str) -> dict[str, str]:
+    """`key = value\\nkey2 = value2` → dict. 파이프라인 출력 안정화를 위해
+    '=' 공백 변형까지 허용."""
+    out: dict[str, str] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line:
+            k, v = line.split("=", 1)
+            out[k.strip()] = v.strip()
+    return out
+
+
+@router.post("/{cluster_id}/collect-kernel-params")
+def collect_kernel_params(
+    cluster_id: UUID,
+    payload: KernelParamsCollectRequest,
+    db: Session = Depends(get_db),
+):
+    """노드별 sysctl 값을 수집해 히스토리에 누적. 내용 동일시 저장 생략."""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    if not payload.password and not payload.private_key:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="password 또는 private_key 중 하나는 필수입니다.",
+        )
+
+    now = datetime.utcnow()
+    sudo = "sudo -n " if payload.use_sudo else ""
+    # params 가 있으면 해당 키만, 없으면 prefix 매칭 (`sysctl -a | grep -E ...`)
+    if payload.params:
+        # 안전: 사용자 입력은 shell 해석되지 않도록 per-key 호출
+        cmds = " && ".join([
+            f"{sudo}sysctl -n {p!r} 2>/dev/null | sed 's#^#{p} = #'"
+            for p in payload.params if re.match(r"^[A-Za-z0-9_.-]+$", p)
+        ])
+        cmd = cmds
+    else:
+        # prefix 필터 — `net.ipv4.` / `fs.` / `vm.` 등으로 시작하는 줄만
+        grep_expr = "|".join(re.escape(p) + r"\\." for p in payload.default_prefixes if "." not in p)
+        exact_expr = "|".join(re.escape(p) for p in payload.default_prefixes if "." in p)
+        parts = [e for e in (grep_expr, exact_expr) if e]
+        regex = "|".join(parts) if parts else "."
+        cmd = f"{sudo}sysctl -a 2>/dev/null | grep -E '^({regex})' || true"
+
+    changed = 0
+    per_host: list[dict] = []
+    errors: list[str] = []
+
+    for host in payload.hosts:
+        target = SSHTarget(
+            host=host, port=payload.port, username=payload.username,
+            password=payload.password, private_key=payload.private_key,
+        )
+        res = _exec_ssh(target, cmd, connect_timeout=payload.connect_timeout, exec_timeout=20)
+        entry: dict = {"host": host, "status": res.status}
+        if res.status != "ok":
+            entry["error"] = res.error or res.stderr[:200]
+            errors.append(f"{host}: {res.error or res.status}")
+            per_host.append(entry)
+            continue
+        parsed = _parse_sysctl(res.stdout)
+        entry["param_count"] = len(parsed)
+        data = {"host": host, "params": parsed, "collected_at": now.isoformat()}
+        stored = _store_if_changed(
+            db, cluster_id,
+            component=f"kernel_params:{host}",
+            category="kernel",
+            version=None,
+            data=data,
+            now=now,
+        )
+        entry["stored"] = stored
+        if stored:
+            changed += 1
+        per_host.append(entry)
+
+    if changed:
+        db.commit()
+
+    return {
+        "cluster_id": str(cluster_id),
+        "changed": changed,
+        "hosts": per_host,
+        "errors": errors,
+    }
+
+
+# ── etcdctl config 수집 ─────────────────────────────────────────────────────
+
+class EtcdctlConfigCollectRequest(BaseModel):
+    """etcd 가 systemd 로 동작 중일 때 `/etc/etcd.env` 등 설정 파일과 endpoint
+    status 를 수집해 스냅샷 저장. 내용 해시 기준 dedup.
+    """
+    hosts: list[str] = Field(..., min_length=1, max_length=30)
+    port: int = Field(default=22, ge=1, le=65535)
+    username: str = Field(default="root", min_length=1, max_length=64)
+    password: str | None = None
+    private_key: str | None = None
+    use_sudo: bool = True
+    connect_timeout: int = Field(default=8, ge=1, le=60)
+    # 읽을 설정파일 후보 (첫 존재하는 것 사용)
+    env_files: list[str] = Field(default_factory=lambda: [
+        "/etc/etcd.env", "/etc/default/etcd", "/etc/sysconfig/etcd",
+    ])
+    # etcdctl endpoint status 호출 여부
+    query_endpoint_status: bool = True
+    etcdctl_path: str = Field(default="etcdctl", max_length=256)
+    # endpoint status 에 사용할 환경변수 파일 (ETCDCTL_CACERT 등). 비어있으면 env_files 사용.
+    source_env_file: str | None = None
+
+
+@router.post("/{cluster_id}/collect-etcdctl-config")
+def collect_etcdctl_config(
+    cluster_id: UUID,
+    payload: EtcdctlConfigCollectRequest,
+    db: Session = Depends(get_db),
+):
+    """etcd 설정 (env 파일 + endpoint status) 을 수집해 histor 에 누적. dedup."""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    if not payload.password and not payload.private_key:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="password 또는 private_key 중 하나는 필수입니다.",
+        )
+
+    now = datetime.utcnow()
+    sudo = "sudo -n " if payload.use_sudo else ""
+
+    changed = 0
+    per_host: list[dict] = []
+    errors: list[str] = []
+
+    for host in payload.hosts:
+        target = SSHTarget(
+            host=host, port=payload.port, username=payload.username,
+            password=payload.password, private_key=payload.private_key,
+        )
+        # 1) 설정파일 내용
+        env_content: str | None = None
+        env_file_used: str | None = None
+        for candidate in payload.env_files:
+            # 경로 검증 — shell 메타문자 금지
+            if not re.match(r"^[A-Za-z0-9_./-]+$", candidate):
+                continue
+            check = _exec_ssh(
+                target,
+                f"{sudo}test -f {candidate} && {sudo}cat {candidate} 2>/dev/null || true",
+                connect_timeout=payload.connect_timeout, exec_timeout=8,
+            )
+            if check.status == "ok" and check.stdout.strip():
+                env_content = check.stdout
+                env_file_used = candidate
+                break
+
+        # 2) endpoint status (JSON)
+        endpoint_status: str | None = None
+        if payload.query_endpoint_status:
+            src = payload.source_env_file or env_file_used
+            src_expr = f"set -a; . {src}; set +a; " if src and re.match(r"^[A-Za-z0-9_./-]+$", src) else ""
+            safe_etcdctl = payload.etcdctl_path if re.match(r"^[A-Za-z0-9_./-]+$", payload.etcdctl_path) else "etcdctl"
+            r = _exec_ssh(
+                target,
+                f"{sudo}bash -c '{src_expr}{safe_etcdctl} endpoint status -w json 2>/dev/null'",
+                connect_timeout=payload.connect_timeout, exec_timeout=15,
+            )
+            if r.status == "ok":
+                endpoint_status = r.stdout.strip()
+
+        entry: dict = {
+            "host": host,
+            "env_file": env_file_used,
+            "has_endpoint_status": bool(endpoint_status),
+        }
+
+        if env_content is None and endpoint_status is None:
+            entry["error"] = "env 파일/endpoint status 모두 읽지 못함"
+            errors.append(f"{host}: 데이터 없음")
+            per_host.append(entry)
+            continue
+
+        data = {
+            "host": host,
+            "env_file": env_file_used,
+            "env_content": env_content,
+            "endpoint_status_json": endpoint_status,
+            "collected_at": now.isoformat(),
+        }
+        stored = _store_if_changed(
+            db, cluster_id,
+            component=f"etcdctl_config:{host}",
+            category="etcdctl",
+            version=None,
+            data=data,
+            now=now,
+        )
+        entry["stored"] = stored
+        if stored:
+            changed += 1
+        per_host.append(entry)
+
+    if changed:
+        db.commit()
+
+    return {
+        "cluster_id": str(cluster_id),
+        "changed": changed,
+        "hosts": per_host,
+        "errors": errors,
+    }
+
+
 @router.get("/{cluster_id}/versions/current")
 def get_current_versions(cluster_id: UUID, db: Session = Depends(get_db)):
     """각 component 별 가장 최근 스냅샷 반환."""

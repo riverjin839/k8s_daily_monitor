@@ -494,6 +494,58 @@ def _cidr_range(cidr: str | None) -> tuple[str | None, str | None]:
         return None, None
 
 
+def _infer_node_cidr(ips: list[str]) -> tuple[str | None, str | None, str | None]:
+    """노드 InternalIP 목록에서 **최소 공통 supernet** 을 추정해
+    (cidr, first_host, last_host) 반환. 실패 / 범위가 너무 넓으면 (None, None, None).
+
+    - 1개: 해당 IP 의 /24 로 가정 (worker 1 대 환경 대비).
+    - 2개+: 모든 IP 를 포함하는 가장 좁은 IPv4 네트워크.
+    - 결과 prefix < 16 (10.0.0.0/8 류) 면 신뢰도 낮다고 판단해 None 반환.
+    """
+    import ipaddress
+
+    valid: list[ipaddress.IPv4Address] = []
+    for ip in ips or []:
+        if not ip:
+            continue
+        try:
+            addr = ipaddress.ip_address(ip.strip())
+        except ValueError:
+            continue
+        if isinstance(addr, ipaddress.IPv4Address):
+            valid.append(addr)
+
+    if not valid:
+        return None, None, None
+
+    if len(valid) == 1:
+        net = ipaddress.IPv4Network(f"{valid[0]}/24", strict=False)
+    else:
+        lo = min(int(a) for a in valid)
+        hi = max(int(a) for a in valid)
+        xor = lo ^ hi
+        prefix_len = 32
+        while xor:
+            xor >>= 1
+            prefix_len -= 1
+        net_addr = lo & ~((1 << (32 - prefix_len)) - 1) & 0xFFFFFFFF
+        try:
+            net = ipaddress.IPv4Network((net_addr, prefix_len))
+        except (ValueError, TypeError):
+            return None, None, None
+
+    if net.prefixlen < 16:
+        # 너무 넓음 (예: 10.0.0.0/8) — 노드가 여러 리전/VPC 에 걸쳐 있거나
+        # 부정확한 추정. 자동 갱신 안 함.
+        return None, None, None
+
+    cidr_str = str(net)
+    hosts = list(net.hosts()) if net.num_addresses > 2 else [net.network_address, net.broadcast_address]
+    if not hosts:
+        return cidr_str, None, None
+    return cidr_str, str(hosts[0]), str(hosts[-1])
+
+
 @router.post("/{cluster_id}/auto-update")
 def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = Depends(get_db)):
     """kubeconfig/k8s API 만으로 얻을 수 있는 클러스터 메타데이터를 자동 수집/반영.
@@ -520,6 +572,9 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
         ("nodeCount", "node_count"),
         ("hostname", "hostname"),
         ("maxPod", "max_pod"),
+        ("cidr", "cidr"),
+        ("firstHost", "first_host"),
+        ("lastHost", "last_host"),
         ("svcCidr", "svc_cidr"),
         ("svcFirstHost", "svc_first_host"),
         ("svcLastHost", "svc_last_host"),
@@ -569,25 +624,56 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
         cluster.node_count = len(items)
         updated["nodeCount"] = len(items)
 
-        # InternalIP 목록 수집 → node_ips (JSON 문자열)
+        # 노드별 IP 수집 — 노드당 InternalIP 가 여러 개 (bond0/bond1) 인 경우 모두 수집.
+        # k8s API (status.addresses) 가 bonding 설정에 따라 InternalIP 를 복수 반환하는
+        # 경우가 있음. 인터페이스 이름(bond0 등) 은 k8s API 로 알 수 없으므로 빈 값.
+        # OS 레벨 NIC 상세는 추후 SSH 수집 기능 (etcd_systemd 류) 으로 확장 가능.
         import json as _json
         ip_list: list[dict] = []
         for n in items:
-            internal_ip = None
+            internal_ips: list[str] = []
+            external_ip: str | None = None
             for addr in (n.status.addresses or []) if n.status else []:
-                if addr.type == "InternalIP":
-                    internal_ip = addr.address
-                    break
+                if addr.type == "InternalIP" and addr.address:
+                    if addr.address not in internal_ips:
+                        internal_ips.append(addr.address)
+                elif addr.type == "ExternalIP" and addr.address and not external_ip:
+                    external_ip = addr.address
             labels = n.metadata.labels or {}
             is_master = any(l in labels for l in (
                 "node-role.kubernetes.io/control-plane", "node-role.kubernetes.io/master",
             ))
-            ip_list.append({"name": n.metadata.name, "ip": internal_ip, "master": is_master})
+            ip_list.append({
+                "name": n.metadata.name,
+                "ip": internal_ips[0] if internal_ips else None,   # 호환성: 1차 IP
+                "ips": internal_ips,                               # 전체 InternalIP 배열
+                "external_ip": external_ip,
+                "master": is_master,
+            })
         # 정렬: master 먼저, 그 다음 이름
         ip_list.sort(key=lambda x: (not x["master"], x["name"]))
         node_ips_json = _json.dumps(ip_list, ensure_ascii=False)
         cluster.node_ips = node_ips_json
         updated["nodeIps"] = node_ips_json
+
+        # Node CIDR 추정 — 실제 노드 InternalIP 들의 최소 공통 supernet.
+        # 노드당 여러 IP 가 있으면 전부 평탄화해서 계산 → bond0/bond1 모두 포함하는 subnet 도출.
+        all_ips: list[str] = [ip for row in ip_list for ip in (row.get("ips") or [])]
+        inferred_cidr, first_h, last_h = _infer_node_cidr(all_ips)
+        if inferred_cidr:
+            cluster.cidr = inferred_cidr
+            updated["cidr"] = inferred_cidr
+            if first_h:
+                cluster.first_host = first_h
+                updated["firstHost"] = first_h
+            if last_h:
+                cluster.last_host = last_h
+                updated["lastHost"] = last_h
+        elif node_ips_only:
+            warnings.append(
+                f"Node CIDR 추정 실패 — 노드 IP {len(node_ips_only)}개가 너무 분산되어 있거나 "
+                "IPv4 가 아닙니다 (최소 공통 subnet 이 /16 보다 넓음)."
+            )
 
         master_labels = ("node-role.kubernetes.io/control-plane", "node-role.kubernetes.io/master")
         master_nodes = [n for n in items if any(l in (n.metadata.labels or {}) for l in master_labels)]

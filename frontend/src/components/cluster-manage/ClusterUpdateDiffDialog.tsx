@@ -22,6 +22,9 @@ const FIELD_LABELS: Record<string, string> = {
   nodeCount: '노드 수',
   hostname: 'Master 호스트명',
   maxPod: '노드당 Max Pod',
+  cidr: 'Node CIDR',
+  firstHost: 'Node 첫 호스트',
+  lastHost: 'Node 마지막 호스트',
   svcCidr: 'Service CIDR',
   svcFirstHost: 'Service 첫 호스트',
   svcLastHost: 'Service 마지막 호스트',
@@ -41,9 +44,16 @@ function renderValue(v: unknown, field?: string): string {
   if (typeof v === 'boolean') return v ? 'true' : 'false';
   if (field === 'nodeIps' && typeof v === 'string') {
     try {
-      const arr = JSON.parse(v) as { name: string; ip?: string }[];
+      const arr = JSON.parse(v) as { name: string; ip?: string; ips?: string[] }[];
       if (Array.isArray(arr)) {
-        return `${arr.length} 노드 · ` + arr.slice(0, 3).map((n) => `${n.name}(${n.ip ?? '?'})`).join(', ') + (arr.length > 3 ? ' …' : '');
+        const multi = arr.filter((n) => (n.ips?.length ?? 0) > 1).length;
+        const preview = arr.slice(0, 3).map((n) => {
+          const ips = n.ips && n.ips.length > 0 ? n.ips : (n.ip ? [n.ip] : []);
+          return `${n.name}(${ips.join(',') || '?'})`;
+        }).join(', ');
+        const suffix = arr.length > 3 ? ' …' : '';
+        const multiHint = multi > 0 ? ` · 다중IP ${multi}대` : '';
+        return `${arr.length} 노드${multiHint} · ${preview}${suffix}`;
       }
     } catch { /* JSON 아님 */ }
   }

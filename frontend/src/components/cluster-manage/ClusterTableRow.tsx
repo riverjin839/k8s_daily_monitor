@@ -227,8 +227,8 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         </div>
       </td>
 
-      {/* 노드 IP 목록 */}
-      <td className="px-3 py-2.5 max-w-[200px]">
+      {/* 노드 IP 목록 — 노드당 여러 IP (bond0/bond1) 도 모두 표시 */}
+      <td className="px-3 py-2.5 max-w-[240px]">
         {(() => {
           if (!cluster.nodeIps) {
             return cluster.nodeCount
@@ -236,19 +236,39 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
               : <span className="text-muted-foreground/60 text-xs">-</span>;
           }
           try {
-            const arr = JSON.parse(cluster.nodeIps) as { name: string; ip?: string; master?: boolean }[];
+            const arr = JSON.parse(cluster.nodeIps) as {
+              name: string; ip?: string; ips?: string[]; externalIp?: string; external_ip?: string; master?: boolean;
+            }[];
             const shown = arr.slice(0, 4);
             const rest = arr.length - shown.length;
+            const multiCount = arr.filter((n) => (n.ips?.length ?? 0) > 1).length;
             return (
               <div className="text-[11px] font-mono space-y-0.5">
-                {shown.map((n) => (
-                  <p key={n.name} className={n.master ? 'text-foreground' : 'text-muted-foreground'}
-                    title={n.name}>
-                    {n.master && <span className="inline-block w-1 h-1 rounded-full bg-primary mr-1 align-middle" />}
-                    {n.ip ?? '?'}
-                  </p>
-                ))}
+                {shown.map((n) => {
+                  const ips = n.ips && n.ips.length > 0 ? n.ips : (n.ip ? [n.ip] : []);
+                  return (
+                    <div key={n.name} className={n.master ? 'text-foreground' : 'text-muted-foreground'}
+                      title={`${n.name}${n.externalIp ? ` · ext: ${n.externalIp}` : ''}`}>
+                      {n.master && <span className="inline-block w-1 h-1 rounded-full bg-primary mr-1 align-middle" />}
+                      {ips.length === 0
+                        ? <span className="text-muted-foreground/60">?</span>
+                        : ips.length === 1
+                          ? ips[0]
+                          : (
+                            <span>
+                              {ips[0]}
+                              <span className="text-muted-foreground/60"> +{ips.length - 1}</span>
+                            </span>
+                          )}
+                    </div>
+                  );
+                })}
                 {rest > 0 && <p className="text-muted-foreground/70">+{rest} more</p>}
+                {multiCount > 0 && (
+                  <p className="text-[10px] text-primary/70" title="노드당 InternalIP 여러 개 (bond0/bond1 등)">
+                    다중 IP {multiCount}대
+                  </p>
+                )}
               </div>
             );
           } catch {

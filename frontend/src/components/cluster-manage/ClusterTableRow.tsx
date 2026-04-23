@@ -209,26 +209,64 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           ? <span className="font-mono text-foreground">{cluster.maxPod}</span>
           : <span className="text-muted-foreground/60 text-xs">-</span>}
       </td>
-      <td className="px-3 py-2.5 max-w-[220px]">
+      {/* K8s / Cilium 버전 */}
+      <td className="px-3 py-2.5">
+        <div className="flex flex-col gap-1">
+          {cluster.k8sVersion ? (
+            <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-500 border border-sky-500/20 w-fit">
+              k8s {cluster.k8sVersion}
+            </span>
+          ) : <span className="text-muted-foreground/60 text-xs">-</span>}
+          {cluster.ciliumVersion ? (
+            <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 w-fit">
+              cilium {cluster.ciliumVersion}
+            </span>
+          ) : null}
+        </div>
+      </td>
+
+      {/* 노드 IP 목록 */}
+      <td className="px-3 py-2.5 max-w-[200px]">
+        {(() => {
+          if (!cluster.nodeIps) {
+            return cluster.nodeCount
+              ? <p className="text-[11px] text-muted-foreground">노드 {cluster.nodeCount}개 (미수집)</p>
+              : <span className="text-muted-foreground/60 text-xs">-</span>;
+          }
+          try {
+            const arr = JSON.parse(cluster.nodeIps) as { name: string; ip?: string; master?: boolean }[];
+            const shown = arr.slice(0, 4);
+            const rest = arr.length - shown.length;
+            return (
+              <div className="text-[11px] font-mono space-y-0.5">
+                {shown.map((n) => (
+                  <p key={n.name} className={n.master ? 'text-foreground' : 'text-muted-foreground'}
+                    title={n.name}>
+                    {n.master && <span className="inline-block w-1 h-1 rounded-full bg-primary mr-1 align-middle" />}
+                    {n.ip ?? '?'}
+                  </p>
+                ))}
+                {rest > 0 && <p className="text-muted-foreground/70">+{rest} more</p>}
+              </div>
+            );
+          } catch {
+            return <p className="text-[10px] font-mono text-muted-foreground truncate">{cluster.nodeIps}</p>;
+          }
+        })()}
+      </td>
+
+      {/* API / 기타 */}
+      <td className="px-3 py-2.5 max-w-[180px]">
         <p className="text-[11px] font-mono text-muted-foreground truncate" title={cluster.apiEndpoint}>
           {cluster.apiEndpoint}
         </p>
-        <div className="flex flex-wrap gap-1 mt-0.5">
-          {cluster.k8sVersion && (
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-500 border border-sky-500/20">
-              k8s {cluster.k8sVersion}
-            </span>
-          )}
-          {cluster.ciliumVersion && (
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-500 border border-cyan-500/20">
-              cilium {cluster.ciliumVersion}
-            </span>
-          )}
-        </div>
-        {cluster.nodeCount && (
-          <p className="text-[10px] text-muted-foreground/60 mt-0.5" title={cluster.nodeIps ?? ''}>
-            노드 {cluster.nodeCount}개
+        {cluster.hostname && (
+          <p className="text-[10px] text-muted-foreground/60 truncate" title={cluster.hostname}>
+            master: {cluster.hostname}
           </p>
+        )}
+        {cluster.nodeCount != null && (
+          <p className="text-[10px] text-muted-foreground/60">노드 {cluster.nodeCount}개</p>
         )}
       </td>
       <td className="px-3 py-2.5">

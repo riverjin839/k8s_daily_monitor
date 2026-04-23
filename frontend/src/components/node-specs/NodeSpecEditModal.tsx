@@ -242,6 +242,29 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
               <Field label="GPU 개수">
                 <input type="number" value={form.gpuCount ?? ''} onChange={setNum('gpuCount')} className={inputCls} min={0} max={64} />
               </Field>
+
+              <Field label="SSD 여부">
+                <select
+                  value={form.isSsd === true ? 'y' : form.isSsd === false ? 'n' : ''}
+                  onChange={(e) => update('isSsd', e.target.value === 'y' ? true : e.target.value === 'n' ? false : null)}
+                  className={inputCls}
+                >
+                  <option value="">미지정</option>
+                  <option value="y">O (SSD)</option>
+                  <option value="n">X (HDD 등)</option>
+                </select>
+              </Field>
+              <Field label="VM 여부">
+                <select
+                  value={form.isVm === true ? 'y' : form.isVm === false ? 'n' : ''}
+                  onChange={(e) => update('isVm', e.target.value === 'y' ? true : e.target.value === 'n' ? false : null)}
+                  className={inputCls}
+                >
+                  <option value="">미지정</option>
+                  <option value="y">O (VM)</option>
+                  <option value="n">X (Bare-metal)</option>
+                </select>
+              </Field>
             </div>
           </section>
 
@@ -300,6 +323,18 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
               <Field label="담당자/팀">
                 <input value={form.owner ?? ''} onChange={set('owner')} className={inputCls} />
               </Field>
+              <div className="md:col-span-2">
+                <Field label="현재 용도">
+                  <input value={form.currentUsage ?? ''} onChange={set('currentUsage')} className={inputCls}
+                    placeholder="NEW K8S MASTER" />
+                </Field>
+              </div>
+              <div className="md:col-span-2">
+                <Field label="구입 목적">
+                  <input value={form.purchasePurpose ?? ''} onChange={set('purchasePurpose')} className={inputCls}
+                    placeholder="장비 분석용" />
+                </Field>
+              </div>
             </div>
           </section>
 

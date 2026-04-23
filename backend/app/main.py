@@ -299,6 +299,19 @@ def _run_migrations():
                 with engine.begin() as conn:
                     conn.execute(text(f"ALTER TABLE work_guides ADD COLUMN {col_name} {col_type}"))
 
+    # node_server_specs: 자산 대장 신규 필드
+    if "node_server_specs" in inspector.get_table_names():
+        ns_cols = [col["name"] for col in inspector.get_columns("node_server_specs")]
+        for col_name, col_type in [
+            ("is_ssd", "BOOLEAN"),
+            ("is_vm", "BOOLEAN"),
+            ("current_usage", "VARCHAR(255)"),
+            ("purchase_purpose", "VARCHAR(255)"),
+        ]:
+            if col_name not in ns_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE node_server_specs ADD COLUMN {col_name} {col_type}"))
+
 
 def _seed_default_metric_cards():
     """Seed default PromQL metric cards if the table is empty."""

@@ -910,6 +910,8 @@ export interface NodeServerSpec {
   raidConfig?: string | null;
   gpuModel?: string | null;
   gpuCount?: number | null;
+  isSsd?: boolean | null;
+  isVm?: boolean | null;
   // 위치
   datacenter?: string | null;
   room?: string | null;
@@ -925,9 +927,49 @@ export interface NodeServerSpec {
   purchaseDate?: string | null;
   warrantyEnd?: string | null;
   owner?: string | null;
+  currentUsage?: string | null;
+  purchasePurpose?: string | null;
   description?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// CSV 업로드 — 한 행 (hostname 만 필수, 나머지는 optional)
+export type NodeSpecCsvRow = Partial<Omit<NodeServerSpec, 'id' | 'createdAt' | 'updatedAt' | 'clusterName'>> & {
+  hostname: string;
+};
+
+export interface NodeSpecCsvUploadRequest {
+  rows: NodeSpecCsvRow[];
+  dryRun?: boolean;
+  matchClusterScope?: boolean;
+  ignoreEmptyOnUpdate?: boolean;
+}
+
+export interface NodeSpecCsvDiff {
+  rowIndex: number;
+  hostname: string;
+  action: 'insert' | 'update' | 'skip' | 'error';
+  existingId?: string | null;
+  changes: Record<string, { old: unknown; new: unknown }>;
+  error?: string | null;
+}
+
+export interface NodeSpecCsvPreviewResponse {
+  dryRun: boolean;
+  insertCount: number;
+  updateCount: number;
+  skipCount: number;
+  errorCount: number;
+  diffs: NodeSpecCsvDiff[];
+}
+
+export interface NodeSpecCsvApplyResponse {
+  inserted: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
+  items: NodeServerSpec[];
 }
 
 export type NodeServerSpecCreate = Omit<NodeServerSpec, 'id' | 'createdAt' | 'updatedAt' | 'clusterName'>;

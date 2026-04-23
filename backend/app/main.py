@@ -35,6 +35,7 @@ from app.routers import (
     etcdctl_router,
     mc_client_router,
     node_server_specs_router,
+    cluster_custom_fields_router,
 )
 
 
@@ -83,6 +84,7 @@ def _run_migrations():
             ("k8s_version", "VARCHAR(32)"),
             ("cilium_version", "VARCHAR(32)"),
             ("node_ips", "TEXT"),
+            ("custom_values", "JSONB"),
         ]
         for col_name, col_type in new_cluster_cols:
             if col_name not in columns:
@@ -490,6 +492,7 @@ app.include_router(bulk_exec_router, prefix="/api/v1")
 app.include_router(etcdctl_router, prefix="/api/v1")
 app.include_router(mc_client_router, prefix="/api/v1")
 app.include_router(node_server_specs_router, prefix="/api/v1")
+app.include_router(cluster_custom_fields_router, prefix="/api/v1")
 
 
 @app.get("/")

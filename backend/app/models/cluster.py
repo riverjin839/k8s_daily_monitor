@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, DateTime, Enum, Integer, Text, Boolean
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.database import Base
 import enum
@@ -54,6 +54,8 @@ class Cluster(Base):
     k8s_version = Column(String(32), nullable=True)                # 예: v1.29.3
     cilium_version = Column(String(32), nullable=True)             # 예: 1.16.3 (image tag)
     node_ips = Column(Text, nullable=True)                         # JSON 배열 (InternalIP 목록)
+    # 사용자 정의 컬럼 값 — ClusterCustomField 의 key 에 대응
+    custom_values = Column(JSONB, nullable=True)                   # {field_key: value, ...}
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

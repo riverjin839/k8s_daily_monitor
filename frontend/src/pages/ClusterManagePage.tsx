@@ -15,9 +15,12 @@ import {
   ClusterCard,
   ClusterTableRow,
   ClusterUpdateDiffDialog,
+  ClusterCustomFieldsManager,
   type DiffRow,
 } from '@/components/cluster-manage';
 import { OPERATION_LEVELS } from '@/components/cluster-manage';
+import { useClusterCustomFields, sortedFields } from '@/hooks/useClusterCustomFields';
+import { Settings2 } from 'lucide-react';
 
 // ── CIDR 겹침 유틸 ────────────────────────────────────────────────────────────
 function cidrIpToNum(ip: string): number {
@@ -63,6 +66,11 @@ export function ClusterManagePage() {
   const [diffRows, setDiffRows]       = useState<DiffRow[]>([]);
   const [diffWarnings, setDiffWarnings] = useState<string[]>([]);
   const autoUpdateAbortRef = useRef<AbortController | null>(null);
+
+  // 커스텀 필드
+  const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
+  const { data: customFieldsRaw } = useClusterCustomFields();
+  const customFields = sortedFields(customFieldsRaw);
 
   const filteredClusters = useMemo(() => {
     let list = [...clusters];
@@ -216,6 +224,14 @@ export function ClusterManagePage() {
               showStylePanel={false}
             />
             <button
+              onClick={() => setCustomFieldsOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors text-muted-foreground hover:text-foreground"
+              title="테이블에 커스텀 컬럼 추가/수정/삭제"
+            >
+              <Settings2 className="w-3.5 h-3.5" />
+              컬럼 관리 {customFields.length > 0 && <span className="text-primary">({customFields.length})</span>}
+            </button>
+            <button
               onClick={() => setShowFilter(v => !v)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors text-muted-foreground hover:text-foreground"
             >
@@ -285,9 +301,17 @@ export function ClusterManagePage() {
               <table className="w-full text-sm border-collapse">
                 <thead className="bg-secondary/50">
                   <tr className="border-b border-border">
-                    {['클러스터명', '상태', '지역', '운영레벨', 'BGP / AS', 'Node CIDR', 'Pod CIDR', 'Svc CIDR', 'Max Pods', 'K8s / Cilium', '노드 IP', 'API / 기타', '액션'].map(h => (
+                    {['클러스터명', '상태', '지역', '운영레벨', 'BGP / AS', 'Node CIDR', 'Pod CIDR', 'Svc CIDR', 'Max Pods', 'K8s / Cilium', '노드 IP', 'API / 기타'].map(h => (
                       <th key={h} className={`px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground ${h === 'Max Pods' ? 'text-center' : ''}`}>{h}</th>
                     ))}
+                    {customFields.map((f) => (
+                      <th key={f.id} className="px-3 py-2.5 text-left text-xs font-semibold text-primary/80 border-l border-primary/10"
+                        style={f.width ? { width: f.width } : undefined}
+                        title={f.description ?? ''}>
+                        {f.label}
+                      </th>
+                    ))}
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">액션</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -302,6 +326,7 @@ export function ClusterManagePage() {
                       onCilium={c => setCiliumCluster(c)}
                       onAutoUpdate={handleAutoUpdate}
                       autoUpdatingId={autoUpdatingId}
+                      customFields={customFields}
                     />
                   ))}
                 </tbody>
@@ -345,6 +370,11 @@ export function ClusterManagePage() {
         applying={applyingId === diffCluster?.id}
         onCancel={() => { if (!applyingId) { setDiffCluster(null); setDiffRows([]); setDiffWarnings([]); } }}
         onConfirm={handleApplyDiff}
+      />
+
+      <ClusterCustomFieldsManager
+        open={customFieldsOpen}
+        onClose={() => setCustomFieldsOpen(false)}
       />
     </div>
   );

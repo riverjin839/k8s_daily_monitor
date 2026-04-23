@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ClipboardCheck, Plus, Search, RefreshCw, Download, Upload, Trash2, Pencil,
-  Server, Cpu, HardDrive, MapPin, Loader2, Square, Copy,
+  Server, Cpu, HardDrive, MapPin, Loader2, Square, Copy, ClipboardPaste, FileDown,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import {
@@ -14,6 +14,8 @@ import { nodeSpecsApi } from '@/services/api';
 import type { NodeServerSpec, NodeSpecStatus } from '@/types';
 import { NodeSpecEditModal } from '@/components/node-specs/NodeSpecEditModal';
 import { NodeSpecCsvUploadModal } from '@/components/node-specs/NodeSpecCsvUploadModal';
+import { NodeSpecPasteModal } from '@/components/node-specs/NodeSpecPasteModal';
+import { EXPORT_COLUMNS, NODE_SPEC_COLUMNS, serializeCellValue } from '@/components/node-specs/columns';
 
 const STATUS_CLS: Record<string, string> = {
   active:       'bg-emerald-500/10 text-emerald-500 border-emerald-500/30',
@@ -35,51 +37,17 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function csvEscape(v: unknown): string {
-  if (v === null || v === undefined) return '';
-  if (typeof v === 'boolean') return v ? 'O' : 'X';
-  const s = String(v);
+function csvEscape(s: string): string {
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
 
 function exportCsv(rows: NodeServerSpec[]) {
-  const cols: { k: keyof NodeServerSpec; label: string }[] = [
-    { k: 'hostname', label: 'hostname' },
-    { k: 'clusterName', label: 'cluster' },
-    { k: 'role', label: 'role' },
-    { k: 'status', label: 'status' },
-    { k: 'internalIp', label: 'internal_ip' },
-    { k: 'bmcIp', label: 'bmc_ip' },
-    { k: 'vendor', label: 'vendor' },
-    { k: 'model', label: 'model' },
-    { k: 'serialNumber', label: 'serial' },
-    { k: 'cpuModel', label: 'cpu_model' },
-    { k: 'cpuSockets', label: 'sockets' },
-    { k: 'cpuCores', label: 'cores' },
-    { k: 'cpuThreads', label: 'threads' },
-    { k: 'memoryGb', label: 'mem_gb' },
-    { k: 'diskTotalGb', label: 'disk_gb' },
-    { k: 'diskType', label: 'disk_type' },
-    { k: 'gpuModel', label: 'gpu' },
-    { k: 'gpuCount', label: 'gpu_count' },
-    { k: 'datacenter', label: 'dc' },
-    { k: 'rack', label: 'rack' },
-    { k: 'rackUnit', label: 'u' },
-    { k: 'osImage', label: 'os' },
-    { k: 'kernelVersion', label: 'kernel' },
-    { k: 'kubeletVersion', label: 'kubelet' },
-    { k: 'isSsd', label: 'ssd' },
-    { k: 'isVm', label: 'vm' },
-    { k: 'assetTag', label: 'asset_tag' },
-    { k: 'purchaseDate', label: 'purchase_date' },
-    { k: 'warrantyEnd', label: 'warranty_end' },
-    { k: 'owner', label: 'owner' },
-    { k: 'currentUsage', label: 'current_usage' },
-    { k: 'purchasePurpose', label: 'purchase_purpose' },
-  ];
-  const header = cols.map((c) => c.label).join(',');
-  const body = rows.map((r) => cols.map((c) => csvEscape(r[c.k])).join(',')).join('\n');
+  const cols = EXPORT_COLUMNS;
+  const header = cols.map((c) => c.csvKey).join(',');
+  const body = rows.map((r) =>
+    cols.map((c) => csvEscape(serializeCellValue(r[c.field], c))).join(','),
+  ).join('\n');
   const csv = `${header}\n${body}\n`;
   const blob = new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -87,6 +55,27 @@ function exportCsv(rows: NodeServerSpec[]) {
   const today = new Date().toISOString().slice(0, 10);
   a.href = url;
   a.download = `node-server-specs-${today}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadCsvTemplate() {
+  const header = EXPORT_COLUMNS.map((c) => c.csvKey).join(',');
+  const example = EXPORT_COLUMNS.map((c) => {
+    if (c.field === 'hostname') return 'srv-master-01';
+    if (c.field === 'osImage') return 'RHEL9';
+    if (c.field === 'diskTotalGb') return '18';
+    if (c.field === 'isSsd') return 'O';
+    if (c.field === 'isVm') return 'X';
+    if (c.field === 'currentUsage') return 'NEW K8S MASTER';
+    if (c.field === 'purchasePurpose') return '장비 분석용';
+    return '';
+  }).join(',');
+  const blob = new Blob(['﻿', `${header}\n${example}\n`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'node-server-specs-template.csv';
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -105,6 +94,7 @@ export function NodeSpecPage() {
   const [confirmImport, setConfirmImport] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<NodeServerSpec | null>(null);
   const [csvOpen, setCsvOpen] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
 
   const listQ = useQuery({
     queryKey: ['node-specs', clusterId, statusFilter, roleFilter, search],
@@ -151,6 +141,27 @@ export function NodeSpecPage() {
     getCellText: cellText,
     containerRef: tableRef,
   });
+
+  // ── 전역 paste — 테이블 내 셀이 선택된 상태에서 Ctrl+V 하면 붙여넣기 모달 ──
+  const [pasteInitialText, setPasteInitialText] = useState<string>('');
+  useEffect(() => {
+    const handler = (e: ClipboardEvent) => {
+      // 편집 중인 input/textarea 에 붙여넣는 건 건드리지 않음
+      const tgt = e.target as HTMLElement | null;
+      if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable)) return;
+      // 현재 페이지에 있을 때만 (테이블 또는 body 포커스)
+      const active = document.activeElement;
+      const inTable = active && (active === document.body || tableRef.current?.contains(active));
+      if (!inTable) return;
+      const txt = e.clipboardData?.getData('text/plain') ?? '';
+      if (!txt.trim() || (!txt.includes('\t') && !txt.includes(','))) return;
+      e.preventDefault();
+      setPasteInitialText(txt);
+      setPasteOpen(true);
+    };
+    window.addEventListener('paste', handler);
+    return () => window.removeEventListener('paste', handler);
+  }, []);
 
   // 인라인 셀 편집 저장
   const saveField = async (id: string, patch: Partial<NodeServerSpec>) => {
@@ -222,9 +233,19 @@ export function NodeSpecPage() {
                 className="px-2.5 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg flex items-center gap-1 disabled:opacity-50">
                 <Download className="w-3 h-3" /> CSV 내보내기
               </button>
+              <button onClick={downloadCsvTemplate}
+                className="px-2.5 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg flex items-center gap-1"
+                title="현재 테이블 컬럼 기준 빈 템플릿 다운로드">
+                <FileDown className="w-3 h-3" /> 템플릿
+              </button>
               <button onClick={() => setCsvOpen(true)}
                 className="px-2.5 py-1 text-xs font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 rounded-lg flex items-center gap-1">
                 <Upload className="w-3 h-3" /> CSV 업로드
+              </button>
+              <button onClick={() => setPasteOpen(true)}
+                className="px-2.5 py-1 text-xs font-medium bg-violet-500/10 hover:bg-violet-500/20 text-violet-500 border border-violet-500/30 rounded-lg flex items-center gap-1"
+                title="엑셀/구글시트에서 복사한 블록 붙여넣기">
+                <ClipboardPaste className="w-3 h-3" /> 엑셀 붙여넣기
               </button>
               {clusterId && (
                 importMut.isPending ? (
@@ -554,6 +575,16 @@ export function NodeSpecPage() {
         onApplied={() => {
           qc.invalidateQueries({ queryKey: ['node-specs'] });
         }}
+      />
+
+      <NodeSpecPasteModal
+        open={pasteOpen}
+        onClose={() => { setPasteOpen(false); setPasteInitialText(''); }}
+        onApplied={() => {
+          qc.invalidateQueries({ queryKey: ['node-specs'] });
+        }}
+        displayColumns={NODE_SPEC_COLUMNS}
+        initialText={pasteInitialText}
       />
     </div>
   );

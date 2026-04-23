@@ -111,12 +111,15 @@ spec:
                   name: k8s-monitor-config
                   key: OLLAMA_MODEL
           resources:
+            # 대규모 클러스터 (수백 노드) 정보 수집 시 k8s API 응답 역직렬화로 메모리
+            # 스파이크가 발생 — 512Mi 제한에서 OOMKilled → 500 에러 유발 이력 있음.
+            # 안전 마진 확보 + auto-update 는 read_namespaced_pod 로 최소화 했음.
             requests:
-              memory: "256Mi"
+              memory: "384Mi"
               cpu: "200m"
             limits:
-              memory: "512Mi"
-              cpu: "500m"
+              memory: "1Gi"
+              cpu: "1000m"
           livenessProbe:
             httpGet:
               path: /health

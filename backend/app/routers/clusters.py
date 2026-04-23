@@ -27,7 +27,7 @@ from app.schemas import (
 )
 
 _CONNECT_TIMEOUT = 5  # seconds
-_K8S_AUTH_TIMEOUT = 5  # seconds
+_K8S_AUTH_TIMEOUT = 15  # seconds — 300노드 규모 API server 부하 고려. heavy call 은 *4 배수.
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -557,11 +557,11 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
             cluster.k8s_version = k8s_ver
             updated["k8sVersion"] = k8s_ver
     except Exception as e:
-        warnings.append(f"k8s 버전 조회 실패: {str(e)[:120]}")
+        warnings.append(f"k8s 버전 조회 실패 ({type(e).__name__}): {str(e)[:120]}")
 
     # 1. nodes → node_count, hostname(master), max_pod, node_ips
     try:
-        nodes = v1.list_node(_request_timeout=_K8S_AUTH_TIMEOUT * 2)
+        nodes = v1.list_node(_request_timeout=_K8S_AUTH_TIMEOUT * 4)
         items = nodes.items
         cluster.node_count = len(items)
         updated["nodeCount"] = len(items)
@@ -604,15 +604,44 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
         # pod CIDR: 노드 spec.podCIDR 들을 모아 최소 덮는 대역을 추정하기는 어렵고,
         # kube-controller-manager --cluster-cidr 를 우선 사용. 아래에서 처리.
     except Exception as e:
-        warnings.append(f"nodes 조회 실패: {str(e)[:120]}")
+        warnings.append(f"nodes 조회 실패 ({type(e).__name__}): {str(e)[:120]}")
 
-    # 2. kube-system 의 kube-apiserver / kube-controller-manager pod 의 플래그에서 CIDR 추출
+    # 2. kube-apiserver / kube-controller-manager pod 의 플래그에서 CIDR 추출.
+    #    300노드 규모에서 kube-system 전체 pod list 는 수 MB~수십 MB → worker timeout 원인.
+    #    → master hostname 기반 static-pod 이름으로 직접 read, 실패 시 label_selector+limit=1 fallback.
+    def _fetch_control_plane_pod(component: str):
+        # static-pod 이름 규칙: "{component}-{master-hostname}"
+        if cluster.hostname:
+            candidate = f"{component}-{cluster.hostname}"
+            try:
+                return v1.read_namespaced_pod(
+                    candidate, "kube-system",
+                    _request_timeout=_K8S_AUTH_TIMEOUT,
+                )
+            except ApiException as _e:
+                if _e.status != 404:
+                    warnings.append(f"{candidate} read 실패 ({type(_e).__name__}): HTTP {_e.status}")
+            except Exception as _e:
+                warnings.append(f"{candidate} read 실패 ({type(_e).__name__}): {str(_e)[:80]}")
+
+        # fallback — label_selector + limit=1 (전체 pod 을 훑지 않음)
+        try:
+            res = v1.list_namespaced_pod(
+                "kube-system",
+                label_selector=f"component={component}",
+                limit=1,
+                _request_timeout=_K8S_AUTH_TIMEOUT * 2,
+            )
+            return res.items[0] if res.items else None
+        except Exception as _e:
+            warnings.append(f"{component} pod 조회 실패 ({type(_e).__name__}): {str(_e)[:120]}")
+            return None
+
     try:
-        sys_pods = v1.list_namespaced_pod("kube-system", _request_timeout=_K8S_AUTH_TIMEOUT * 2)
-        api_pod = next((p for p in sys_pods.items if p.metadata.name.startswith("kube-apiserver")), None)
-        ctrl_pod = next((p for p in sys_pods.items if p.metadata.name.startswith("kube-controller-manager")), None)
+        api_pod = _fetch_control_plane_pod("kube-apiserver")
+        ctrl_pod = _fetch_control_plane_pod("kube-controller-manager")
 
-        if api_pod and api_pod.spec.containers:
+        if api_pod and api_pod.spec and api_pod.spec.containers:
             svc_range = _extract_flag_value(api_pod.spec.containers[0], "service-cluster-ip-range")
             if svc_range:
                 cluster.svc_cidr = svc_range
@@ -623,7 +652,7 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
                 if first: updated["svcFirstHost"] = first
                 if last: updated["svcLastHost"] = last
 
-        if ctrl_pod and ctrl_pod.spec.containers:
+        if ctrl_pod and ctrl_pod.spec and ctrl_pod.spec.containers:
             pod_range = _extract_flag_value(ctrl_pod.spec.containers[0], "cluster-cidr")
             if pod_range:
                 cluster.pod_cidr = pod_range
@@ -634,7 +663,7 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
                 if first: updated["podFirstHost"] = first
                 if last: updated["podLastHost"] = last
     except Exception as e:
-        warnings.append(f"system pods 플래그 조회 실패: {str(e)[:120]}")
+        warnings.append(f"system pods 플래그 조회 실패 ({type(e).__name__}): {str(e)[:120]}")
 
     # 3. Cilium config — ConfigMap/kube-system/cilium-config
     try:
@@ -660,17 +689,19 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
             updated["ciliumVersion"] = cluster.cilium_version
     except ApiException as e:
         if e.status != 404:
-            warnings.append(f"cilium-config 조회 실패: HTTP {e.status}")
+            warnings.append(f"cilium-config 조회 실패 (ApiException): HTTP {e.status}")
     except Exception as e:
-        warnings.append(f"cilium-config 조회 실패: {str(e)[:120]}")
+        warnings.append(f"cilium-config 조회 실패 ({type(e).__name__}): {str(e)[:120]}")
 
     # 3.5 Cilium 버전 — ConfigMap 에 없으면 cilium-agent 이미지 태그로 fallback
+    #     300노드에서 label_selector 있어도 300개 pod 반환되므로 limit=1 로 제한.
     if not updated.get("ciliumVersion"):
         try:
             cpods = v1.list_namespaced_pod(
                 "kube-system",
                 label_selector="k8s-app=cilium",
-                _request_timeout=_K8S_AUTH_TIMEOUT,
+                limit=1,
+                _request_timeout=_K8S_AUTH_TIMEOUT * 2,
             )
             agent_pod = next((p for p in cpods.items if p.spec and p.spec.containers), None)
             if agent_pod:
@@ -681,8 +712,8 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
                     tag = last.rsplit(":", 1)[1]
                     cluster.cilium_version = tag
                     updated["ciliumVersion"] = tag
-        except Exception:
-            pass  # cilium 미설치 환경
+        except Exception as e:
+            warnings.append(f"cilium-agent pod 조회 실패 ({type(e).__name__}): {str(e)[:120]}")
 
     # 4. Cilium BGP — CiliumBGPClusterConfig (신규) 또는 CiliumBGPPeeringPolicy (구) CR
     try:
@@ -720,7 +751,7 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
         except ApiException:
             pass  # BGP 미설정 클러스터
         except Exception as e:
-            warnings.append(f"BGP 조회 실패: {str(e)[:120]}")
+            warnings.append(f"BGP 조회 실패 ({type(e).__name__}): {str(e)[:120]}")
     except Exception as e:
         warnings.append(f"BGP 조회 실패: {str(e)[:120]}")
 

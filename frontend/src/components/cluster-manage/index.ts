@@ -4,4 +4,6 @@ export { ClusterTableRow } from './ClusterTableRow';
 export { CidrRow } from './CidrRow';
 export { ClusterUpdateDiffDialog } from './ClusterUpdateDiffDialog';
 export type { DiffRow } from './ClusterUpdateDiffDialog';
+export { ClusterCustomFieldsManager } from './ClusterCustomFieldsManager';
+export { ClusterCustomCell } from './ClusterCustomCell';
 export * from './constants';

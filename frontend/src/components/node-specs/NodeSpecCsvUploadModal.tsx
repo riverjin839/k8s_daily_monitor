@@ -4,6 +4,9 @@ import { nodeSpecsApi } from '@/services/api';
 import type {
   NodeSpecCsvDiff, NodeSpecCsvPreviewResponse, NodeSpecCsvRow,
 } from '@/types';
+import {
+  HEADER_TO_FIELD, NODE_SPEC_COLUMNS, normalizeHeader, parseCellValue,
+} from './columns';
 
 interface Props {
   open: boolean;
@@ -41,120 +44,7 @@ function parseCsv(text: string): string[][] {
   return rows.filter((r) => r.some((v) => v.trim() !== ''));
 }
 
-// ── 헤더 alias 테이블 ─────────────────────────────────────────────────────
-// 사용자가 한글/영문 어느 쪽으로 헤더를 써도 인식.
-const HEADER_ALIASES: Record<string, string> = {
-  'hostname': 'hostname',
-  '호스트명': 'hostname',
-  'node_name': 'nodeName',
-  'k8s_node': 'nodeName',
-  'cluster_id': 'clusterId',
-  '클러스터id': 'clusterId',
-  'role': 'role',
-  '역할': 'role',
-  'status': 'status',
-  '상태': 'status',
-  'internal_ip': 'internalIp',
-  'ip': 'internalIp',
-  '내부ip': 'internalIp',
-  'external_ip': 'externalIp',
-  'bmc_ip': 'bmcIp',
-  'idrac': 'bmcIp',
-  'bond0_ip': 'bond0Ip',
-  'bond0_mac': 'bond0Mac',
-  'bond0_speed': 'bond0Speed',
-  'bond1_ip': 'bond1Ip',
-  'bond1_mac': 'bond1Mac',
-  'bond1_speed': 'bond1Speed',
-  'vendor': 'vendor',
-  '제조사': 'vendor',
-  'model': 'model',
-  '모델': 'model',
-  'serial': 'serialNumber',
-  'serial_number': 'serialNumber',
-  '시리얼': 'serialNumber',
-  'cpu_model': 'cpuModel',
-  'cpu모델': 'cpuModel',
-  'cpu_sockets': 'cpuSockets',
-  '소켓': 'cpuSockets',
-  'cpu_cores': 'cpuCores',
-  '코어': 'cpuCores',
-  'cpu_threads': 'cpuThreads',
-  '스레드': 'cpuThreads',
-  'memory': 'memoryGb',
-  'memory_gb': 'memoryGb',
-  'ram_gb': 'memoryGb',
-  '메모리': 'memoryGb',
-  'memory_modules': 'memoryModules',
-  'disk_total': 'diskTotalGb',
-  'disk_total_gb': 'diskTotalGb',
-  'disk총용량': 'diskTotalGb',
-  '디스크': 'diskTotalGb',
-  'disk_type': 'diskType',
-  'disk_count': 'diskCount',
-  'raid': 'raidConfig',
-  'raid_config': 'raidConfig',
-  'gpu': 'gpuModel',
-  'gpu_model': 'gpuModel',
-  'gpu_count': 'gpuCount',
-  'ssd': 'isSsd',
-  'is_ssd': 'isSsd',
-  'vm': 'isVm',
-  'is_vm': 'isVm',
-  'datacenter': 'datacenter',
-  'dc': 'datacenter',
-  'room': 'room',
-  'rack': 'rack',
-  '랙': 'rack',
-  'rack_unit': 'rackUnit',
-  'u': 'rackUnit',
-  'os': 'osImage',
-  'os_image': 'osImage',
-  'os이미지': 'osImage',
-  'kernel': 'kernelVersion',
-  'kernel_version': 'kernelVersion',
-  'kubelet': 'kubeletVersion',
-  'kubelet_version': 'kubeletVersion',
-  'runtime': 'containerRuntime',
-  'container_runtime': 'containerRuntime',
-  'asset_tag': 'assetTag',
-  '자산태그': 'assetTag',
-  'purchase_date': 'purchaseDate',
-  '구매일': 'purchaseDate',
-  'warranty_end': 'warrantyEnd',
-  '보증종료': 'warrantyEnd',
-  'owner': 'owner',
-  '담당자': 'owner',
-  'current_usage': 'currentUsage',
-  '현재용도': 'currentUsage',
-  '용도': 'currentUsage',
-  'purchase_purpose': 'purchasePurpose',
-  '구입목적': 'purchasePurpose',
-  '목적': 'purchasePurpose',
-  'description': 'description',
-  '메모': 'description',
-  '설명': 'description',
-};
-
-const NUMBER_KEYS = new Set([
-  'cpuSockets', 'cpuCores', 'cpuThreads', 'memoryGb',
-  'diskTotalGb', 'diskCount', 'gpuCount',
-]);
-const BOOL_KEYS = new Set(['isSsd', 'isVm']);
-
-function normalizeHeader(h: string): string {
-  return h.trim().toLowerCase().replace(/[\s-]+/g, '_');
-}
-
-function parseBool(v: string): boolean | null {
-  const s = v.trim().toLowerCase();
-  if (!s) return null;
-  if (['o', 'y', 'yes', 'true', '1', 'on', 'ssd', 'vm'].includes(s)) return true;
-  if (['x', 'n', 'no', 'false', '0', 'off', 'hdd', 'bare', '-'].includes(s)) return false;
-  return null;
-}
-
-// CSV → NodeSpecCsvRow[] 변환. 에러 row 는 errors 에 쌓아 리턴.
+// CSV → NodeSpecCsvRow[] 변환 (shared columns.ts 의 NODE_SPEC_COLUMNS + HEADER_TO_FIELD 사용)
 function rowsFromCsv(table: string[][]): { rows: NodeSpecCsvRow[]; errors: string[] } {
   const errors: string[] = [];
   if (table.length < 2) {
@@ -162,35 +52,36 @@ function rowsFromCsv(table: string[][]): { rows: NodeSpecCsvRow[]; errors: strin
     return { rows: [], errors };
   }
   const rawHeaders = table[0];
-  const mappedHeaders = rawHeaders.map((h) => HEADER_ALIASES[normalizeHeader(h)] ?? null);
+  const mappedFields = rawHeaders.map((h) => HEADER_TO_FIELD[normalizeHeader(h)] ?? null);
   const unknown = rawHeaders
-    .map((h, i) => mappedHeaders[i] === null ? h : null)
+    .map((h, i) => mappedFields[i] === null ? h : null)
     .filter((h): h is string => !!h);
   if (unknown.length > 0) {
     errors.push(`인식되지 않은 헤더(무시됨): ${unknown.join(', ')}`);
   }
-  if (!mappedHeaders.includes('hostname')) {
+  if (!mappedFields.includes('hostname')) {
     errors.push('필수 헤더 "hostname" 이 없습니다.');
     return { rows: [], errors };
   }
+
+  // field → column 조회용
+  const byField = new Map(NODE_SPEC_COLUMNS.map((c) => [c.field, c]));
 
   const rows: NodeSpecCsvRow[] = [];
   for (let r = 1; r < table.length; r++) {
     const cells = table[r];
     const obj: Record<string, unknown> = {};
-    mappedHeaders.forEach((key, colIdx) => {
-      if (!key) return;
+    mappedFields.forEach((field, colIdx) => {
+      if (!field) return;
+      const col = byField.get(field);
+      if (!col) return;
       const raw = (cells[colIdx] ?? '').trim();
       if (raw === '') return;
-      if (NUMBER_KEYS.has(key)) {
-        const n = Number(raw);
-        if (Number.isFinite(n)) obj[key] = n;
-        else errors.push(`행 ${r + 1}: ${key} 숫자 아님 ("${raw}")`);
-      } else if (BOOL_KEYS.has(key)) {
-        const b = parseBool(raw);
-        if (b !== null) obj[key] = b;
-      } else {
-        obj[key] = raw;
+      try {
+        const parsed = parseCellValue(raw, col);
+        if (parsed !== null) obj[field] = parsed;
+      } catch (e) {
+        errors.push(`행 ${r + 1}: ${field} — ${(e as Error).message}`);
       }
     });
     if (!obj.hostname) {
@@ -464,14 +355,22 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
           )}
 
           {parsedRows.length === 0 && !fileName && (
-            <div className="px-3 py-8 text-center text-xs text-muted-foreground space-y-1">
+            <div className="px-3 py-6 text-center text-xs text-muted-foreground space-y-2">
               <FileSpreadsheet className="w-8 h-8 mx-auto text-muted-foreground/40" />
-              <p>CSV 파일을 업로드하세요. 첫 행은 헤더, hostname 컬럼은 필수입니다.</p>
-              <p className="text-[10px]">
-                지원 헤더(일부): hostname / node_name / internal_ip / vendor / model /
-                cpu_cores / memory_gb / disk_total_gb / ssd / vm / os / kernel /
-                rack / asset_tag / current_usage / purchase_purpose ...
-              </p>
+              <p>CSV 파일을 업로드하세요. 첫 행은 헤더, <strong>hostname</strong> 컬럼은 필수입니다.</p>
+              <details className="text-left max-w-lg mx-auto">
+                <summary className="cursor-pointer text-[11px] text-primary hover:underline">
+                  지원 헤더 전체 ({NODE_SPEC_COLUMNS.length}개) 보기 — 테이블 컬럼과 동일
+                </summary>
+                <div className="mt-2 text-[10px] font-mono grid grid-cols-3 gap-x-2 gap-y-0.5">
+                  {NODE_SPEC_COLUMNS.map((c) => (
+                    <span key={c.field} className="truncate" title={`${c.label} (${c.type})`}>
+                      {c.csvKey}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-2 text-[10px]">한글 라벨("호스트명", "제조사" 등) 도 인식됩니다. 업로드 전 내보내기 CSV 를 템플릿으로 사용하세요.</p>
+              </details>
             </div>
           )}
 

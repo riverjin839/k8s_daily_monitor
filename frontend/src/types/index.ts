@@ -39,8 +39,44 @@ export interface Cluster {
   k8sVersion?: string;
   ciliumVersion?: string;
   nodeIps?: string;   // JSON 문자열: [{name, ip, master}]
+  // 사용자 정의 컬럼 값 (ClusterCustomField.key → value)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  customValues?: Record<string, any> | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// ── Cluster 커스텀 컬럼 (Confluence 스타일 table customization) ─────────
+export type ClusterCustomFieldType = 'text' | 'number' | 'date' | 'checkbox' | 'select';
+
+export interface ClusterCustomField {
+  id: string;
+  key: string;
+  label: string;
+  dataType: ClusterCustomFieldType;
+  options?: string[] | null;
+  description?: string | null;
+  sortOrder: number;
+  width?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClusterCustomFieldCreate {
+  key: string;
+  label: string;
+  dataType?: ClusterCustomFieldType;
+  options?: string[];
+  description?: string;
+  sortOrder?: number;
+  width?: number;
+}
+
+export type ClusterCustomFieldUpdate = Partial<Omit<ClusterCustomFieldCreate, 'key'>>;
+
+export interface ClusterCustomValuesUpdate {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  values: Record<string, any>;
 }
 
 export interface ClusterManageUpdate {

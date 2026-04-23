@@ -134,6 +134,22 @@ export const clustersApi = {
     }),
   getCiliumConfig: (id: string) =>
     api.get<{ live: string | null; stored: string | null; source: string; error: string | null }>(`/clusters/${id}/cilium-config`),
+  updateCustomValues: (id: string, values: Record<string, unknown>) =>
+    api.put<{ clusterId: string; customValues: Record<string, unknown> }>(
+      `/clusters/${id}/custom-values`, { values },
+    ),
+};
+
+// Cluster 커스텀 컬럼 (Confluence 스타일)
+export const clusterCustomFieldsApi = {
+  list: () =>
+    api.get<{ data: import('@/types').ClusterCustomField[] }>('/cluster-custom-fields'),
+  create: (data: import('@/types').ClusterCustomFieldCreate) =>
+    api.post<import('@/types').ClusterCustomField>('/cluster-custom-fields', data),
+  update: (id: string, data: import('@/types').ClusterCustomFieldUpdate) =>
+    api.put<import('@/types').ClusterCustomField>(`/cluster-custom-fields/${id}`, data),
+  delete: (id: string) =>
+    api.delete(`/cluster-custom-fields/${id}`),
 };
 
 // Versions API — 클러스터 컴포넌트 버전/설정 스냅샷 수집 & 히스토리

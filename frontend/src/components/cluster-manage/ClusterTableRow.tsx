@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
-import type { Cluster } from '@/types';
+import type { Cluster, ClusterCustomField } from '@/types';
 import { useUpdateCluster } from '@/hooks/useCluster';
 import { InlineEdit } from '@/components/common';
 import { STATUS_STYLE, LEVEL_BADGE, OPERATION_LEVELS } from './constants';
+import { ClusterCustomCell } from './ClusterCustomCell';
 
 interface ClusterTableRowProps {
   cluster: Cluster;
@@ -14,6 +15,7 @@ interface ClusterTableRowProps {
   onCilium: (c: Cluster) => void;
   onAutoUpdate: (c: Cluster) => void;
   autoUpdatingId: string | null;
+  customFields?: ClusterCustomField[];
 }
 
 type EditField = null | 'region' | 'operationLevel' | 'cidr' | 'podCidr' | 'svcCidr';
@@ -56,7 +58,7 @@ function EditableCell({
   );
 }
 
-export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onCilium, onAutoUpdate, autoUpdatingId }: ClusterTableRowProps) {
+export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onCilium, onAutoUpdate, autoUpdatingId, customFields = [] }: ClusterTableRowProps) {
   const updateCluster = useUpdateCluster();
   const [editingField, setEditingField] = useState<EditField>(null);
 
@@ -269,6 +271,12 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           <p className="text-[10px] text-muted-foreground/60">노드 {cluster.nodeCount}개</p>
         )}
       </td>
+      {customFields.map((f) => (
+        <td key={f.id} className="px-3 py-2.5 border-l border-primary/10 align-top" style={f.width ? { width: f.width } : undefined}>
+          <ClusterCustomCell cluster={cluster} field={f} />
+        </td>
+      ))}
+
       <td className="px-3 py-2.5">
         <div className="flex items-center gap-1">
           <button onClick={() => onAutoUpdate(cluster)}

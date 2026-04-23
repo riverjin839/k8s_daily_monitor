@@ -37,12 +37,13 @@ backend:
     type: ClusterIP
     port: 8000
   resources:
+    # 대규모 클러스터 수집 시 k8s API 역직렬화 피크 고려 — 512Mi 는 OOMKilled 이력.
     requests:
-      memory: "256Mi"
+      memory: "384Mi"
       cpu: "200m"
     limits:
-      memory: "512Mi"
-      cpu: "500m"
+      memory: "1Gi"
+      cpu: "1000m"
   livenessProbe:
     httpGet:
       path: /health

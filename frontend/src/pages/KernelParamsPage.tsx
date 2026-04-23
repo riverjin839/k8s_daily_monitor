@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
-  Cpu, Play, Loader2, CheckCircle, XCircle, Clock,
+  Cpu, Play, Square, CheckCircle, XCircle, Clock,
   ShieldAlert, Wifi, Terminal, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
@@ -242,8 +243,8 @@ export function KernelParamsPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [globalFilter, setGlobalFilter] = useState('');
 
-  const runMut = useMutation({
-    mutationFn: async () => {
+  const runMut = useAbortableMutation({
+    mutationFn: async (_: void, signal) => {
       const res = await bulkExecApi.run({
         clusterId: clusterId || undefined,
         action: 'ssh',
@@ -256,7 +257,7 @@ export function KernelParamsPage() {
         parallelism: 10,
         connectTimeout: 8,
         execTimeout: 60,
-      });
+      }, signal);
       return res.data;
     },
     onSuccess: (d) => setRunResponse(d),
@@ -437,14 +438,24 @@ export function KernelParamsPage() {
               )}
 
               <div className="flex justify-end pt-2 border-t border-border">
-                <button
-                  onClick={() => setConfirmOpen(true)}
-                  disabled={!canRun || runMut.isPending}
-                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
-                >
-                  {runMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                  조회 ({selected.size} 노드)
-                </button>
+                {runMut.isPending ? (
+                  <button
+                    onClick={runMut.abort}
+                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-red-500 hover:bg-red-600 text-primary-foreground rounded-lg transition-colors"
+                  >
+                    <Square className="w-4 h-4 fill-current" />
+                    중지
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setConfirmOpen(true)}
+                    disabled={!canRun}
+                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <Play className="w-4 h-4" />
+                    조회 ({selected.size} 노드)
+                  </button>
+                )}
               </div>
             </section>
           </div>

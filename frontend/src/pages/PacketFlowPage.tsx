@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
 import {
-  Route, Play, Loader2, ArrowRight, Globe, Network, Share2, Server, Box,
-  AlertTriangle, Info,
+  Route, Play, ArrowRight, Globe, Network, Share2, Server, Box,
+  AlertTriangle, Info, Square,
 } from 'lucide-react';
+import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel } from '@/components/common';
 import { topologyTraceApi } from '@/services/api';
 import type {
   PacketFlowResponseV2, TopologyTraceHopV2, PacketDirection,
@@ -98,8 +98,8 @@ export function PacketFlowPage() {
   const [response, setResponse] = useState<PacketFlowResponseV2 | null>(null);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
-  const runMut = useMutation({
-    mutationFn: async () => {
+  const runMut = useAbortableMutation({
+    mutationFn: async (_: void, signal) => {
       const r = await topologyTraceApi.packetFlowV2({
         clusterId,
         direction,
@@ -108,13 +108,13 @@ export function PacketFlowPage() {
         protocol,
         port: port ? Number(port) : undefined,
         path: path.trim() || '/',
-      });
+      }, signal);
       return r.data;
     },
     onSuccess: (d) => { setResponse(d); setSelectedIdx(null); },
   });
 
-  const canRun = !!clusterId && !!source.trim() && !!destination.trim() && !runMut.isPending;
+  const canRun = !!clusterId && !!source.trim() && !!destination.trim();
 
   const runError = runMut.error as { response?: { data?: { detail?: string } }; message?: string } | null;
 
@@ -172,6 +172,7 @@ export function PacketFlowPage() {
         />
 
         <div className="flex-1 min-w-0">
+          <DebugLogPanel pageKey="packet-flow" extra={{ clusterId, direction, source, destination, tab, pending: runMut.isPending }} />
           <div className="flex items-center gap-3 mb-5">
             <Route className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">패킷 흐름 분석</h1>
@@ -192,14 +193,24 @@ export function PacketFlowPage() {
                 ))}
               </div>
               <div className="flex items-center gap-1 ml-auto">
-                <button
-                  onClick={() => runMut.mutate()}
-                  disabled={!canRun}
-                  className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
-                >
-                  {runMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                  추적
-                </button>
+                {runMut.isPending ? (
+                  <button
+                    onClick={runMut.abort}
+                    className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-red-500 text-primary-foreground rounded-lg hover:bg-red-600"
+                  >
+                    <Square className="w-4 h-4 fill-current" />
+                    중지
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => runMut.mutate()}
+                    disabled={!canRun}
+                    className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    <Play className="w-4 h-4" />
+                    추적
+                  </button>
+                )}
               </div>
             </div>
 

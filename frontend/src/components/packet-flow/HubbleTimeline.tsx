@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { Play, Loader2, CheckCircle2, XCircle, Info, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Play, Square, CheckCircle2, XCircle, Info, AlertTriangle, RefreshCw } from 'lucide-react';
 import { topologyTraceApi } from '@/services/api';
+import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import type { HubbleFlow, HubbleFlowsResponse } from '@/types';
 
 interface Props {
@@ -75,8 +75,8 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
 
   const [resp, setResp] = useState<HubbleFlowsResponse | null>(null);
 
-  const runMut = useMutation({
-    mutationFn: async () => {
+  const runMut = useAbortableMutation({
+    mutationFn: async (_: void, signal) => {
       const r = await topologyTraceApi.hubbleFlows({
         clusterId,
         fromPod: fromPod.trim() || undefined,
@@ -85,13 +85,13 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
         verdict: verdict || undefined,
         sinceSeconds,
         limit,
-      });
+      }, signal);
       return r.data;
     },
     onSuccess: (d) => setResp(d),
   });
 
-  const canRun = !!clusterId && !runMut.isPending;
+  const canRun = !!clusterId;
 
   return (
     <div className="space-y-3">
@@ -136,14 +136,24 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
             min={1} max={5000}
             className="w-20 px-2 py-1 text-sm bg-background border border-border rounded" />
         </div>
-        <button
-          onClick={() => runMut.mutate()}
-          disabled={!canRun}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
-        >
-          {runMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-          플로우 조회
-        </button>
+        {runMut.isPending ? (
+          <button
+            onClick={runMut.abort}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-red-500 text-primary-foreground rounded-lg hover:bg-red-600"
+          >
+            <Square className="w-4 h-4 fill-current" />
+            중지
+          </button>
+        ) : (
+          <button
+            onClick={() => runMut.mutate()}
+            disabled={!canRun}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+          >
+            <Play className="w-4 h-4" />
+            플로우 조회
+          </button>
+        )}
       </div>
 
       {resp?.error && (

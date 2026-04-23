@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ViewModeBar } from '@/components/common';
+import { ViewModeBar, DebugLogPanel } from '@/components/common';
 import {
   Server, AlertTriangle, Search, ChevronDown,
   LayoutList, LayoutGrid,
@@ -14,6 +14,8 @@ import {
   CiliumConfigModal,
   ClusterCard,
   ClusterTableRow,
+  ClusterUpdateDiffDialog,
+  type DiffRow,
 } from '@/components/cluster-manage';
 import { OPERATION_LEVELS } from '@/components/cluster-manage';
 
@@ -48,12 +50,19 @@ export function ClusterManagePage() {
 
   const [deletingId, setDeletingId]       = useState<string | null>(null);
   const [autoUpdatingId, setAutoUpdatingId] = useState<string | null>(null);
+  const [applyingId, setApplyingId]       = useState<string | null>(null);
   const [search, setSearch]               = useState('');
   const [filterLevel, setFilterLevel]     = useState('');
   const [sortBy, setSortBy]               = useState<'name' | 'status' | 'level'>('name');
   const [showFilter, setShowFilter]       = useState(false);
   const [viewMode, setViewMode]           = useState<'table' | 'card'>('table');
   const [ciliumCluster, setCiliumCluster] = useState<Cluster | null>(null);
+
+  // Diff 팝업 상태
+  const [diffCluster, setDiffCluster] = useState<Cluster | null>(null);
+  const [diffRows, setDiffRows]       = useState<DiffRow[]>([]);
+  const [diffWarnings, setDiffWarnings] = useState<string[]>([]);
+  const autoUpdateAbortRef = useRef<AbortController | null>(null);
 
   const filteredClusters = useMemo(() => {
     let list = [...clusters];
@@ -129,27 +138,55 @@ export function ClusterManagePage() {
   };
 
   const handleAutoUpdate = async (cluster: Cluster) => {
+    // 이미 수집 중인 클러스터면 중지
+    if (autoUpdatingId === cluster.id && autoUpdateAbortRef.current) {
+      autoUpdateAbortRef.current.abort();
+      return;
+    }
     setAutoUpdatingId(cluster.id);
+    autoUpdateAbortRef.current = new AbortController();
     try {
-      const { data } = await clustersApi.autoUpdate(cluster.id);
-      queryClient.invalidateQueries({ queryKey: ['clusters'] });
-      const updatedCount = Object.keys(data.updated ?? {}).length;
-      const warnings = (data.warnings ?? []).join('\n');
-      const msg = updatedCount > 0
-        ? `${updatedCount}개 필드가 업데이트되었습니다.`
-        : '변경된 필드가 없습니다.';
-      alert(warnings ? `${msg}\n\n⚠ 경고:\n${warnings}` : msg);
+      const { data } = await clustersApi.autoUpdate(cluster.id, {
+        dryRun: true,
+        signal: autoUpdateAbortRef.current.signal,
+      });
+      setDiffCluster(cluster);
+      setDiffRows((data.diff ?? []) as DiffRow[]);
+      setDiffWarnings(data.warnings ?? []);
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } }; message?: string };
-      alert(`자동 업데이트 실패: ${err.response?.data?.detail ?? err.message ?? '알 수 없는 오류'}`);
+      const err = e as { response?: { data?: { detail?: string } }; message?: string; name?: string; code?: string };
+      if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') {
+        // 사용자 중지 — 무음
+      } else {
+        alert(`클러스터 정보 수집 실패: ${err.response?.data?.detail ?? err.message ?? '알 수 없는 오류'}`);
+      }
     } finally {
       setAutoUpdatingId(null);
+      autoUpdateAbortRef.current = null;
+    }
+  };
+
+  const handleApplyDiff = async () => {
+    if (!diffCluster) return;
+    setApplyingId(diffCluster.id);
+    try {
+      await clustersApi.autoUpdate(diffCluster.id);
+      queryClient.invalidateQueries({ queryKey: ['clusters'] });
+      setDiffCluster(null);
+      setDiffRows([]);
+      setDiffWarnings([]);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } }; message?: string };
+      alert(`적용 실패: ${err.response?.data?.detail ?? err.message ?? '알 수 없는 오류'}`);
+    } finally {
+      setApplyingId(null);
     }
   };
 
   return (
     <div className="min-h-screen bg-background">
       <main className="max-w-[1600px] mx-auto px-6 py-8">
+        <DebugLogPanel pageKey="cluster-manage" extra={{ clusters: clusters.length, filtered: filteredClusters.length, autoUpdatingId, diffRowsCount: diffRows.length }} />
 
         {/* 페이지 헤더 */}
         <div className="flex items-center justify-between mb-6">
@@ -299,6 +336,16 @@ export function ClusterManagePage() {
           onClose={() => setCiliumCluster(null)}
         />
       )}
+
+      <ClusterUpdateDiffDialog
+        open={!!diffCluster}
+        clusterName={diffCluster?.name ?? ''}
+        diff={diffRows}
+        warnings={diffWarnings}
+        applying={applyingId === diffCluster?.id}
+        onCancel={() => { if (!applyingId) { setDiffCluster(null); setDiffRows([]); setDiffWarnings([]); } }}
+        onConfirm={handleApplyDiff}
+      />
     </div>
   );
 }

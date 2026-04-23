@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
-  Database, Play, Loader2, CheckCircle, XCircle, Key, FileText, Terminal,
+  Database, Play, Square, CheckCircle, XCircle, Key, FileText, Terminal,
   ShieldAlert, Wifi, Clock, ScrollText,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
@@ -120,8 +121,8 @@ export function EtcdCtlPage() {
   const [tab, setTab] = useState<Tab>('run');
   const [result, setResult] = useState<EtcdCtlRunResponse | null>(null);
 
-  const runMut = useMutation({
-    mutationFn: async () => {
+  const runMut = useAbortableMutation({
+    mutationFn: async (_: void, signal) => {
       const res = await etcdctlApi.run(clusterId, {
         host: effectiveHost,
         port,
@@ -133,14 +134,14 @@ export function EtcdCtlPage() {
         useEnv,
         etcdctlPath,
         timeout,
-      });
+      }, signal);
       return res.data;
     },
     onSuccess: (d) => setResult(d),
   });
 
-  const logsMut = useMutation({
-    mutationFn: async () => {
+  const logsMut = useAbortableMutation({
+    mutationFn: async (_: void, signal) => {
       const res = await etcdctlApi.logs(clusterId, {
         host: effectiveHost,
         port,
@@ -151,7 +152,7 @@ export function EtcdCtlPage() {
         tail,
         since: since.trim() || undefined,
         grep: grep.trim() || undefined,
-      });
+      }, signal);
       return res.data;
     },
     onSuccess: (d) => setResult(d),
@@ -398,16 +399,24 @@ export function EtcdCtlPage() {
                 )}
 
                 <div className="flex justify-end pt-2 border-t border-border">
-                  <button
-                    onClick={() => setConfirmAction('run')}
-                    disabled={!canRunEtcdctl || runMut.isPending}
-                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {runMut.isPending
-                      ? <Loader2 className="w-4 h-4 animate-spin" />
-                      : <Play className="w-4 h-4" />}
-                    etcdctl 실행
-                  </button>
+                  {runMut.isPending ? (
+                    <button
+                      onClick={runMut.abort}
+                      className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-red-500 hover:bg-red-600 text-primary-foreground rounded-lg transition-colors"
+                    >
+                      <Square className="w-4 h-4 fill-current" />
+                      중지
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmAction('run')}
+                      disabled={!canRunEtcdctl}
+                      className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <Play className="w-4 h-4" />
+                      etcdctl 실행
+                    </button>
+                  )}
                 </div>
               </>
             ) : (
@@ -455,16 +464,24 @@ export function EtcdCtlPage() {
                 )}
 
                 <div className="flex justify-end pt-2 border-t border-border">
-                  <button
-                    onClick={() => setConfirmAction('logs')}
-                    disabled={!canRunLogs || logsMut.isPending}
-                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {logsMut.isPending
-                      ? <Loader2 className="w-4 h-4 animate-spin" />
-                      : <ScrollText className="w-4 h-4" />}
-                    로그 가져오기
-                  </button>
+                  {logsMut.isPending ? (
+                    <button
+                      onClick={logsMut.abort}
+                      className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-red-500 hover:bg-red-600 text-primary-foreground rounded-lg transition-colors"
+                    >
+                      <Square className="w-4 h-4 fill-current" />
+                      중지
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmAction('logs')}
+                      disabled={!canRunLogs}
+                      className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <ScrollText className="w-4 h-4" />
+                      로그 가져오기
+                    </button>
+                  )}
                 </div>
               </>
             )}

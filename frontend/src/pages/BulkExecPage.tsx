@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
-  Terminal, RefreshCw, Play, Loader2, CheckCircle, XCircle, Key, Upload, ChevronDown, ChevronRight,
+  Terminal, RefreshCw, Play, Square, CheckCircle, XCircle, Key, Upload, ChevronDown, ChevronRight,
   Wifi, FileText, ShieldAlert, Zap, Clock,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands } from '@/components/common';
+import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands, DebugLogPanel } from '@/components/common';
 import { bulkExecApi, type NodeSummary, type BulkExecResponse, type BulkExecResultItem } from '@/services/api';
 
 // ── 상태 색상 ───────────────────────────────────────────────────────────────
@@ -163,8 +164,8 @@ export function BulkExecPage() {
 
   const [runResponse, setRunResponse] = useState<BulkExecResponse | null>(null);
 
-  const runMutation = useMutation({
-    mutationFn: async () => {
+  const runMutation = useAbortableMutation({
+    mutationFn: async (_: void, signal) => {
       const res = await bulkExecApi.run({
         clusterId: clusterId || undefined,
         action,
@@ -180,7 +181,7 @@ export function BulkExecPage() {
         parallelism,
         connectTimeout,
         execTimeout,
-      });
+      }, signal);
       return res.data;
     },
     onSuccess: (data) => setRunResponse(data),
@@ -208,6 +209,7 @@ export function BulkExecPage() {
         />
 
         <div className="flex-1 min-w-0">
+        <DebugLogPanel pageKey="bulk-exec" extra={{ clusterId, selected: selected.size, action, mode, pending: runMutation.isPending }} />
         {/* 헤더 */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -479,16 +481,24 @@ export function BulkExecPage() {
               <p className="text-xs text-muted-foreground">
                 인증 정보는 이 실행에만 사용되고 저장되지 않습니다.
               </p>
-              <button
-                onClick={() => setConfirmOpen(true)}
-                disabled={!canRun || runMutation.isPending}
-                className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {runMutation.isPending
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : <Play className="w-4 h-4" />}
-                실행 ({selected.size} 노드)
-              </button>
+              {runMutation.isPending ? (
+                <button
+                  onClick={runMutation.abort}
+                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-red-500 hover:bg-red-600 text-primary-foreground rounded-lg transition-colors"
+                >
+                  <Square className="w-4 h-4 fill-current" />
+                  중지
+                </button>
+              ) : (
+                <button
+                  onClick={() => setConfirmOpen(true)}
+                  disabled={!canRun}
+                  className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Play className="w-4 h-4" />
+                  실행 ({selected.size} 노드)
+                </button>
+              )}
             </div>
           </section>
         </div>

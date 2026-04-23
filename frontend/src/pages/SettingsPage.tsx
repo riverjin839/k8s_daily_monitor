@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserPlus, UserCheck, Check, X as XIcon } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserPlus, UserCheck, Check, X as XIcon, Bug } from 'lucide-react';
+import { DEBUG_PAGES, useDebugStore } from '@/stores/debugStore';
 import { useClusters, useUpdateCluster, useDeleteCluster } from '@/hooks/useCluster';
 import { useAssignees, useUpdateAssignees } from '@/hooks/useAssignees';
 import { clustersApi, managementServersApi } from '@/services/api';
@@ -455,13 +456,20 @@ export function SettingsPage() {
     cicd: 'CI/CD',
   };
 
-  type TabId = 'cluster' | 'server' | 'assignee';
+  type TabId = 'cluster' | 'server' | 'assignee' | 'debug';
   const [activeTab, setActiveTab] = useState<TabId>('cluster');
+
+  // Debug 설정
+  const debugEnabled = useDebugStore((s) => s.enabled);
+  const debugToggle  = useDebugStore((s) => s.toggle);
+  const debugEventsCount = useDebugStore((s) => s.events.length);
+  const debugActiveCount = Object.values(debugEnabled).filter(Boolean).length;
 
   const TABS: { id: TabId; label: string; icon: JSX.Element; count: number }[] = [
     { id: 'cluster', label: '클러스터', icon: <Server className="w-4 h-4" />, count: clusters.length },
     { id: 'server', label: '관리서버', icon: <MonitorDot className="w-4 h-4" />, count: servers.length },
     { id: 'assignee', label: '담당자', icon: <UserCheck className="w-4 h-4" />, count: assignees.length },
+    { id: 'debug', label: 'Debug', icon: <Bug className="w-4 h-4" />, count: debugActiveCount },
   ];
 
   return (
@@ -916,6 +924,67 @@ export function SettingsPage() {
             </table>
           </div>
         </div>}
+
+        {/* Debug 탭: 대시보드 별 상세 로그 토글 */}
+        {activeTab === 'debug' && (
+          <div className="bg-card border border-border rounded-xl p-6 space-y-5">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                <Bug className="w-5 h-5 text-amber-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="font-semibold text-base">Debug 모드</h2>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  각 대시보드의 상세 실행 로그를 표시합니다. "전역"을 켜면 모든 API 호출
+                  (요청/응답/에러)이 debug 패널에 기록되며, 개별 페이지 토글을 켜면 해당
+                  페이지에 로그 패널이 나타납니다. 현재 {debugEventsCount}개 이벤트가
+                  버퍼에 있습니다.
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-border pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {DEBUG_PAGES.map((p) => {
+                  const on = !!debugEnabled[p.key];
+                  return (
+                    <label key={p.key}
+                      className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                        on ? 'border-amber-500/40 bg-amber-500/5' : 'border-border hover:bg-muted/30'
+                      }`}>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {p.label}
+                          {p.key === 'global' && (
+                            <span className="ml-1.5 text-[10px] text-muted-foreground font-normal">
+                              (axios interceptor)
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground font-mono">{p.key}</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() => debugToggle(p.key)}
+                        className="w-4 h-4 accent-amber-500"
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="border-t border-border pt-4 text-xs text-muted-foreground space-y-1">
+              <p className="font-medium text-foreground">팁</p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                <li>"전역" 만 켜도 브라우저 콘솔에 모든 API 호출이 기록됩니다.</li>
+                <li>페이지 토글만 켜면 해당 페이지에 DebugLogPanel 이 상단에 표시됩니다.</li>
+                <li>설정은 브라우저 localStorage 에 저장되며 새로고침 후에도 유지됩니다.</li>
+              </ul>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Add Cluster Modal */}

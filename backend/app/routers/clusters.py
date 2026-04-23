@@ -550,10 +550,13 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
     version_api = k8s_client.VersionApi(api_client)
 
     # 0. k8s server version (VersionApi)
+    #    git_version 은 배포판(RKE2/EKS/OpenShift) 에 따라 매우 길어질 수 있음 →
+    #    DB 컬럼 (VARCHAR(128)) 보호 위해 truncate.
     try:
         ver = version_api.get_code(_request_timeout=_K8S_AUTH_TIMEOUT)
         k8s_ver = getattr(ver, "git_version", None) or getattr(ver, "major", None)
         if k8s_ver:
+            k8s_ver = str(k8s_ver)[:128]
             cluster.k8s_version = k8s_ver
             updated["k8sVersion"] = k8s_ver
     except Exception as e:
@@ -682,10 +685,10 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
         if data.get("enable-bgp-control-plane", "").lower() == "true":
             cluster.bgp_enabled = True
             updated["bgpEnabled"] = True
-        # Cilium 버전 — ConfigMap 에 cilium-version 키 있으면 우선
+        # Cilium 버전 — ConfigMap 에 cilium-version 키 있으면 우선. VARCHAR(128) 보호.
         cv = data.get("cilium-version") or data.get("cni-version")
         if cv:
-            cluster.cilium_version = cv.strip()
+            cluster.cilium_version = cv.strip()[:128]
             updated["ciliumVersion"] = cluster.cilium_version
     except ApiException as e:
         if e.status != 404:
@@ -709,7 +712,7 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
                 # `quay.io/cilium/cilium:v1.16.3` → `v1.16.3`
                 last = img.rsplit("/", 1)[-1]
                 if ":" in last:
-                    tag = last.rsplit(":", 1)[1]
+                    tag = last.rsplit(":", 1)[1][:128]
                     cluster.cilium_version = tag
                     updated["ciliumVersion"] = tag
         except Exception as e:

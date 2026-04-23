@@ -140,6 +140,56 @@ export const clustersApi = {
     ),
 };
 
+// 백업 / 복구
+export interface BackupMetaTable { name: string; rows: number; isLog: boolean }
+export interface BackupMetaResponse { version: string; totalRows: number; tables: BackupMetaTable[]; logTables: string[] }
+export interface BackupImportTableDiff {
+  name: string; incoming: number; existing: number;
+  insertCount: number; updateCount: number; unchangedCount: number; deleteCandidates: number;
+}
+export interface BackupImportDiff {
+  version?: string | null; createdAt?: string | null;
+  backupOptions: Record<string, unknown>;
+  totalIncoming: number; totalExisting: number;
+  tables: BackupImportTableDiff[];
+}
+export interface BackupImportResponse {
+  dryRun: boolean; mode: 'merge' | 'replace';
+  inserted: number; updated: number; deleted: number;
+  errors: string[]; diff: BackupImportDiff;
+}
+
+export const backupApi = {
+  meta: () => api.get<BackupMetaResponse>('/backup/meta'),
+  // export → blob
+  exportDownload: (includeLogs = false, includeSensitive = false) =>
+    api.get('/backup/export', {
+      params: { include_logs: includeLogs, include_sensitive: includeSensitive },
+      responseType: 'blob',
+    }),
+  importPreview: (file: File, mode: 'merge' | 'replace', includeLogs: boolean) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('mode', mode);
+    fd.append('include_logs', String(includeLogs));
+    return api.post<BackupImportResponse>('/backup/import/preview', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 5 * 60_000,   // 대용량 파싱 고려 5분
+    });
+  },
+  importApply: (file: File, mode: 'merge' | 'replace', includeLogs: boolean, confirm: boolean) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('mode', mode);
+    fd.append('include_logs', String(includeLogs));
+    fd.append('confirm', String(confirm));
+    return api.post<BackupImportResponse>('/backup/import', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 10 * 60_000,
+    });
+  },
+};
+
 // Cluster 커스텀 컬럼 (Confluence 스타일)
 export const clusterCustomFieldsApi = {
   list: () =>

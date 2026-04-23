@@ -11,6 +11,7 @@ const STORAGE_KEY = 'k8s:debug-flags-v1';
 export const DEBUG_PAGES = [
   { key: 'dashboard',      label: '메인 대시보드' },
   { key: 'cluster-manage', label: '클러스터 관리' },
+  { key: 'node-specs',     label: '노드 서버스펙 대장' },
   { key: 'packet-flow',    label: '패킷 흐름' },
   { key: 'versions',       label: '버전/설정' },
   { key: 'bulk-exec',      label: '노드 일괄 실행' },

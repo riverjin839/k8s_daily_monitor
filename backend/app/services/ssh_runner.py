@@ -193,8 +193,19 @@ async def run_bulk(
     connect_timeout: int = 8,
     exec_timeout: int = 60,
     parallelism: int = 10,
+    chunk_size: int = 30,
+    chunk_pause_ms: int = 200,
 ) -> list[SSHResult]:
-    """여러 target 에 대해 SSH/SCP 일괄 실행."""
+    """여러 target 에 대해 SSH/SCP 일괄 실행.
+
+    대규모 (100+ 호스트) 안정성을 위해 **청크 단위**로 처리:
+      - 한 번에 chunk_size 개씩 병렬 실행 → 완료 대기 → chunk_pause_ms ms 휴지
+    이 방식은:
+      - 동시에 살아있는 paramiko 세션 수 상한 = parallelism (메모리 안정)
+      - SSH 게이트웨이/베스천의 burst 부하 완화
+      - 한 청크 실패가 다음 청크를 막지 않음 (결과는 모두 누적)
+      - `chunk_size <= parallelism` 이면 사실상 parallelism 제한과 동일
+    """
 
     def one(t: SSHTarget) -> SSHResult:
         if action == "ssh":
@@ -204,11 +215,32 @@ async def run_bulk(
         raise ValueError(f"unknown action: {action}")
 
     if mode == "sequential":
-        # 순차: 하나씩
         return [await asyncio.get_event_loop().run_in_executor(None, one, t) for t in targets]
 
-    # 병렬: ThreadPool 로 동시 실행
+    # 병렬 — 청크 단위 + Semaphore
     loop = asyncio.get_event_loop()
-    with ThreadPoolExecutor(max_workers=max(1, min(parallelism, len(targets) or 1))) as pool:
-        tasks = [loop.run_in_executor(pool, one, t) for t in targets]
-        return list(await asyncio.gather(*tasks))
+    n = len(targets)
+    workers = max(1, min(parallelism, n or 1))
+    chunk = max(1, chunk_size)
+
+    results: list[SSHResult] = []
+    # ThreadPoolExecutor 는 전체 배치 동안 1개만 사용 — chunk 별로 재생성하지 않음
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        sem = asyncio.Semaphore(workers)
+
+        async def bounded(t: SSHTarget) -> SSHResult:
+            async with sem:
+                return await loop.run_in_executor(pool, one, t)
+
+        for i in range(0, n, chunk):
+            batch = targets[i:i + chunk]
+            batch_results = await asyncio.gather(
+                *[bounded(t) for t in batch],
+                return_exceptions=False,
+            )
+            results.extend(batch_results)
+            # 마지막 청크가 아니면 휴지 — 베스천/게이트웨이 부하 완화
+            if i + chunk < n and chunk_pause_ms > 0:
+                await asyncio.sleep(chunk_pause_ms / 1000.0)
+
+    return results

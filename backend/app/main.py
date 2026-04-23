@@ -36,6 +36,7 @@ from app.routers import (
     mc_client_router,
     node_server_specs_router,
     cluster_custom_fields_router,
+    backup_router,
 )
 
 
@@ -81,8 +82,8 @@ def _run_migrations():
             ("bgp_enabled", "BOOLEAN DEFAULT FALSE"),
             ("as_number", "VARCHAR(20)"),
             ("kubeconfig_content", "TEXT"),
-            ("k8s_version", "VARCHAR(32)"),
-            ("cilium_version", "VARCHAR(32)"),
+            ("k8s_version", "VARCHAR(128)"),
+            ("cilium_version", "VARCHAR(128)"),
             ("node_ips", "TEXT"),
             ("custom_values", "JSONB"),
         ]
@@ -90,6 +91,20 @@ def _run_migrations():
             if col_name not in columns:
                 with engine.begin() as conn:
                     conn.execute(text(f"ALTER TABLE clusters ADD COLUMN {col_name} {col_type}"))
+
+        # 길이 확장 — VARCHAR(32) 에서 VARCHAR(128) 로. 일부 배포판 버전 문자열이
+        # 32자를 초과해 StringDataRightTruncation 발생 이력. 이미 128 이면 no-op.
+        cols_meta = inspector.get_columns("clusters")
+        for col_name in ("k8s_version", "cilium_version"):
+            meta = next((c for c in cols_meta if c["name"] == col_name), None)
+            if meta is None:
+                continue
+            cur_len = getattr(meta.get("type"), "length", None)
+            if cur_len is not None and cur_len < 128:
+                with engine.begin() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE clusters ALTER COLUMN {col_name} TYPE VARCHAR(128)"
+                    ))
 
         # 백필: kubeconfig_content 가 NULL 인 기존 레코드 중 파일이 남아있으면 DB 로 복사
         # (/tmp 기반 저장소라 재시작 후 파일이 사라지면 영원히 못 살리므로 한 번은 시도)
@@ -493,6 +508,7 @@ app.include_router(etcdctl_router, prefix="/api/v1")
 app.include_router(mc_client_router, prefix="/api/v1")
 app.include_router(node_server_specs_router, prefix="/api/v1")
 app.include_router(cluster_custom_fields_router, prefix="/api/v1")
+app.include_router(backup_router, prefix="/api/v1")
 
 
 @app.get("/")

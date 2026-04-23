@@ -26,6 +26,7 @@ from app.routers.etcdctl import router as etcdctl_router
 from app.routers.mc_client import router as mc_client_router
 from app.routers.node_server_specs import router as node_server_specs_router
 from app.routers.cluster_custom_fields import router as cluster_custom_fields_router
+from app.routers.backup import router as backup_router
 
 __all__ = [
     "clusters_router",
@@ -56,4 +57,5 @@ __all__ = [
     "mc_client_router",
     "node_server_specs_router",
     "cluster_custom_fields_router",
+    "backup_router",
 ]

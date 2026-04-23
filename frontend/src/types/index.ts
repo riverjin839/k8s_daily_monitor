@@ -779,6 +779,39 @@ export interface HubbleFlowsResponse {
   executed?: string | null;
 }
 
+// ── etcd systemd 수집 ──────────────────────────────────────────────────
+export interface EtcdSystemdCollectRequest {
+  hosts: string[];
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  useSudo?: boolean;
+  connectTimeout?: number;
+}
+
+export interface EtcdSystemdPerHost {
+  host: string;
+  status: string;
+  version?: string | null;
+  activeState?: string | null;
+  mainPid?: number | null;
+  fragmentPath?: string | null;
+  execStart?: string | null;
+  endpointHealth?: string | null;
+  error?: string | null;
+  raw?: Record<string, string> | null;
+}
+
+export interface EtcdSystemdCollectResponse {
+  clusterId: string;
+  stored: boolean;
+  changed: number;
+  hosts: EtcdSystemdPerHost[];
+  componentKey?: string;
+  errors: string[];
+}
+
 // ── tcpdump ────────────────────────────────────────────────────────────
 export interface TcpdumpCaptureRequest {
   clusterId?: string;

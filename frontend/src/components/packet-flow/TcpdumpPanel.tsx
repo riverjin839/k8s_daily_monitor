@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
-  Play, Loader2, Server, Terminal, RefreshCw, Download, AlertTriangle, Info,
+  Play, Square, Server, Terminal, RefreshCw, Download, AlertTriangle, Info,
   CheckCircle2, XCircle,
 } from 'lucide-react';
 import { bulkExecApi, topologyTraceApi } from '@/services/api';
 import type { NodeSummary } from '@/services/api';
 import type { TcpdumpCaptureResponse, TcpdumpPacketRow } from '@/types';
 import { ConfirmDialog, LogViewer } from '@/components/common';
+import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 
 interface Props {
   clusterId: string;
@@ -155,8 +156,8 @@ export function TcpdumpPanel({ clusterId }: Props) {
   const [result, setResult] = useState<TcpdumpCaptureResponse | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const runMut = useMutation({
-    mutationFn: async () => {
+  const runMut = useAbortableMutation({
+    mutationFn: async (_: void, signal) => {
       const r = await topologyTraceApi.tcpdumpRun({
         clusterId,
         host, port, username, ...authPayload,
@@ -165,7 +166,7 @@ export function TcpdumpPanel({ clusterId }: Props) {
         durationSec: duration,
         packetCount: count,
         useSudo,
-      });
+      }, signal);
       return r.data;
     },
     onSuccess: (d) => setResult(d),
@@ -322,14 +323,24 @@ export function TcpdumpPanel({ clusterId }: Props) {
               {runError.response?.data?.detail ?? runError.message}
             </div>
           )}
-          <button
-            onClick={() => setConfirmOpen(true)}
-            disabled={!canRun || runMut.isPending}
-            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
-          >
-            {runMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            캡처 실행
-          </button>
+          {runMut.isPending ? (
+            <button
+              onClick={runMut.abort}
+              className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-red-500 text-primary-foreground rounded-lg hover:bg-red-600"
+            >
+              <Square className="w-4 h-4 fill-current" />
+              중지
+            </button>
+          ) : (
+            <button
+              onClick={() => setConfirmOpen(true)}
+              disabled={!canRun}
+              className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+            >
+              <Play className="w-4 h-4" />
+              캡처 실행
+            </button>
+          )}
         </div>
       </div>
 

@@ -219,9 +219,13 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       </td>
       <td className="px-3 py-2.5">
         <div className="flex items-center gap-1">
-          <button onClick={() => onAutoUpdate(cluster)} disabled={autoUpdatingId === cluster.id}
-            className="p-1.5 hover:bg-primary/10 rounded text-muted-foreground hover:text-primary disabled:opacity-40 transition-colors"
-            title="kubeconfig 기반 자동 업데이트">
+          <button onClick={() => onAutoUpdate(cluster)}
+            className={`p-1.5 rounded transition-colors ${
+              autoUpdatingId === cluster.id
+                ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
+                : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
+            }`}
+            title={autoUpdatingId === cluster.id ? '중지' : '클러스터 정보 수집 (kubeconfig 기반)'}>
             {autoUpdatingId === cluster.id
               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
               : <RefreshCw className="w-3.5 h-3.5" />}

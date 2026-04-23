@@ -1,5 +1,6 @@
-import axios from 'axios';
+import axios, { type InternalAxiosRequestConfig } from 'axios';
 import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate, TaskStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource } from '@/types';
+import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 
 // snake_case → camelCase 변환 (Backend는 snake_case, Frontend는 camelCase)
 function toCamelCase(str: string): string {
@@ -45,11 +46,21 @@ const api = axios.create({
   },
 });
 
-// Request interceptor - camelCase → snake_case 자동 변환
+// Request interceptor - camelCase → snake_case 자동 변환 + debug 로깅
+type DebugConfig = InternalAxiosRequestConfig & { __debugStart?: number };
 api.interceptors.request.use(
   (config) => {
     if (config.data && typeof config.data === 'object') {
       config.data = convertKeysToSnake(config.data);
+    }
+    if (isDebugEnabled('global')) {
+      (config as DebugConfig).__debugStart = performance.now();
+      useDebugStore.getState().pushEvent({
+        kind: 'request',
+        method: config.method?.toUpperCase(),
+        url: config.url,
+        payload: config.data,
+      });
     }
     return config;
   },
@@ -58,15 +69,36 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor - snake_case → camelCase 자동 변환
+// Response interceptor - snake_case → camelCase 자동 변환 + debug 로깅
 api.interceptors.response.use(
   (response) => {
     if (response.data && typeof response.data === 'object' && !(response.data instanceof Blob)) {
       response.data = convertKeys(response.data);
     }
+    if (isDebugEnabled('global')) {
+      const start = (response.config as DebugConfig).__debugStart;
+      useDebugStore.getState().pushEvent({
+        kind: 'response',
+        method: response.config.method?.toUpperCase(),
+        url: response.config.url,
+        status: response.status,
+        durationMs: start ? Math.round(performance.now() - start) : undefined,
+      });
+    }
     return response;
   },
   (error) => {
+    if (isDebugEnabled('global')) {
+      const start = (error?.config as DebugConfig | undefined)?.__debugStart;
+      useDebugStore.getState().pushEvent({
+        kind: 'error',
+        method: error?.config?.method?.toUpperCase(),
+        url: error?.config?.url,
+        status: error?.response?.status,
+        durationMs: start ? Math.round(performance.now() - start) : undefined,
+        message: error?.response?.data?.detail ?? error?.message,
+      });
+    }
     console.error('API Error:', error.response?.data || error.message);
     return Promise.reject(error);
   }
@@ -86,8 +118,20 @@ export const clustersApi = {
     api.put<{ content: string; path: string }>(`/clusters/${id}/kubeconfig`, { content }),
   verify: (id: string) =>
     api.post<{ ok: boolean; cluster_name: string; results: { check: string; ok: boolean | null; detail: string }[] }>(`/clusters/${id}/verify`),
-  autoUpdate: (id: string) =>
-    api.post<{ clusterId: string; clusterName: string; updated: Record<string, unknown>; warnings: string[] }>(`/clusters/${id}/auto-update`),
+  autoUpdate: (id: string, opts?: { dryRun?: boolean; signal?: AbortSignal }) =>
+    api.post<{
+      clusterId: string;
+      clusterName: string;
+      dryRun?: boolean;
+      updated?: Record<string, unknown>;
+      current?: Record<string, unknown>;
+      proposed?: Record<string, unknown>;
+      diff?: { field: string; current: unknown; proposed: unknown; changed: boolean }[];
+      warnings: string[];
+    }>(`/clusters/${id}/auto-update`, undefined, {
+      params: opts?.dryRun ? { dry_run: 'true' } : undefined,
+      signal: opts?.signal,
+    }),
   getCiliumConfig: (id: string) =>
     api.get<{ live: string | null; stored: string | null; source: string; error: string | null }>(`/clusters/${id}/cilium-config`),
 };
@@ -120,9 +164,13 @@ export interface VersionGraphEdge {
 }
 
 export const versionsApi = {
-  collect: (clusterId: string) =>
+  collect: (clusterId: string, signal?: AbortSignal) =>
     api.post<{ clusterId: string; changed: number; errors: string[]; collectedAt: string }>(
-      `/clusters/${clusterId}/collect-versions`,
+      `/clusters/${clusterId}/collect-versions`, undefined, { signal },
+    ),
+  collectEtcdSystemd: (clusterId: string, payload: import('@/types').EtcdSystemdCollectRequest, signal?: AbortSignal) =>
+    api.post<import('@/types').EtcdSystemdCollectResponse>(
+      `/clusters/${clusterId}/collect-etcd-systemd`, payload, { signal },
     ),
   current: (clusterId: string) =>
     api.get<{ clusterId: string; components: ComponentSnapshot[] }>(
@@ -205,8 +253,8 @@ export const bulkExecApi = {
     api.get<{ clusterId: string; clusterName: string; nodes: NodeSummary[] }>(
       `/clusters/${clusterId}/node-list`,
     ),
-  run: (payload: BulkExecRequest) =>
-    api.post<BulkExecResponse>('/bulk-exec/run', payload),
+  run: (payload: BulkExecRequest, signal?: AbortSignal) =>
+    api.post<BulkExecResponse>('/bulk-exec/run', payload, { signal }),
 };
 
 // etcdctl API
@@ -281,8 +329,8 @@ export interface McRunRequest {
 export const mcApi = {
   presets: (clusterId: string) =>
     api.get<{ presets: McPreset[] }>(`/clusters/${clusterId}/mc/presets`),
-  run: (clusterId: string, payload: McRunRequest) =>
-    api.post<EtcdCtlRunResponse>(`/clusters/${clusterId}/mc/run`, payload),
+  run: (clusterId: string, payload: McRunRequest, signal?: AbortSignal) =>
+    api.post<EtcdCtlRunResponse>(`/clusters/${clusterId}/mc/run`, payload, { signal }),
 };
 
 export const etcdctlApi = {
@@ -292,10 +340,10 @@ export const etcdctlApi = {
     api.get<{ clusterId: string; clusterName: string; candidates: EtcdMasterCandidate[] }>(
       `/clusters/${clusterId}/etcdctl/master-candidates`,
     ),
-  run: (clusterId: string, payload: EtcdCtlRunRequest) =>
-    api.post<EtcdCtlRunResponse>(`/clusters/${clusterId}/etcdctl/run`, payload),
-  logs: (clusterId: string, payload: EtcdLogsRequest) =>
-    api.post<EtcdCtlRunResponse>(`/clusters/${clusterId}/etcdctl/logs`, payload),
+  run: (clusterId: string, payload: EtcdCtlRunRequest, signal?: AbortSignal) =>
+    api.post<EtcdCtlRunResponse>(`/clusters/${clusterId}/etcdctl/run`, payload, { signal }),
+  logs: (clusterId: string, payload: EtcdLogsRequest, signal?: AbortSignal) =>
+    api.post<EtcdCtlRunResponse>(`/clusters/${clusterId}/etcdctl/logs`, payload, { signal }),
 };
 
 // Health API
@@ -615,14 +663,14 @@ export const topologyTraceApi = {
     api.post<TopologyTraceResponse>('/topology-trace', payload),
   packetFlow: (payload: import('@/types').PacketFlowRequest) =>
     api.post<import('@/types').PacketFlowResponse>('/topology-trace/packet-flow', payload),
-  packetFlowV2: (payload: import('@/types').PacketFlowRequestV2) =>
-    api.post<import('@/types').PacketFlowResponseV2>('/topology-trace/packet-flow-v2', payload),
-  hubbleFlows: (payload: import('@/types').HubbleFlowsRequest) =>
-    api.post<import('@/types').HubbleFlowsResponse>('/topology-trace/hubble-flows', payload),
-  tcpdumpRun: (payload: import('@/types').TcpdumpCaptureRequest) =>
-    api.post<import('@/types').TcpdumpCaptureResponse>('/topology-trace/tcpdump', payload),
-  tcpdumpInterfaces: (payload: import('@/types').TcpdumpInterfacesRequest) =>
-    api.post<import('@/types').TcpdumpInterfacesResponse>('/topology-trace/tcpdump/interfaces', payload),
+  packetFlowV2: (payload: import('@/types').PacketFlowRequestV2, signal?: AbortSignal) =>
+    api.post<import('@/types').PacketFlowResponseV2>('/topology-trace/packet-flow-v2', payload, { signal }),
+  hubbleFlows: (payload: import('@/types').HubbleFlowsRequest, signal?: AbortSignal) =>
+    api.post<import('@/types').HubbleFlowsResponse>('/topology-trace/hubble-flows', payload, { signal }),
+  tcpdumpRun: (payload: import('@/types').TcpdumpCaptureRequest, signal?: AbortSignal) =>
+    api.post<import('@/types').TcpdumpCaptureResponse>('/topology-trace/tcpdump', payload, { signal }),
+  tcpdumpInterfaces: (payload: import('@/types').TcpdumpInterfacesRequest, signal?: AbortSignal) =>
+    api.post<import('@/types').TcpdumpInterfacesResponse>('/topology-trace/tcpdump/interfaces', payload, { signal }),
 };
 
 // Assignees API (담당자 관리)

@@ -13,17 +13,20 @@ SSH 가 필요한 NIC/호스트 파라미터는 여기서 수집하지 않음.
 import hashlib
 import json
 import os
+import re
 from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from kubernetes import client as k8s_client, config as k8s_config
 from kubernetes.client import ApiException
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Cluster, ClusterConfigSnapshot
 from app.services.kubeconfig import ensure_kubeconfig_file as _ensure_kubeconfig_file_for
+from app.services.ssh_runner import SSHTarget, _exec_ssh  # noqa: PLC2701 — 내부 재사용
 
 router = APIRouter(prefix="/clusters", tags=["versions"])
 
@@ -259,6 +262,151 @@ def collect_versions(cluster_id: UUID, db: Session = Depends(get_db)):
             detail=f"수집 실패: {str(e)[:200]}",
         )
     return {"cluster_id": str(cluster_id), **summary}
+
+
+# ── etcd (systemd) 수집 ──────────────────────────────────────────────────────
+
+class EtcdSystemdCollectRequest(BaseModel):
+    """사내 kubeadm 외 환경에서 etcd 가 systemd 로 기동될 때, 각 master 노드에
+    SSH 로 접속해 `systemctl show etcd` + `etcd --version` + 필요 시
+    `etcdctl endpoint health` 결과를 모아 1건의 스냅샷으로 저장한다.
+    자격증명은 요청에만 존재하고 DB 에 저장하지 않는다.
+    """
+    hosts: list[str] = Field(..., min_length=1, max_length=30)
+    port: int = Field(default=22, ge=1, le=65535)
+    username: str = Field(default="root", min_length=1, max_length=64)
+    password: str | None = None
+    private_key: str | None = None
+    use_sudo: bool = True
+    connect_timeout: int = Field(default=8, ge=1, le=60)
+    unit: str = Field(default="etcd", max_length=64)
+
+
+_SYSTEMCTL_SHOW_PROPS = [
+    "ActiveState", "SubState", "MainPID", "FragmentPath", "ExecStart",
+    "UnitFileState", "LoadState",
+]
+
+
+def _parse_systemctl_show(text: str) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for line in text.splitlines():
+        if "=" in line:
+            k, v = line.split("=", 1)
+            out[k.strip()] = v.strip()
+    return out
+
+
+def _parse_etcd_version(text: str) -> str | None:
+    # `etcd Version: 3.5.12` 또는 `etcdctl version: 3.5.12`
+    m = re.search(r"Version:\s*([0-9][^\s]+)", text)
+    return m.group(1) if m else None
+
+
+def _clean_exec_start(val: str) -> str:
+    """systemctl show 의 ExecStart 는 전체 구조체 문자열. argv[...] 부분 추출."""
+    m = re.search(r"argv\[\]=([^;]*);", val)
+    if m:
+        return m.group(1).strip()
+    return val.strip()
+
+
+@router.post("/{cluster_id}/collect-etcd-systemd")
+def collect_etcd_systemd(
+    cluster_id: UUID,
+    payload: EtcdSystemdCollectRequest,
+    db: Session = Depends(get_db),
+):
+    """SSH 로 각 master 노드의 etcd (systemd unit) 상태/버전을 수집해 스냅샷에 저장.
+
+    수집 항목(호스트별):
+      - systemctl show etcd → ActiveState / MainPID / FragmentPath / ExecStart / UnitFileState
+      - etcd --version → 버전 문자열
+    모든 호스트를 합쳐 component 키 `etcd_systemd` 로 1건의 스냅샷(JSON) 을 저장.
+    변경이 없으면 저장하지 않는다.
+    """
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+
+    if not payload.password and not payload.private_key:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="password 또는 private_key 중 하나는 필수입니다.",
+        )
+
+    now = datetime.utcnow()
+    sudo = "sudo -n " if payload.use_sudo else ""
+    show_cmd = f"{sudo}systemctl show {payload.unit} -p {',-p '.join(_SYSTEMCTL_SHOW_PROPS)}"
+    ver_cmd = f"{sudo}etcd --version 2>/dev/null | head -2"
+
+    per_host: list[dict] = []
+    errors: list[str] = []
+
+    for host in payload.hosts:
+        target = SSHTarget(
+            host=host, port=payload.port, username=payload.username,
+            password=payload.password, private_key=payload.private_key,
+        )
+        r_show = _exec_ssh(target, show_cmd, connect_timeout=payload.connect_timeout, exec_timeout=15)
+        r_ver  = _exec_ssh(target, ver_cmd,  connect_timeout=payload.connect_timeout, exec_timeout=10)
+
+        host_entry: dict = {"host": host, "status": r_show.status}
+
+        if r_show.status != "ok":
+            host_entry["error"] = r_show.error or r_show.stderr[:200]
+            errors.append(f"{host}: {r_show.error or r_show.status}")
+            per_host.append(host_entry)
+            continue
+
+        props = _parse_systemctl_show(r_show.stdout)
+        host_entry["active_state"]  = props.get("ActiveState")
+        host_entry["sub_state"]     = props.get("SubState")
+        host_entry["unit_file_state"] = props.get("UnitFileState")
+        host_entry["main_pid"]      = int(props["MainPID"]) if props.get("MainPID", "").isdigit() else None
+        host_entry["fragment_path"] = props.get("FragmentPath")
+        host_entry["exec_start"]    = _clean_exec_start(props.get("ExecStart", ""))
+        host_entry["raw"]           = props
+        if r_ver.status == "ok":
+            host_entry["version"] = _parse_etcd_version(r_ver.stdout)
+        per_host.append(host_entry)
+
+    # 대표 버전 — 모든 호스트의 버전이 동일하면 그걸, 다르면 ';' 구분
+    versions = sorted({(h.get("version") or "").strip() for h in per_host if h.get("version")})
+    version_label: str | None
+    if len(versions) == 1:
+        version_label = versions[0]
+    elif len(versions) > 1:
+        version_label = ";".join(versions)
+    else:
+        version_label = None
+
+    snapshot_data = {
+        "source": "systemd",
+        "unit": payload.unit,
+        "hosts": per_host,
+        "collected_at": now.isoformat(),
+    }
+
+    changed = _store_if_changed(
+        db, cluster_id,
+        component="etcd_systemd",
+        category="control_plane",
+        version=version_label,
+        data=snapshot_data,
+        now=now,
+    )
+    if changed:
+        db.commit()
+
+    return {
+        "cluster_id": str(cluster_id),
+        "stored": changed,
+        "changed": 1 if changed else 0,
+        "hosts": per_host,
+        "component_key": "etcd_systemd",
+        "errors": errors,
+    }
 
 
 @router.get("/{cluster_id}/versions/current")

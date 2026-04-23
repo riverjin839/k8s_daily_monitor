@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
-  GitCommit, RefreshCw, Loader2, Clock, Share2, X, ChevronDown, ChevronUp,
+  GitCommit, RefreshCw, Square, Clock, Share2, X, ChevronDown, ChevronUp,
   Server, Cpu, Network, Settings2,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel } from '@/components/common';
 import { versionsApi, type ComponentSnapshot } from '@/services/api';
+import { useAbortableMutation } from '@/hooks/useAbortableMutation';
+import { EtcdSystemdModal } from '@/components/versions';
+import { Database } from 'lucide-react';
 
 // ── 유틸 ────────────────────────────────────────────────────────────────────
 
@@ -220,6 +223,7 @@ export function VersionsPage() {
   const queryClient = useQueryClient();
   const { data: clusters = [] } = useClusters();
   const [clusterId, setClusterId] = useState<string>('');
+  const [etcdModalOpen, setEtcdModalOpen] = useState(false);
 
   // 사이드바 진입 시 자동으로 첫 클러스터 선택
   useEffect(() => {
@@ -233,8 +237,8 @@ export function VersionsPage() {
     staleTime: 30_000,
   });
 
-  const collect = useMutation({
-    mutationFn: () => versionsApi.collect(clusterId),
+  const collect = useAbortableMutation({
+    mutationFn: (_: void, signal) => versionsApi.collect(clusterId, signal),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['versions'] });
       const { changed, errors } = res.data;
@@ -281,6 +285,7 @@ export function VersionsPage() {
           onSelect={(id) => setClusterId(id ?? '')}
         />
         <div className="flex-1 min-w-0">
+        <DebugLogPanel pageKey="versions" extra={{ clusterId, components: current?.components?.length ?? 0, pending: collect.isPending }} />
         {/* 헤더 */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -306,15 +311,30 @@ export function VersionsPage() {
                 3D 그래프
               </Link>
               <button
-                onClick={() => collect.mutate()}
-                disabled={collect.isPending}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
+                onClick={() => setEtcdModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors"
+                title="etcd (systemd) — SSH 로 수집"
               >
-                {collect.isPending
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : <RefreshCw className="w-4 h-4" />}
-                지금 수집
+                <Database className="w-4 h-4" />
+                etcd (systemd)
               </button>
+              {collect.isPending ? (
+                <button
+                  onClick={collect.abort}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-red-500 hover:bg-red-600 text-primary-foreground rounded-lg transition-colors"
+                >
+                  <Square className="w-4 h-4 fill-current" />
+                  중지
+                </button>
+              ) : (
+                <button
+                  onClick={() => collect.mutate()}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  지금 수집
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -421,6 +441,12 @@ export function VersionsPage() {
         )}
         </div>
       </main>
+
+      <EtcdSystemdModal
+        open={etcdModalOpen && !!clusterId}
+        clusterId={clusterId}
+        onClose={() => setEtcdModalOpen(false)}
+      />
     </div>
   );
 }

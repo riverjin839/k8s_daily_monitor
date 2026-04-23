@@ -14,7 +14,7 @@ import {
 } from '@/components/dashboard';
 import { PlaybookCard, AddPlaybookModal } from '@/components/playbooks';
 import { MacCard } from '@/components/ui/MacCard';
-import { ClusterSidebar } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel } from '@/components/common';
 import { useClusterStore } from '@/stores/clusterStore';
 import { usePlaybookStore } from '@/stores/playbookStore';
 import { useClusters, useSummary, useAddons, useLogs, useHealthCheck, useCreateAddon, useDeleteAddon, useAddonHealthCheck } from '@/hooks/useCluster';
@@ -251,9 +251,9 @@ export function Dashboard() {
   return (
     <div className="min-h-screen bg-background">
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-20 px-8 py-3 bg-background border-b border-border flex items-center justify-between">
-        <div>
-          <h1 className="font-bold text-base tracking-tight">K8s Daily Monitor</h1>
+      <div className="sticky top-0 z-20 px-6 py-2 bg-background/95 backdrop-blur border-b border-border flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h1 className="font-bold text-sm tracking-tight">K8s Daily Monitor</h1>
           {lastCheckTime && (
             <p className="text-[11px] text-muted-foreground font-mono">
               Last check: {formatDateTime(lastCheckTime)}
@@ -263,14 +263,14 @@ export function Dashboard() {
         <button
           onClick={handleRunCheck}
           disabled={isChecking}
-          className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50 mac-shadow"
+          className="px-3.5 py-1.5 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50 mac-shadow"
         >
-          <RefreshCw className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
           {isChecking ? 'Checking...' : 'Run Check'}
         </button>
       </div>
 
-      <div className="max-w-[1800px] mx-auto px-6 py-6 flex gap-5">
+      <div className="max-w-[1800px] mx-auto px-4 py-3 flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={selectedClusterId}
@@ -279,7 +279,8 @@ export function Dashboard() {
           allLabel="전체 현황"
         />
 
-      <main className="flex-1 min-w-0 space-y-5">
+      <main className="flex-1 min-w-0 space-y-3">
+        <DebugLogPanel pageKey="dashboard" extra={{ activeClusterId, clusters: clusters.length, metricCards: metricCards.length }} />
 
         {/* ── Summary Stats ──────────────────────────────────────────────── */}
         <SummaryStats
@@ -287,21 +288,24 @@ export function Dashboard() {
           isLoading={summaryLoading}
         />
 
+        {/* 2-column grid: Cluster Status (메인) ↔ Prometheus Insights (우측) */}
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_minmax(420px,520px)] gap-3">
+
         {/* ── Cluster Status ─────────────────────────────────────────────── */}
-        <MacCard title="Cluster Status" bodyPadding="p-5">
+        <MacCard title="Cluster Status" bodyPadding="p-4">
           {/* Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div className="flex flex-wrap items-center gap-1.5">
               <button
                 onClick={() => setShowAddCluster(true)}
-                className="px-3 py-1.5 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl transition-colors"
+                className="px-2.5 py-1 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
               >
                 + Add Cluster
               </button>
               {clusters.length > 0 && (
                 <button
                   onClick={() => setShowAddAddon(true)}
-                  className="px-3 py-1.5 text-xs font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border border-emerald-500/20 rounded-xl transition-colors flex items-center gap-1"
+                  className="px-2.5 py-1 text-xs font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border border-emerald-500/20 rounded-lg transition-colors flex items-center gap-1"
                 >
                   <Plus className="w-3 h-3" /> Add Check
                 </button>
@@ -309,20 +313,20 @@ export function Dashboard() {
               {selectedClusterId && (
                 <button
                   onClick={() => setShowKubeconfig(true)}
-                  className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors"
+                  className="px-2.5 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
                 >
                   Kubeconfig
                 </button>
               )}
               <button
                 onClick={() => handleDailyReport('md')}
-                className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5"
+                className="px-2.5 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1"
               >
-                <Download className="w-3 h-3" /> Daily Report .md
+                <Download className="w-3 h-3" /> .md
               </button>
               <button
                 onClick={() => handleDailyReport('csv')}
-                className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-1.5"
+                className="px-2.5 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1"
               >
                 <Download className="w-3 h-3" /> .csv
               </button>
@@ -361,22 +365,18 @@ export function Dashboard() {
           )}
         </MacCard>
 
-        {/* ── Prometheus Insights ────────────────────────────────────────── */}
-        <MacCard
-          title="Prometheus Insights"
-          bodyPadding="p-5"
-          rootClassName=""
-        >
-          <div className="flex items-center justify-between mb-4">
+        {/* ── Prometheus Insights (우측 컬럼) ─────────────────────────────── */}
+        <MacCard title="Prometheus Insights" bodyPadding="p-4">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2 text-muted-foreground text-xs">
               <Activity className="w-4 h-4 text-primary" />
-              <span>{metricCards.length} metric cards</span>
+              <span>{metricCards.length} cards</span>
             </div>
             <button
               onClick={() => { setEditingMetricCard(null); setShowAddMetric(true); }}
-              className="px-3 py-1.5 text-xs font-medium bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 border border-purple-500/20 rounded-xl transition-colors flex items-center gap-1"
+              className="px-2.5 py-1 text-xs font-medium bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 border border-purple-500/20 rounded-lg transition-colors flex items-center gap-1"
             >
-              <Plus className="w-3 h-3" /> Add Metric
+              <Plus className="w-3 h-3" /> Metric
             </button>
           </div>
           <MetricCardGrid
@@ -388,38 +388,44 @@ export function Dashboard() {
           />
         </MacCard>
 
-        {/* ── Playbook Checks ────────────────────────────────────────────── */}
-        {dashboardPlaybooks.length > 0 && (
-          <MacCard title="Playbook Checks" bodyPadding="p-5">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-4">
-              <BookOpen className="w-4 h-4 text-primary" />
-              <span>{dashboardPlaybooks.length} playbooks</span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {dashboardPlaybooks.map((playbook) => (
-                <PlaybookCard
-                  key={playbook.id}
-                  playbook={playbook}
-                  isRunning={runningIds.has(playbook.id)}
-                  onRun={() => runPlaybook.mutate(playbook.id)}
-                  onDelete={() => { if (confirm(`Delete playbook "${playbook.name}"?`)) deletePlaybook.mutate(playbook.id); }}
-                  onToggleDashboard={() => toggleDashboard.mutate(playbook.id)}
-                  onEdit={() => { setEditingPlaybook(playbook); setShowPlaybookModal(true); }}
-                />
-              ))}
-            </div>
-          </MacCard>
-        )}
+        </div>
 
-        {/* ── 작업 / 이슈 현황 ───────────────────────────────────────────── */}
-        <MacCard title="작업 / 이슈 현황" bodyPadding="p-5">
-          <KanbanSummaryCharts
-            tasks={allTasks}
-            issues={allIssues}
-            isLoading={tasksLoading || issuesLoading}
-            selectedClusterId={selectedClusterId}
-          />
-        </MacCard>
+        {/* 2-column grid: Playbook Checks ↔ 작업/이슈 현황 */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+          {/* ── Playbook Checks ──────────────────────────────────────────── */}
+          {dashboardPlaybooks.length > 0 && (
+            <MacCard title="Playbook Checks" bodyPadding="p-4">
+              <div className="flex items-center gap-2 text-muted-foreground text-xs mb-3">
+                <BookOpen className="w-4 h-4 text-primary" />
+                <span>{dashboardPlaybooks.length} playbooks</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {dashboardPlaybooks.map((playbook) => (
+                  <PlaybookCard
+                    key={playbook.id}
+                    playbook={playbook}
+                    isRunning={runningIds.has(playbook.id)}
+                    onRun={() => runPlaybook.mutate(playbook.id)}
+                    onDelete={() => { if (confirm(`Delete playbook "${playbook.name}"?`)) deletePlaybook.mutate(playbook.id); }}
+                    onToggleDashboard={() => toggleDashboard.mutate(playbook.id)}
+                    onEdit={() => { setEditingPlaybook(playbook); setShowPlaybookModal(true); }}
+                  />
+                ))}
+              </div>
+            </MacCard>
+          )}
+
+          {/* ── 작업 / 이슈 현황 ─────────────────────────────────────────── */}
+          <MacCard title="작업 / 이슈 현황" bodyPadding="p-4"
+            className={dashboardPlaybooks.length === 0 ? 'xl:col-span-2' : ''}>
+            <KanbanSummaryCharts
+              tasks={allTasks}
+              issues={allIssues}
+              isLoading={tasksLoading || issuesLoading}
+              selectedClusterId={selectedClusterId}
+            />
+          </MacCard>
+        </div>
 
         {/* ── History Log ───────────────────────────────────────────────── */}
         <MacCard title="Recent Check History" bodyPadding="p-0">

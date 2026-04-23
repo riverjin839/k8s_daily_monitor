@@ -495,12 +495,14 @@ def _cidr_range(cidr: str | None) -> tuple[str | None, str | None]:
 
 
 @router.post("/{cluster_id}/auto-update")
-def auto_update_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
+def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = Depends(get_db)):
     """kubeconfig/k8s API 만으로 얻을 수 있는 클러스터 메타데이터를 자동 수집/반영.
 
     채우는 필드: node_count, hostname (master 후보), max_pod, pod_cidr/first/last,
     svc_cidr/first/last, cilium_config, bgp_enabled, as_number.
     NIC (bond*), Node CIDR 비트마스크는 kubeconfig 만으로는 알 수 없어 건너뜀.
+
+    dry_run=True 면 DB 에 반영하지 않고 {current, proposed, diff} 만 돌려준다.
     """
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
@@ -512,6 +514,25 @@ def auto_update_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="kubeconfig가 없습니다. 먼저 kubeconfig를 등록하세요.",
         )
+
+    # dry_run 시 비교 대상 스냅샷 (현재 DB 값)
+    _DIFF_FIELDS = [
+        ("nodeCount", "node_count"),
+        ("hostname", "hostname"),
+        ("maxPod", "max_pod"),
+        ("svcCidr", "svc_cidr"),
+        ("svcFirstHost", "svc_first_host"),
+        ("svcLastHost", "svc_last_host"),
+        ("podCidr", "pod_cidr"),
+        ("podFirstHost", "pod_first_host"),
+        ("podLastHost", "pod_last_host"),
+        ("ciliumConfig", "cilium_config"),
+        ("bgpEnabled", "bgp_enabled"),
+        ("asNumber", "as_number"),
+    ]
+    current: dict[str, object] = {
+        camel: getattr(cluster, snake) for camel, snake in _DIFF_FIELDS
+    }
 
     updated: dict[str, object] = {}
     warnings: list[str] = []
@@ -644,6 +665,28 @@ def auto_update_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
     except Exception as e:
         warnings.append(f"BGP 조회 실패: {str(e)[:120]}")
 
+    if dry_run:
+        # ORM 변경사항은 버리고 현재 DB 값 유지
+        db.rollback()
+        diff = []
+        for camel, _snake in _DIFF_FIELDS:
+            if camel in updated:
+                diff.append({
+                    "field": camel,
+                    "current": current.get(camel),
+                    "proposed": updated[camel],
+                    "changed": current.get(camel) != updated[camel],
+                })
+        return {
+            "cluster_id": str(cluster_id),
+            "cluster_name": cluster.name,
+            "dry_run": True,
+            "current": current,
+            "proposed": updated,
+            "diff": diff,
+            "warnings": warnings,
+        }
+
     cluster.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(cluster)
@@ -651,6 +694,7 @@ def auto_update_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
     return {
         "cluster_id": str(cluster_id),
         "cluster_name": cluster.name,
+        "dry_run": False,
         "updated": updated,
         "warnings": warnings,
     }

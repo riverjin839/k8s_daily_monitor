@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
   Terminal, RefreshCw, Play, Square, CheckCircle, XCircle, Key, Upload, ChevronDown, ChevronRight,
-  Wifi, FileText, ShieldAlert, Zap, Clock,
+  Wifi, FileText, ShieldAlert, Zap, Clock, Download, LayoutList, Rows,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands, DebugLogPanel } from '@/components/common';
@@ -21,6 +21,105 @@ const STATUS_META: Record<BulkExecResultItem['status'], { label: string; cls: st
 };
 
 // ── Node row ────────────────────────────────────────────────────────────────
+
+/** 필터가 있으면 필터에 매칭되는 라인만 join (대소문자 무시). 빈 필터면 원본 그대로.
+ *  요약 테이블 / CSV 내보내기에서 공통으로 쓰는 유틸. */
+function filteredText(text: string, filter: string): string {
+  if (!filter.trim()) return text;
+  const q = filter.toLowerCase();
+  return text
+    .split('\n')
+    .filter((l) => l.toLowerCase().includes(q))
+    .join('\n');
+}
+
+/** CSV 셀 이스케이프 */
+function csvCell(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+/** 결과 → CSV 변환.
+ *  열: host, status, exit_code, duration_ms, error, stdout_lines, stderr_lines,
+ *       stdout (필터 적용 시 매칭 라인만), stderr.
+ */
+function resultsToCsv(
+  results: BulkExecResultItem[],
+  filter: string,
+  command: string,
+): string {
+  const cols = [
+    'host', 'status', 'exit_code', 'duration_ms',
+    'error', 'stdout_lines', 'stderr_lines', 'stdout', 'stderr',
+  ];
+  const lines: string[] = [];
+  lines.push(`# command: ${command || '-'}`);
+  if (filter.trim()) lines.push(`# filter: ${filter}`);
+  lines.push(`# exported_at: ${new Date().toISOString()}`);
+  lines.push(cols.join(','));
+  for (const r of results) {
+    const stdout = filteredText(r.stdout, filter);
+    const stderr = filteredText(r.stderr, filter);
+    lines.push([
+      r.host,
+      r.status,
+      r.exitCode ?? '',
+      r.durationMs,
+      r.error ?? '',
+      stdout.split('\n').filter(Boolean).length,
+      stderr.split('\n').filter(Boolean).length,
+      stdout,
+      stderr,
+    ].map(csvCell).join(','));
+  }
+  return lines.join('\n') + '\n';
+}
+
+/** 결과 → 텍스트 (host 마다 섹션). admin 한눈에 보기 좋음. */
+function resultsToTxt(
+  results: BulkExecResultItem[],
+  filter: string,
+  command: string,
+): string {
+  const lines: string[] = [];
+  lines.push(`# command : ${command || '-'}`);
+  if (filter.trim()) lines.push(`# filter  : ${filter}`);
+  lines.push(`# exported: ${new Date().toISOString()}`);
+  lines.push(`# total   : ${results.length} (ok=${results.filter((r) => r.status === 'ok').length})`);
+  lines.push('');
+  for (const r of results) {
+    lines.push(`========== ${r.host}  [${r.status}]  exit=${r.exitCode ?? '-'}  ${r.durationMs}ms ==========`);
+    if (r.error) lines.push(`!! error: ${r.error}`);
+    const stdout = filteredText(r.stdout, filter);
+    if (stdout.trim()) {
+      lines.push('--- stdout ---');
+      lines.push(stdout);
+    }
+    const stderr = filteredText(r.stderr, filter);
+    if (stderr.trim()) {
+      lines.push('--- stderr ---');
+      lines.push(stderr);
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+function downloadBlob(text: string, filename: string, mime: string) {
+  const blob = new Blob(['﻿', text], { type: `${mime};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function copyToClipboard(text: string): Promise<boolean> {
+  return navigator.clipboard.writeText(text).then(() => true).catch(() => false);
+}
 
 function NodeRow({ node, checked, onToggle }: { node: NodeSummary; checked: boolean; onToggle: () => void }) {
   const host = node.internalIp || node.name;
@@ -110,6 +209,97 @@ function ResultRow({ result, globalFilter }: { result: BulkExecResultItem; globa
 }
 
 // ── 메인 페이지 ───────────────────────────────────────────────────────────────
+
+/** Admin 요약 뷰 — 모든 노드를 한 행씩, 필터 적용된 결과만 압축해서 표시.
+ *  상태 별 색 · 매칭 라인 수 badge · 대표 출력 1~3줄. */
+function SummaryResultsTable({
+  results, globalFilter,
+}: { results: BulkExecResultItem[]; globalFilter: string }) {
+  const maxPreviewLines = 3;
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="bg-muted/30 sticky top-0">
+          <tr className="text-left border-b border-border">
+            <th className="px-3 py-2 text-[11px] font-semibold text-muted-foreground">실행 노드</th>
+            <th className="px-3 py-2 text-[11px] font-semibold text-muted-foreground">수행 결과</th>
+            <th className="px-3 py-2 text-[11px] font-semibold text-muted-foreground">exit · 소요</th>
+            <th className="px-3 py-2 text-[11px] font-semibold text-muted-foreground">
+              결과 {globalFilter.trim() ? `(필터: "${globalFilter.length > 20 ? globalFilter.slice(0, 20) + '…' : globalFilter}")` : ''}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {results.map((r) => {
+            const meta = STATUS_META[r.status];
+            const Icon = meta.icon;
+            const filteredOut = filteredText(r.stdout, globalFilter);
+            const filteredErr = filteredText(r.stderr, globalFilter);
+            const outLines = filteredOut.split('\n').filter((l) => l.trim());
+            const errLines = filteredErr.split('\n').filter((l) => l.trim());
+            const preview = (outLines.length > 0 ? outLines : errLines).slice(0, maxPreviewLines);
+            const moreCount = Math.max(0, outLines.length + errLines.length - preview.length);
+            const matchBadge = globalFilter.trim()
+              ? (outLines.length + errLines.length)
+              : null;
+
+            return (
+              <tr key={r.host}
+                className={`border-b border-border hover:bg-muted/20 align-top ${
+                  r.status !== 'ok' ? 'bg-red-500/[0.02]' : ''
+                }`}>
+                <td className="px-3 py-2 align-top whitespace-nowrap">
+                  <p className="font-mono text-xs font-medium">{r.host}</p>
+                </td>
+                <td className="px-3 py-2 align-top whitespace-nowrap">
+                  <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
+                    <Icon className="w-3 h-3" />
+                    {meta.label}
+                  </span>
+                  {matchBadge !== null && (
+                    <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full border ${
+                      matchBadge > 0
+                        ? 'bg-sky-500/10 text-sky-500 border-sky-500/30'
+                        : 'bg-slate-500/10 text-slate-400 border-slate-500/30'
+                    }`}>
+                      매칭 {matchBadge}
+                    </span>
+                  )}
+                </td>
+                <td className="px-3 py-2 align-top whitespace-nowrap font-mono text-[11px] text-muted-foreground">
+                  {r.exitCode ?? '-'} · {r.durationMs}ms
+                </td>
+                <td className="px-3 py-2 align-top">
+                  {r.error && (
+                    <p className="text-[11px] text-red-400 font-medium mb-0.5">⚠ {r.error}</p>
+                  )}
+                  {preview.length > 0 ? (
+                    <div className="font-mono text-[11px] space-y-0.5">
+                      {preview.map((line, i) => (
+                        <p key={i} className={errLines.includes(line) ? 'text-red-400/90' : 'text-foreground/90'}
+                          title={line}>
+                          {line.length > 160 ? line.slice(0, 160) + '…' : line}
+                        </p>
+                      ))}
+                      {moreCount > 0 && (
+                        <p className="text-[10px] text-muted-foreground/70">+{moreCount} 라인 더</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground/60">
+                      {globalFilter.trim() ? '(필터 매칭 없음)' : '(출력 없음)'}
+                    </p>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export function BulkExecPage() {
   const { data: clusters = [] } = useClusters();
@@ -202,6 +392,8 @@ export function BulkExecPage() {
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [globalFilter, setGlobalFilter] = useState('');
+  const [resultView, setResultView] = useState<'summary' | 'detail'>('summary');
+  const [copyToast, setCopyToast] = useState<string | null>(null);
 
   return (
     <div className="min-h-screen bg-background">
@@ -544,27 +736,47 @@ export function BulkExecPage() {
           </section>
         </div>
 
-        {/* 결과 테이블 */}
+        {/* 결과 */}
         {runResponse && (
           <section className="mt-6 bg-card border border-border rounded-xl overflow-hidden">
-            <header className="px-5 py-3 border-b border-border flex items-center justify-between bg-muted/20">
-              <div className="flex items-center gap-3">
-                <h2 className="text-sm font-semibold">실행 결과</h2>
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                  성공 {runResponse.okCount}
-                </span>
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/30">
-                  실패 {runResponse.errorCount}
-                </span>
-                <span className="text-[11px] text-muted-foreground">
-                  총 {runResponse.totalDurationMs}ms · {runResponse.mode} · {runResponse.action}
-                </span>
-                <div className="ml-auto relative">
+            <header className="px-5 py-3 border-b border-border bg-muted/20 flex flex-wrap items-center gap-3">
+              <h2 className="text-sm font-semibold">실행 결과</h2>
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                성공 {runResponse.okCount}
+              </span>
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/30">
+                실패 {runResponse.errorCount}
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                총 {runResponse.totalDurationMs}ms · {runResponse.mode} · {runResponse.action}
+              </span>
+
+              <div className="ml-auto flex items-center gap-2 flex-wrap">
+                {/* 뷰 모드 토글 */}
+                <div className="flex items-center bg-secondary/60 rounded-md p-[2px] gap-px">
+                  <button onClick={() => setResultView('summary')}
+                    className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded transition-all ${
+                      resultView === 'summary' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="모든 노드 한 줄 요약">
+                    <LayoutList className="w-3 h-3" /> 요약
+                  </button>
+                  <button onClick={() => setResultView('detail')}
+                    className={`flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded transition-all ${
+                      resultView === 'detail' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="호스트별 stdout/stderr 전체">
+                    <Rows className="w-3 h-3" /> 상세
+                  </button>
+                </div>
+
+                {/* 공통 필터 */}
+                <div className="relative">
                   <input
                     value={globalFilter}
                     onChange={(e) => setGlobalFilter(e.target.value)}
                     placeholder="모든 노드 결과 공통 필터..."
-                    className="pl-2 pr-7 py-1 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-64"
+                    className="pl-2 pr-7 py-1 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-60"
                   />
                   {globalFilter && (
                     <button
@@ -573,27 +785,75 @@ export function BulkExecPage() {
                     >×</button>
                   )}
                 </div>
+
+                {/* 내보내기 */}
+                <div className="flex items-center gap-1">
+                  <button onClick={() => {
+                      const ts = new Date().toISOString().slice(0, 19).replace(/[:]/g, '-');
+                      downloadBlob(
+                        resultsToCsv(runResponse.results, globalFilter, command),
+                        `bulk-exec-${ts}.csv`,
+                        'text/csv',
+                      );
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
+                    title="필터 반영 CSV 내보내기">
+                    <Download className="w-3 h-3" /> CSV
+                  </button>
+                  <button onClick={() => {
+                      const ts = new Date().toISOString().slice(0, 19).replace(/[:]/g, '-');
+                      downloadBlob(
+                        resultsToTxt(runResponse.results, globalFilter, command),
+                        `bulk-exec-${ts}.txt`,
+                        'text/plain',
+                      );
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
+                    title="필터 반영 텍스트 내보내기">
+                    <Download className="w-3 h-3" /> TXT
+                  </button>
+                  <button onClick={async () => {
+                      const ok = await copyToClipboard(resultsToTxt(runResponse.results, globalFilter, command));
+                      setCopyToast(ok ? '클립보드에 복사됨' : '복사 실패');
+                      setTimeout(() => setCopyToast(null), 1500);
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-md"
+                    title="필터 반영 결과 클립보드 복사">
+                    <FileText className="w-3 h-3" /> 복사
+                  </button>
+                </div>
               </div>
             </header>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30 text-left">
-                    <th className="w-7"></th>
-                    <th className="px-3 py-2 text-xs font-medium text-muted-foreground">호스트</th>
-                    <th className="px-3 py-2 text-xs font-medium text-muted-foreground">상태</th>
-                    <th className="px-3 py-2 text-xs font-medium text-muted-foreground">exit</th>
-                    <th className="px-3 py-2 text-xs font-medium text-muted-foreground">소요</th>
-                    <th className="px-3 py-2 text-xs font-medium text-muted-foreground">요약</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {runResponse.results.map((r) => (
-                    <ResultRow key={r.host} result={r} globalFilter={globalFilter} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+
+            {copyToast && (
+              <div className="px-5 py-1.5 text-[11px] bg-primary/5 text-primary border-b border-primary/20">
+                {copyToast}
+              </div>
+            )}
+
+            {resultView === 'summary' ? (
+              <SummaryResultsTable results={runResponse.results} globalFilter={globalFilter} />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30 text-left">
+                      <th className="w-7"></th>
+                      <th className="px-3 py-2 text-xs font-medium text-muted-foreground">호스트</th>
+                      <th className="px-3 py-2 text-xs font-medium text-muted-foreground">상태</th>
+                      <th className="px-3 py-2 text-xs font-medium text-muted-foreground">exit</th>
+                      <th className="px-3 py-2 text-xs font-medium text-muted-foreground">소요</th>
+                      <th className="px-3 py-2 text-xs font-medium text-muted-foreground">요약</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {runResponse.results.map((r) => (
+                      <ResultRow key={r.host} result={r} globalFilter={globalFilter} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         )}
         </div>

@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from kubernetes import client, config
+from sqlalchemy.orm import Session
 
 from app.models import Cluster, Addon, StatusEnum
 from app.services.kubeconfig import ensure_kubeconfig_file
@@ -39,9 +40,10 @@ class CheckResult:
 class BaseChecker(ABC):
     """모든 Checker의 추상 기반 클래스"""
 
-    def __init__(self, cluster: Cluster, addon: Addon):
+    def __init__(self, cluster: Cluster, addon: Addon, db: Optional[Session] = None):
         self.cluster = cluster
         self.addon = addon
+        self.db = db   # 스냅샷(etcd_systemd / etcdctl_config) 조회용 — 없어도 동작
         self._v1: Optional[client.CoreV1Api] = None
 
     # ── K8s client (lazy init, 재사용) ──────────────────────

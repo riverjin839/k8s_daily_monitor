@@ -172,6 +172,22 @@ export const versionsApi = {
     api.post<import('@/types').EtcdSystemdCollectResponse>(
       `/clusters/${clusterId}/collect-etcd-systemd`, payload, { signal },
     ),
+  collectKernelParams: (
+    clusterId: string,
+    payload: import('@/types').KernelParamsCollectRequest,
+    signal?: AbortSignal,
+  ) =>
+    api.post<import('@/types').KernelParamsCollectResponse>(
+      `/clusters/${clusterId}/collect-kernel-params`, payload, { signal },
+    ),
+  collectEtcdctlConfig: (
+    clusterId: string,
+    payload: import('@/types').EtcdctlConfigCollectRequest,
+    signal?: AbortSignal,
+  ) =>
+    api.post<import('@/types').EtcdctlConfigCollectResponse>(
+      `/clusters/${clusterId}/collect-etcdctl-config`, payload, { signal },
+    ),
   current: (clusterId: string) =>
     api.get<{ clusterId: string; components: ComponentSnapshot[] }>(
       `/clusters/${clusterId}/versions/current`,

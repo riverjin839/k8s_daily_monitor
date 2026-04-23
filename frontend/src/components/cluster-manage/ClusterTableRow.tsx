@@ -209,12 +209,26 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           ? <span className="font-mono text-foreground">{cluster.maxPod}</span>
           : <span className="text-muted-foreground/60 text-xs">-</span>}
       </td>
-      <td className="px-3 py-2.5 max-w-[180px]">
+      <td className="px-3 py-2.5 max-w-[220px]">
         <p className="text-[11px] font-mono text-muted-foreground truncate" title={cluster.apiEndpoint}>
           {cluster.apiEndpoint}
         </p>
+        <div className="flex flex-wrap gap-1 mt-0.5">
+          {cluster.k8sVersion && (
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-500 border border-sky-500/20">
+              k8s {cluster.k8sVersion}
+            </span>
+          )}
+          {cluster.ciliumVersion && (
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-500 border border-cyan-500/20">
+              cilium {cluster.ciliumVersion}
+            </span>
+          )}
+        </div>
         {cluster.nodeCount && (
-          <p className="text-[10px] text-muted-foreground/60">노드 {cluster.nodeCount}개</p>
+          <p className="text-[10px] text-muted-foreground/60 mt-0.5" title={cluster.nodeIps ?? ''}>
+            노드 {cluster.nodeCount}개
+          </p>
         )}
       </td>
       <td className="px-3 py-2.5">

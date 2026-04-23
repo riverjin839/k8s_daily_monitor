@@ -50,6 +50,10 @@ class Cluster(Base):
     bond1_mac = Column(String(50), nullable=True)
     bgp_enabled = Column(Boolean, nullable=True, default=False)   # BGP 설정 여부
     as_number = Column(String(20), nullable=True)                  # BGP AS 번호
+    # 자동 수집되는 버전 정보
+    k8s_version = Column(String(32), nullable=True)                # 예: v1.29.3
+    cilium_version = Column(String(32), nullable=True)             # 예: 1.16.3 (image tag)
+    node_ips = Column(Text, nullable=True)                         # JSON 배열 (InternalIP 목록)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

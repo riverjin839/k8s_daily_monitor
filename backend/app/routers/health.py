@@ -283,7 +283,17 @@ def _extract_addon_value(addon: Addon) -> str:
     if addon_type == "etcd-leader":
         db_mb = d.get("db_size_mb", "")
         members = d.get("member_count", "")
-        return f"DB:{db_mb}MB, Members:{members}" if db_mb else "-"
+        src = d.get("source")
+        if db_mb:
+            suffix = {
+                "etcdctl_snapshot": " · snapshot",
+                "systemd_snapshot": " · systemd",
+            }.get(src, "")
+            return f"DB:{db_mb}MB, Members:{members}{suffix}"
+        if src == "systemd_snapshot":
+            active = d.get("active_states", [])
+            return f"systemd · {sum(1 for s in active if s == 'active')}/{len(active)} active" if active else "systemd"
+        return "-"
 
     if addon_type == "node-check":
         ready = d.get("ready", 0)

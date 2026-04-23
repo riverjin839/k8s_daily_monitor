@@ -4,7 +4,6 @@ import { formatDateTime } from '@/lib/utils';
 import {
   SummaryStats,
   AddonGrid,
-  HistoryLog,
   AddClusterModal,
   AddAddonModal,
   MetricCardGrid,
@@ -17,7 +16,7 @@ import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar, DebugLogPanel } from '@/components/common';
 import { useClusterStore } from '@/stores/clusterStore';
 import { usePlaybookStore } from '@/stores/playbookStore';
-import { useClusters, useSummary, useAddons, useLogs, useHealthCheck, useCreateAddon, useDeleteAddon, useAddonHealthCheck } from '@/hooks/useCluster';
+import { useClusters, useSummary, useAddons, useHealthCheck, useCreateAddon, useDeleteAddon, useAddonHealthCheck } from '@/hooks/useCluster';
 import { useDashboardPlaybooks, useRunPlaybook, useDeletePlaybook, useToggleDashboard, useUpdatePlaybook } from '@/hooks/usePlaybook';
 import { useMetricCards, useMetricResults, useDeleteMetricCard } from '@/hooks/useMetricCards';
 import { useTasks } from '@/hooks/useTasks';
@@ -154,12 +153,11 @@ export function Dashboard() {
   const [editingPlaybook, setEditingPlaybook] = useState<Playbook | null>(null);
   const [showKubeconfig, setShowKubeconfig] = useState(false);
   const [editingMetricCard, setEditingMetricCard] = useState<MetricCard | null>(null);
-  const { clusters, summary, addons, logs, isChecking, lastCheckTime } = useClusterStore();
+  const { clusters, summary, addons, isChecking, lastCheckTime } = useClusterStore();
 
   // Queries
   const { isLoading: clustersLoading } = useClusters();
   const { isLoading: summaryLoading } = useSummary();
-  const { isLoading: logsLoading } = useLogs();
 
   // 선택된 클러스터의 애드온 로드
   const activeClusterId = selectedClusterId || clusters[0]?.id || '';
@@ -251,23 +249,68 @@ export function Dashboard() {
   return (
     <div className="min-h-screen bg-background">
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-20 px-6 py-2 bg-background/95 backdrop-blur border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="font-bold text-sm tracking-tight">K8s Daily Monitor</h1>
-          {lastCheckTime && (
-            <p className="text-[11px] text-muted-foreground font-mono">
-              Last check: {formatDateTime(lastCheckTime)}
-            </p>
+      <div className="sticky top-0 z-20 px-6 py-2 bg-background/95 backdrop-blur border-b border-border flex items-center gap-3">
+        <h1 className="font-bold text-sm tracking-tight">K8s Daily Monitor</h1>
+        {lastCheckTime && (
+          <p className="text-[11px] text-muted-foreground font-mono">
+            Last: {formatDateTime(lastCheckTime)}
+          </p>
+        )}
+
+        <div className="ml-auto flex items-center gap-1.5">
+          <button
+            onClick={() => setShowAddCluster(true)}
+            className="px-2.5 py-1 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors flex items-center gap-1"
+          >
+            <Plus className="w-3 h-3" /> Cluster
+          </button>
+          {clusters.length > 0 && (
+            <button
+              onClick={() => setShowAddAddon(true)}
+              className="px-2.5 py-1 text-xs font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border border-emerald-500/20 rounded-lg transition-colors flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" /> Check
+            </button>
           )}
+          <button
+            onClick={() => { setEditingMetricCard(null); setShowAddMetric(true); }}
+            className="px-2.5 py-1 text-xs font-medium bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 border border-purple-500/20 rounded-lg transition-colors flex items-center gap-1"
+          >
+            <Plus className="w-3 h-3" /> Metric
+          </button>
+          <div className="w-px h-4 bg-border mx-0.5" />
+          <button
+            onClick={() => handleDailyReport('md')}
+            className="px-2.5 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1"
+            title="Daily Report (markdown)"
+          >
+            <Download className="w-3 h-3" /> .md
+          </button>
+          <button
+            onClick={() => handleDailyReport('csv')}
+            className="px-2.5 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1"
+            title="Daily Report (csv)"
+          >
+            <Download className="w-3 h-3" /> .csv
+          </button>
+          {selectedClusterId && (
+            <button
+              onClick={() => setShowKubeconfig(true)}
+              className="px-2.5 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+            >
+              Kubeconfig
+            </button>
+          )}
+          <div className="w-px h-4 bg-border mx-0.5" />
+          <button
+            onClick={handleRunCheck}
+            disabled={isChecking}
+            className="px-3 py-1 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 mac-shadow"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
+            {isChecking ? 'Checking...' : 'Run Check'}
+          </button>
         </div>
-        <button
-          onClick={handleRunCheck}
-          disabled={isChecking}
-          className="px-3.5 py-1.5 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50 mac-shadow"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
-          {isChecking ? 'Checking...' : 'Run Check'}
-        </button>
       </div>
 
       <div className="max-w-[1800px] mx-auto px-4 py-3 flex gap-3">
@@ -293,46 +336,6 @@ export function Dashboard() {
 
         {/* ── Cluster Status ─────────────────────────────────────────────── */}
         <MacCard title="Cluster Status" bodyPadding="p-4">
-          {/* Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                onClick={() => setShowAddCluster(true)}
-                className="px-2.5 py-1 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
-              >
-                + Add Cluster
-              </button>
-              {clusters.length > 0 && (
-                <button
-                  onClick={() => setShowAddAddon(true)}
-                  className="px-2.5 py-1 text-xs font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border border-emerald-500/20 rounded-lg transition-colors flex items-center gap-1"
-                >
-                  <Plus className="w-3 h-3" /> Add Check
-                </button>
-              )}
-              {selectedClusterId && (
-                <button
-                  onClick={() => setShowKubeconfig(true)}
-                  className="px-2.5 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
-                >
-                  Kubeconfig
-                </button>
-              )}
-              <button
-                onClick={() => handleDailyReport('md')}
-                className="px-2.5 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1"
-              >
-                <Download className="w-3 h-3" /> .md
-              </button>
-              <button
-                onClick={() => handleDailyReport('csv')}
-                className="px-2.5 py-1 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-1"
-              >
-                <Download className="w-3 h-3" /> .csv
-              </button>
-            </div>
-          </div>
-
           {selectedClusterId === null ? (
             <ClusterOverviewGrid clusters={clusters} addons={addons} onSelectCluster={setSelectedClusterId} />
           ) : (
@@ -367,17 +370,9 @@ export function Dashboard() {
 
         {/* ── Prometheus Insights (우측 컬럼) ─────────────────────────────── */}
         <MacCard title="Prometheus Insights" bodyPadding="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs">
-              <Activity className="w-4 h-4 text-primary" />
-              <span>{metricCards.length} cards</span>
-            </div>
-            <button
-              onClick={() => { setEditingMetricCard(null); setShowAddMetric(true); }}
-              className="px-2.5 py-1 text-xs font-medium bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 border border-purple-500/20 rounded-lg transition-colors flex items-center gap-1"
-            >
-              <Plus className="w-3 h-3" /> Metric
-            </button>
+          <div className="flex items-center gap-2 text-muted-foreground text-xs mb-3">
+            <Activity className="w-4 h-4 text-primary" />
+            <span>{metricCards.length} cards</span>
           </div>
           <MetricCardGrid
             cards={metricCards}
@@ -426,16 +421,6 @@ export function Dashboard() {
             />
           </MacCard>
         </div>
-
-        {/* ── History Log ───────────────────────────────────────────────── */}
-        <MacCard title="Recent Check History" bodyPadding="p-0">
-          <HistoryLog
-            logs={logs}
-            isLoading={logsLoading}
-            maxItems={10}
-            onViewAll={() => console.log('View all logs')}
-          />
-        </MacCard>
 
       </main>
       </div>

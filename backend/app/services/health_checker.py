@@ -142,7 +142,7 @@ class HealthChecker:
         """addon.type에 맞는 Checker를 찾아 실행 (Strategy Pattern)."""
         checker_cls = CHECKER_REGISTRY.get(addon.type)
         if checker_cls:
-            return checker_cls(cluster, addon).safe_check()
+            return checker_cls(cluster, addon, db=self.db).safe_check()
 
         # fallback: ansible playbook 또는 HTTP 체크
         try:

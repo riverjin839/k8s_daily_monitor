@@ -6,19 +6,19 @@
   /* ── macOS-inspired Light theme (default) ────────────────────────────────── */
   :root {
     --background: 190 55% 96%;       /* aqua mist */
-    --foreground: 202 39% 18%;       /* deep ocean text */
+    --foreground: 202 55% 10%;       /* 더 진한 텍스트 — 가독성/명도 ↑ */
     --card: 0 0% 100%;
-    --card-foreground: 202 39% 18%;
+    --card-foreground: 202 55% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 202 39% 18%;
+    --popover-foreground: 202 55% 10%;
     --primary: 191 88% 41%;          /* aqua brand color */
     --primary-foreground: 0 0% 100%;
     --secondary: 191 52% 90%;
-    --secondary-foreground: 202 39% 18%;
+    --secondary-foreground: 202 55% 10%;
     --muted: 191 45% 92%;
-    --muted-foreground: 202 30% 26%;  /* aqua 테마 + 가독성: 36% → 26% 로 진하게 */
+    --muted-foreground: 202 40% 22%;  /* 26% → 22% 로 더 진하게 */
     --accent: 183 72% 86%;
-    --accent-foreground: 202 39% 18%;
+    --accent-foreground: 202 55% 10%;
     --destructive: 4 86% 58%;
     --destructive-foreground: 0 0% 100%;
     --border: 190 40% 82%;
@@ -62,19 +62,19 @@
   /* ── Legacy light class (keep for transition) ─────────────────────────────── */
   html.light {
     --background: 190 55% 96%;
-    --foreground: 202 39% 18%;
+    --foreground: 202 55% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 202 39% 18%;
+    --card-foreground: 202 55% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 202 39% 18%;
+    --popover-foreground: 202 55% 10%;
     --primary: 191 88% 41%;
     --primary-foreground: 0 0% 100%;
     --secondary: 191 52% 90%;
-    --secondary-foreground: 202 39% 18%;
+    --secondary-foreground: 202 55% 10%;
     --muted: 191 45% 92%;
-    --muted-foreground: 202 30% 26%;  /* aqua + 가독성 */
+    --muted-foreground: 202 40% 22%;
     --accent: 183 72% 86%;
-    --accent-foreground: 202 39% 18%;
+    --accent-foreground: 202 55% 10%;
     --destructive: 4 86% 58%;
     --destructive-foreground: 0 0% 100%;
     --border: 190 40% 82%;
@@ -97,30 +97,51 @@
     background-image: radial-gradient(circle at 20% 0%, hsl(184 90% 82% / 0.28), transparent 34%),
       radial-gradient(circle at 80% 20%, hsl(196 95% 78% / 0.22), transparent 30%);
     font-feature-settings: "rlig" 1, "calt" 1;
-    /* 기본 본문 가독성 — 16px (Tailwind text-base) */
-    font-size: 16px;
-    line-height: 1.55;
+    /* 기본 본문 — 17px + medium 가중치로 전반 가독성/명도 ↑ */
+    font-size: 17px;
+    line-height: 1.6;
+    font-weight: 500;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.005em;
   }
+
+  /* 기본 heading 은 extrabold 까지 올려 대비 강조 */
+  h1 { font-weight: 800; letter-spacing: -0.015em; }
+  h2 { font-weight: 700; letter-spacing: -0.01em; }
+  h3 { font-weight: 700; }
+  h4, h5, h6 { font-weight: 600; }
+
+  /* label / strong 도 또렷하게 */
+  label { font-weight: 600; }
+  strong, b { font-weight: 700; }
 }
 
-/* ── 가독성 개선 — 너무 작은 임의 크기를 floor 처리 ────────────────────────── */
-/* 9~10px 로 쓰인 텍스트가 많아 읽기 어려움. 12~13px 로 올림. */
-.text-\[9px\]  { font-size: 12px !important; line-height: 1.4; }
-.text-\[10px\] { font-size: 12px !important; line-height: 1.4; }
-.text-\[11px\] { font-size: 13px !important; line-height: 1.45; }
+/* ── 가독성 개선 — 너무 작은 임의 크기를 floor + weight 보정 ─────────────── */
+/* 9~11px 로 쓰인 텍스트가 많아 읽기 어려움 → 12.5~13.5px 로 올리고 medium 가중치 */
+.text-\[9px\]  { font-size: 12.5px !important; line-height: 1.45; font-weight: 500; }
+.text-\[10px\] { font-size: 12.5px !important; line-height: 1.45; font-weight: 500; }
+.text-\[11px\] { font-size: 13.5px !important; line-height: 1.5;  font-weight: 500; }
 
 /* 단, 코드 블록(pre/code)은 pre 자체 규칙을 따르게 상속 */
 pre .text-\[11px\], pre .text-\[10px\], pre .text-\[9px\],
 code .text-\[11px\], code .text-\[10px\], code .text-\[9px\] {
   font-size: inherit !important;
+  font-weight: inherit;
 }
 
-/* text-xs / text-sm 모두 한 단계 올림 — 메타데이터가 잘 보이게 */
-.text-xs { font-size: 13px; line-height: 1.5; }
-.text-sm { font-size: 14.5px; line-height: 1.55; }
-/* text-base 는 기본 16px */
+/* text-xs / text-sm / text-base 전반 + medium 가중치 */
+.text-xs   { font-size: 13.5px; line-height: 1.5;  font-weight: 500; }
+.text-sm   { font-size: 15px;   line-height: 1.55; font-weight: 500; }
+.text-base { font-size: 17px;   line-height: 1.6;  font-weight: 500; }
+.text-lg   { font-size: 19px;   line-height: 1.55; font-weight: 600; }
+.text-xl   { font-size: 22px;   line-height: 1.4;  font-weight: 700; }
+.text-2xl  { font-size: 26px;   line-height: 1.35; font-weight: 700; }
+
+/* font-medium 기본값 보강 (Tailwind 500) */
+.font-medium   { font-weight: 600; }
+.font-semibold { font-weight: 700; }
+.font-bold     { font-weight: 800; }
 
 /* ── macOS-style Card shadow utility ──────────────────────────────────────── */
 .mac-shadow {

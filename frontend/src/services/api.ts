@@ -234,26 +234,43 @@ export const versionsApi = {
     api.post<{ clusterId: string; changed: number; errors: string[]; collectedAt: string }>(
       `/clusters/${clusterId}/collect-versions`, undefined, { signal },
     ),
-  collectEtcdSystemd: (clusterId: string, payload: import('@/types').EtcdSystemdCollectRequest, signal?: AbortSignal) =>
-    api.post<import('@/types').EtcdSystemdCollectResponse>(
-      `/clusters/${clusterId}/collect-etcd-systemd`, payload, { signal },
-    ),
+  collectEtcdSystemd: (clusterId: string, payload: import('@/types').EtcdSystemdCollectRequest, signal?: AbortSignal) => {
+    const n = payload.hosts.length;
+    const parallel = payload.parallelism ?? 10;
+    const perHost = ((payload.connectTimeout ?? 8) + 25) * 1000;
+    const est = Math.ceil(n / parallel) * perHost + 10_000;
+    const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
+    return api.post<import('@/types').EtcdSystemdCollectResponse>(
+      `/clusters/${clusterId}/collect-etcd-systemd`, payload, { signal, timeout },
+    );
+  },
   collectKernelParams: (
     clusterId: string,
     payload: import('@/types').KernelParamsCollectRequest,
     signal?: AbortSignal,
-  ) =>
-    api.post<import('@/types').KernelParamsCollectResponse>(
-      `/clusters/${clusterId}/collect-kernel-params`, payload, { signal },
-    ),
+  ) => {
+    const n = payload.hosts.length;
+    const parallel = payload.parallelism ?? 10;
+    const perHost = ((payload.connectTimeout ?? 8) + 20) * 1000;
+    const est = Math.ceil(n / parallel) * perHost + 10_000;
+    const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
+    return api.post<import('@/types').KernelParamsCollectResponse>(
+      `/clusters/${clusterId}/collect-kernel-params`, payload, { signal, timeout },
+    );
+  },
   collectEtcdctlConfig: (
     clusterId: string,
     payload: import('@/types').EtcdctlConfigCollectRequest,
     signal?: AbortSignal,
-  ) =>
-    api.post<import('@/types').EtcdctlConfigCollectResponse>(
-      `/clusters/${clusterId}/collect-etcdctl-config`, payload, { signal },
-    ),
+  ) => {
+    const n = payload.hosts.length;
+    const perHost = ((payload.connectTimeout ?? 8) + 20) * 1000;
+    const est = Math.ceil(n / 10) * perHost + 10_000;
+    const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
+    return api.post<import('@/types').EtcdctlConfigCollectResponse>(
+      `/clusters/${clusterId}/collect-etcdctl-config`, payload, { signal, timeout },
+    );
+  },
   current: (clusterId: string) =>
     api.get<{ clusterId: string; components: ComponentSnapshot[] }>(
       `/clusters/${clusterId}/versions/current`,

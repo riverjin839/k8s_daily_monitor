@@ -828,6 +828,10 @@ export interface EtcdSystemdCollectRequest {
   privateKey?: string;
   useSudo?: boolean;
   connectTimeout?: number;
+  envFiles?: string[];
+  parallelism?: number;
+  chunkSize?: number;
+  chunkPauseMs?: number;
 }
 
 export interface EtcdSystemdPerHost {
@@ -863,6 +867,9 @@ export interface KernelParamsCollectRequest {
   connectTimeout?: number;
   params?: string[];
   defaultPrefixes?: string[];
+  parallelism?: number;
+  chunkSize?: number;
+  chunkPauseMs?: number;
 }
 
 export interface KernelParamsPerHost {

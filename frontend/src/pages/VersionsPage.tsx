@@ -10,7 +10,7 @@ import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, SkeletonCard } fro
 import { formatApiError } from '@/lib/utils';
 import { versionsApi, type ComponentSnapshot } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
-import { EtcdSystemdModal } from '@/components/versions';
+import { EtcdSystemdModal, KernelParamsCollectModal } from '@/components/versions';
 import { Database } from 'lucide-react';
 
 // ── 유틸 ────────────────────────────────────────────────────────────────────
@@ -19,6 +19,8 @@ const CATEGORY_META: Record<string, { label: string; icon: React.ComponentType<{
   control_plane: { label: 'Control Plane', icon: Server,     cls: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' },
   kubelet:       { label: 'Kubelet',        icon: Cpu,        cls: 'bg-sky-500/10 text-sky-400 border-sky-500/30' },
   cni:           { label: 'CNI / Cilium',   icon: Network,    cls: 'bg-purple-500/10 text-purple-400 border-purple-500/30' },
+  kernel:        { label: 'Kernel (sysctl)', icon: Cpu,       cls: 'bg-amber-500/10 text-amber-500 border-amber-500/30' },
+  etcdctl:       { label: 'etcdctl',        icon: Settings2,  cls: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' },
   cluster:       { label: 'Cluster',        icon: Server,     cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30' },
   other:         { label: 'Other',          icon: Settings2,  cls: 'bg-muted text-muted-foreground border-border' },
 };
@@ -226,6 +228,7 @@ export function VersionsPage() {
   const toast = useToast();
   const [clusterId, setClusterId] = useState<string>('');
   const [etcdModalOpen, setEtcdModalOpen] = useState(false);
+  const [kernelModalOpen, setKernelModalOpen] = useState(false);
 
   // 사이드바 진입 시 자동으로 첫 클러스터 선택
   useEffect(() => {
@@ -272,8 +275,8 @@ export function VersionsPage() {
       if (!byCategory.has(key)) byCategory.set(key, []);
       byCategory.get(key)!.push(c);
     }
-    // control_plane 먼저, 그 다음 kubelet, cni
-    const order = ['control_plane', 'cni', 'kubelet', 'other'];
+    // control_plane 먼저, 그 다음 cni, kubelet, kernel, etcdctl, other
+    const order = ['control_plane', 'cni', 'kubelet', 'kernel', 'etcdctl', 'other'];
     return order.filter((k) => byCategory.has(k)).map((k) => ({
       category: k,
       items: byCategory.get(k)!.sort((a, b) => a.component.localeCompare(b.component)),
@@ -321,6 +324,14 @@ export function VersionsPage() {
               >
                 <Database className="w-4 h-4" />
                 etcd (systemd)
+              </button>
+              <button
+                onClick={() => setKernelModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors"
+                title="노드별 sysctl 커널 파라미터 — SSH 로 수집 (값 변경시 히스토리 누적)"
+              >
+                <Cpu className="w-4 h-4" />
+                커널 파라미터
               </button>
               {collect.isPending ? (
                 <button
@@ -447,6 +458,11 @@ export function VersionsPage() {
         open={etcdModalOpen && !!clusterId}
         clusterId={clusterId}
         onClose={() => setEtcdModalOpen(false)}
+      />
+      <KernelParamsCollectModal
+        open={kernelModalOpen && !!clusterId}
+        clusterId={clusterId}
+        onClose={() => setKernelModalOpen(false)}
       />
     </div>
   );

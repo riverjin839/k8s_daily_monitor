@@ -41,7 +41,10 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    <div
+      className="grid gap-3"
+      style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}
+    >
       {clusters.map((cluster) => {
         const clusterAddons = addons[cluster.id] ?? [];
         const healthy  = clusterAddons.filter((a) => a.status === 'healthy').length;
@@ -60,10 +63,10 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
           <button
             key={cluster.id}
             onClick={() => onSelectCluster(cluster.id)}
-            className={`bg-card border rounded-xl p-5 text-left hover:shadow-md transition-all group ${statusColor.border} hover:border-primary/40`}
+            className={`bg-card border rounded-xl p-4 text-left hover:shadow-md transition-all group ${statusColor.border} hover:border-primary/40`}
           >
             {/* Header */}
-            <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start justify-between mb-3 min-w-0">
               <div className="flex items-center gap-2 min-w-0">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${statusColor.bg}`}>
                   <Server className={`w-4 h-4 ${statusColor.text}`} />
@@ -81,7 +84,7 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
             </div>
 
             {/* Status label */}
-            <div className={`text-xs font-medium px-2 py-1 rounded-full inline-flex items-center gap-1.5 mb-4 ${statusColor.bg} ${statusColor.text}`}>
+            <div className={`text-xs font-medium px-2 py-1 rounded-full inline-flex items-center gap-1.5 mb-3 ${statusColor.bg} ${statusColor.text}`}>
               {cluster.status === 'healthy'  && <CheckCircle className="w-3 h-3" />}
               {cluster.status === 'warning'  && <AlertTriangle className="w-3 h-3" />}
               {cluster.status === 'critical' && <XCircle className="w-3 h-3" />}
@@ -134,7 +137,7 @@ function ClusterOverviewGrid({ clusters, addons, onSelectCluster }: ClusterOverv
             )}
 
             {cluster.nodeCount != null && (
-              <p className="text-xs text-muted-foreground mt-3">노드 {cluster.nodeCount}개</p>
+              <p className="text-xs text-muted-foreground mt-2">노드 {cluster.nodeCount}개</p>
             )}
           </button>
         );
@@ -249,15 +252,15 @@ export function Dashboard() {
   return (
     <div className="min-h-screen bg-background">
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-20 px-6 py-2 bg-background/95 backdrop-blur border-b border-border flex items-center gap-3">
-        <h1 className="font-bold text-sm tracking-tight">K8s Daily Monitor</h1>
+      <div className="sticky top-0 z-20 px-4 lg:px-6 py-2 bg-background/95 backdrop-blur border-b border-border flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <h1 className="font-bold text-sm tracking-tight whitespace-nowrap">K8s Daily Monitor</h1>
         {lastCheckTime && (
-          <p className="text-[11px] text-muted-foreground font-mono">
+          <p className="text-[11px] text-muted-foreground font-mono hidden sm:block">
             Last: {formatDateTime(lastCheckTime)}
           </p>
         )}
 
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <button
             onClick={() => setShowAddCluster(true)}
             className="px-2.5 py-1 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors flex items-center gap-1"
@@ -313,7 +316,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="max-w-[1800px] mx-auto px-4 py-3 flex gap-3">
+      <div className="max-w-[1680px] mx-auto px-3 lg:px-4 py-3 flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={selectedClusterId}
@@ -331,8 +334,17 @@ export function Dashboard() {
           isLoading={summaryLoading}
         />
 
-        {/* 2-column grid: Cluster Status (메인) ↔ Prometheus Insights (우측) */}
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_minmax(420px,520px)] gap-3">
+        {/*
+          레이아웃 규칙
+            · "전체 현황" (selectedClusterId === null): ClusterOverviewGrid 를 full-width 로 펼쳐 노드 카드가 짤리지 않게.
+              Prometheus 는 그 아래 전체 폭으로 배치.
+            · 특정 클러스터 선택: 2-column (lg 이상에서) — AddonGrid 는 좁아도 잘 접힘.
+        */}
+        <div className={
+          selectedClusterId === null
+            ? 'space-y-3'
+            : 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(380px,480px)] gap-3'
+        }>
 
         {/* ── Cluster Status ─────────────────────────────────────────────── */}
         <MacCard title="Cluster Status" bodyPadding="p-4">
@@ -385,8 +397,8 @@ export function Dashboard() {
 
         </div>
 
-        {/* 2-column grid: Playbook Checks ↔ 작업/이슈 현황 */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+        {/* 2-column grid: Playbook Checks ↔ 작업/이슈 현황 (lg 부터 분할) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {/* ── Playbook Checks ──────────────────────────────────────────── */}
           {dashboardPlaybooks.length > 0 && (
             <MacCard title="Playbook Checks" bodyPadding="p-4">
@@ -412,7 +424,7 @@ export function Dashboard() {
 
           {/* ── 작업 / 이슈 현황 ─────────────────────────────────────────── */}
           <MacCard title="작업 / 이슈 현황" bodyPadding="p-4"
-            className={dashboardPlaybooks.length === 0 ? 'xl:col-span-2' : ''}>
+            className={dashboardPlaybooks.length === 0 ? 'lg:col-span-2' : ''}>
             <KanbanSummaryCharts
               tasks={allTasks}
               issues={allIssues}

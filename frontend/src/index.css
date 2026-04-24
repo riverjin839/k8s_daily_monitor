@@ -29,6 +29,26 @@
     --mac-yellow: #FEBC2E;
     --mac-green:  #28C840;
     --card-shadow: 0 4px 18px rgba(14, 116, 144, 0.16), 0 1px 4px rgba(14, 116, 144, 0.12);
+
+    /* ── Semantic status tokens — 모든 StatusBadge/StatusDot 에서 참조 ─ */
+    --status-healthy:     152 60% 40%;   /* emerald */
+    --status-healthy-bg:  152 70% 93%;
+    --status-warning:     32 90% 48%;    /* amber */
+    --status-warning-bg:  32 85% 93%;
+    --status-critical:    0 72% 51%;     /* red */
+    --status-critical-bg: 0 80% 95%;
+    --status-pending:     215 18% 50%;   /* slate (미연결) */
+    --status-pending-bg:  215 18% 93%;
+    --status-info:        199 85% 45%;   /* sky */
+    --status-info-bg:     199 85% 94%;
+    --status-neutral:     215 12% 55%;
+    --status-neutral-bg:  215 12% 93%;
+
+    /* ── Motion — 모든 transition 기본값 통일 (Pre-delivery checklist 준수) ─ */
+    --motion-fast: 150ms;
+    --motion-base: 200ms;
+    --motion-slow: 300ms;
+    --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
   /* ── Dark theme ──────────────────────────────────────────────────────────── */
@@ -57,6 +77,25 @@
     --mac-yellow: #FEBC2E;
     --mac-green:  #28C840;
     --card-shadow: 0 2px 14px rgba(0,0,0,0.3);
+
+    /* Dark mode status — 배경 채도 낮추고 전경 채도 유지 */
+    --status-healthy:     152 55% 55%;
+    --status-healthy-bg:  152 40% 15%;
+    --status-warning:     32 85% 58%;
+    --status-warning-bg:  32 40% 15%;
+    --status-critical:    0 72% 60%;
+    --status-critical-bg: 0 45% 15%;
+    --status-pending:     215 12% 65%;
+    --status-pending-bg:  215 12% 18%;
+    --status-info:        199 80% 55%;
+    --status-info-bg:     199 40% 15%;
+    --status-neutral:     215 8% 60%;
+    --status-neutral-bg:  215 8% 18%;
+
+    --motion-fast: 150ms;
+    --motion-base: 200ms;
+    --motion-slow: 300ms;
+    --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
   /* ── Legacy light class (keep for transition) ─────────────────────────────── */
@@ -162,10 +201,19 @@ select:focus-visible {
   outline: none;
 }
 
-/* ── 부드러운 transition 기본값 ───────────────────────────────────────────── */
+/* ── 부드러운 transition 기본값 — motion 토큰 참조 ────────────────────── */
 a, button {
-  transition-property: color, background-color, border-color, opacity, box-shadow;
-  transition-duration: 150ms;
+  transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--motion-ease);
+}
+button:not(:disabled):not([aria-disabled="true"]),
+a:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+button:disabled,
+button[aria-disabled="true"] {
+  cursor: not-allowed;
 }
 
 /* ── placeholder 가독성 개선 (너무 흐리면 안 보임) ───────────────────────── */
@@ -204,6 +252,45 @@ a, button {
 
 .animate-pulse-slow {
   animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ── Skeleton loading shimmer ──────────────────────────────────────────── */
+@keyframes skeleton-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted) / 0.5) 0%,
+    hsl(var(--muted) / 0.85) 50%,
+    hsl(var(--muted) / 0.5) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s var(--motion-ease) infinite;
+  border-radius: 6px;
+}
+
+/* ── Toast — slide-in/out from right ───────────────────────────────────── */
+@keyframes toast-in {
+  from { transform: translateX(110%); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+@keyframes toast-out {
+  from { transform: translateX(0);     opacity: 1; }
+  to   { transform: translateX(110%); opacity: 0; }
+}
+.toast-enter { animation: toast-in  var(--motion-base) var(--motion-ease); }
+.toast-exit  { animation: toast-out var(--motion-base) var(--motion-ease) forwards; }
+
+/* ── Prefers-reduced-motion — 모든 애니메이션/트랜지션 최소화 ────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ── Date input calendar icon (dark mode only) ─────────────────────────────── */

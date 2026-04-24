@@ -8,7 +8,8 @@ import { clustersApi, managementServersApi } from '@/services/api';
 import { useClusterStore } from '@/stores/clusterStore';
 import { AddClusterModal, KubeconfigEditModal } from '@/components/dashboard';
 import { Cluster, ManagementServer, ManagementServerCreate, Assignee } from '@/types';
-import { getStatusIcon, formatDateTime } from '@/lib/utils';
+import { getStatusIcon, formatDateTime, formatApiError } from '@/lib/utils';
+import { useToast } from '@/components/common';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 // ── Edit Cluster Modal ──────────────────────────────────────────────────────
@@ -381,6 +382,7 @@ export function SettingsPage() {
   });
 
   const deleteCluster = useDeleteCluster();
+  const toast = useToast();
 
   const handleDelete = async (cluster: Cluster) => {
     if (
@@ -393,10 +395,9 @@ export function SettingsPage() {
     setDeletingId(cluster.id);
     try {
       await deleteCluster.mutateAsync(cluster.id);
+      toast.success('클러스터 삭제됨', cluster.name);
     } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
-      const msg = axiosErr.response?.data?.detail ?? axiosErr.message ?? '삭제에 실패했습니다.';
-      alert(`삭제 실패: ${msg}`);
+      toast.error('삭제 실패', formatApiError(err));
     } finally {
       setDeletingId(null);
     }
@@ -437,9 +438,9 @@ export function SettingsPage() {
     if (!confirm(`관리서버 "${server.name}"을(를) 삭제하시겠습니까?`)) return;
     try {
       await deleteServerMutation.mutateAsync(server.id);
+      toast.success('관리서버 삭제됨', server.name);
     } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
-      alert(`삭제 실패: ${axiosErr.response?.data?.detail ?? axiosErr.message ?? '삭제에 실패했습니다.'}`);
+      toast.error('삭제 실패', formatApiError(err));
     }
   };
 

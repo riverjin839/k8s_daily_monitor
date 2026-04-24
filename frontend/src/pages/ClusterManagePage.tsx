@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ViewModeBar, DebugLogPanel } from '@/components/common';
+import { ViewModeBar, DebugLogPanel, useToast } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 import {
   Server, AlertTriangle, Search, ChevronDown,
   LayoutList, LayoutGrid,
@@ -50,6 +51,7 @@ export function ClusterManagePage() {
   const { clusters } = useClusterStore();
   useClusters();
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const [deletingId, setDeletingId]       = useState<string | null>(null);
   const [autoUpdatingId, setAutoUpdatingId] = useState<string | null>(null);
@@ -138,8 +140,9 @@ export function ClusterManagePage() {
     try {
       await clustersApi.delete(cluster.id);
       queryClient.invalidateQueries({ queryKey: ['clusters'] });
-    } catch {
-      alert('삭제에 실패했습니다.');
+      toast.success('클러스터 삭제됨', cluster.name);
+    } catch (e) {
+      toast.error('삭제 실패', formatApiError(e));
     } finally {
       setDeletingId(null);
     }
@@ -162,11 +165,9 @@ export function ClusterManagePage() {
       setDiffRows((data.diff ?? []) as DiffRow[]);
       setDiffWarnings(data.warnings ?? []);
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } }; message?: string; name?: string; code?: string };
-      if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') {
-        // 사용자 중지 — 무음
-      } else {
-        alert(`클러스터 정보 수집 실패: ${err.response?.data?.detail ?? err.message ?? '알 수 없는 오류'}`);
+      const err = e as { name?: string; code?: string };
+      if (err.name !== 'CanceledError' && err.code !== 'ERR_CANCELED') {
+        toast.error('클러스터 정보 수집 실패', formatApiError(e));
       }
     } finally {
       setAutoUpdatingId(null);
@@ -180,12 +181,12 @@ export function ClusterManagePage() {
     try {
       await clustersApi.autoUpdate(diffCluster.id);
       queryClient.invalidateQueries({ queryKey: ['clusters'] });
+      toast.success('클러스터 정보 갱신됨', diffCluster.name);
       setDiffCluster(null);
       setDiffRows([]);
       setDiffWarnings([]);
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } }; message?: string };
-      alert(`적용 실패: ${err.response?.data?.detail ?? err.message ?? '알 수 없는 오류'}`);
+      toast.error('적용 실패', formatApiError(e));
     } finally {
       setApplyingId(null);
     }

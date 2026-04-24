@@ -6,6 +6,8 @@ import { ArrowLeft, Loader2, RefreshCw, Share2, X } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { versionsApi, type VersionGraphNode, type VersionGraphEdge } from '@/services/api';
 import { useClusters } from '@/hooks/useCluster';
+import { useToast } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 
 // ── 타입별 색상 ────────────────────────────────────────────────────────────
 
@@ -110,6 +112,7 @@ export function VersionGraphPage() {
   const { clusterId: paramClusterId } = useParams<{ clusterId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const { data: clusters = [] } = useClusters();
   const [selectedId, setSelectedId] = useState<string>('');
 
@@ -174,9 +177,9 @@ export function VersionGraphPage() {
     try {
       await versionsApi.collect(selectedId);
       queryClient.invalidateQueries({ queryKey: ['versions'] });
+      toast.success('수집 완료');
     } catch (e) {
-      const err = e as { response?: { data?: { detail?: string } } };
-      alert(`수집 실패: ${err.response?.data?.detail ?? '오류'}`);
+      toast.error('수집 실패', formatApiError(e));
     }
   };
 

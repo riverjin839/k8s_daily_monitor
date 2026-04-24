@@ -34,6 +34,7 @@ import { TrendDigestPage } from '@/pages/TrendDigestPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar } from '@/components/layout';
 import { useSidebarStore } from '@/stores/sidebarStore';
+import { ToastProvider } from '@/components/common';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -97,10 +98,12 @@ function AppShell() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AppShell />
-        <AgentChat />
-      </BrowserRouter>
+      <ToastProvider>
+        <BrowserRouter>
+          <AppShell />
+          <AgentChat />
+        </BrowserRouter>
+      </ToastProvider>
     </QueryClientProvider>
   );
 }

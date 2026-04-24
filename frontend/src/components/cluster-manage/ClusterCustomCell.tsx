@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Cluster, ClusterCustomField } from '@/types';
 import { useUpdateClusterCustomValues } from '@/hooks/useClusterCustomFields';
+import { useToast } from '@/components/common';
 
 interface Props {
   cluster: Cluster;
@@ -15,6 +16,7 @@ function boolLabel(v: unknown): string {
 
 export function ClusterCustomCell({ cluster, field }: Props) {
   const mut = useUpdateClusterCustomValues();
+  const toast = useToast();
   const current = cluster.customValues?.[field.key];
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<string>(() => {
@@ -37,7 +39,7 @@ export function ClusterCustomCell({ cluster, field }: Props) {
       if (draft.trim() === '') val = null;
       else {
         const n = Number(draft);
-        if (!Number.isFinite(n)) return alert('숫자가 아닙니다.');
+        if (!Number.isFinite(n)) { toast.warning('숫자가 아닙니다', `입력값: "${draft}"`); return; }
         val = n;
       }
     }

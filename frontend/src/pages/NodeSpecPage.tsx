@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ClipboardCheck, Plus, Search, RefreshCw, Download, Upload, Trash2, Pencil,
-  Server, Cpu, HardDrive, MapPin, Loader2, Square, Copy, ClipboardPaste, FileDown,
+  Server, Cpu, HardDrive, MapPin, Square, Copy, ClipboardPaste, FileDown,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import {
-  ClusterSidebar, DebugLogPanel, ConfirmDialog, GridCell, InlineTextCell,
+  ClusterSidebar, DebugLogPanel, ConfirmDialog, GridCell, InlineTextCell, useToast,
+  SkeletonTable, EmptyState,
 } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useGridSelection } from '@/hooks/useGridSelection';
 import { nodeSpecsApi } from '@/services/api';
@@ -83,6 +85,7 @@ function downloadCsvTemplate() {
 export function NodeSpecPage() {
   const { data: clusters = [] } = useClusters();
   const qc = useQueryClient();
+  const toast = useToast();
 
   const [clusterId, setClusterId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<NodeSpecStatus | ''>('');
@@ -169,8 +172,7 @@ export function NodeSpecPage() {
       await nodeSpecsApi.update(id, patch);
       qc.invalidateQueries({ queryKey: ['node-specs'] });
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } }; message?: string };
-      alert(`저장 실패: ${err.response?.data?.detail ?? err.message}`);
+      toast.error('저장 실패', formatApiError(e));
     }
   };
 
@@ -187,23 +189,27 @@ export function NodeSpecPage() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['node-specs'] });
-      alert(`임포트 완료 — 신규 ${data.inserted} / 업데이트 ${data.updated} / 변경없음 ${data.skipped}` +
-        (data.errors.length ? `\n\n오류:\n${data.errors.join('\n')}` : ''));
+      toast.success(
+        '클러스터 임포트 완료',
+        `신규 ${data.inserted} · 업데이트 ${data.updated} · 변경없음 ${data.skipped}` +
+        (data.errors.length ? ` · 오류 ${data.errors.length}건` : ''),
+      );
     },
     onError: (e: unknown) => {
-      const err = e as { response?: { data?: { detail?: string } }; message?: string };
-      alert(`임포트 실패: ${err.response?.data?.detail ?? err.message ?? '알 수 없는 오류'}`);
+      toast.error('임포트 실패', formatApiError(e));
     },
   });
 
   const handleDelete = async () => {
     if (!confirmDelete) return;
     try {
+      const hostname = confirmDelete.hostname;
       await nodeSpecsApi.delete(confirmDelete.id);
       qc.invalidateQueries({ queryKey: ['node-specs'] });
       setConfirmDelete(null);
+      toast.success('서버스펙 삭제됨', hostname);
     } catch (e) {
-      alert(`삭제 실패: ${(e as Error).message}`);
+      toast.error('삭제 실패', formatApiError(e));
     }
   };
 
@@ -345,14 +351,16 @@ export function NodeSpecPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {listQ.isLoading && (
-                    <tr><td colSpan={13} className="text-center py-10 text-muted-foreground">
-                      <Loader2 className="w-4 h-4 inline animate-spin mr-1" /> 로딩 중...
-                    </td></tr>
-                  )}
+                  {listQ.isLoading && <SkeletonTable rows={6} columns={13} />}
                   {!listQ.isLoading && rows.length === 0 && (
-                    <tr><td colSpan={13} className="text-center py-12 text-sm text-muted-foreground">
-                      등록된 서버가 없습니다. "클러스터 임포트" 또는 "신규 등록" 을 사용하세요.
+                    <tr><td colSpan={13} className="p-0">
+                      <EmptyState
+                        icon={ClipboardCheck}
+                        title="등록된 서버가 없습니다"
+                        description="kubeconfig 가 등록된 클러스터라면 '클러스터 임포트' 로 자동 생성 가능합니다."
+                        action={{ label: '신규 등록', onClick: () => setCreating(true) }}
+                        secondaryAction={clusterId ? { label: '클러스터 임포트', onClick: () => setConfirmImport(true) } : undefined}
+                      />
                     </td></tr>
                   )}
                   {rows.map((r) => (

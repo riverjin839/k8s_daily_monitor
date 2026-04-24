@@ -3,6 +3,8 @@ import { X, Plus, Trash2, Save, Loader2, GripVertical, Settings2 } from 'lucide-
 import type {
   ClusterCustomField, ClusterCustomFieldType, ClusterCustomFieldCreate,
 } from '@/types';
+import { useToast } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 import {
   useClusterCustomFields, useCreateClusterCustomField,
   useUpdateClusterCustomField, useDeleteClusterCustomField,
@@ -38,6 +40,7 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
   const createMut = useCreateClusterCustomField();
   const updateMut = useUpdateClusterCustomField();
   const deleteMut = useDeleteClusterCustomField();
+  const toast = useToast();
 
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<ClusterCustomFieldCreate>({
@@ -96,8 +99,9 @@ export function ClusterCustomFieldsManager({ open, onClose }: Props) {
     if (!confirm(`커스텀 컬럼 "${f.label}" 을(를) 삭제하면 저장된 값도 모든 클러스터에서 사라집니다. 계속할까요?`)) return;
     try {
       await deleteMut.mutateAsync(f.id);
+      toast.success('커스텀 컬럼 삭제됨', f.label);
     } catch (e: unknown) {
-      alert(`삭제 실패: ${(e as Error).message}`);
+      toast.error('삭제 실패', formatApiError(e));
     }
   };
 

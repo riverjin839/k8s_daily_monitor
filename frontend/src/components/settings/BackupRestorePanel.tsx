@@ -6,7 +6,8 @@ import {
 } from 'lucide-react';
 import { backupApi } from '@/services/api';
 import type { BackupImportResponse } from '@/services/api';
-import { ConfirmDialog } from '@/components/common';
+import { ConfirmDialog, useToast } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 
 type Mode = 'merge' | 'replace';
 
@@ -18,6 +19,7 @@ function formatBytes(n: number): string {
 
 export function BackupRestorePanel() {
   // 현재 DB 메타
+  const toast = useToast();
   const metaQ = useQuery({
     queryKey: ['backup-meta'],
     queryFn: () => backupApi.meta().then((r) => r.data),
@@ -57,8 +59,9 @@ export function BackupRestorePanel() {
       a.download = `k8s-monitor-backup-${ts}.json`;
       a.click();
       URL.revokeObjectURL(url);
+      toast.success('백업 파일 다운로드');
     } catch (e: unknown) {
-      alert(`내보내기 실패: ${(e as Error).message}`);
+      toast.error('내보내기 실패', formatApiError(e));
     } finally {
       setExporting(false);
     }

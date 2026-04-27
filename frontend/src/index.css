@@ -3,32 +3,32 @@
 @tailwind utilities;
 
 @layer base {
-  /* ── macOS-inspired Light theme (default) ────────────────────────────────── */
+  /* ── Apple-inspired Light theme (default) ────────────────────────────────── */
   :root {
-    --background: 190 55% 96%;       /* aqua mist */
-    --foreground: 202 55% 10%;       /* 더 진한 텍스트 — 가독성/명도 ↑ */
+    --background: 220 20% 98%;
+    --foreground: 220 18% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 202 55% 10%;
+    --card-foreground: 220 18% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 202 55% 10%;
-    --primary: 191 88% 41%;          /* aqua brand color */
+    --popover-foreground: 220 18% 12%;
+    --primary: 211 100% 50%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 191 52% 90%;
-    --secondary-foreground: 202 55% 10%;
-    --muted: 191 45% 92%;
-    --muted-foreground: 202 40% 22%;  /* 26% → 22% 로 더 진하게 */
-    --accent: 183 72% 86%;
-    --accent-foreground: 202 55% 10%;
+    --secondary: 220 18% 94%;
+    --secondary-foreground: 220 18% 12%;
+    --muted: 220 14% 95%;
+    --muted-foreground: 220 10% 35%;
+    --accent: 213 100% 95%;
+    --accent-foreground: 220 18% 12%;
     --destructive: 4 86% 58%;
     --destructive-foreground: 0 0% 100%;
-    --border: 190 40% 82%;
-    --input: 191 52% 90%;
-    --ring: 191 88% 41%;
-    --radius: 0.875rem;
+    --border: 220 13% 87%;
+    --input: 220 13% 90%;
+    --ring: 211 100% 50%;
+    --radius: 1rem;
     --mac-red:    #FF5F57;
     --mac-yellow: #FEBC2E;
     --mac-green:  #28C840;
-    --card-shadow: 0 4px 18px rgba(14, 116, 144, 0.16), 0 1px 4px rgba(14, 116, 144, 0.12);
+    --card-shadow: 0 16px 34px rgba(17, 24, 39, 0.08), 0 2px 8px rgba(17, 24, 39, 0.06);
 
     /* ── Semantic status tokens — 모든 StatusBadge/StatusDot 에서 참조 ─ */
     --status-healthy:     152 60% 40%;   /* emerald */
@@ -53,30 +53,30 @@
 
   /* ── Dark theme ──────────────────────────────────────────────────────────── */
   html.dark {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 7%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 7%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 217 91% 60%;
+    --background: 220 18% 7%;
+    --foreground: 220 10% 96%;
+    --card: 220 17% 10%;
+    --card-foreground: 220 10% 96%;
+    --popover: 220 17% 10%;
+    --popover-foreground: 220 10% 96%;
+    --primary: 212 100% 63%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 15%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 64%;
-    --accent: 0 0% 15%;
-    --accent-foreground: 0 0% 98%;
+    --secondary: 220 14% 16%;
+    --secondary-foreground: 220 10% 96%;
+    --muted: 220 14% 16%;
+    --muted-foreground: 220 8% 68%;
+    --accent: 217 72% 18%;
+    --accent-foreground: 220 10% 96%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 15%;
-    --input: 0 0% 15%;
-    --ring: 217 91% 60%;
-    --radius: 0.875rem;
+    --border: 220 14% 20%;
+    --input: 220 14% 20%;
+    --ring: 212 100% 63%;
+    --radius: 1rem;
     --mac-red:    #FF5F57;
     --mac-yellow: #FEBC2E;
     --mac-green:  #28C840;
-    --card-shadow: 0 2px 14px rgba(0,0,0,0.3);
+    --card-shadow: 0 16px 40px rgba(0,0,0,0.45), 0 2px 10px rgba(0,0,0,0.35);
 
     /* Dark mode status — 배경 채도 낮추고 전경 채도 유지 */
     --status-healthy:     152 55% 55%;
@@ -100,30 +100,30 @@
 
   /* ── Legacy light class (keep for transition) ─────────────────────────────── */
   html.light {
-    --background: 190 55% 96%;
-    --foreground: 202 55% 10%;
+    --background: 220 20% 98%;
+    --foreground: 220 18% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 202 55% 10%;
+    --card-foreground: 220 18% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 202 55% 10%;
-    --primary: 191 88% 41%;
+    --popover-foreground: 220 18% 12%;
+    --primary: 211 100% 50%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 191 52% 90%;
-    --secondary-foreground: 202 55% 10%;
-    --muted: 191 45% 92%;
-    --muted-foreground: 202 40% 22%;
-    --accent: 183 72% 86%;
-    --accent-foreground: 202 55% 10%;
+    --secondary: 220 18% 94%;
+    --secondary-foreground: 220 18% 12%;
+    --muted: 220 14% 95%;
+    --muted-foreground: 220 10% 35%;
+    --accent: 213 100% 95%;
+    --accent-foreground: 220 18% 12%;
     --destructive: 4 86% 58%;
     --destructive-foreground: 0 0% 100%;
-    --border: 190 40% 82%;
-    --input: 191 52% 90%;
-    --ring: 191 88% 41%;
-    --radius: 0.875rem;
+    --border: 220 13% 87%;
+    --input: 220 13% 90%;
+    --ring: 211 100% 50%;
+    --radius: 1rem;
     --mac-red:    #FF5F57;
     --mac-yellow: #FEBC2E;
     --mac-green:  #28C840;
-    --card-shadow: 0 4px 18px rgba(14, 116, 144, 0.16), 0 1px 4px rgba(14, 116, 144, 0.12);
+    --card-shadow: 0 16px 34px rgba(17, 24, 39, 0.08), 0 2px 8px rgba(17, 24, 39, 0.06);
   }
 }
 
@@ -133,9 +133,10 @@
   }
   body {
     @apply bg-background text-foreground;
-    background-image: radial-gradient(circle at 20% 0%, hsl(184 90% 82% / 0.28), transparent 34%),
-      radial-gradient(circle at 80% 20%, hsl(196 95% 78% / 0.22), transparent 30%);
+    background-image: radial-gradient(circle at 15% 0%, hsl(0 0% 100% / 0.85), transparent 36%),
+      radial-gradient(circle at 85% 10%, hsl(210 85% 88% / 0.24), transparent 34%);
     font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     /* 기본 본문 — 17px + medium 가중치로 전반 가독성/명도 ↑ */
     font-size: 17px;
     line-height: 1.6;

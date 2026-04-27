@@ -78,7 +78,7 @@ function PortalTooltip({ state }: { state: PortalTooltipState | null }) {
         transform: 'translateY(-50%)',
         zIndex: 9999,
       }}
-      className="pointer-events-none px-2.5 py-1 bg-card border border-border rounded-md shadow-lg text-xs font-medium text-foreground whitespace-nowrap"
+      className="pointer-events-none px-2.5 py-1 bg-card/95 backdrop-blur-lg border border-border rounded-lg shadow-lg text-xs font-medium text-foreground whitespace-nowrap"
     >
       {state.label}
     </div>,
@@ -106,9 +106,9 @@ function NavItem({
       aria-current={isActive ? 'page' : undefined}
       onMouseEnter={(e) => onHover(e, label)}
       onMouseLeave={onLeave}
-      className={`relative flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+      className={`relative flex items-center gap-3 px-3 py-2 rounded-xl transition-colors ${
         isActive
-          ? 'bg-primary/15 text-primary font-semibold'
+          ? 'bg-primary/12 text-primary font-semibold shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.14)]'
           : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
       }`}
     >
@@ -185,11 +185,11 @@ export function Sidebar() {
     <>
       <aside
         style={{ width: navWidth }}
-        className="fixed top-0 left-0 h-full bg-card border-r border-border flex flex-col z-40"
+        className="fixed top-0 left-0 h-full bg-card/90 backdrop-blur-2xl border-r border-border flex flex-col z-40"
       >
         {/* 타이틀 */}
         <div className={`flex items-center ${iconOnly ? 'justify-center py-4' : 'gap-2 px-3 py-4'} border-b border-border flex-shrink-0`}>
-          <div className="w-10 h-10 bg-gradient-to-br from-primary to-blue-700 rounded-xl flex items-center justify-center text-white text-lg shadow-sm flex-shrink-0">
+          <div className="w-10 h-10 bg-gradient-to-br from-primary to-sky-700 rounded-2xl flex items-center justify-center text-white text-lg shadow-[0_10px_22px_rgba(0,122,255,0.28)] flex-shrink-0">
             ☸
           </div>
           {!iconOnly && (

@@ -17,6 +17,7 @@ from app.models.ontology import OntologyEntity, OntologyRelationship, OntologyEv
 from app.models.config_snapshot import ClusterConfigSnapshot
 from app.models.node_server_spec import NodeServerSpec
 from app.models.cluster_custom_field import ClusterCustomField
+from app.models.service_entry import ServiceEntry
 
 __all__ = [
     "Cluster",
@@ -46,4 +47,5 @@ __all__ = [
     "ClusterConfigSnapshot",
     "NodeServerSpec",
     "ClusterCustomField",
+    "ServiceEntry",
 ]

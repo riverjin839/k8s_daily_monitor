@@ -1263,3 +1263,39 @@ export interface MindMapNodeUpdate {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   extra?: Record<string, any>;
 }
+
+// ── Service Entries (서비스별 히스토리/지식관리) ─────────────────
+export type ServiceEntryKind = 'note' | 'guide' | 'troubleshoot' | 'history' | 'link';
+
+export interface ServiceEntry {
+  id: string;
+  service: string;
+  clusterId?: string | null;
+  clusterName?: string | null;
+  kind: ServiceEntryKind;
+  title: string;
+  content: string;
+  url?: string | null;
+  severity?: string | null;
+  occurredAt?: string | null;
+  tags?: string[] | null;
+  pinned: boolean;
+  author?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  meta?: Record<string, any> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ServiceEntryCreate = Omit<ServiceEntry, 'id' | 'createdAt' | 'updatedAt' | 'clusterName'>;
+export type ServiceEntryUpdate = Partial<Omit<ServiceEntryCreate, 'service'>>;
+
+export interface ServiceCatalogItem {
+  service: string;
+  total: number;
+  byKind: Record<string, number>;
+  lastUpdated?: string | null;
+}
+export interface ServiceCatalogResponse { services: ServiceCatalogItem[] }
+export interface ServiceEntryListResponse { data: ServiceEntry[]; total: number }
+

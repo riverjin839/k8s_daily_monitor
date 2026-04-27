@@ -923,6 +923,104 @@ export interface EtcdctlConfigCollectResponse {
   errors: string[];
 }
 
+// ── 노드 NIC 수집 (bond0/bond1 + public/private IP) ────────────────────
+export interface NodeNicsCollectRequest {
+  hosts: string[];
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  useSudo?: boolean;
+  connectTimeout?: number;
+  skipIfacePatterns?: string[];
+  parallelism?: number;
+  chunkSize?: number;
+  chunkPauseMs?: number;
+}
+
+export interface NicAddrInfo {
+  ip: string;
+  prefixlen?: number | null;
+  scope?: string | null;
+}
+
+export interface NicInterface {
+  name: string;
+  mac?: string | null;
+  mtu?: number | null;
+  operstate?: string | null;
+  addrs: NicAddrInfo[];
+  link_kind?: string | null;
+}
+
+export interface NicAllIp {
+  iface: string;
+  ip: string;
+  prefix?: number | null;
+  mac?: string | null;
+  mtu?: number | null;
+  operstate?: string | null;
+  scope: 'public' | 'private' | 'linklocal' | 'unknown';
+}
+
+export interface NodeNicsPerHost {
+  host: string;
+  status: string;
+  interfaces?: NicInterface[];
+  all_ips?: NicAllIp[];
+  error?: string | null;
+}
+
+export interface NodeNicsCollectResponse {
+  clusterId: string;
+  changed: number;
+  hosts: NodeNicsPerHost[];
+  errors: string[];
+}
+
+// ── MinIO / AIStor 수집 응답 ──────────────────────────────────────────
+export interface MinioCollectTenantSummary {
+  namespace: string | null;
+  name: string | null;
+  image: string | null;
+  version: string | null;
+  totalServers: number;
+  totalDrives: number;
+  drivesPerSet: number;
+  ecParity: number;
+  ecDataShards: number;
+  currentState: string | null;
+  healthStatus: string | null;
+  drivesOnline: number | null;
+  drivesOffline: number | null;
+}
+
+export interface MinioCollectDirectPVSummary {
+  totalDrives: number;
+  readyDrives: number;
+  totalCapacity: number;
+  nodeCount: number;
+}
+
+export interface MinioCollectOperatorSummary {
+  namespace: string | null;
+  name: string | null;
+  image: string | null;
+  version: string | null;
+}
+
+export interface MinioCollectResponse {
+  clusterId: string;
+  changed: number;
+  warnings: string[];
+  summary: {
+    operator: MinioCollectOperatorSummary | null;
+    tenants: MinioCollectTenantSummary[];
+    directpv: MinioCollectDirectPVSummary | null;
+  };
+  collectedAt: string;
+}
+
 // ── 노드 서버스펙 관리 대장 ────────────────────────────────────────────
 export type NodeSpecStatus = 'active' | 'spare' | 'maintenance' | 'decommission';
 

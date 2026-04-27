@@ -271,6 +271,24 @@ export const versionsApi = {
       `/clusters/${clusterId}/collect-etcdctl-config`, payload, { signal, timeout },
     );
   },
+  collectNodeNics: (
+    clusterId: string,
+    payload: import('@/types').NodeNicsCollectRequest,
+    signal?: AbortSignal,
+  ) => {
+    const n = payload.hosts.length;
+    const parallel = payload.parallelism ?? 10;
+    const perHost = ((payload.connectTimeout ?? 8) + 18) * 1000;
+    const est = Math.ceil(n / parallel) * perHost + 10_000;
+    const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
+    return api.post<import('@/types').NodeNicsCollectResponse>(
+      `/clusters/${clusterId}/collect-node-nics`, payload, { signal, timeout },
+    );
+  },
+  collectMinio: (clusterId: string, signal?: AbortSignal) =>
+    api.post<import('@/types').MinioCollectResponse>(
+      `/clusters/${clusterId}/collect-minio`, undefined, { signal, timeout: 120_000 },
+    ),
   current: (clusterId: string) =>
     api.get<{ clusterId: string; components: ComponentSnapshot[] }>(
       `/clusters/${clusterId}/versions/current`,

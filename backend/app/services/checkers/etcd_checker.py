@@ -135,7 +135,11 @@ class EtcdChecker(BaseChecker):
 
         member_id = header.get("member_id", 0)
         leader_id = status_data.get("leader", 0)
-        is_leader = (member_id == leader_id) if member_id and leader_id else False
+        # 64-bit ID 는 etcd 버전에 따라 int/string 둘다 가능 → str 정규화 후 비교
+        is_leader = (
+            bool(member_id) and bool(leader_id)
+            and str(member_id) == str(leader_id)
+        )
         db_size = status_data.get("dbSize", 0)
         version = status_data.get("version", "unknown")
         raft_term = status_data.get("raftTerm", 0)
@@ -199,18 +203,30 @@ class EtcdChecker(BaseChecker):
             if snap.component not in latest_per_host:
                 latest_per_host[snap.component] = snap
 
-        # 2) etcd_systemd 최신 1건
-        sysd = (
+        # 2) etcd_systemd 는 `etcd_systemd:{host}` 호스트별로 저장됨 — 모두 모아 호스트별 최신 1건씩
+        sysd_snaps = (
             self.db.query(ClusterConfigSnapshot)
             .filter(
                 ClusterConfigSnapshot.cluster_id == self.cluster.id,
-                ClusterConfigSnapshot.component == "etcd_systemd",
+                ClusterConfigSnapshot.component.like("etcd_systemd:%"),
             )
-            .order_by(ClusterConfigSnapshot.collected_at.desc())
-            .first()
+            .order_by(
+                ClusterConfigSnapshot.component,
+                ClusterConfigSnapshot.collected_at.desc(),
+            )
+            .all()
+        )
+        sysd_latest_per_host: dict[str, ClusterConfigSnapshot] = {}
+        for snap in sysd_snaps:
+            if snap.component not in sysd_latest_per_host:
+                sysd_latest_per_host[snap.component] = snap
+        # 가장 최근 systemd 스냅샷 시각 (대표값으로 details 에 노출)
+        sysd_latest_at = max(
+            (s.collected_at for s in sysd_latest_per_host.values() if s.collected_at),
+            default=None,
         )
 
-        if not latest_per_host and not sysd:
+        if not latest_per_host and not sysd_latest_per_host:
             return None
 
         hosts_info: list[dict] = []
@@ -234,7 +250,10 @@ class EtcdChecker(BaseChecker):
                     hdr = st.get("header", {})
                     member_id = hdr.get("member_id", 0)
                     leader_id = st.get("leader", 0)
-                    is_leader = (member_id == leader_id) if member_id and leader_id else False
+                    is_leader = (
+                        bool(member_id) and bool(leader_id)
+                        and str(member_id) == str(leader_id)
+                    )
                     if is_leader:
                         leader_found = True
                     ver = st.get("version")
@@ -258,26 +277,33 @@ class EtcdChecker(BaseChecker):
                 entry["has_endpoint_status"] = False
             hosts_info.append(entry)
 
-        # systemd 상태 병합
+        # systemd 상태 병합 — `etcd_systemd:{host}` 스냅샷 (호스트당 1건) 을 평면으로 읽음
         active_states: list[str] = []
-        if sysd and sysd.data:
-            for h in sysd.data.get("hosts", []) or []:
-                active_states.append(h.get("active_state") or "?")
-                host = h.get("host")
-                existing = next((x for x in hosts_info if x.get("host") == host), None)
-                if existing is None and host:
-                    hosts_info.append({
-                        "host": host,
-                        "collected_at": (sysd.collected_at.isoformat() if sysd.collected_at else None),
-                        "active_state": h.get("active_state"),
-                        "version": h.get("version"),
-                    })
-                elif existing:
-                    existing["active_state"] = h.get("active_state")
-                    if not existing.get("version"):
-                        existing["version"] = h.get("version")
-                    if h.get("version"):
-                        versions.add(h["version"])
+        for comp_key, snap in sysd_latest_per_host.items():
+            data = snap.data or {}
+            host = data.get("host") or comp_key.split(":", 1)[1]
+            active_state = data.get("active_state")
+            ver = data.get("version")
+            sub_state = data.get("sub_state")
+            if active_state:
+                active_states.append(active_state)
+            if ver:
+                versions.add(ver)
+            existing = next((x for x in hosts_info if x.get("host") == host), None)
+            if existing is None:
+                hosts_info.append({
+                    "host": host,
+                    "collected_at": (snap.collected_at.isoformat() if snap.collected_at else None),
+                    "active_state": active_state,
+                    "sub_state": sub_state,
+                    "version": ver,
+                })
+            else:
+                existing["active_state"] = active_state
+                if sub_state:
+                    existing["sub_state"] = sub_state
+                if not existing.get("version") and ver:
+                    existing["version"] = ver
 
         elapsed = self._elapsed_ms(start)
 
@@ -293,11 +319,11 @@ class EtcdChecker(BaseChecker):
                     "host_count": len(hosts_info),
                     "representative_host": newest_host,
                     "active_states": active_states,
-                    "systemd_snapshot_at": sysd.collected_at.isoformat() if sysd else None,
+                    "systemd_snapshot_at": sysd_latest_at.isoformat() if sysd_latest_at else None,
                 },
             )
 
-        if sysd:
+        if sysd_latest_per_host:
             all_active = len(active_states) > 0 and all(s == "active" for s in active_states)
             any_active = any(s == "active" for s in active_states)
             if all_active:
@@ -319,7 +345,7 @@ class EtcdChecker(BaseChecker):
                     "hosts": hosts_info,
                     "active_states": active_states,
                     "versions": sorted(versions),
-                    "snapshot_at": sysd.collected_at.isoformat(),
+                    "snapshot_at": sysd_latest_at.isoformat() if sysd_latest_at else None,
                 },
             )
 

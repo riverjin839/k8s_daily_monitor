@@ -3,14 +3,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
   GitCommit, RefreshCw, Square, Clock, Share2, X, ChevronDown, ChevronUp,
-  Server, Cpu, Network, Settings2,
+  Server, Cpu, Network, Settings2, HardDrive,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, SkeletonCard } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { versionsApi, type ComponentSnapshot } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
-import { EtcdSystemdModal, KernelParamsCollectModal } from '@/components/versions';
+import { EtcdSystemdModal, KernelParamsCollectModal, NodeNicsCollectModal } from '@/components/versions';
 import { Database } from 'lucide-react';
 
 // ── 유틸 ────────────────────────────────────────────────────────────────────
@@ -21,6 +21,8 @@ const CATEGORY_META: Record<string, { label: string; icon: React.ComponentType<{
   cni:           { label: 'CNI / Cilium',   icon: Network,    cls: 'bg-purple-500/10 text-purple-400 border-purple-500/30' },
   // OS 레벨 — kernel sysctl · etcd systemd · etcdctl config 를 한 카테고리로.
   os:            { label: 'OS',              icon: Cpu,        cls: 'bg-amber-500/10 text-amber-500 border-amber-500/30' },
+  // Storage — MinIO / AIStor / DirectPV 등 객체스토리지 레이어
+  storage:       { label: 'Storage (S3/MinIO)', icon: HardDrive, cls: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' },
   cluster:       { label: 'Cluster',        icon: Server,     cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30' },
   other:         { label: 'Other',          icon: Settings2,  cls: 'bg-muted text-muted-foreground border-border' },
 };
@@ -38,6 +40,14 @@ function ComponentDetails({ snap }: { snap: ComponentSnapshot }) {
   const flags = (data?.flags && typeof data.flags === 'object') ? data.flags as Record<string, string> : null;
   const image = typeof data?.image === 'string' ? data.image : null;
   const cmData = (data?.data && typeof data.data === 'object') ? data.data as Record<string, string> : null;
+
+  // MinIO Tenant / DirectPV 전용 디테일 — pool/EC 등 운영 핵심 표시
+  if (snap.component.startsWith('minio_tenant:')) {
+    return <MinioTenantDetails data={data} />;
+  }
+  if (snap.component === 'directpv_summary') {
+    return <DirectPVDetails data={data} />;
+  }
 
   return (
     <div className="space-y-3 text-xs">
@@ -83,6 +93,169 @@ function ComponentDetails({ snap }: { snap: ComponentSnapshot }) {
               <span className="text-foreground/80">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── MinIO Tenant / DirectPV 전용 디테일 ───────────────────────────────────
+
+function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
+  const pools = Array.isArray(data?.pools) ? data.pools as Array<Record<string, unknown>> : [];
+  const num = (k: string) => typeof data?.[k] === 'number' ? data[k] as number : null;
+  const str = (k: string) => typeof data?.[k] === 'string' ? data[k] as string : null;
+  const totalServers  = num('totalServers');
+  const totalDrives   = num('totalDrives');
+  const drivesPerSet  = num('drivesPerSet');
+  const ecParity      = num('ecParity');
+  const ecDataShards  = num('ecDataShards');
+  const ecExplicit    = data?.ecExplicit === true;
+  const requestAutoCert = data?.requestAutoCert === true;
+  const ecRatio = (drivesPerSet && ecDataShards != null && ecParity != null && drivesPerSet > 0)
+    ? `EC:${ecParity} (${ecDataShards} data + ${ecParity} parity / ${drivesPerSet})`
+    : null;
+
+  const stat = (label: string, value: React.ReactNode, color?: string) => (
+    <div className="bg-muted/40 rounded-md px-2 py-1.5">
+      <p className="text-[9px] uppercase text-muted-foreground tracking-wider">{label}</p>
+      <p className={`text-sm font-semibold font-mono ${color ?? 'text-foreground'}`}>{value ?? '-'}</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-3 text-xs">
+      {str('image') && (
+        <div>
+          <p className="text-[10px] text-muted-foreground uppercase mb-0.5">Image</p>
+          <p className="font-mono text-foreground break-all">{str('image')}</p>
+        </div>
+      )}
+      <div className="grid grid-cols-3 gap-1.5">
+        {stat('서버 수',   totalServers,  'text-sky-500')}
+        {stat('드라이브',  totalDrives,   'text-emerald-500')}
+        {stat('Erasure Set', drivesPerSet)}
+      </div>
+      <div className="grid grid-cols-3 gap-1.5">
+        {stat('Parity (EC)', ecParity != null ? `${ecParity}${ecExplicit ? ' (명시)' : ' (default)'}` : '-', 'text-amber-500')}
+        {stat('Data shards', ecDataShards)}
+        {stat('Auto TLS', requestAutoCert ? 'Yes' : 'No', requestAutoCert ? 'text-emerald-500' : 'text-muted-foreground')}
+      </div>
+      {ecRatio && (
+        <p className="text-[11px] font-mono text-emerald-500/80 bg-emerald-500/5 border border-emerald-500/20 rounded-md px-2 py-1">
+          {ecRatio} — 손실 허용 디스크: {ecParity}개
+        </p>
+      )}
+
+      {pools.length > 0 && (
+        <div>
+          <p className="text-[10px] text-muted-foreground uppercase mb-1 tracking-wider">
+            Pools ({pools.length})
+          </p>
+          <div className="overflow-x-auto rounded-md border border-border">
+            <table className="w-full text-[11px]">
+              <thead className="bg-muted/40">
+                <tr className="text-left">
+                  <th className="px-2 py-1 font-medium">name</th>
+                  <th className="px-2 py-1 font-medium">servers</th>
+                  <th className="px-2 py-1 font-medium">vol/srv</th>
+                  <th className="px-2 py-1 font-medium">drives</th>
+                  <th className="px-2 py-1 font-medium">size</th>
+                  <th className="px-2 py-1 font-medium">storageClass</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pools.map((p, i) => (
+                  <tr key={i} className="border-t border-border font-mono">
+                    <td className="px-2 py-1">{String(p.name ?? `pool-${i}`)}</td>
+                    <td className="px-2 py-1">{String(p.servers ?? '-')}</td>
+                    <td className="px-2 py-1">{String(p.volumesPerServer ?? '-')}</td>
+                    <td className="px-2 py-1 text-emerald-500">{String(p.drives ?? '-')}</td>
+                    <td className="px-2 py-1">{String(p.volumeSize ?? '-')}</td>
+                    <td className="px-2 py-1 truncate max-w-[140px]" title={String(p.storageClass ?? '')}>{String(p.storageClass ?? '-')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 상태 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
+        {stat('currentState', str('currentState'))}
+        {stat('health', str('healthStatus'))}
+        {stat('online', num('drivesOnline'), 'text-emerald-500')}
+        {stat('offline', num('drivesOffline'),
+          (num('drivesOffline') ?? 0) > 0 ? 'text-red-500' : undefined)}
+      </div>
+    </div>
+  );
+}
+
+function DirectPVDetails({ data }: { data: Record<string, unknown> }) {
+  const num = (k: string) => typeof data?.[k] === 'number' ? data[k] as number : null;
+  const nodes = Array.isArray(data?.nodes) ? data.nodes as Array<Record<string, unknown>> : [];
+  const totalDrives = num('totalDrives') ?? 0;
+  const readyDrives = num('readyDrives') ?? 0;
+  const totalCap   = num('totalCapacity') ?? 0;
+  const allocCap   = num('allocatedCapacity') ?? 0;
+  const nodeCount  = num('nodeCount') ?? 0;
+  const fmtBytes = (b: number) => {
+    if (b <= 0) return '-';
+    const u = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+    let i = 0; let v = b;
+    while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+    return `${v.toFixed(2)} ${u[i]}`;
+  };
+
+  const stat = (label: string, value: React.ReactNode, color?: string) => (
+    <div className="bg-muted/40 rounded-md px-2 py-1.5">
+      <p className="text-[9px] uppercase text-muted-foreground tracking-wider">{label}</p>
+      <p className={`text-sm font-semibold font-mono ${color ?? 'text-foreground'}`}>{value ?? '-'}</p>
+    </div>
+  );
+  return (
+    <div className="space-y-3 text-xs">
+      <div className="grid grid-cols-3 gap-1.5">
+        {stat('총 드라이브', totalDrives, 'text-emerald-500')}
+        {stat('Ready', `${readyDrives} / ${totalDrives}`, readyDrives === totalDrives ? 'text-emerald-500' : 'text-amber-500')}
+        {stat('노드 수', nodeCount, 'text-sky-500')}
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        {stat('총 용량', fmtBytes(totalCap))}
+        {stat('할당된 용량', fmtBytes(allocCap),
+          (totalCap > 0 && allocCap / totalCap > 0.85) ? 'text-amber-500' : undefined)}
+      </div>
+      {nodes.length > 0 && (
+        <div>
+          <p className="text-[10px] text-muted-foreground uppercase mb-1 tracking-wider">
+            Per-node ({nodes.length})
+          </p>
+          <div className="max-h-60 overflow-y-auto rounded-md border border-border">
+            <table className="w-full text-[11px]">
+              <thead className="bg-muted/40 sticky top-0">
+                <tr className="text-left">
+                  <th className="px-2 py-1 font-medium">node</th>
+                  <th className="px-2 py-1 font-medium">drives</th>
+                  <th className="px-2 py-1 font-medium">ready</th>
+                  <th className="px-2 py-1 font-medium">total</th>
+                  <th className="px-2 py-1 font-medium">fs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {nodes.map((n, i) => (
+                  <tr key={i} className="border-t border-border font-mono">
+                    <td className="px-2 py-1 break-all">{String(n.node ?? '-')}</td>
+                    <td className="px-2 py-1">{String(n.drives ?? '-')}</td>
+                    <td className="px-2 py-1">{String(n.ready ?? '-')}</td>
+                    <td className="px-2 py-1">{fmtBytes(Number(n.total ?? 0))}</td>
+                    <td className="px-2 py-1">{Array.isArray(n.fsTypes) ? (n.fsTypes as string[]).join(', ') : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -229,6 +402,7 @@ export function VersionsPage() {
   const [clusterId, setClusterId] = useState<string>('');
   const [etcdModalOpen, setEtcdModalOpen] = useState(false);
   const [kernelModalOpen, setKernelModalOpen] = useState(false);
+  const [nicsModalOpen, setNicsModalOpen] = useState(false);
 
   // 사이드바 진입 시 자동으로 첫 클러스터 선택
   useEffect(() => {
@@ -258,6 +432,28 @@ export function VersionsPage() {
     },
   });
 
+  const collectMinio = useAbortableMutation({
+    mutationFn: (_: void, signal) => versionsApi.collectMinio(clusterId, signal),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['versions'] });
+      const { changed, summary, warnings } = res.data;
+      const tenants = summary.tenants?.length ?? 0;
+      const op = summary.operator ? '운영자 OK' : '운영자 X';
+      const directpv = summary.directpv ? `DirectPV ${summary.directpv.totalDrives}드라이브` : 'DirectPV X';
+      const desc = `${op} · 테넌트 ${tenants}개 · ${directpv}`;
+      if (changed > 0) {
+        toast.success(`MinIO ${changed}건 변경 감지`, desc);
+      } else if (tenants === 0 && !summary.operator) {
+        toast.info('MinIO 미설치', warnings.slice(0, 2).join('\n') || '관련 리소스를 찾지 못했습니다.');
+      } else {
+        toast.info('MinIO 변경 없음', desc);
+      }
+    },
+    onError: (err: unknown) => {
+      toast.error('MinIO 수집 실패', formatApiError(err));
+    },
+  });
+
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggle = (comp: string) => setExpanded((prev) => {
     const next = new Set(prev);
@@ -275,8 +471,8 @@ export function VersionsPage() {
       if (!byCategory.has(key)) byCategory.set(key, []);
       byCategory.get(key)!.push(c);
     }
-    // control_plane 먼저, 그 다음 cni, kubelet, os, other
-    const order = ['control_plane', 'cni', 'kubelet', 'os', 'other'];
+    // control_plane 먼저, 그 다음 cni, kubelet, os, storage, other
+    const order = ['control_plane', 'cni', 'kubelet', 'os', 'storage', 'other'];
     return order.filter((k) => byCategory.has(k)).map((k) => ({
       category: k,
       items: byCategory.get(k)!.sort((a, b) => a.component.localeCompare(b.component)),
@@ -333,6 +529,33 @@ export function VersionsPage() {
                 <Cpu className="w-4 h-4" />
                 커널 파라미터
               </button>
+              <button
+                onClick={() => setNicsModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors"
+                title="노드별 NIC / IP — SSH 로 수집 (bond0/bond1 + public/private 분류)"
+              >
+                <Network className="w-4 h-4" />
+                노드 NIC
+              </button>
+              {collectMinio.isPending ? (
+                <button
+                  onClick={collectMinio.abort}
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-red-500 hover:bg-red-600 text-primary-foreground rounded-lg transition-colors"
+                  title="MinIO 수집 중지"
+                >
+                  <Square className="w-4 h-4 fill-current" />
+                  MinIO 중지
+                </button>
+              ) : (
+                <button
+                  onClick={() => collectMinio.mutate()}
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors"
+                  title="MinIO Operator + Tenant + DirectPV 정보 수집 (pool/disk/parity)"
+                >
+                  <HardDrive className="w-4 h-4" />
+                  MinIO
+                </button>
+              )}
               {collect.isPending ? (
                 <button
                   onClick={collect.abort}
@@ -463,6 +686,15 @@ export function VersionsPage() {
         open={kernelModalOpen && !!clusterId}
         clusterId={clusterId}
         onClose={() => setKernelModalOpen(false)}
+      />
+      <NodeNicsCollectModal
+        open={nicsModalOpen && !!clusterId}
+        clusterId={clusterId}
+        onClose={() => {
+          setNicsModalOpen(false);
+          // Cluster 정보 (node_ips) 가 갱신됐을 수 있으므로 클러스터 캐시 무효화
+          queryClient.invalidateQueries({ queryKey: ['clusters'] });
+        }}
       />
     </div>
   );

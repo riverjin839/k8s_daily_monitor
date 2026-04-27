@@ -19,8 +19,8 @@ const CATEGORY_META: Record<string, { label: string; icon: React.ComponentType<{
   control_plane: { label: 'Control Plane', icon: Server,     cls: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' },
   kubelet:       { label: 'Kubelet',        icon: Cpu,        cls: 'bg-sky-500/10 text-sky-400 border-sky-500/30' },
   cni:           { label: 'CNI / Cilium',   icon: Network,    cls: 'bg-purple-500/10 text-purple-400 border-purple-500/30' },
-  kernel:        { label: 'Kernel (sysctl)', icon: Cpu,       cls: 'bg-amber-500/10 text-amber-500 border-amber-500/30' },
-  etcdctl:       { label: 'etcdctl',        icon: Settings2,  cls: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' },
+  // OS 레벨 — kernel sysctl · etcd systemd · etcdctl config 를 한 카테고리로.
+  os:            { label: 'OS',              icon: Cpu,        cls: 'bg-amber-500/10 text-amber-500 border-amber-500/30' },
   cluster:       { label: 'Cluster',        icon: Server,     cls: 'bg-slate-500/10 text-slate-400 border-slate-500/30' },
   other:         { label: 'Other',          icon: Settings2,  cls: 'bg-muted text-muted-foreground border-border' },
 };
@@ -275,8 +275,8 @@ export function VersionsPage() {
       if (!byCategory.has(key)) byCategory.set(key, []);
       byCategory.get(key)!.push(c);
     }
-    // control_plane 먼저, 그 다음 cni, kubelet, kernel, etcdctl, other
-    const order = ['control_plane', 'cni', 'kubelet', 'kernel', 'etcdctl', 'other'];
+    // control_plane 먼저, 그 다음 cni, kubelet, os, other
+    const order = ['control_plane', 'cni', 'kubelet', 'os', 'other'];
     return order.filter((k) => byCategory.has(k)).map((k) => ({
       category: k,
       items: byCategory.get(k)!.sort((a, b) => a.component.localeCompare(b.component)),

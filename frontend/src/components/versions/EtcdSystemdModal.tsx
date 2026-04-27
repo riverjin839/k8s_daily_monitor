@@ -24,6 +24,9 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [unit, setUnit] = useState('etcd');
   const [useSudo, setUseSudo] = useState(true);
+  // etcd env file 기본값 /etcd/etcd.env (사내 표준), 쉼표로 여러 후보 지정 가능.
+  const [envFilesText, setEnvFilesText] = useState('/etcd/etcd.env, /etc/etcd.env, /etc/default/etcd');
+  const [parallelism, setParallelism] = useState(10);
   const [result, setResult] = useState<EtcdSystemdCollectResponse | null>(null);
 
   const nodeQ = useQuery({
@@ -51,6 +54,8 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
         password: authMode === 'password' ? password : undefined,
         privateKey: authMode === 'key' ? privateKey : undefined,
         useSudo,
+        envFiles: envFilesText.split(',').map((s) => s.trim()).filter(Boolean),
+        parallelism,
       }, signal);
       return r.data;
     },
@@ -102,6 +107,34 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
               <label className="text-[11px] text-muted-foreground mb-1 block">systemd unit</label>
               <input value={unit} onChange={(e) => setUnit(e.target.value)}
                 placeholder="etcd"
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+            </div>
+          </div>
+
+          {/* etcd env file 경로 — 사내 표준 /etcd/etcd.env 가 기본, 다른 배포판은 수정 */}
+          <div>
+            <label className="text-[11px] text-muted-foreground mb-1 block">
+              etcd env 파일 후보 (쉼표 구분, 첫 존재 파일만 저장)
+            </label>
+            <input value={envFilesText} onChange={(e) => setEnvFilesText(e.target.value)}
+              placeholder="/etcd/etcd.env, /etc/etcd.env"
+              className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              기본: <code className="font-mono">/etcd/etcd.env</code> (사내 표준) — kubeadm 은 <code className="font-mono">/etc/etcd.env</code>,
+              CentOS/RHEL 은 <code className="font-mono">/etc/sysconfig/etcd</code> 경우가 많음.
+            </p>
+          </div>
+
+          {/* 병렬/청크 옵션 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="text-[11px] text-muted-foreground mb-1 block"
+                title="동시에 SSH 세션 몇 개 열지 상한">
+                Parallelism (동시 SSH 수)
+              </label>
+              <input type="number" value={parallelism}
+                onChange={(e) => setParallelism(Number(e.target.value) || 10)}
+                min={1} max={50}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
             </div>
           </div>

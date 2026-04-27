@@ -14,7 +14,10 @@ import hashlib
 import json
 import os
 import re
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from typing import Any, Callable
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -264,13 +267,51 @@ def collect_versions(cluster_id: UUID, db: Session = Depends(get_db)):
     return {"cluster_id": str(cluster_id), **summary}
 
 
+# ── 공통: 병렬 SSH 수집 헬퍼 ─────────────────────────────────────────────────
+
+async def _parallel_collect(
+    hosts: list[str],
+    *,
+    worker: Callable[[str], Any],
+    parallelism: int = 10,
+    chunk_size: int = 30,
+    chunk_pause_ms: int = 200,
+) -> list[Any]:
+    """호스트 리스트를 청크 단위로 병렬 실행하는 공통 헬퍼.
+    - paramiko 기반 sync 함수를 ThreadPool + asyncio.gather 로 파라랠.
+    - Semaphore 로 동시 실행 수 엄격 상한.
+    - 청크 사이에 짧은 pause (베스천 burst 완화).
+    순서는 입력 호스트 순서와 일치하게 반환.
+    """
+    n = len(hosts)
+    if n == 0:
+        return []
+    workers = max(1, min(parallelism, n))
+    chunk = max(1, chunk_size)
+    loop = asyncio.get_event_loop()
+    results: list[Any] = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        sem = asyncio.Semaphore(workers)
+
+        async def bounded(h: str) -> Any:
+            async with sem:
+                return await loop.run_in_executor(pool, worker, h)
+
+        for i in range(0, n, chunk):
+            batch = hosts[i:i + chunk]
+            batch_res = await asyncio.gather(*[bounded(h) for h in batch])
+            results.extend(batch_res)
+            if i + chunk < n and chunk_pause_ms > 0:
+                await asyncio.sleep(chunk_pause_ms / 1000.0)
+    return results
+
+
 # ── etcd (systemd) 수집 ──────────────────────────────────────────────────────
 
 class EtcdSystemdCollectRequest(BaseModel):
     """사내 kubeadm 외 환경에서 etcd 가 systemd 로 기동될 때, 각 master 노드에
-    SSH 로 접속해 `systemctl show etcd` + `etcd --version` + 필요 시
-    `etcdctl endpoint health` 결과를 모아 1건의 스냅샷으로 저장한다.
-    자격증명은 요청에만 존재하고 DB 에 저장하지 않는다.
+    SSH 로 접속해 `systemctl show etcd` + `etcd --version` + env 파일 내용을
+    모아 호스트별 스냅샷으로 저장한다. 자격증명은 요청에만 존재.
     """
     hosts: list[str] = Field(..., min_length=1, max_length=2000)
     port: int = Field(default=22, ge=1, le=65535)
@@ -280,6 +321,16 @@ class EtcdSystemdCollectRequest(BaseModel):
     use_sudo: bool = True
     connect_timeout: int = Field(default=8, ge=1, le=60)
     unit: str = Field(default="etcd", max_length=64)
+    # etcd 환경변수 파일 — 기본 /etcd/etcd.env (사내 표준), 다른 배포판은 edit 가능.
+    # 순서대로 존재하는 첫 파일을 읽음.
+    env_files: list[str] = Field(
+        default_factory=lambda: ["/etcd/etcd.env", "/etc/etcd.env", "/etc/default/etcd", "/etc/sysconfig/etcd"],
+        description="SSH 로 cat 해볼 etcd 환경파일 후보 (첫 존재 파일만 저장)",
+    )
+    # 병렬 수집 옵션 — 대규모 클러스터에서 timeout 방지
+    parallelism: int = Field(default=10, ge=1, le=50)
+    chunk_size: int = Field(default=30, ge=1, le=200)
+    chunk_pause_ms: int = Field(default=200, ge=0, le=5000)
 
 
 _SYSTEMCTL_SHOW_PROPS = [
@@ -312,18 +363,19 @@ def _clean_exec_start(val: str) -> str:
 
 
 @router.post("/{cluster_id}/collect-etcd-systemd")
-def collect_etcd_systemd(
+async def collect_etcd_systemd(
     cluster_id: UUID,
     payload: EtcdSystemdCollectRequest,
     db: Session = Depends(get_db),
 ):
-    """SSH 로 각 master 노드의 etcd (systemd unit) 상태/버전을 수집해 스냅샷에 저장.
+    """SSH 로 각 master 노드의 etcd (systemd unit) 상태 + env 파일 + 버전 수집.
 
     수집 항목(호스트별):
       - systemctl show etcd → ActiveState / MainPID / FragmentPath / ExecStart / UnitFileState
       - etcd --version → 버전 문자열
-    모든 호스트를 합쳐 component 키 `etcd_systemd` 로 1건의 스냅샷(JSON) 을 저장.
-    변경이 없으면 저장하지 않는다.
+      - env 파일 내용 (env_files 중 처음 존재하는 것, 기본 /etcd/etcd.env)
+    **호스트별로 component 키 `etcd_systemd:{host}` 로 스냅샷을 저장** 해 값 변경 추적.
+    병렬 SSH + 청크 실행으로 대규모 클러스터에서도 timeout 없이 수집.
     """
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
@@ -340,71 +392,106 @@ def collect_etcd_systemd(
     show_cmd = f"{sudo}systemctl show {payload.unit} -p {',-p '.join(_SYSTEMCTL_SHOW_PROPS)}"
     ver_cmd = f"{sudo}etcd --version 2>/dev/null | head -2"
 
-    per_host: list[dict] = []
-    errors: list[str] = []
+    # env 파일 후보를 한 번에 체크 — 단일 SSH 세션에서 처음 존재하는 것의 내용을 출력.
+    # 경로 검증: 허용된 문자만.
+    safe_envs: list[str] = [
+        p for p in (payload.env_files or [])
+        if re.match(r"^[A-Za-z0-9_./-]+$", p)
+    ]
+    env_cmd: str | None = None
+    if safe_envs:
+        parts = " || ".join([
+            f'(test -f {p} && echo "===ENVFILE===:{p}" && {sudo}cat {p})' for p in safe_envs
+        ])
+        env_cmd = f"{sudo}sh -c '{parts}' 2>/dev/null || true"
 
-    for host in payload.hosts:
+    def _one(host: str) -> dict:
         target = SSHTarget(
             host=host, port=payload.port, username=payload.username,
             password=payload.password, private_key=payload.private_key,
         )
         r_show = _exec_ssh(target, show_cmd, connect_timeout=payload.connect_timeout, exec_timeout=15)
         r_ver  = _exec_ssh(target, ver_cmd,  connect_timeout=payload.connect_timeout, exec_timeout=10)
+        r_env  = (
+            _exec_ssh(target, env_cmd, connect_timeout=payload.connect_timeout, exec_timeout=10)
+            if env_cmd else None
+        )
 
-        host_entry: dict = {"host": host, "status": r_show.status}
+        entry: dict = {"host": host, "status": r_show.status}
 
         if r_show.status != "ok":
-            host_entry["error"] = r_show.error or r_show.stderr[:200]
-            errors.append(f"{host}: {r_show.error or r_show.status}")
-            per_host.append(host_entry)
-            continue
+            entry["error"] = r_show.error or r_show.stderr[:200]
+            return entry
 
         props = _parse_systemctl_show(r_show.stdout)
-        host_entry["active_state"]  = props.get("ActiveState")
-        host_entry["sub_state"]     = props.get("SubState")
-        host_entry["unit_file_state"] = props.get("UnitFileState")
-        host_entry["main_pid"]      = int(props["MainPID"]) if props.get("MainPID", "").isdigit() else None
-        host_entry["fragment_path"] = props.get("FragmentPath")
-        host_entry["exec_start"]    = _clean_exec_start(props.get("ExecStart", ""))
-        host_entry["raw"]           = props
-        if r_ver.status == "ok":
-            host_entry["version"] = _parse_etcd_version(r_ver.stdout)
-        per_host.append(host_entry)
+        entry["active_state"]    = props.get("ActiveState")
+        entry["sub_state"]       = props.get("SubState")
+        entry["unit_file_state"] = props.get("UnitFileState")
+        entry["main_pid"]        = int(props["MainPID"]) if props.get("MainPID", "").isdigit() else None
+        entry["fragment_path"]   = props.get("FragmentPath")
+        entry["exec_start"]      = _clean_exec_start(props.get("ExecStart", ""))
+        entry["raw"]             = props
+        if r_ver and r_ver.status == "ok":
+            entry["version"] = _parse_etcd_version(r_ver.stdout)
+        if r_env and r_env.status == "ok" and r_env.stdout.strip():
+            # "===ENVFILE===:/path" 마커 파싱
+            m = re.match(r"===ENVFILE===:([^\n]+)\n(.*)", r_env.stdout, re.DOTALL)
+            if m:
+                entry["env_file"] = m.group(1).strip()
+                entry["env_content"] = m.group(2)
+        return entry
 
-    # 대표 버전 — 모든 호스트의 버전이 동일하면 그걸, 다르면 ';' 구분
-    versions = sorted({(h.get("version") or "").strip() for h in per_host if h.get("version")})
-    version_label: str | None
-    if len(versions) == 1:
-        version_label = versions[0]
-    elif len(versions) > 1:
-        version_label = ";".join(versions)
-    else:
-        version_label = None
-
-    snapshot_data = {
-        "source": "systemd",
-        "unit": payload.unit,
-        "hosts": per_host,
-        "collected_at": now.isoformat(),
-    }
-
-    changed = _store_if_changed(
-        db, cluster_id,
-        component="etcd_systemd",
-        category="control_plane",
-        version=version_label,
-        data=snapshot_data,
-        now=now,
+    per_host: list[dict] = await _parallel_collect(
+        payload.hosts,
+        worker=_one,
+        parallelism=payload.parallelism,
+        chunk_size=payload.chunk_size,
+        chunk_pause_ms=payload.chunk_pause_ms,
     )
+
+    # 호스트별 스냅샷 저장 — 각 host 단위로 content-hash dedup.
+    changed = 0
+    errors: list[str] = []
+    for entry in per_host:
+        host = entry.get("host")
+        if not host:
+            continue
+        if entry.get("status") != "ok":
+            errors.append(f"{host}: {entry.get('error') or entry.get('status')}")
+            continue
+        data = {
+            "source": "systemd",
+            "unit": payload.unit,
+            "host": host,
+            "active_state": entry.get("active_state"),
+            "sub_state": entry.get("sub_state"),
+            "main_pid": entry.get("main_pid"),
+            "fragment_path": entry.get("fragment_path"),
+            "exec_start": entry.get("exec_start"),
+            "unit_file_state": entry.get("unit_file_state"),
+            "version": entry.get("version"),
+            "env_file": entry.get("env_file"),
+            "env_content": entry.get("env_content"),
+            "raw": entry.get("raw"),
+        }
+        if _store_if_changed(
+            db, cluster_id,
+            component=f"etcd_systemd:{host}",
+            category="os",
+            version=entry.get("version"),
+            data=data, now=now,
+        ):
+            changed += 1
+
     if changed:
         db.commit()
 
     return {
         "cluster_id": str(cluster_id),
-        "stored": changed,
-        "changed": 1 if changed else 0,
+        "stored": changed > 0,
+        "changed": changed,
         "hosts": per_host,
-        "component_key": "etcd_systemd",
+        "component_key": "etcd_systemd:{host}",
         "errors": errors,
     }
 
@@ -414,7 +501,7 @@ def collect_etcd_systemd(
 class KernelParamsCollectRequest(BaseModel):
     """각 노드에 SSH 로 접속해 sysctl 결과를 수집해 스냅샷 저장. 각 노드별로
     `kernel_params:{host}` component 키로 저장, 내용 해시가 이전과 같으면
-    저장 생략 (최신 일자 기준 uniq).
+    저장 생략 (최신 일자 기준 uniq). 병렬/청크 수집으로 대규모 클러스터 대응.
     """
     hosts: list[str] = Field(..., min_length=1, max_length=2000)
     port: int = Field(default=22, ge=1, le=65535)
@@ -423,13 +510,14 @@ class KernelParamsCollectRequest(BaseModel):
     private_key: str | None = None
     use_sudo: bool = False
     connect_timeout: int = Field(default=8, ge=1, le=60)
-    # 수집 대상. 비어있으면 아래 기본 prefix 들만 긁는다.
     params: list[str] = Field(default_factory=list, max_length=200)
-    # 비어있을 때 사용할 prefix 목록
     default_prefixes: list[str] = Field(default_factory=lambda: [
         "net.ipv4", "net.bridge", "net.core", "vm",
         "fs.file-max", "fs.nr_open", "kernel.pid_max",
     ])
+    parallelism: int = Field(default=10, ge=1, le=50)
+    chunk_size: int = Field(default=30, ge=1, le=200)
+    chunk_pause_ms: int = Field(default=200, ge=0, le=5000)
 
 
 def _parse_sysctl(text: str) -> dict[str, str]:
@@ -447,12 +535,12 @@ def _parse_sysctl(text: str) -> dict[str, str]:
 
 
 @router.post("/{cluster_id}/collect-kernel-params")
-def collect_kernel_params(
+async def collect_kernel_params(
     cluster_id: UUID,
     payload: KernelParamsCollectRequest,
     db: Session = Depends(get_db),
 ):
-    """노드별 sysctl 값을 수집해 히스토리에 누적. 내용 동일시 저장 생략."""
+    """노드별 sysctl 값을 병렬로 수집해 히스토리에 누적. 내용 동일시 저장 생략."""
     cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
@@ -464,27 +552,20 @@ def collect_kernel_params(
 
     now = datetime.utcnow()
     sudo = "sudo -n " if payload.use_sudo else ""
-    # params 가 있으면 해당 키만, 없으면 prefix 매칭 (`sysctl -a | grep -E ...`)
     if payload.params:
-        # 안전: 사용자 입력은 shell 해석되지 않도록 per-key 호출
         cmds = " && ".join([
             f"{sudo}sysctl -n {p!r} 2>/dev/null | sed 's#^#{p} = #'"
             for p in payload.params if re.match(r"^[A-Za-z0-9_.-]+$", p)
         ])
         cmd = cmds
     else:
-        # prefix 필터 — `net.ipv4.` / `fs.` / `vm.` 등으로 시작하는 줄만
         grep_expr = "|".join(re.escape(p) + r"\\." for p in payload.default_prefixes if "." not in p)
         exact_expr = "|".join(re.escape(p) for p in payload.default_prefixes if "." in p)
         parts = [e for e in (grep_expr, exact_expr) if e]
         regex = "|".join(parts) if parts else "."
         cmd = f"{sudo}sysctl -a 2>/dev/null | grep -E '^({regex})' || true"
 
-    changed = 0
-    per_host: list[dict] = []
-    errors: list[str] = []
-
-    for host in payload.hosts:
+    def _one(host: str) -> dict:
         target = SSHTarget(
             host=host, port=payload.port, username=payload.username,
             password=payload.password, private_key=payload.private_key,
@@ -493,16 +574,33 @@ def collect_kernel_params(
         entry: dict = {"host": host, "status": res.status}
         if res.status != "ok":
             entry["error"] = res.error or res.stderr[:200]
-            errors.append(f"{host}: {res.error or res.status}")
-            per_host.append(entry)
-            continue
+            return entry
         parsed = _parse_sysctl(res.stdout)
         entry["param_count"] = len(parsed)
+        entry["_parsed"] = parsed   # 저장용 임시
+        return entry
+
+    per_host: list[dict] = await _parallel_collect(
+        payload.hosts,
+        worker=_one,
+        parallelism=payload.parallelism,
+        chunk_size=payload.chunk_size,
+        chunk_pause_ms=payload.chunk_pause_ms,
+    )
+
+    changed = 0
+    errors: list[str] = []
+    for entry in per_host:
+        if entry.get("status") != "ok":
+            errors.append(f"{entry.get('host')}: {entry.get('error') or entry.get('status')}")
+            continue
+        host = entry["host"]
+        parsed = entry.pop("_parsed", {})
         data = {"host": host, "params": parsed, "collected_at": now.isoformat()}
         stored = _store_if_changed(
             db, cluster_id,
             component=f"kernel_params:{host}",
-            category="kernel",
+            category="os",
             version=None,
             data=data,
             now=now,
@@ -510,7 +608,6 @@ def collect_kernel_params(
         entry["stored"] = stored
         if stored:
             changed += 1
-        per_host.append(entry)
 
     if changed:
         db.commit()
@@ -628,7 +725,7 @@ def collect_etcdctl_config(
         stored = _store_if_changed(
             db, cluster_id,
             component=f"etcdctl_config:{host}",
-            category="etcdctl",
+            category="os",
             version=None,
             data=data,
             now=now,

@@ -41,6 +41,7 @@ export function KernelParamsCollectModal({ open, clusterId, onClose }: Props) {
 
   // prefix 편집 — 기본 7개 · 쉼표 구분 표시
   const [prefixesText, setPrefixesText] = useState(DEFAULT_PREFIXES.join(', '));
+  const [parallelism, setParallelism] = useState(10);
 
   // 대상
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -75,6 +76,7 @@ export function KernelParamsCollectModal({ open, clusterId, onClose }: Props) {
         privateKey: authMode === 'key' ? privateKey : undefined,
         useSudo,
         defaultPrefixes: prefixes,
+        parallelism,
       }, signal);
       return r.data;
     },
@@ -123,7 +125,7 @@ export function KernelParamsCollectModal({ open, clusterId, onClose }: Props) {
 
         <div className="px-5 py-4 max-h-[520px] overflow-y-auto space-y-4">
           {/* SSH 자격증명 */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div>
               <label className="text-[11px] text-muted-foreground mb-1 block">SSH User</label>
               <input value={username} onChange={(e) => setUsername(e.target.value)}
@@ -133,6 +135,16 @@ export function KernelParamsCollectModal({ open, clusterId, onClose }: Props) {
               <label className="text-[11px] text-muted-foreground mb-1 block">SSH Port</label>
               <input type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
                 min={1} max={65535}
+                className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
+            </div>
+            <div>
+              <label className="text-[11px] text-muted-foreground mb-1 block"
+                title="동시에 SSH 세션 몇 개 열지 상한. 300 노드 이상이면 10~20 권장.">
+                Parallelism
+              </label>
+              <input type="number" value={parallelism}
+                onChange={(e) => setParallelism(Number(e.target.value) || 10)}
+                min={1} max={50}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
             </div>
             <div className="flex items-end">

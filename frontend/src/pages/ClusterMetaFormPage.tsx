@@ -6,7 +6,7 @@ import { clustersApi } from '@/services/api';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useQueryClient } from '@tanstack/react-query';
-import { OPERATION_LEVELS } from '@/components/cluster-manage';
+import { useOperationLevels } from '@/hooks/useOperationLevels';
 
 const TABS = [
   { id: 'node',    label: '노드 스펙 / NIC', icon: Cpu },
@@ -24,6 +24,7 @@ export function ClusterMetaFormPage() {
   useClusters();
   const { clusters } = useClusterStore();
   const cluster: Cluster | undefined = clusters.find((c) => c.id === id);
+  const { data: opsLevels = [] } = useOperationLevels();
 
   const [region, setRegion]             = useState('');
   const [operationLevel, setLevel]      = useState('');
@@ -172,7 +173,7 @@ export function ClusterMetaFormPage() {
               <label className={lc}>운영레벨</label>
               <select value={operationLevel} onChange={(e) => setLevel(e.target.value)} className={ic}>
                 <option value="">— 선택 —</option>
-                {OPERATION_LEVELS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+                {opsLevels.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
               </select>
             </div>
             <div>

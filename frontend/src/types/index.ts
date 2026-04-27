@@ -351,6 +351,13 @@ export interface UiSettings {
   navLabels: Record<string, string>;
 }
 
+export interface OperationLevelItem {
+  value: string;
+  label: string;
+  /** tailwind 컬러 키 — red/amber/emerald/sky/slate/purple/blue/yellow/pink/cyan/violet/orange/muted */
+  color: string;
+}
+
 // Workflow Board
 export type WorkflowStepType = 'trigger' | 'action' | 'condition' | 'wait' | 'notification';
 export type WorkflowStepStatus = 'idle' | 'running' | 'success' | 'failed' | 'skipped';
@@ -828,6 +835,10 @@ export interface EtcdSystemdCollectRequest {
   privateKey?: string;
   useSudo?: boolean;
   connectTimeout?: number;
+  envFiles?: string[];
+  parallelism?: number;
+  chunkSize?: number;
+  chunkPauseMs?: number;
 }
 
 export interface EtcdSystemdPerHost {
@@ -863,6 +874,9 @@ export interface KernelParamsCollectRequest {
   connectTimeout?: number;
   params?: string[];
   defaultPrefixes?: string[];
+  parallelism?: number;
+  chunkSize?: number;
+  chunkPauseMs?: number;
 }
 
 export interface KernelParamsPerHost {

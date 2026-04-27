@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserPlus, UserCheck, Check, X as XIcon, Bug, HardDrive } from 'lucide-react';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
+import { OperationLevelsManager } from '@/components/settings/OperationLevelsManager';
 import { DEBUG_PAGES, useDebugStore } from '@/stores/debugStore';
 import { useClusters, useUpdateCluster, useDeleteCluster } from '@/hooks/useCluster';
 import { useAssignees, useUpdateAssignees } from '@/hooks/useAssignees';
@@ -540,6 +541,13 @@ export function SettingsPage() {
             <p className="text-2xl font-bold text-red-400">{statusCounts.critical}</p>
           </div>
         </div>}
+
+        {/* 운영레벨 관리 */}
+        {activeTab === 'cluster' && (
+          <div className="mb-8">
+            <OperationLevelsManager />
+          </div>
+        )}
 
         {/* Cluster List */}
         {activeTab === 'cluster' && <div className="bg-card border border-border rounded-xl mb-8">

@@ -21,10 +21,10 @@ export function Header({ onRunCheck, onSettings }: HeaderProps) {
   const location = useLocation();
 
   return (
-    <header className="bg-card border-b border-border px-8 h-16 flex items-center justify-between sticky top-0 z-50">
+    <header className="bg-card/86 backdrop-blur-xl border-b border-border px-8 h-16 flex items-center justify-between sticky top-0 z-50">
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-primary to-blue-700 rounded-lg flex items-center justify-center text-white text-sm">
+          <div className="w-8 h-8 bg-gradient-to-br from-primary to-sky-700 rounded-[10px] flex items-center justify-center text-white text-sm shadow-[0_8px_18px_rgba(0,122,255,0.28)]">
             ☸
           </div>
           <span className="font-semibold text-lg">K8s Daily Monitor</span>
@@ -38,9 +38,9 @@ export function Header({ onRunCheck, onSettings }: HeaderProps) {
               <Link
                 key={to}
                 to={to}
-                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+                className={`px-3 py-1.5 text-sm font-medium rounded-xl transition-colors flex items-center gap-2 ${
                   isActive
-                    ? 'bg-primary/10 text-primary'
+                    ? 'bg-primary/12 text-primary shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.12)]'
                     : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 }`}
               >
@@ -62,7 +62,7 @@ export function Header({ onRunCheck, onSettings }: HeaderProps) {
         {onSettings && (
           <button
             onClick={onSettings}
-            className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors flex items-center gap-2"
+            className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors flex items-center gap-2"
           >
             <Settings className="w-4 h-4" />
             Settings
@@ -73,7 +73,7 @@ export function Header({ onRunCheck, onSettings }: HeaderProps) {
           <button
             onClick={onRunCheck}
             disabled={isChecking}
-            className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50 shadow-[0_10px_20px_rgba(0,122,255,0.3)]"
           >
             <RefreshCw className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />
             {isChecking ? 'Checking...' : 'Run Check'}

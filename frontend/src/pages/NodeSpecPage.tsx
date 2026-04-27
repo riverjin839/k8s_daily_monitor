@@ -7,8 +7,9 @@ import {
 import { useClusters } from '@/hooks/useCluster';
 import {
   ClusterSidebar, DebugLogPanel, ConfirmDialog, GridCell, InlineTextCell, useToast,
-  SkeletonTable, EmptyState,
+  SkeletonTable, EmptyState, ResizeGrip,
 } from '@/components/common';
+import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { formatApiError } from '@/lib/utils';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useGridSelection } from '@/hooks/useGridSelection';
@@ -117,6 +118,21 @@ export function NodeSpecPage() {
     'os', 'ssdvm', 'usage', 'location', 'asset',
   ], []);
   const rowIds = useMemo(() => rows.map((r) => r.id), [rows]);
+
+  // 컬럼 너비 (드래그로 조정, localStorage 영속화)
+  const COL_LABELS: Record<string, string> = {
+    hostname: '호스트명', status: '상태', cluster: '클러스터/역할', ip: 'IP / BMC',
+    vendor: 'Vendor / Model', cpu: 'CPU / RAM', disk: 'Disk / GPU', os: 'OS',
+    ssdvm: 'SSD / VM', usage: '현재 용도 / 구입 목적', location: '위치', asset: '자산',
+  };
+  const colW = useColumnWidths('node-spec-table', {
+    defaults: {
+      hostname: 140, status: 80, cluster: 120, ip: 160, vendor: 160,
+      cpu: 140, disk: 140, os: 140, ssdvm: 90, usage: 200, location: 140,
+      asset: 160, actions: 80,
+    },
+    min: 60, max: 600,
+  });
 
   const cellText = (coord: { row: string; col: string }): string | undefined => {
     const r = rows.find((x) => x.id === coord.row);
@@ -332,22 +348,23 @@ export function NodeSpecPage() {
           {/* 테이블 */}
           <div ref={tableRef} tabIndex={-1} className="bg-card border border-border rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
+                <colgroup>
+                  {GRID_COLS.map((k) => <col key={k} style={{ width: `${colW.getWidth(k)}px` }} />)}
+                  <col style={{ width: `${colW.getWidth('actions')}px` }} />
+                </colgroup>
                 <thead className="bg-muted/30 text-left sticky top-0">
                   <tr className="border-b border-border">
-                    <th className="px-2 py-2 text-[11px] font-semibold text-muted-foreground">호스트명</th>
-                    <th className="px-2 py-2 text-[11px] font-semibold text-muted-foreground">상태</th>
-                    <th className="px-2 py-2 text-[11px] font-semibold text-muted-foreground">클러스터/역할</th>
-                    <th className="px-2 py-2 text-[11px] font-semibold text-muted-foreground">IP / BMC</th>
-                    <th className="px-2 py-2 text-[11px] font-semibold text-muted-foreground">Vendor / Model</th>
-                    <th className="px-2 py-2 text-[11px] font-semibold text-muted-foreground">CPU / RAM</th>
-                    <th className="px-2 py-2 text-[11px] font-semibold text-muted-foreground">Disk / GPU</th>
-                    <th className="px-2 py-2 text-[11px] font-semibold text-muted-foreground">OS</th>
-                    <th className="px-2 py-2 text-[11px] font-semibold text-muted-foreground text-center">SSD / VM</th>
-                    <th className="px-2 py-2 text-[11px] font-semibold text-muted-foreground">현재 용도 / 구입 목적</th>
-                    <th className="px-2 py-2 text-[11px] font-semibold text-muted-foreground">위치</th>
-                    <th className="px-2 py-2 text-[11px] font-semibold text-muted-foreground">자산</th>
-                    <th className="px-2 py-2 text-[11px] font-semibold text-muted-foreground"></th>
+                    {GRID_COLS.map((k) => (
+                      <th key={k}
+                        className={`relative px-2 py-2 text-[11px] font-semibold text-muted-foreground ${k === 'ssdvm' ? 'text-center' : ''}`}>
+                        <span className="truncate inline-block max-w-full align-middle">{COL_LABELS[k]}</span>
+                        <ResizeGrip onMouseDown={(e) => colW.beginResize(k, e)} onDoubleClick={() => colW.autoFit(k)} />
+                      </th>
+                    ))}
+                    <th className="relative px-2 py-2 text-[11px] font-semibold text-muted-foreground">
+                      <ResizeGrip onMouseDown={(e) => colW.beginResize('actions', e)} onDoubleClick={() => colW.autoFit('actions')} />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Pencil, Trash2, Cpu, Network, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
 import type { Cluster } from '@/types';
-import { STATUS_STYLE, LEVEL_BADGE, OPERATION_LEVELS, OVERLAP_COLORS } from './constants';
+import { STATUS_STYLE, OVERLAP_COLORS } from './constants';
+import { useOperationLevels, levelBadgeClass, levelLabel, levelColor } from '@/hooks/useOperationLevels';
 import { CidrRow } from './CidrRow';
 
 type CardTab = 'node' | 'network';
@@ -19,6 +20,7 @@ interface ClusterCardProps {
 export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onAutoUpdate, autoUpdatingId }: ClusterCardProps) {
   const [tab, setTab] = useState<CardTab>('node');
   const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
+  const { data: opsLevels } = useOperationLevels();
   const overlapColor = overlapGroupIdx !== undefined
     ? OVERLAP_COLORS[overlapGroupIdx % OVERLAP_COLORS.length]
     : null;
@@ -39,8 +41,8 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
             <div className="flex flex-wrap items-center gap-1.5">
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${st.badge}`}>{st.label}</span>
               {cluster.operationLevel && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${LEVEL_BADGE[cluster.operationLevel] ?? 'bg-muted text-muted-foreground border-border'}`}>
-                  {OPERATION_LEVELS.find((l) => l.value === cluster.operationLevel)?.label ?? cluster.operationLevel}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${levelBadgeClass(levelColor(opsLevels, cluster.operationLevel))}`}>
+                  {levelLabel(opsLevels, cluster.operationLevel)}
                 </span>
               )}
               {cluster.region && (

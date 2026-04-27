@@ -650,6 +650,10 @@ export const uiSettingsApi = {
   update: (data: Partial<UiSettings>) => api.put<UiSettings>('/ui-settings', data),
   getClusterLinks: () => api.get<{ data: ClusterLinksPayload }>('/ui-settings/cluster-links'),
   updateClusterLinks: (data: ClusterLinksPayload) => api.put<{ data: ClusterLinksPayload }>('/ui-settings/cluster-links', data),
+  getOperationLevels: () =>
+    api.get<{ levels: import('@/types').OperationLevelItem[] }>('/ui-settings/operation-levels'),
+  updateOperationLevels: (levels: import('@/types').OperationLevelItem[]) =>
+    api.put<{ levels: import('@/types').OperationLevelItem[] }>('/ui-settings/operation-levels', { levels }),
 };
 
 export const nodeLabelsApi = {

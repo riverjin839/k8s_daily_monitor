@@ -19,7 +19,9 @@ import {
   ClusterCustomFieldsManager,
   type DiffRow,
 } from '@/components/cluster-manage';
-import { OPERATION_LEVELS } from '@/components/cluster-manage';
+import { useOperationLevels } from '@/hooks/useOperationLevels';
+import { useColumnWidths } from '@/hooks/useColumnWidths';
+import { ResizeGrip } from '@/components/common';
 import { useClusterCustomFields, sortedFields } from '@/hooks/useClusterCustomFields';
 import { Settings2 } from 'lucide-react';
 
@@ -73,6 +75,27 @@ export function ClusterManagePage() {
   const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
   const { data: customFieldsRaw } = useClusterCustomFields();
   const customFields = sortedFields(customFieldsRaw);
+  const { data: opsLevels = [] } = useOperationLevels();
+
+  // 컬럼 너비 — drag 로 사용자 정의, localStorage 영속화
+  const COLUMNS: { key: string; label: string; w: number; center?: boolean }[] = [
+    { key: 'name',     label: '클러스터명',  w: 160 },
+    { key: 'status',   label: '상태',         w: 90 },
+    { key: 'region',   label: '지역',         w: 100 },
+    { key: 'level',    label: '운영레벨',     w: 130 },
+    { key: 'bgp',      label: 'BGP / AS',    w: 110 },
+    { key: 'cidr',     label: 'Node CIDR',   w: 150 },
+    { key: 'pod',      label: 'Pod CIDR',    w: 150 },
+    { key: 'svc',      label: 'Svc CIDR',    w: 150 },
+    { key: 'maxpod',   label: 'Max Pods',    w: 80, center: true },
+    { key: 'k8s',      label: 'K8s / Cilium', w: 130 },
+    { key: 'nodeip',   label: '노드 IP',     w: 200 },
+    { key: 'api',      label: 'API / 기타',  w: 200 },
+  ];
+  const columnDefaults: Record<string, number> = Object.fromEntries(COLUMNS.map((c) => [c.key, c.w]));
+  customFields.forEach((f) => { columnDefaults[`custom_${f.id}`] = f.width ?? 140; });
+  columnDefaults['actions'] = 120;
+  const colW = useColumnWidths('cluster-table', { defaults: columnDefaults, min: 60, max: 800 });
 
   const filteredClusters = useMemo(() => {
     let list = [...clusters];
@@ -233,6 +256,13 @@ export function ClusterManagePage() {
               컬럼 관리 {customFields.length > 0 && <span className="text-primary">({customFields.length})</span>}
             </button>
             <button
+              onClick={colW.reset}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors text-muted-foreground hover:text-foreground"
+              title="저장된 컬럼 너비를 기본값으로 되돌립니다"
+            >
+              너비 리셋
+            </button>
+            <button
               onClick={() => setShowFilter(v => !v)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors text-muted-foreground hover:text-foreground"
             >
@@ -263,7 +293,7 @@ export function ClusterManagePage() {
               <select value={filterLevel} onChange={(e) => setFilterLevel(e.target.value)}
                 className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
                 <option value="">전체</option>
-                {OPERATION_LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                {opsLevels.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
               </select>
             </div>
             <div className="min-w-[140px]">
@@ -299,20 +329,33 @@ export function ClusterManagePage() {
         ) : viewMode === 'table' ? (
           <div className="rounded-xl border border-border overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm border-collapse">
+              <table className="text-sm border-collapse" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
+                <colgroup>
+                  {COLUMNS.map((c) => <col key={c.key} style={{ width: `${colW.getWidth(c.key)}px` }} />)}
+                  {customFields.map((f) => <col key={`custom_${f.id}`} style={{ width: `${colW.getWidth(`custom_${f.id}`)}px` }} />)}
+                  <col style={{ width: `${colW.getWidth('actions')}px` }} />
+                </colgroup>
                 <thead className="bg-secondary/50">
                   <tr className="border-b border-border">
-                    {['클러스터명', '상태', '지역', '운영레벨', 'BGP / AS', 'Node CIDR', 'Pod CIDR', 'Svc CIDR', 'Max Pods', 'K8s / Cilium', '노드 IP', 'API / 기타'].map(h => (
-                      <th key={h} className={`px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground ${h === 'Max Pods' ? 'text-center' : ''}`}>{h}</th>
-                    ))}
-                    {customFields.map((f) => (
-                      <th key={f.id} className="px-3 py-2.5 text-left text-xs font-semibold text-primary/80 border-l border-primary/10"
-                        style={f.width ? { width: f.width } : undefined}
-                        title={f.description ?? ''}>
-                        {f.label}
+                    {COLUMNS.map((c) => (
+                      <th key={c.key}
+                        className={`relative px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground ${c.center ? 'text-center' : ''}`}>
+                        <span className="truncate inline-block max-w-full align-middle">{c.label}</span>
+                        <ResizeGrip onMouseDown={(e) => colW.beginResize(c.key, e)} onDoubleClick={() => colW.autoFit(c.key)} />
                       </th>
                     ))}
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">액션</th>
+                    {customFields.map((f) => (
+                      <th key={f.id}
+                        className="relative px-3 py-2.5 text-left text-xs font-semibold text-primary/80 border-l border-primary/10"
+                        title={f.description ?? ''}>
+                        <span className="truncate inline-block max-w-full align-middle">{f.label}</span>
+                        <ResizeGrip onMouseDown={(e) => colW.beginResize(`custom_${f.id}`, e)} onDoubleClick={() => colW.autoFit(`custom_${f.id}`)} />
+                      </th>
+                    ))}
+                    <th className="relative px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">
+                      <span>액션</span>
+                      <ResizeGrip onMouseDown={(e) => colW.beginResize('actions', e)} onDoubleClick={() => colW.autoFit('actions')} />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>

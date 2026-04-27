@@ -3,7 +3,8 @@ import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react'
 import type { Cluster, ClusterCustomField } from '@/types';
 import { useUpdateCluster } from '@/hooks/useCluster';
 import { InlineEdit } from '@/components/common';
-import { STATUS_STYLE, LEVEL_BADGE, OPERATION_LEVELS } from './constants';
+import { STATUS_STYLE } from './constants';
+import { useOperationLevels, levelBadgeClass, levelLabel, levelColor } from '@/hooks/useOperationLevels';
 import { ClusterCustomCell } from './ClusterCustomCell';
 
 interface ClusterTableRowProps {
@@ -66,7 +67,8 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
     updateCluster.mutate({ id: cluster.id, data: patch }, { onSettled: () => setEditingField(null) });
   };
   const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
-  const lv = LEVEL_BADGE[cluster.operationLevel ?? ''];
+  const { data: opsLevels } = useOperationLevels();
+  const lv = cluster.operationLevel ? levelBadgeClass(levelColor(opsLevels, cluster.operationLevel)) : undefined;
 
   return (
     <tr className="border-b border-border hover:bg-secondary/20 transition-colors">
@@ -114,11 +116,11 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             className="text-xs bg-background border border-border rounded px-1.5 py-0.5"
           >
             <option value="">—</option>
-            {OPERATION_LEVELS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+            {(opsLevels ?? []).map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
           </select>
         ) : cluster.operationLevel ? (
           <span className={`text-[11px] px-2 py-0.5 rounded-full border ${lv}`}>
-            {OPERATION_LEVELS.find(l => l.value === cluster.operationLevel)?.label ?? cluster.operationLevel}
+            {levelLabel(opsLevels, cluster.operationLevel)}
           </span>
         ) : <span className="text-muted-foreground/60 text-xs">-</span>}
       </EditableCell>

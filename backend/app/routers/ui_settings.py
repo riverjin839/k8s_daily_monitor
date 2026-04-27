@@ -9,6 +9,9 @@ from app.schemas.ui_settings import (
     ClusterLinksResponse,
     ClusterLinksUpdate,
     ClusterLinksPayload,
+    OperationLevelsResponse,
+    OperationLevelsUpdate,
+    OperationLevelItem,
 )
 
 router = APIRouter(prefix="/ui-settings", tags=["ui-settings"])
@@ -16,7 +19,17 @@ router = APIRouter(prefix="/ui-settings", tags=["ui-settings"])
 UI_SETTINGS_KEY = "ui_settings"
 CLUSTER_LINKS_KEY = "cluster_links"
 ASSIGNEES_KEY = "assignees"
+OPERATION_LEVELS_KEY = "operation_levels"
 DEFAULT_ASSIGNEES = []
+DEFAULT_OPERATION_LEVELS = {
+    "levels": [
+        {"value": "production", "label": "운영 (Production)", "color": "red"},
+        {"value": "staging",    "label": "스테이징 (Staging)", "color": "amber"},
+        {"value": "dev",        "label": "개발 (Dev)",         "color": "blue"},
+        {"value": "test",       "label": "테스트 (Test)",      "color": "slate"},
+        {"value": "dr",         "label": "DR",                 "color": "purple"},
+    ]
+}
 
 
 DEFAULT_UI_SETTINGS = {
@@ -141,3 +154,45 @@ def update_assignees(payload: dict, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(setting)
     return {"data": cleaned}
+
+
+# ── 운영레벨 (사용자 정의) ──────────────────────────────────────────────
+
+@router.get("/operation-levels", response_model=OperationLevelsResponse)
+def get_operation_levels(db: Session = Depends(get_db)):
+    setting = _get_or_create(db, OPERATION_LEVELS_KEY, DEFAULT_OPERATION_LEVELS)
+    raw_levels = (setting.value or {}).get("levels", [])
+    items: list[OperationLevelItem] = []
+    seen: set[str] = set()
+    for it in raw_levels:
+        if not isinstance(it, dict):
+            continue
+        v = str(it.get("value", "")).strip()
+        if not v or v in seen:
+            continue
+        seen.add(v)
+        items.append(OperationLevelItem(
+            value=v,
+            label=str(it.get("label", v)),
+            color=str(it.get("color", "slate")),
+        ))
+    if not items:
+        items = [OperationLevelItem(**x) for x in DEFAULT_OPERATION_LEVELS["levels"]]
+    return OperationLevelsResponse(levels=items)
+
+
+@router.put("/operation-levels", response_model=OperationLevelsResponse)
+def update_operation_levels(payload: OperationLevelsUpdate, db: Session = Depends(get_db)):
+    setting = _get_or_create(db, OPERATION_LEVELS_KEY, DEFAULT_OPERATION_LEVELS)
+    seen: set[str] = set()
+    cleaned: list[dict] = []
+    for it in payload.levels:
+        v = it.value.strip()
+        if not v or v in seen:
+            continue
+        seen.add(v)
+        cleaned.append({"value": v, "label": it.label.strip() or v, "color": it.color or "slate"})
+    setting.value = {"levels": cleaned}
+    db.commit()
+    db.refresh(setting)
+    return OperationLevelsResponse(levels=[OperationLevelItem(**x) for x in cleaned])

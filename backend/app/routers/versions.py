@@ -964,3 +964,579 @@ def get_versions_graph(cluster_id: UUID, db: Session = Depends(get_db)):
         "nodes": nodes,
         "edges": edges,
     }
+
+
+# ── 노드 NIC 수집 (bond0/bond1 + public/private IP) ─────────────────────────
+
+class NodeNicsCollectRequest(BaseModel):
+    """각 노드 SSH → `ip -j addr show` 로 모든 인터페이스/IP 를 가져와
+    `node_nics:{host}` 스냅샷에 저장 + Cluster.node_ips 의 풍부한 포맷으로 갱신.
+
+    K8s API 의 InternalIP 만으로는 bond0/bond1 (public/private) 같은 다중
+    NIC 환경을 표현 못해 OS 레벨 SSH 로 수집한다.
+    """
+    hosts: list[str] = Field(..., min_length=1, max_length=2000)
+    port: int = Field(default=22, ge=1, le=65535)
+    username: str = Field(default="root", min_length=1, max_length=64)
+    password: str | None = None
+    private_key: str | None = None
+    use_sudo: bool = False
+    connect_timeout: int = Field(default=8, ge=1, le=60)
+    # 표시할 인터페이스 prefix (loopback / docker / cni / kube-ipvs0 등 제외)
+    skip_iface_patterns: list[str] = Field(default_factory=lambda: [
+        "lo", "docker", "cni", "veth", "kube-ipvs",
+        "flannel", "cilium_", "tunl", "calico", "br-",
+    ])
+    parallelism: int = Field(default=10, ge=1, le=50)
+    chunk_size: int = Field(default=30, ge=1, le=200)
+    chunk_pause_ms: int = Field(default=200, ge=0, le=5000)
+
+
+def _parse_ip_json(raw_json: str, skip_patterns: list[str]) -> list[dict]:
+    """`ip -j addr show` 출력 파싱.
+
+    출력 예 (단일 인터페이스):
+      {"ifindex": 5, "ifname": "bond0", "operstate": "UP",
+       "address": "aa:bb:cc:dd:ee:ff", "mtu": 1500,
+       "addr_info": [{"family": "inet", "local": "10.0.1.10", "prefixlen": 24}]}
+    """
+    if not raw_json or not raw_json.strip():
+        return []
+    try:
+        data = json.loads(raw_json)
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+    out: list[dict] = []
+    for it in data:
+        name = it.get("ifname") or ""
+        if not name:
+            continue
+        # skip 패턴 매칭
+        if any(name == p or name.startswith(p) for p in skip_patterns):
+            continue
+        addrs = []
+        for ai in it.get("addr_info", []) or []:
+            if ai.get("family") == "inet" and ai.get("local"):
+                addrs.append({
+                    "ip": ai["local"],
+                    "prefixlen": ai.get("prefixlen"),
+                    "scope": ai.get("scope"),
+                })
+        if not addrs:
+            continue
+        out.append({
+            "name": name,
+            "mac": it.get("address"),
+            "mtu": it.get("mtu"),
+            "operstate": it.get("operstate"),
+            "addrs": addrs,
+            # 결합 인터페이스 정보 (bond/bridge/vlan slave 등)
+            "link_kind": (it.get("linkinfo") or {}).get("info_kind"),
+        })
+    return out
+
+
+def _categorize_ip(ip: str) -> str:
+    """RFC1918 / RFC6598 / 100.64.0.0/10 (CGNAT) 등 사설 vs 공인 분류.
+    public / private / linklocal / unknown."""
+    try:
+        import ipaddress
+        addr = ipaddress.IPv4Address(ip)
+    except Exception:
+        return "unknown"
+    if addr.is_private:
+        # 10/8, 172.16/12, 192.168/16 + 100.64/10 (CGNAT 도 사설로 취급)
+        return "private"
+    if addr.is_link_local:
+        return "linklocal"
+    if addr.is_loopback or addr.is_multicast or addr.is_reserved:
+        return "unknown"
+    return "public"
+
+
+@router.post("/{cluster_id}/collect-node-nics")
+async def collect_node_nics(
+    cluster_id: UUID,
+    payload: NodeNicsCollectRequest,
+    db: Session = Depends(get_db),
+):
+    """SSH 로 각 노드의 ip 인터페이스 정보 수집 → node_nics:{host} 스냅샷 + Cluster.node_ips 갱신."""
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    if not payload.password and not payload.private_key:
+        raise HTTPException(status_code=422, detail="password 또는 private_key 중 하나는 필수입니다.")
+
+    sudo = "sudo -n " if payload.use_sudo else ""
+    cmd = f"{sudo}ip -j addr show 2>/dev/null"
+    skip_patterns = list(payload.skip_iface_patterns or [])
+    now = datetime.utcnow()
+
+    # 기존 cluster.node_ips 에서 master 플래그 / 이름 매핑 보존
+    name_master: dict[str, bool] = {}
+    name_by_ip: dict[str, str] = {}
+    existing_node_ips_raw = cluster.node_ips
+    if existing_node_ips_raw:
+        try:
+            arr = json.loads(existing_node_ips_raw)
+            if isinstance(arr, list):
+                for n in arr:
+                    nm = n.get("name")
+                    if nm:
+                        name_master[nm] = bool(n.get("master"))
+                    for ip in n.get("ips", []) or [n.get("ip")] or []:
+                        if ip and nm:
+                            name_by_ip[ip] = nm
+        except Exception:
+            pass
+
+    def _one(host: str) -> dict:
+        target = SSHTarget(
+            host=host, port=payload.port, username=payload.username,
+            password=payload.password, private_key=payload.private_key,
+        )
+        res = _exec_ssh(target, cmd, connect_timeout=payload.connect_timeout, exec_timeout=15)
+        entry: dict = {"host": host, "status": res.status}
+        if res.status != "ok":
+            entry["error"] = res.error or res.stderr[:200]
+            return entry
+        ifaces = _parse_ip_json(res.stdout, skip_patterns)
+        entry["interfaces"] = ifaces
+        # 모든 IP 수집
+        all_ips: list[dict] = []
+        for ifc in ifaces:
+            for a in ifc.get("addrs", []):
+                all_ips.append({
+                    "iface": ifc["name"],
+                    "ip": a["ip"],
+                    "prefix": a.get("prefixlen"),
+                    "mac": ifc.get("mac"),
+                    "mtu": ifc.get("mtu"),
+                    "operstate": ifc.get("operstate"),
+                    "scope": _categorize_ip(a["ip"]),  # public / private / linklocal
+                })
+        entry["all_ips"] = all_ips
+        return entry
+
+    per_host = await _parallel_collect(
+        payload.hosts,
+        worker=_one,
+        parallelism=payload.parallelism,
+        chunk_size=payload.chunk_size,
+        chunk_pause_ms=payload.chunk_pause_ms,
+    )
+
+    # 호스트별 스냅샷 저장 (history 추적)
+    changed = 0
+    errors: list[str] = []
+    for entry in per_host:
+        host = entry.get("host")
+        if not host:
+            continue
+        if entry.get("status") != "ok":
+            errors.append(f"{host}: {entry.get('error') or entry.get('status')}")
+            continue
+        data = {
+            "host": host,
+            "interfaces": entry.get("interfaces"),
+            "all_ips": entry.get("all_ips"),
+            "collected_at": now.isoformat(),
+        }
+        if _store_if_changed(
+            db, cluster_id,
+            component=f"node_nics:{host}",
+            category="os",
+            version=None,
+            data=data, now=now,
+        ):
+            changed += 1
+
+    # Cluster.node_ips 풍부한 포맷으로 갱신 — 호스트당 모든 인터페이스/IP 포함
+    rich_nodes: list[dict] = []
+    for entry in per_host:
+        host = entry.get("host")
+        if not host or entry.get("status") != "ok":
+            continue
+        # name 추정: 기존 매핑 → 없으면 host 그대로
+        name = name_by_ip.get(host, host)
+        is_master = name_master.get(name, False)
+        ifaces = entry.get("interfaces") or []
+        ips_flat: list[str] = []
+        for ifc in ifaces:
+            for a in ifc.get("addrs", []):
+                ips_flat.append(a["ip"])
+        rich_nodes.append({
+            "name": name,
+            "master": is_master,
+            "ip": ips_flat[0] if ips_flat else None,
+            "ips": ips_flat,
+            "interfaces": [
+                {
+                    "name": ifc["name"],
+                    "ips": [a["ip"] for a in ifc.get("addrs", [])],
+                    "scopes": [_categorize_ip(a["ip"]) for a in ifc.get("addrs", [])],
+                    "mac": ifc.get("mac"),
+                    "operstate": ifc.get("operstate"),
+                }
+                for ifc in ifaces
+            ],
+        })
+    if rich_nodes:
+        rich_nodes.sort(key=lambda x: (not x.get("master"), x.get("name") or ""))
+        cluster.node_ips = json.dumps(rich_nodes, ensure_ascii=False)
+
+    if changed or rich_nodes:
+        db.commit()
+
+    return {
+        "cluster_id": str(cluster_id),
+        "changed": changed,
+        "hosts": per_host,
+        "errors": errors,
+    }
+
+
+# ── MinIO / AIStor 수집 (Operator + Tenant + DirectPV) ──────────────────────
+
+
+def _ec_parity_default(drives_per_set: int) -> int:
+    """MinIO 의 EC parity 기본값 추정 — 정확한 값은 erasureCodingParity 필드를 우선.
+
+    https://min.io/docs/minio/kubernetes/upstream/operations/concepts/erasure-coding.html
+    drives_per_set <  4 → 0 (EC 미적용)
+    drives_per_set ==  4 → 2 (EC:2 default)
+    drives_per_set ==  6 → 2 (EC:2 default)
+    drives_per_set ==  8 → 4 (EC:4 default)
+    drives_per_set == 12 → 4 (EC:4 default)
+    drives_per_set == 16 → 4 (EC:4 default)
+    """
+    if drives_per_set < 4:
+        return 0
+    if drives_per_set <= 6:
+        return 2
+    return 4
+
+
+def _summarize_tenant(tenant: dict) -> dict:
+    """MinIO Tenant CR 에서 운영자가 알아야 할 핵심만 추출.
+    pools / disks / parity / image / autoCert / 자원 스펙 등."""
+    meta = tenant.get("metadata") or {}
+    spec = tenant.get("spec") or {}
+    status = tenant.get("status") or {}
+
+    pools_in = spec.get("pools") or []
+    pools_out: list[dict] = []
+    total_drives = 0
+    total_servers = 0
+    drives_per_set = 0  # erasure set size (servers × volumesPerServer)
+
+    for p in pools_in:
+        servers = int(p.get("servers") or 0)
+        vps = int(p.get("volumesPerServer") or 0)
+        drives = servers * vps
+        total_drives += drives
+        total_servers += servers
+        if drives_per_set == 0:
+            drives_per_set = drives  # 첫 pool 기준 (보통 동일)
+        vct = p.get("volumeClaimTemplate") or {}
+        vct_spec = vct.get("spec") or {}
+        size_req = (
+            ((vct_spec.get("resources") or {}).get("requests") or {}).get("storage")
+        )
+        sc = vct_spec.get("storageClassName")
+        access_modes = vct_spec.get("accessModes") or []
+        resources = p.get("resources") or {}
+        pools_out.append({
+            "name": p.get("name"),
+            "servers": servers,
+            "volumesPerServer": vps,
+            "drives": drives,
+            "storageClass": sc,
+            "volumeSize": size_req,
+            "accessModes": access_modes,
+            "nodeSelector": p.get("nodeSelector"),
+            "tolerations": bool(p.get("tolerations")),
+            "affinity": bool(p.get("affinity")),
+            "topologySpreadConstraints": bool(p.get("topologySpreadConstraints")),
+            "cpuRequest":   ((resources.get("requests") or {}).get("cpu")),
+            "memoryRequest": ((resources.get("requests") or {}).get("memory")),
+            "cpuLimit":     ((resources.get("limits")   or {}).get("cpu")),
+            "memoryLimit":   ((resources.get("limits")   or {}).get("memory")),
+            "runtimeClassName": p.get("runtimeClassName"),
+        })
+
+    # erasure-coding parity — tenant.spec.erasureCodingParity 가 명시돼 있으면 그 값,
+    # 없으면 drives_per_set 기준 기본값.
+    explicit_parity = spec.get("erasureCodingParity")
+    parity = int(explicit_parity) if explicit_parity is not None else _ec_parity_default(drives_per_set)
+    data_shards = drives_per_set - parity if drives_per_set > 0 else 0
+
+    return {
+        "namespace": meta.get("namespace"),
+        "name": meta.get("name"),
+        "image": spec.get("image"),
+        "imagePullSecret": (spec.get("imagePullSecret") or {}).get("name"),
+        "configMap":       (spec.get("configuration") or {}).get("name"),
+        "credsSecret":     (spec.get("credsSecret") or {}).get("name"),
+        "requestAutoCert": bool(spec.get("requestAutoCert", True)),
+        "exposeServices":  spec.get("exposeServices"),
+        "mountPath":       spec.get("mountPath"),
+        "subPath":         spec.get("subPath"),
+        "serviceAccountName": spec.get("serviceAccountName"),
+        "priorityClassName":  spec.get("priorityClassName"),
+        "podManagementPolicy": spec.get("podManagementPolicy"),
+        "buckets":         spec.get("buckets"),
+        "users":           spec.get("users"),
+        "kes":             bool(spec.get("kes")),
+        # 운영 핵심 — 풀/디스크/패리티
+        "totalServers":    total_servers,
+        "totalDrives":     total_drives,
+        "drivesPerSet":    drives_per_set,   # erasure set 크기
+        "ecParity":        parity,           # 패리티 디스크 수 (EC:N)
+        "ecDataShards":    data_shards,      # 데이터 디스크 수 = set - parity
+        "ecExplicit":      explicit_parity is not None,
+        "pools":           pools_out,
+        # 상태
+        "currentState":    status.get("currentState"),
+        "syncVersion":     status.get("syncVersion"),
+        "availableReplicas": status.get("availableReplicas"),
+        "drivesHealing":   status.get("drivesHealing"),
+        "drivesOnline":    status.get("drivesOnline"),
+        "drivesOffline":   status.get("drivesOffline"),
+        "writeQuorum":     status.get("writeQuorum"),
+        "healthStatus":    status.get("healthStatus"),
+    }
+
+
+def _collect_minio_one(api_client, db: Session, cluster: Cluster, now: datetime) -> dict:
+    """MinIO Operator + Tenant + DirectPV 수집 통합 경로.
+    각 컴포넌트가 없으면 그냥 건너뜀 (warnings 에 기록)."""
+    apps = k8s_client.AppsV1Api(api_client)
+    custom = k8s_client.CustomObjectsApi(api_client)
+    v1 = k8s_client.CoreV1Api(api_client)
+    changed = 0
+    warnings: list[str] = []
+    summary: dict[str, Any] = {
+        "operator": None,
+        "tenants": [],
+        "directpv": None,
+    }
+
+    # 1. MinIO Operator deployment — minio-operator 네임스페이스 일반적
+    op_dep = None
+    op_ns = None
+    for ns_candidate in ("minio-operator", "minio", "default"):
+        try:
+            deps = apps.list_namespaced_deployment(
+                ns_candidate,
+                label_selector="name=minio-operator",
+                _request_timeout=_K8S_TIMEOUT,
+            )
+            if deps.items:
+                op_dep = deps.items[0]; op_ns = ns_candidate
+                break
+            # fallback — 라벨 없이 이름 매칭
+            deps2 = apps.list_namespaced_deployment(
+                ns_candidate,
+                _request_timeout=_K8S_TIMEOUT,
+            )
+            for d in deps2.items:
+                if d.metadata.name in ("minio-operator", "minio-operator-controller"):
+                    op_dep = d; op_ns = ns_candidate; break
+            if op_dep:
+                break
+        except ApiException as e:
+            if e.status not in (404, 403):
+                warnings.append(f"operator search ({ns_candidate}): HTTP {e.status}")
+        except Exception as e:
+            warnings.append(f"operator search ({ns_candidate}): {type(e).__name__}: {str(e)[:120]}")
+
+    if op_dep:
+        c = (op_dep.spec.template.spec.containers or [None])[0]
+        op_data = {
+            "namespace": op_ns,
+            "name":      op_dep.metadata.name,
+            "image":     c.image if c else None,
+            "replicas":  op_dep.spec.replicas,
+            "readyReplicas": op_dep.status.ready_replicas,
+            "labels":    op_dep.metadata.labels or {},
+            "args":      _parse_container_args(c) if c else {},
+        }
+        op_version = _image_tag(c.image) if c and c.image else None
+        if _store_if_changed(db, cluster.id, "minio_operator", "storage",
+                             op_version, op_data, now):
+            changed += 1
+        summary["operator"] = {"namespace": op_ns, "name": op_dep.metadata.name,
+                               "image": c.image if c else None, "version": op_version}
+    else:
+        warnings.append("MinIO Operator 미설치 또는 미발견")
+
+    # 2. MinIO Tenants (CR) — minio.min.io/v2 tenants
+    try:
+        # 클러스터 전체 검색 — operator 가 어떤 ns 에서든 tenant 를 만들 수 있음
+        tenants = custom.list_cluster_custom_object(
+            group="minio.min.io",
+            version="v2",
+            plural="tenants",
+            _request_timeout=_K8S_TIMEOUT * 2,
+        )
+        items = tenants.get("items") or []
+        for t in items:
+            ts = _summarize_tenant(t)
+            comp_key = f"minio_tenant:{ts['namespace']}/{ts['name']}"
+            tag = _image_tag(ts["image"]) if ts.get("image") else None
+            if _store_if_changed(db, cluster.id, comp_key, "storage",
+                                 tag, ts, now):
+                changed += 1
+            summary["tenants"].append({
+                "namespace":     ts["namespace"],
+                "name":          ts["name"],
+                "image":         ts["image"],
+                "version":       tag,
+                "totalServers":  ts["totalServers"],
+                "totalDrives":   ts["totalDrives"],
+                "drivesPerSet":  ts["drivesPerSet"],
+                "ecParity":      ts["ecParity"],
+                "ecDataShards":  ts["ecDataShards"],
+                "currentState":  ts["currentState"],
+                "healthStatus":  ts["healthStatus"],
+                "drivesOnline":  ts["drivesOnline"],
+                "drivesOffline": ts["drivesOffline"],
+            })
+    except ApiException as e:
+        if e.status == 404:
+            warnings.append("MinIO Tenant CRD 미설치 (minio.min.io/v2)")
+        else:
+            warnings.append(f"tenants 조회 실패 ({type(e).__name__}): HTTP {e.status}")
+    except Exception as e:
+        warnings.append(f"tenants 조회 실패 ({type(e).__name__}): {str(e)[:120]}")
+
+    # 3. DirectPV — directpv.min.io/v1beta1 drives / nodes
+    directpv_summary: dict[str, Any] = {}
+    try:
+        drives = custom.list_cluster_custom_object(
+            group="directpv.min.io",
+            version="v1beta1",
+            plural="directpvdrives",
+            _request_timeout=_K8S_TIMEOUT * 2,
+        )
+        d_items = drives.get("items") or []
+        # 노드별 그룹
+        by_node: dict[str, dict] = {}
+        total_size = 0
+        total_alloc = 0
+        ready = 0
+        for d in d_items:
+            st = (d.get("status") or {})
+            node = st.get("nodeName") or (d.get("metadata") or {}).get("labels", {}).get("directpv.min.io/node")
+            size = int(st.get("totalCapacity") or 0)
+            alloc = int(st.get("allocatedCapacity") or 0)
+            cond_ok = str(st.get("status") or "").lower() == "ready"
+            total_size += size
+            total_alloc += alloc
+            if cond_ok:
+                ready += 1
+            n = by_node.setdefault(node or "(unknown)", {
+                "drives": 0, "ready": 0, "total": 0, "allocated": 0, "fsTypes": set(),
+            })
+            n["drives"] += 1
+            if cond_ok:
+                n["ready"] += 1
+            n["total"]     += size
+            n["allocated"] += alloc
+            fs = st.get("filesystem")
+            if fs:
+                n["fsTypes"].add(fs)
+        directpv_summary = {
+            "totalDrives":      len(d_items),
+            "readyDrives":      ready,
+            "totalCapacity":    total_size,
+            "allocatedCapacity": total_alloc,
+            "nodeCount":        len(by_node),
+            "nodes":            [
+                {"node": k, "drives": v["drives"], "ready": v["ready"],
+                 "total": v["total"], "allocated": v["allocated"],
+                 "fsTypes": sorted(v["fsTypes"])}
+                for k, v in sorted(by_node.items())
+            ],
+        }
+        if _store_if_changed(db, cluster.id, "directpv_summary", "storage",
+                             None, directpv_summary, now):
+            changed += 1
+        summary["directpv"] = {
+            "totalDrives":  directpv_summary["totalDrives"],
+            "readyDrives":  directpv_summary["readyDrives"],
+            "totalCapacity": directpv_summary["totalCapacity"],
+            "nodeCount":    directpv_summary["nodeCount"],
+        }
+    except ApiException as e:
+        if e.status == 404:
+            warnings.append("DirectPV CRD 미설치 (directpv.min.io/v1beta1)")
+        else:
+            warnings.append(f"directpv 조회 실패 ({type(e).__name__}): HTTP {e.status}")
+    except Exception as e:
+        warnings.append(f"directpv 조회 실패 ({type(e).__name__}): {str(e)[:120]}")
+
+    # 4. (보너스) Tenant 별 워크로드 pod 수 — Tenant 가 발견됐으면
+    for t in summary["tenants"]:
+        ns = t["namespace"]; name = t["name"]
+        try:
+            pods = v1.list_namespaced_pod(
+                ns,
+                label_selector=f"v1.min.io/tenant={name}",
+                limit=1,
+                _request_timeout=_K8S_TIMEOUT,
+            )
+            # pod 가 있으면 image 도 한번 더 검증
+            t["podsLabelMatch"] = bool(pods.items)
+        except Exception:
+            pass
+
+    return {"changed": changed, "warnings": warnings, "summary": summary}
+
+
+@router.post("/{cluster_id}/collect-minio")
+def collect_minio(cluster_id: UUID, db: Session = Depends(get_db)):
+    """MinIO Operator + Tenant + DirectPV 정보를 수집해 storage 카테고리 스냅샷에 저장.
+
+    스냅샷 컴포넌트:
+    - `minio_operator`         — Operator deployment (image, replicas, args)
+    - `minio_tenant:{ns}/{name}` — Tenant 별 (pools, drives, parity, EC, 상태)
+    - `directpv_summary`       — DirectPV 클러스터 전체 (드라이브 수, 용량, 노드 수)
+
+    각각 content-hash dedup → 변경 시점에만 history 누적.
+    """
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+
+    kc_path = _ensure_kubeconfig_file_for(cluster)
+    if not kc_path or not os.path.exists(kc_path):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="kubeconfig가 없습니다. 먼저 kubeconfig를 등록하세요.",
+        )
+
+    try:
+        api_client = k8s_config.new_client_from_config(config_file=kc_path)
+        now = datetime.utcnow()
+        result = _collect_minio_one(api_client, db, cluster, now)
+        db.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"MinIO 수집 실패 ({type(e).__name__}): {str(e)[:200]}",
+        )
+
+    return {
+        "cluster_id": str(cluster_id),
+        "changed": result["changed"],
+        "warnings": result["warnings"],
+        "summary": result["summary"],
+        "collectedAt": now.isoformat(),
+    }

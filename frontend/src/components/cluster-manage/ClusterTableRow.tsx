@@ -229,8 +229,8 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         </div>
       </td>
 
-      {/* 노드 IP 목록 — 노드당 여러 IP (bond0/bond1) 도 모두 표시 */}
-      <td className="px-3 py-2.5 max-w-[240px]">
+      {/* 노드 IP 목록 — 노드당 여러 IP (bond0/bond1) + public/private 스코프 표시 */}
+      <td className="px-3 py-2.5 max-w-[280px]">
         {(() => {
           if (!cluster.nodeIps) {
             return cluster.nodeCount
@@ -239,14 +239,61 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           }
           try {
             const arr = JSON.parse(cluster.nodeIps) as {
-              name: string; ip?: string; ips?: string[]; externalIp?: string; external_ip?: string; master?: boolean;
+              name: string;
+              ip?: string;
+              ips?: string[];
+              externalIp?: string;
+              external_ip?: string;
+              master?: boolean;
+              interfaces?: { name: string; ips: string[]; scopes?: string[]; operstate?: string | null }[];
             }[];
             const shown = arr.slice(0, 4);
             const rest = arr.length - shown.length;
             const multiCount = arr.filter((n) => (n.ips?.length ?? 0) > 1).length;
+            const hasIfaces = arr.some((n) => (n.interfaces?.length ?? 0) > 0);
+            const pubCount = arr.reduce((s, n) =>
+              s + (n.interfaces ?? []).reduce((s2, ifc) =>
+                s2 + (ifc.scopes ?? []).filter((sc) => sc === 'public').length, 0), 0);
             return (
               <div className="text-[11px] font-mono space-y-0.5">
                 {shown.map((n) => {
+                  const ifaces = n.interfaces ?? [];
+                  if (ifaces.length > 0) {
+                    return (
+                      <div key={n.name} className="space-y-0.5"
+                        title={`${n.name}${n.externalIp ? ` · ext: ${n.externalIp}` : ''}`}>
+                        <div className={`flex items-center gap-1 ${n.master ? 'text-foreground' : 'text-foreground/80'}`}>
+                          {n.master && <span className="inline-block w-1 h-1 rounded-full bg-primary align-middle" />}
+                          <span className="text-[10px] text-muted-foreground/80 truncate max-w-[120px]">{n.name}</span>
+                        </div>
+                        {ifaces.map((ifc) => {
+                          const scopes = ifc.scopes ?? [];
+                          const ips = ifc.ips ?? [];
+                          return (
+                            <div key={`${n.name}-${ifc.name}`} className="flex items-center gap-1 flex-wrap pl-2">
+                              <span className="text-[9px] text-muted-foreground/70">{ifc.name}</span>
+                              {ips.map((ip, i) => {
+                                const sc = scopes[i] ?? 'unknown';
+                                const isPub = sc === 'public';
+                                return (
+                                  <span key={ip}
+                                    className={`text-[10px] px-1 rounded ${
+                                      isPub
+                                        ? 'bg-amber-500/10 text-amber-500'
+                                        : 'bg-sky-500/10 text-sky-500'
+                                    }`}
+                                    title={isPub ? 'public' : sc}>
+                                    {ip}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  }
+                  // legacy 포맷 — interfaces 없는 경우
                   const ips = n.ips && n.ips.length > 0 ? n.ips : (n.ip ? [n.ip] : []);
                   return (
                     <div key={n.name} className={n.master ? 'text-foreground' : 'text-muted-foreground'}
@@ -266,11 +313,23 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
                   );
                 })}
                 {rest > 0 && <p className="text-muted-foreground/70">+{rest} more</p>}
-                {multiCount > 0 && (
-                  <p className="text-[10px] text-primary/70" title="노드당 InternalIP 여러 개 (bond0/bond1 등)">
-                    다중 IP {multiCount}대
-                  </p>
-                )}
+                <div className="flex items-center gap-2 pt-0.5">
+                  {multiCount > 0 && (
+                    <span className="text-[10px] text-primary/70" title="노드당 IP 여러 개 (bond0/bond1 등)">
+                      다중 IP {multiCount}대
+                    </span>
+                  )}
+                  {pubCount > 0 && (
+                    <span className="text-[10px] text-amber-500/80" title="public IP 보유 NIC 수">
+                      public {pubCount}건
+                    </span>
+                  )}
+                  {!hasIfaces && (
+                    <span className="text-[10px] text-muted-foreground/60" title="NIC 상세 미수집 — 'NIC 수집' 실행 시 채워집니다.">
+                      NIC 미수집
+                    </span>
+                  )}
+                </div>
               </div>
             );
           } catch {

@@ -36,6 +36,7 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
   '/packet-flow':        { defaultLabel: '패킷 흐름 분석', icon: Route },
   '/ontology':           { defaultLabel: '온톨로지 그래프', icon: Share2 },
   '/trends':             { defaultLabel: '기술 동향',      icon: Rss },
+  '/services':           { defaultLabel: '서비스 지식관리', icon: BookOpen },
   '/work-guides':        { defaultLabel: '작업 가이드',    icon: BookMarked },
   '/ops-notes':          { defaultLabel: '업무 게시판',    icon: Layers },
   '/wbs':                { defaultLabel: 'WBS 작업흐름',   icon: BarChart3 },
@@ -49,7 +50,7 @@ const NAV_GROUPS: Array<{ id: string; label: string; paths: string[] }> = [
   { id: 'work',       label: '작업관리',   paths: ['/issues', '/tasks', '/todo-today', '/members'] },
   { id: 'cluster',    label: '클러스터',   paths: ['/cluster-manage', '/node-specs', '/versions', '/bulk-exec', '/etcdctl', '/mc', '/kernel-params', '/infra-topology', '/links', '/node-labels', '/cidr'] },
   { id: 'analysis',   label: 'AI 분석',    paths: ['/incident-analysis', '/packet-flow', '/ontology', '/trends'] },
-  { id: 'docs',       label: '운영/문서',  paths: ['/work-guides', '/ops-notes', '/wbs', '/mindmap', '/workflow'] },
+  { id: 'docs',       label: '운영/문서',  paths: ['/services', '/work-guides', '/ops-notes', '/wbs', '/mindmap', '/workflow'] },
   { id: 'system',     label: '시스템',     paths: ['/settings'] },
 ];
 

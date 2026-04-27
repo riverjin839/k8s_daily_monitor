@@ -27,6 +27,8 @@ import { MindMapPage } from '@/pages/MindMapPage';
 import { WbsFlowPage } from '@/pages/WbsFlowPage';
 import { InfraTopologyPage } from '@/pages/InfraTopologyPage';
 import { NodeSpecPage } from '@/pages/NodeSpecPage';
+import { ServicesCatalogPage } from '@/pages/ServicesCatalogPage';
+import { ServiceHubPage } from '@/pages/ServiceHubPage';
 import { IncidentAnalysisPage } from '@/pages/IncidentAnalysisPage';
 import { PacketFlowPage } from '@/pages/PacketFlowPage';
 import { OntologyPage } from '@/pages/OntologyPage';
@@ -78,6 +80,8 @@ function AppShell() {
               <Route path="/mc" element={<McClientPage />} />
               <Route path="/infra-topology" element={<InfraTopologyPage />} />
               <Route path="/node-specs" element={<NodeSpecPage />} />
+              <Route path="/services" element={<ServicesCatalogPage />} />
+              <Route path="/services/:service" element={<ServiceHubPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/workflow" element={<WorkflowBoardPage />} />
               <Route path="/work-guides" element={<WorkGuidePage />} />

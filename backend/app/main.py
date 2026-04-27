@@ -37,6 +37,7 @@ from app.routers import (
     node_server_specs_router,
     cluster_custom_fields_router,
     backup_router,
+    service_entries_router,
 )
 
 
@@ -509,6 +510,7 @@ app.include_router(mc_client_router, prefix="/api/v1")
 app.include_router(node_server_specs_router, prefix="/api/v1")
 app.include_router(cluster_custom_fields_router, prefix="/api/v1")
 app.include_router(backup_router, prefix="/api/v1")
+app.include_router(service_entries_router, prefix="/api/v1")
 
 
 @app.get("/")

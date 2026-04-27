@@ -883,4 +883,27 @@ export const trendsApi = {
   deleteSource: (id: string) => api.delete(`/trends/sources/${id}`),
 };
 
+// 서비스별 히스토리·지식관리
+export const serviceEntriesApi = {
+  catalog: (clusterId?: string) =>
+    api.get<import('@/types').ServiceCatalogResponse>('/services/catalog', {
+      params: clusterId ? { cluster_id: clusterId } : undefined,
+    }),
+  list: (service: string, params?: { clusterId?: string; kind?: string; search?: string; tag?: string }) =>
+    api.get<import('@/types').ServiceEntryListResponse>(`/services/${service}/entries`, {
+      params: params ? {
+        cluster_id: params.clusterId,
+        kind: params.kind,
+        search: params.search,
+        tag: params.tag,
+      } : undefined,
+    }),
+  get: (id: string) => api.get<import('@/types').ServiceEntry>(`/service-entries/${id}`),
+  create: (data: import('@/types').ServiceEntryCreate) =>
+    api.post<import('@/types').ServiceEntry>('/service-entries', data),
+  update: (id: string, data: import('@/types').ServiceEntryUpdate) =>
+    api.put<import('@/types').ServiceEntry>(`/service-entries/${id}`, data),
+  delete: (id: string) => api.delete(`/service-entries/${id}`),
+};
+
 export default api;

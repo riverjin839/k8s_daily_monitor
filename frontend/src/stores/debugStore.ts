@@ -20,6 +20,7 @@ export const DEBUG_PAGES = [
   { key: 'kernel-params',  label: '커널 파라미터' },
   { key: 'node-labels',    label: '노드 라벨' },
   { key: 'members',        label: '멤버 / 업무' },
+  { key: 'services',       label: '서비스 지식관리' },
   { key: 'global',         label: '전역 (모든 API 호출)' },
 ] as const;
 

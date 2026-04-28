@@ -88,11 +88,26 @@ def _run_migrations():
             ("cilium_version", "VARCHAR(128)"),
             ("node_ips", "TEXT"),
             ("custom_values", "JSONB"),
+            ("seq", "INTEGER NOT NULL DEFAULT 1000"),
         ]
         for col_name, col_type in new_cluster_cols:
             if col_name not in columns:
                 with engine.begin() as conn:
                     conn.execute(text(f"ALTER TABLE clusters ADD COLUMN {col_name} {col_type}"))
+
+        # seq 백필 — 기존 레코드는 created_at 순서대로 1000, 1010, 1020, ...
+        # 새 컬럼이 막 추가됐다면 모두 default(1000) 이라 정렬이 안정적이지 않다.
+        if "seq" in [c["name"] for c in inspector.get_columns("clusters")]:
+            with engine.begin() as conn:
+                rows = conn.execute(text(
+                    "SELECT id FROM clusters WHERE seq = 1000 ORDER BY created_at"
+                )).fetchall()
+                if len(rows) > 1:
+                    for i, row in enumerate(rows):
+                        conn.execute(
+                            text("UPDATE clusters SET seq = :seq WHERE id = :id"),
+                            {"seq": 1000 + i * 10, "id": row[0]},
+                        )
 
         # 길이 확장 — VARCHAR(32) 에서 VARCHAR(128) 로. 일부 배포판 버전 문자열이
         # 32자를 초과해 StringDataRightTruncation 발생 이력. 이미 128 이면 no-op.

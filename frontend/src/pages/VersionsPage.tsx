@@ -5,7 +5,7 @@ import {
   GitCommit, RefreshCw, Square, Clock, Share2, X, ChevronDown, ChevronUp,
   Server, Cpu, Network, Settings2, HardDrive,
 } from 'lucide-react';
-import { useClusters } from '@/hooks/useCluster';
+import { useClusters, useReorderClusters } from '@/hooks/useCluster';
 import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, SkeletonCard } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { versionsApi, type ComponentSnapshot } from '@/services/api';
@@ -33,6 +33,86 @@ function formatDateTime(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// ── Kernel sysctl params 전용 디테일 ─────────────────────────────────────────
+
+function KernelParamsDetails({ data }: { data: Record<string, unknown> }) {
+  const params = (data?.params && typeof data.params === 'object')
+    ? data.params as Record<string, string>
+    : {};
+  const host = typeof data?.host === 'string' ? data.host : null;
+  const collectedAt = typeof data?.collected_at === 'string' ? data.collected_at : null;
+
+  const [filter, setFilter] = useState('');
+  const entries = Object.entries(params).sort(([a], [b]) => a.localeCompare(b));
+  const filtered = filter
+    ? entries.filter(([k, v]) => k.toLowerCase().includes(filter.toLowerCase())
+      || String(v).toLowerCase().includes(filter.toLowerCase()))
+    : entries;
+
+  // 자주 보는 prefix 그룹화 — 가독성을 위해 카테고리 별로 묶음.
+  const groups: Record<string, [string, string][]> = {};
+  for (const [k, v] of filtered) {
+    let g = 'other';
+    if (k.startsWith('net.ipv4')) g = 'net.ipv4';
+    else if (k.startsWith('net.ipv6')) g = 'net.ipv6';
+    else if (k.startsWith('net.bridge')) g = 'net.bridge';
+    else if (k.startsWith('net.core')) g = 'net.core';
+    else if (k.startsWith('net.netfilter')) g = 'net.netfilter';
+    else if (k.startsWith('vm.')) g = 'vm';
+    else if (k.startsWith('fs.')) g = 'fs';
+    else if (k.startsWith('kernel.')) g = 'kernel';
+    if (!groups[g]) groups[g] = [];
+    groups[g].push([k, v]);
+  }
+  const orderedKeys = ['net.ipv4', 'net.ipv6', 'net.bridge', 'net.core', 'net.netfilter', 'vm', 'fs', 'kernel', 'other']
+    .filter((k) => groups[k]?.length);
+
+  if (entries.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        수집된 sysctl 값이 없습니다. (수집이 실패했거나 값이 없는 호스트)
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3 text-xs">
+      {(host || collectedAt) && (
+        <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+          {host && <span className="font-mono">호스트: <span className="text-foreground">{host}</span></span>}
+          {collectedAt && <span>수집: {formatDateTime(collectedAt)}</span>}
+          <span>총 {entries.length}개 파라미터</span>
+        </div>
+      )}
+      <input
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        placeholder="파라미터 필터 (예: net.ipv4.ip_forward)"
+        className="w-full px-3 py-1.5 text-xs bg-background border border-border rounded-md font-mono"
+      />
+      <div className="space-y-2">
+        {orderedKeys.map((g) => (
+          <details key={g} open className="rounded-md border border-border bg-muted/30">
+            <summary className="cursor-pointer px-3 py-1.5 text-[11px] uppercase tracking-wider text-muted-foreground select-none flex items-center justify-between">
+              <span>{g}</span>
+              <span className="font-mono text-foreground/60">{groups[g].length}</span>
+            </summary>
+            <div className="px-3 pb-2 pt-1 space-y-0.5 max-h-72 overflow-y-auto">
+              {groups[g].map(([k, v]) => (
+                <div key={k} className="font-mono text-[11px] break-all flex gap-2">
+                  <span className="text-primary flex-shrink-0">{k}</span>
+                  <span className="text-muted-foreground">=</span>
+                  <span className="text-foreground/80 break-all">{String(v)}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Component detail (flags / data) ─────────────────────────────────────────
 
 function ComponentDetails({ snap }: { snap: ComponentSnapshot }) {
@@ -41,12 +121,15 @@ function ComponentDetails({ snap }: { snap: ComponentSnapshot }) {
   const image = typeof data?.image === 'string' ? data.image : null;
   const cmData = (data?.data && typeof data.data === 'object') ? data.data as Record<string, string> : null;
 
-  // MinIO Tenant / DirectPV 전용 디테일 — pool/EC 등 운영 핵심 표시
+  // MinIO Tenant / DirectPV / Kernel — 전용 디테일 (다른 데이터 모양)
   if (snap.component.startsWith('minio_tenant:')) {
     return <MinioTenantDetails data={data} />;
   }
   if (snap.component === 'directpv_summary') {
     return <DirectPVDetails data={data} />;
+  }
+  if (snap.component.startsWith('kernel_params:')) {
+    return <KernelParamsDetails data={data} />;
   }
 
   return (
@@ -398,6 +481,7 @@ function DiffPanel({
 export function VersionsPage() {
   const queryClient = useQueryClient();
   const { data: clusters = [] } = useClusters();
+  const reorder = useReorderClusters();
   const toast = useToast();
   const [clusterId, setClusterId] = useState<string>('');
   const [etcdModalOpen, setEtcdModalOpen] = useState(false);
@@ -462,6 +546,16 @@ export function VersionsPage() {
     return next;
   });
 
+  // 카테고리 단위 접기 — 기본 모두 펼침, control_plane/kubelet/cni 처럼 컴포넌트가
+  // 많은 카테고리에서 가독성을 위해 한 번에 접을 수 있게 한다.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = (cat: string) => setCollapsedGroups((prev) => {
+    const next = new Set(prev);
+    if (next.has(cat)) next.delete(cat);
+    else next.add(cat);
+    return next;
+  });
+
   const [diffPair, setDiffPair] = useState<{ from: ComponentSnapshot; to: ComponentSnapshot } | null>(null);
 
   const grouped = useMemo(() => {
@@ -486,6 +580,12 @@ export function VersionsPage() {
           clusters={clusters}
           selectedId={clusterId || null}
           onSelect={(id) => setClusterId(id ?? '')}
+          onReorder={(ids) => {
+            reorder.mutate(ids, {
+              onSuccess: () => toast.success('순서 저장됨', '클러스터 정렬을 갱신했습니다.'),
+              onError: (err: unknown) => toast.error('정렬 저장 실패', formatApiError(err)),
+            });
+          }}
         />
         <div className="flex-1 min-w-0">
         <DebugLogPanel pageKey="versions" extra={{ clusterId, components: current?.components?.length ?? 0, pending: collect.isPending }} />
@@ -608,15 +708,50 @@ export function VersionsPage() {
             {grouped.map(({ category, items }) => {
               const meta = CATEGORY_META[category] ?? CATEGORY_META.other;
               const Icon = meta.icon;
+              const groupCollapsed = collapsedGroups.has(category);
+              const groupExpandedCount = items.filter((s) => expanded.has(s.component)).length;
               return (
                 <section key={category} className="bg-card border border-border rounded-xl overflow-hidden">
                   <header className="flex items-center gap-2 px-5 py-3 border-b border-border bg-muted/20">
-                    <Icon className="w-4 h-4 text-muted-foreground" />
-                    <h2 className="text-sm font-semibold">{meta.label}</h2>
-                    <span className={`text-[11px] px-2 py-0.5 rounded-full border ${meta.cls}`}>
-                      {items.length}
-                    </span>
+                    <button
+                      onClick={() => toggleGroup(category)}
+                      className="flex items-center gap-2 flex-1 text-left hover:opacity-80 transition-opacity"
+                      aria-label={`${meta.label} 섹션 ${groupCollapsed ? '펼치기' : '접기'}`}
+                    >
+                      {groupCollapsed
+                        ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                        : <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
+                      <Icon className="w-4 h-4 text-muted-foreground" />
+                      <h2 className="text-sm font-semibold">{meta.label}</h2>
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full border ${meta.cls}`}>
+                        {items.length}
+                      </span>
+                      {groupCollapsed && groupExpandedCount > 0 && (
+                        <span className="text-[10px] text-muted-foreground">
+                          ({groupExpandedCount}개 상세 펼침)
+                        </span>
+                      )}
+                    </button>
+                    {!groupCollapsed && items.length > 1 && (
+                      <button
+                        onClick={() => {
+                          // 모두 펼침/접기 토글 — 이 섹션 안의 컴포넌트만 영향.
+                          const compNames = items.map((s) => s.component);
+                          const anyOpen = compNames.some((c) => expanded.has(c));
+                          setExpanded((prev) => {
+                            const next = new Set(prev);
+                            if (anyOpen) compNames.forEach((c) => next.delete(c));
+                            else compNames.forEach((c) => next.add(c));
+                            return next;
+                          });
+                        }}
+                        className="text-[11px] px-2 py-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary"
+                      >
+                        {items.some((s) => expanded.has(s.component)) ? '모두 접기' : '모두 펼치기'}
+                      </button>
+                    )}
                   </header>
+                  {!groupCollapsed && (
                   <ul className="divide-y divide-border">
                     {items.map((snap) => {
                       const isOpen = expanded.has(snap.component);
@@ -660,6 +795,7 @@ export function VersionsPage() {
                       );
                     })}
                   </ul>
+                  )}
                 </section>
               );
             })}

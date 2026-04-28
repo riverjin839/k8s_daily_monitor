@@ -18,6 +18,7 @@ from app.models.config_snapshot import ClusterConfigSnapshot
 from app.models.node_server_spec import NodeServerSpec
 from app.models.cluster_custom_field import ClusterCustomField
 from app.models.service_entry import ServiceEntry
+from app.models.batch_job import BatchJob, BatchJobRun
 
 __all__ = [
     "Cluster",
@@ -48,4 +49,6 @@ __all__ = [
     "NodeServerSpec",
     "ClusterCustomField",
     "ServiceEntry",
+    "BatchJob",
+    "BatchJobRun",
 ]

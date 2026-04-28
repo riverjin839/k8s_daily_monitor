@@ -145,6 +145,48 @@ def run_trend_collect(self):
         db.close()
 
 
+@celery_app.task(bind=True, name="app.celery_app.run_batch_job")
+def run_batch_job(self, job_id: str, *, password: str | None = None, private_key: str | None = None):
+    """Execute a registered batch job by id.
+
+    Credentials must be passed in (they are not stored on BatchJob).
+    Used for scheduled runs (Celery Beat) and ad-hoc background triggers.
+    """
+    from uuid import UUID
+    from app.database import SessionLocal
+    from app.services.batch_job_service import execute_job, get_job_or_404
+
+    db = SessionLocal()
+    try:
+        job = get_job_or_404(db, UUID(job_id))
+        if not job.enabled:
+            return {"job_id": job_id, "skipped": True, "reason": "disabled"}
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            run, result = loop.run_until_complete(
+                execute_job(
+                    db,
+                    job,
+                    password=password,
+                    private_key=private_key,
+                    trigger="schedule",
+                )
+            )
+        finally:
+            loop.close()
+
+        return {
+            "job_id": job_id,
+            "run_id": str(run.id),
+            "status": result.status,
+            "duration_ms": result.duration_ms,
+        }
+    finally:
+        db.close()
+
+
 @celery_app.task(bind=True, name="app.celery_app.run_single_check")
 def run_single_check(self, cluster_id: str):
     """단일 클러스터 체크 실행 (수동)"""

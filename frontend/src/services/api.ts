@@ -924,4 +924,90 @@ export const serviceEntriesApi = {
   delete: (id: string) => api.delete(`/service-entries/${id}`),
 };
 
+// Batch Jobs API
+export interface BatchJobTypeDescriptor {
+  jobType: string;
+  label: string;
+  description: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  paramSchema: Record<string, { type: string; label?: string; default?: any; help?: string }>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  defaultParams: Record<string, any>;
+}
+
+export interface BatchJob {
+  id: string;
+  clusterId: string;
+  name: string;
+  description?: string | null;
+  jobType: string;
+  defaultHost?: string | null;
+  defaultPort: number;
+  defaultUsername: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  params?: Record<string, any> | null;
+  cron?: string | null;
+  enabled: boolean;
+  lastStatus: string;
+  lastRunAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BatchJobCreate {
+  clusterId: string;
+  name: string;
+  description?: string;
+  jobType: string;
+  defaultHost?: string;
+  defaultPort?: number;
+  defaultUsername?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  params?: Record<string, any>;
+  cron?: string;
+  enabled?: boolean;
+}
+
+export interface BatchJobRunRequest {
+  host?: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  paramOverride?: Record<string, any>;
+  timeout?: number;
+}
+
+export interface BatchJobRun {
+  id: string;
+  jobId: string;
+  status: string;
+  trigger: string;
+  host?: string | null;
+  executedCommand?: string | null;
+  exitCode?: number | null;
+  stdout: string;
+  stderr: string;
+  error?: string | null;
+  durationMs: number;
+  startedAt: string;
+  finishedAt?: string | null;
+}
+
+export const batchJobsApi = {
+  listTypes: () =>
+    api.get<{ data: BatchJobTypeDescriptor[] }>('/batch-jobs/types'),
+  list: (params?: { clusterId?: string; jobType?: string }) =>
+    api.get<{ data: BatchJob[] }>('/batch-jobs', { params }),
+  get: (id: string) => api.get<BatchJob>(`/batch-jobs/${id}`),
+  create: (data: BatchJobCreate) => api.post<BatchJob>('/batch-jobs', data),
+  update: (id: string, data: Partial<BatchJobCreate>) => api.put<BatchJob>(`/batch-jobs/${id}`, data),
+  delete: (id: string) => api.delete(`/batch-jobs/${id}`),
+  run: (id: string, payload: BatchJobRunRequest, signal?: AbortSignal) =>
+    api.post<BatchJobRun>(`/batch-jobs/${id}/run`, payload, { signal, timeout: 600000 }),
+  listRuns: (id: string, limit = 50) =>
+    api.get<{ data: BatchJobRun[] }>(`/batch-jobs/${id}/runs`, { params: { limit } }),
+};
+
 export default api;

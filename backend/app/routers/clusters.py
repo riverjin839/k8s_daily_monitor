@@ -7,7 +7,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from kubernetes import client as k8s_client, config as k8s_config
 from kubernetes.client import ApiException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from uuid import UUID
 
@@ -200,9 +200,36 @@ class KubeconfigResponse(BaseModel):
 
 @router.get("", response_model=ClusterListResponse)
 def get_clusters(db: Session = Depends(get_db)):
-    """전체 클러스터 목록 조회"""
-    clusters = db.query(Cluster).order_by(Cluster.name).all()
+    """전체 클러스터 목록 조회 — 사용자 지정 seq 오름차순, 동률은 이름 순."""
+    clusters = db.query(Cluster).order_by(Cluster.seq.asc(), Cluster.name.asc()).all()
     return ClusterListResponse(data=clusters)
+
+
+class ReorderRequest(BaseModel):
+    """드래그앤드랍 정렬 결과: 클러스터 id 를 원하는 순서대로 보냄."""
+    cluster_ids: list[UUID] = Field(..., min_length=1)
+
+
+@router.post("/reorder")
+def reorder_clusters(payload: ReorderRequest, db: Session = Depends(get_db)):
+    """순서 일괄 갱신 — 받은 순서대로 seq 를 10 간격으로 재할당."""
+    seen: set[UUID] = set()
+    for i, cid in enumerate(payload.cluster_ids):
+        if cid in seen:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="cluster_ids 에 중복 id 가 포함되어 있습니다.",
+            )
+        seen.add(cid)
+        cluster = db.query(Cluster).filter(Cluster.id == cid).first()
+        if not cluster:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Cluster {cid} not found",
+            )
+        cluster.seq = 1000 + i * 10
+    db.commit()
+    return {"updated": len(payload.cluster_ids)}
 
 
 @router.get("/{cluster_id}", response_model=ClusterResponse)

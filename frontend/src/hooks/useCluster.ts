@@ -21,10 +21,13 @@ export function useClusters() {
     queryKey: queryKeys.clusters,
     queryFn: async () => {
       const { data } = await clustersApi.getAll();
-      // createdAt 기준 정렬로 리페치 시 순서 고정 (run check 후 순서 변경 방지)
-      const clusters = (data?.data ?? []).sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-      );
+      // 사용자 지정 seq 우선, 동률은 createdAt 으로 안정 정렬.
+      const clusters = (data?.data ?? []).sort((a, b) => {
+        const sa = a.seq ?? 1000;
+        const sb = b.seq ?? 1000;
+        if (sa !== sb) return sa - sb;
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      });
       setClusters(clusters);
       return clusters;
     },
@@ -92,6 +95,18 @@ export function useUpdateCluster() {
       clustersApi.update(id, data),
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.cluster(id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clusters });
+    },
+  });
+}
+
+// Reorder Clusters (drag-and-drop) — 받은 순서대로 seq 일괄 갱신
+export function useReorderClusters() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (clusterIds: string[]) => clustersApi.reorder(clusterIds),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.clusters });
     },
   });

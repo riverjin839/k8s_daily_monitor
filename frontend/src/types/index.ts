@@ -5,6 +5,8 @@ export type Status = 'healthy' | 'warning' | 'critical' | 'pending';
 export interface Cluster {
   id: string;
   name: string;
+  /** 사용자 지정 정렬 순번 (작을수록 위). 기본 1000, 10 간격 권장. */
+  seq: number;
   apiEndpoint: string;
   kubeconfigPath: string;
   status: Status;

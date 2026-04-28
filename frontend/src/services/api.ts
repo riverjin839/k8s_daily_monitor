@@ -112,6 +112,8 @@ export const clustersApi = {
     api.post<ApiResponse<Cluster>>('/clusters', data),
   update: (id: string, data: Partial<Cluster>) => api.put<ApiResponse<Cluster>>(`/clusters/${id}`, data),
   delete: (id: string) => api.delete(`/clusters/${id}`),
+  reorder: (clusterIds: string[]) =>
+    api.post<{ updated: number }>('/clusters/reorder', { clusterIds }),
   getKubeconfig: (id: string) =>
     api.get<{ content: string; path: string }>(`/clusters/${id}/kubeconfig`),
   updateKubeconfig: (id: string, content: string) =>

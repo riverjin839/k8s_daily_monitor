@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { X, FlaskConical, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { X, FlaskConical, CheckCircle2, AlertTriangle, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
 import { useCreateMetricCard, useTestPromql, useUpdateMetricCard } from '@/hooks/useMetricCards';
 import { MetricCard } from '@/types';
 
@@ -25,34 +25,119 @@ const DISPLAY_TYPES = [
 
 const UNIT_OPTIONS = ['', '%', 'count', 'bytes', 'bytes/s', 'ms', 'req/s'];
 
-const PROMQL_TEMPLATES = [
+interface PromqlTemplate {
+  label: string;
+  promql: string;
+  unit: string;
+  displayType: string;
+  category: string;
+  /** 이 메트릭이 어떤 exporter 에서 노출되는지 — 사용자에게 사전 점검을 알려주기 위함. */
+  source?: string;
+  /** 추천 thresholds 가 있으면 자동 채움. 사용자가 편집 가능. */
+  thresholds?: string;
+  group?: string;
+}
+
+const PROMQL_TEMPLATES: PromqlTemplate[] = [
+  // ── General K8s ───────────────────────────────────────
   {
+    group: 'k8s',
     label: 'Pod restart count (last 1h)',
     promql: 'sum(increase(kube_pod_container_status_restarts_total[1h])) by (pod, namespace)',
     unit: 'count',
     displayType: 'list',
     category: 'alert',
+    source: 'kube-state-metrics',
   },
   {
+    group: 'k8s',
     label: 'Node not ready count',
     promql: 'sum(kube_node_status_condition{condition="Ready",status="false"}) OR on() vector(0)',
     unit: 'count',
     displayType: 'value',
     category: 'alert',
+    source: 'kube-state-metrics',
   },
   {
+    group: 'k8s',
     label: 'API Server request latency (p99)',
     promql: 'histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket[5m])) by (le)) * 1000',
     unit: 'ms',
     displayType: 'value',
     category: 'resource',
+    source: 'kube-apiserver',
+    thresholds: 'warning:300,critical:1000',
   },
   {
+    group: 'k8s',
     label: 'Pending pods count',
     promql: 'sum(kube_pod_status_phase{phase="Pending"}) OR on() vector(0)',
     unit: 'count',
     displayType: 'value',
     category: 'alert',
+    source: 'kube-state-metrics',
+  },
+  // ── etcd ────────────────────────────────────────────
+  // 자주 발생하는 "etcd 카드 에러" 의 원인은 보통 (a) 메트릭 이름이 틀림
+  // (b) Prometheus 가 etcd /metrics 를 스크랩하지 않음. 아래 템플릿은 정상적인 metric 이름 + scrape 검증용.
+  {
+    group: 'etcd',
+    label: 'etcd has leader',
+    promql: 'min(etcd_server_has_leader) OR on() vector(0)',
+    unit: 'count',
+    displayType: 'value',
+    category: 'alert',
+    source: 'etcd /metrics (kube-system 의 etcd ServiceMonitor 필요)',
+    thresholds: 'warning:0.5,critical:0.5',
+  },
+  {
+    group: 'etcd',
+    label: 'etcd leader changes (last 1h)',
+    promql: 'sum(rate(etcd_server_leader_changes_seen_total[1h])) * 3600',
+    unit: 'count',
+    displayType: 'value',
+    category: 'alert',
+    source: 'etcd /metrics',
+    thresholds: 'warning:1,critical:5',
+  },
+  {
+    group: 'etcd',
+    label: 'etcd proposal failures (last 1h)',
+    promql: 'sum(increase(etcd_server_proposals_failed_total[1h]))',
+    unit: 'count',
+    displayType: 'value',
+    category: 'alert',
+    source: 'etcd /metrics',
+    thresholds: 'warning:1,critical:10',
+  },
+  {
+    group: 'etcd',
+    label: 'etcd disk WAL fsync p99 (ms)',
+    promql: 'histogram_quantile(0.99, rate(etcd_disk_wal_fsync_duration_seconds_bucket[5m])) * 1000',
+    unit: 'ms',
+    displayType: 'value',
+    category: 'resource',
+    source: 'etcd /metrics',
+    thresholds: 'warning:50,critical:100',
+  },
+  {
+    group: 'etcd',
+    label: 'etcd backend commit p99 (ms)',
+    promql: 'histogram_quantile(0.99, rate(etcd_disk_backend_commit_duration_seconds_bucket[5m])) * 1000',
+    unit: 'ms',
+    displayType: 'value',
+    category: 'resource',
+    source: 'etcd /metrics',
+    thresholds: 'warning:25,critical:100',
+  },
+  {
+    group: 'etcd',
+    label: 'etcd DB size (bytes)',
+    promql: 'max(etcd_mvcc_db_total_size_in_bytes)',
+    unit: 'bytes',
+    displayType: 'value',
+    category: 'storage',
+    source: 'etcd /metrics',
   },
 ];
 
@@ -75,6 +160,21 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
   const testQuery = useTestPromql();
 
   const isEditMode = !!editingCard;
+  const [showGuide, setShowGuide] = useState(false);
+
+  // 그룹별 템플릿 묶음 (k8s / etcd / …) — 그룹마다 헤더로 구분.
+  const groupedTemplates = useMemo(() => {
+    const m = new Map<string, PromqlTemplate[]>();
+    for (const tpl of PROMQL_TEMPLATES) {
+      const g = tpl.group || 'general';
+      if (!m.has(g)) m.set(g, []);
+      m.get(g)!.push(tpl);
+    }
+    const order = ['k8s', 'etcd', 'general'];
+    return order
+      .filter((g) => m.has(g))
+      .map((g) => ({ group: g, items: m.get(g)! }));
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -146,13 +246,17 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
     onClose();
   };
 
-  const handleTemplateSelect = (tpl: typeof PROMQL_TEMPLATES[0]) => {
+  const handleTemplateSelect = (tpl: PromqlTemplate) => {
     setPromql(tpl.promql);
     setUnit(tpl.unit);
     setDisplayType(tpl.displayType);
     setCategory(tpl.category);
+    if (tpl.thresholds && !thresholds) setThresholds(tpl.thresholds);
     if (!title) setTitle(tpl.label);
+    setTestStatus('idle');
+    setTestResult('');
   };
+
 
   const resetForm = () => {
     setTitle('');
@@ -182,20 +286,90 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
         </div>
 
         <div className="px-6 py-5 space-y-5">
+          {/* 가이드 / Help — 첫 사용자가 PromQL 카드 만드는 법을 빠르게 익히기 위함. */}
+          <div className="rounded-lg border border-border bg-muted/30 overflow-hidden">
+            <button
+              onClick={() => setShowGuide((v) => !v)}
+              className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold hover:bg-muted/50 transition-colors"
+            >
+              <span className="flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5 text-primary" />
+                커스텀 카드 등록 가이드 (처음이라면 펼쳐 읽어보세요)
+              </span>
+              {showGuide
+                ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />
+                : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+            </button>
+            {showGuide && (
+              <div className="px-4 pb-3 pt-1 text-[11px] text-muted-foreground leading-relaxed space-y-2 border-t border-border">
+                <p>
+                  대시보드의 카드는 모두 <b className="text-foreground">PromQL</b> 한 줄로 정의됩니다.
+                  Prometheus 가 이미 스크랩하고 있는 메트릭을 자유롭게 조합하세요.
+                </p>
+                <div>
+                  <p className="text-foreground/90 font-semibold mb-1">필드 설명</p>
+                  <ul className="list-disc pl-4 space-y-0.5">
+                    <li><b>Title</b>: 카드 헤더에 보일 이름. (예: <i>etcd has leader</i>)</li>
+                    <li><b>PromQL Query</b>: 단일 표현식. <span className="font-mono">OR on() vector(0)</span> 으로 비어있을 때 0 fallback 권장.</li>
+                    <li><b>Display Type</b>:
+                      <span className="font-mono"> value</span> = 큰 숫자 ·
+                      <span className="font-mono"> gauge</span> = 0~100% 게이지 ·
+                      <span className="font-mono"> list</span> = 여러 시리즈를 표 형태로
+                    </li>
+                    <li><b>Unit</b>: 숫자 포맷팅. <span className="font-mono">%</span>/<span className="font-mono">bytes</span>/<span className="font-mono">ms</span>/<span className="font-mono">count</span> 등.</li>
+                    <li><b>Thresholds</b>: <span className="font-mono">warning:80,critical:95</span> — 색상 자동 (녹/황/적).</li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-foreground/90 font-semibold mb-1">자주 발생하는 에러</p>
+                  <ul className="list-disc pl-4 space-y-0.5">
+                    <li><b>"empty result"</b> = 메트릭은 있지만 라벨/조건과 매치 안 됨. <span className="font-mono">OR on() vector(0)</span> 으로 가드.</li>
+                    <li><b>"metric not found"</b> = exporter 가 안 켜짐. 예: <i>etcd_*</i> 는 etcd /metrics 가 Prometheus 에 등록돼야 합니다.</li>
+                    <li><b>parse error / unexpected</b> = PromQL 문법. <i>Test Query</i> 버튼으로 즉시 검증 가능.</li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-foreground/90 font-semibold mb-1">정상 동작 검증 절차</p>
+                  <ol className="list-decimal pl-4 space-y-0.5">
+                    <li>아래 <b>Quick Templates</b> 에서 비슷한 카드 골라 자동 채움.</li>
+                    <li>필요시 라벨/조건 수정.</li>
+                    <li><b>Test Query</b> 클릭 → 결과 / 에러 즉시 확인.</li>
+                    <li>이상 없으면 <b>Create Card</b> 클릭.</li>
+                  </ol>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
               Quick Templates
             </label>
-            <div className="grid grid-cols-2 gap-2">
-              {PROMQL_TEMPLATES.map((tpl) => (
-                <button
-                  key={tpl.label}
-                  onClick={() => handleTemplateSelect(tpl)}
-                  className="text-left p-2.5 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-all"
-                >
-                  <div className="text-xs font-medium">{tpl.label}</div>
-                  <div className="text-[10px] text-muted-foreground font-mono truncate mt-0.5">{tpl.promql}</div>
-                </button>
+            <div className="space-y-3">
+              {groupedTemplates.map(({ group, items }) => (
+                <div key={group}>
+                  <p className="text-[10px] font-mono uppercase text-muted-foreground/70 mb-1">
+                    {group === 'k8s' ? 'Kubernetes / API server' : group === 'etcd' ? 'etcd' : 'General'}
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {items.map((tpl) => (
+                      <button
+                        key={tpl.label}
+                        onClick={() => handleTemplateSelect(tpl)}
+                        title={tpl.source ? `필요 exporter: ${tpl.source}` : undefined}
+                        className="text-left p-2.5 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-all"
+                      >
+                        <div className="text-xs font-medium">{tpl.label}</div>
+                        <div className="text-[10px] text-muted-foreground font-mono truncate mt-0.5">{tpl.promql}</div>
+                        {tpl.source && (
+                          <div className="text-[10px] text-muted-foreground/70 mt-0.5">
+                            <span className="opacity-70">출처:</span> {tpl.source}
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>

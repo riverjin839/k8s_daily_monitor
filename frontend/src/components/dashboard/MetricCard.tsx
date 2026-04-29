@@ -1,5 +1,6 @@
 import { MetricCard as MetricCardType, MetricQueryResult } from '@/types';
-import { ExternalLink, Trash2, AlertTriangle, WifiOff, Pencil } from 'lucide-react';
+import { ExternalLink, Trash2, AlertTriangle, WifiOff, Pencil, RefreshCw } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface MetricCardProps {
   card: MetricCardType;
@@ -119,7 +120,35 @@ function ListDisplay({ results }: { results?: Array<Record<string, unknown>> | n
 }
 
 // ── Status overlay ───────────────────────────────────────
-function StatusOverlay({ result }: { result?: MetricQueryResult }) {
+/** 에러 메시지에서 자주 발생하는 패턴을 감지해 사용자에게 친숙한 힌트 한 줄 추가.
+ *  대부분의 etcd / 기타 모듈 카드 에러는 "Prometheus 에 해당 메트릭이 없음" 으로 귀결되므로
+ *  단순히 "Query error" 만 보여주면 사용자가 문제 원인을 모른다.
+ */
+function errorHint(error?: string | null): string | null {
+  if (!error) return null;
+  const e = error.toLowerCase();
+  if (e.includes('parse') || e.includes('syntax') || e.includes('unexpected'))
+    return '쿼리 문법 오류 — 카드를 편집해 PromQL 을 점검하세요.';
+  if (e.includes('unknown function')) return 'PromQL 함수명을 확인하세요 (예: sum, rate, histogram_quantile).';
+  if (e.includes('not found') || e.includes('no such') || e.includes('metric'))
+    return 'Prometheus 에 해당 메트릭이 없습니다 — exporter (kube-state-metrics, etcd-exporter) 가 켜져 있는지 확인하세요.';
+  if (e.includes('empty') || e === 'no data' || e.includes('empty result'))
+    return '결과가 비어있습니다 — 라벨/조건이 너무 좁거나 메트릭이 0 일 수 있어요.';
+  if (e.includes('timeout')) return 'Prometheus 응답이 늦습니다 — 쿼리 시간 범위를 줄여보세요.';
+  return null;
+}
+
+function StatusOverlay({
+  result,
+  promql,
+  onEdit,
+  onRefresh,
+}: {
+  result?: MetricQueryResult;
+  promql?: string;
+  onEdit?: () => void;
+  onRefresh?: () => void;
+}) {
   if (!result) {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -130,17 +159,55 @@ function StatusOverlay({ result }: { result?: MetricQueryResult }) {
   }
   if (result.status === 'offline') {
     return (
-      <div className="flex items-center gap-1.5 text-xs text-yellow-400">
-        <WifiOff className="w-3 h-3" />
-        Prometheus offline
+      <div className="flex items-start gap-1.5 text-xs text-yellow-500">
+        <WifiOff className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+        <div className="space-y-0.5">
+          <p className="font-medium">Prometheus offline</p>
+          {result.error && <p className="text-[11px] text-yellow-500/80">{result.error}</p>}
+          {onRefresh && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRefresh(); }}
+              className="text-[11px] text-yellow-600 hover:underline inline-flex items-center gap-0.5"
+            >
+              <RefreshCw className="w-2.5 h-2.5" /> 다시 시도
+            </button>
+          )}
+        </div>
       </div>
     );
   }
   if (result.status === 'error') {
+    const hint = errorHint(result.error);
     return (
-      <div className="flex items-center gap-1.5 text-xs text-red-400">
-        <AlertTriangle className="w-3 h-3" />
-        {result.error || 'Query error'}
+      <div className="flex items-start gap-1.5 text-xs text-red-400">
+        <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+        <div className="space-y-0.5 min-w-0 flex-1">
+          <p className="font-medium break-words">{result.error || 'Query error'}</p>
+          {hint && <p className="text-[11px] text-red-300/80">{hint}</p>}
+          {promql && (
+            <code className="block text-[10px] font-mono text-muted-foreground/80 break-all max-h-12 overflow-hidden">
+              {promql}
+            </code>
+          )}
+          <div className="flex items-center gap-2 pt-1">
+            {onRefresh && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onRefresh(); }}
+                className="text-[11px] text-red-300 hover:text-red-200 inline-flex items-center gap-0.5"
+              >
+                <RefreshCw className="w-2.5 h-2.5" /> 재시도
+              </button>
+            )}
+            {onEdit && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                className="text-[11px] text-blue-300 hover:text-blue-200 inline-flex items-center gap-0.5"
+              >
+                <Pencil className="w-2.5 h-2.5" /> 카드 편집
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
@@ -150,6 +217,9 @@ function StatusOverlay({ result }: { result?: MetricQueryResult }) {
 // ── Main Card ────────────────────────────────────────────
 export function MetricCard({ card, result, onDelete, onEdit }: MetricCardProps) {
   const hasError = result && result.status !== 'ok';
+  const queryClient = useQueryClient();
+  // 사용자가 "재시도" 를 누르면 metric 결과 캐시 무효화 → 백그라운드 refetch.
+  const handleRefresh = () => queryClient.invalidateQueries({ queryKey: ['metricResults'] });
 
   return (
     <div className="bg-card border border-border rounded-xl p-5 hover:border-muted-foreground/30 transition-all hover:-translate-y-0.5 relative group">
@@ -203,7 +273,12 @@ export function MetricCard({ card, result, onDelete, onEdit }: MetricCardProps) 
       {/* Content */}
       <div className="pt-4 border-t border-border">
         {hasError ? (
-          <StatusOverlay result={result} />
+          <StatusOverlay
+            result={result}
+            promql={card.promql}
+            onEdit={onEdit}
+            onRefresh={handleRefresh}
+          />
         ) : !result ? (
           <StatusOverlay />
         ) : card.displayType === 'gauge' ? (

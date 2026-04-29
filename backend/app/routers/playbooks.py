@@ -6,7 +6,7 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Cluster, Playbook
+from app.models import AnsibleInventory, AnsiblePlaybookFile, Cluster, Playbook
 from app.schemas.playbook import (
     PlaybookCreate,
     PlaybookUpdate,
@@ -17,6 +17,30 @@ from app.schemas.playbook import (
 from app.services.playbook_executor import run_playbook
 
 router = APIRouter(prefix="/playbooks", tags=["playbooks"])
+
+
+def _serialize(pb: Playbook) -> dict:
+    """Playbook → dict (FK joined name 포함). PlaybookResponse 와 호환."""
+    return {
+        "id": pb.id,
+        "cluster_id": pb.cluster_id,
+        "name": pb.name,
+        "description": pb.description,
+        "playbook_file_id": pb.playbook_file_id,
+        "inventory_id": pb.inventory_id,
+        "playbook_path": pb.playbook_path,
+        "inventory_path": pb.inventory_path,
+        "extra_vars": pb.extra_vars,
+        "tags": pb.tags,
+        "status": pb.status,
+        "show_on_dashboard": pb.show_on_dashboard,
+        "last_run_at": pb.last_run_at,
+        "last_result": pb.last_result,
+        "created_at": pb.created_at,
+        "updated_at": pb.updated_at,
+        "playbook_file_name": pb.playbook_file.name if pb.playbook_file else None,
+        "inventory_name": pb.inventory.name if pb.inventory else None,
+    }
 
 STATUS_LABEL = {
     "healthy": "OK",
@@ -37,7 +61,7 @@ def list_playbooks(
     if cluster_id:
         query = query.filter(Playbook.cluster_id == cluster_id)
     playbooks = query.order_by(Playbook.created_at.desc()).all()
-    return PlaybookListResponse(data=playbooks)
+    return PlaybookListResponse(data=[_serialize(p) for p in playbooks])
 
 
 @router.get("/report")
@@ -129,7 +153,7 @@ def get_dashboard_playbooks(cluster_id: UUID, db: Session = Depends(get_db)):
         .order_by(Playbook.name)
         .all()
     )
-    return PlaybookListResponse(data=playbooks)
+    return PlaybookListResponse(data=[_serialize(p) for p in playbooks])
 
 
 @router.patch("/{playbook_id}/dashboard", response_model=PlaybookResponse)
@@ -142,7 +166,7 @@ def toggle_dashboard(playbook_id: UUID, db: Session = Depends(get_db)):
     playbook.show_on_dashboard = not playbook.show_on_dashboard
     db.commit()
     db.refresh(playbook)
-    return playbook
+    return _serialize(playbook)
 
 
 @router.get("/{playbook_id}", response_model=PlaybookResponse)
@@ -151,18 +175,37 @@ def get_playbook(playbook_id: UUID, db: Session = Depends(get_db)):
     playbook = db.query(Playbook).filter(Playbook.id == playbook_id).first()
     if not playbook:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playbook not found")
-    return playbook
+    return _serialize(playbook)
+
+
+def _validate_assets(payload, db: Session, current_cluster_id: UUID | None = None):
+    """playbook_file_id / inventory_id 무결성 검증."""
+    if payload.playbook_file_id:
+        if not db.query(AnsiblePlaybookFile).filter(
+            AnsiblePlaybookFile.id == payload.playbook_file_id,
+        ).first():
+            raise HTTPException(status_code=422, detail="playbook_file_id 가 유효하지 않습니다.")
+    if payload.inventory_id:
+        inv = db.query(AnsibleInventory).filter(
+            AnsibleInventory.id == payload.inventory_id,
+        ).first()
+        if not inv:
+            raise HTTPException(status_code=422, detail="inventory_id 가 유효하지 않습니다.")
+        target_cluster = current_cluster_id or getattr(payload, "cluster_id", None)
+        if target_cluster and inv.cluster_id != target_cluster:
+            raise HTTPException(
+                status_code=422,
+                detail="inventory 가 이 cluster 에 속하지 않습니다.",
+            )
 
 
 @router.post("", response_model=PlaybookResponse, status_code=status.HTTP_201_CREATED)
 def create_playbook(payload: PlaybookCreate, db: Session = Depends(get_db)):
     """새 Playbook 등록"""
-    # 클러스터 존재 확인
     cluster = db.query(Cluster).filter(Cluster.id == payload.cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
 
-    # 중복 체크 (같은 클러스터에 같은 이름)
     existing = (
         db.query(Playbook)
         .filter(Playbook.cluster_id == payload.cluster_id, Playbook.name == payload.name)
@@ -174,11 +217,12 @@ def create_playbook(payload: PlaybookCreate, db: Session = Depends(get_db)):
             detail=f"Playbook '{payload.name}' already exists for this cluster",
         )
 
+    _validate_assets(payload, db)
     playbook = Playbook(**payload.model_dump())
     db.add(playbook)
     db.commit()
     db.refresh(playbook)
-    return playbook
+    return _serialize(playbook)
 
 
 @router.put("/{playbook_id}", response_model=PlaybookResponse)
@@ -188,12 +232,13 @@ def update_playbook(playbook_id: UUID, payload: PlaybookUpdate, db: Session = De
     if not playbook:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playbook not found")
 
+    _validate_assets(payload, db, current_cluster_id=playbook.cluster_id)
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(playbook, key, value)
 
     db.commit()
     db.refresh(playbook)
-    return playbook
+    return _serialize(playbook)
 
 
 @router.delete("/{playbook_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -219,10 +264,15 @@ def run_playbook_endpoint(playbook_id: UUID, db: Session = Depends(get_db)):
     playbook.status = "running"
     db.commit()
 
-    # 실행
+    # DB 관리형 우선, 없으면 path 기반(구 호환)
+    pb_content = playbook.playbook_file.content if playbook.playbook_file else None
+    inv_content = playbook.inventory.content if playbook.inventory else None
+
     result = run_playbook(
         playbook_path=playbook.playbook_path,
         inventory_path=playbook.inventory_path,
+        playbook_content=pb_content,
+        inventory_content=inv_content,
         extra_vars=playbook.extra_vars,
         tags=playbook.tags,
     )

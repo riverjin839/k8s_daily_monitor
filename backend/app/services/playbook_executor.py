@@ -9,9 +9,15 @@ Ansible Playbook 실행기
   - 모든 호스트 failures=0, unreachable=0  → healthy (초록)
   - 어느 호스트든 failures > 0             → critical (빨강)
   - 그 외 (unreachable, changed 등)         → warning (주황)
+
+Playbook 본문/Inventory 본문이 직접 전달되면(``playbook_content`` /
+``inventory_content``) 임시 파일로 머터리얼라이즈해 실행 후 정리한다.
 """
+import contextlib
 import json
+import os
 import subprocess
+import tempfile
 from datetime import datetime
 from typing import Any
 
@@ -34,31 +40,47 @@ class PlaybookResult:
         self.raw_output = raw_output
 
 
+@contextlib.contextmanager
+def _materialized(content: str | None, suffix: str):
+    """주어진 content 를 임시 파일로 쓰고 경로를 yield. None 이면 None yield."""
+    if content is None:
+        yield None
+        return
+    fd, path = tempfile.mkstemp(suffix=suffix, prefix="ansible-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(content)
+        yield path
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
 def run_playbook(
-    playbook_path: str,
+    playbook_path: str | None = None,
     inventory_path: str | None = None,
     extra_vars: dict[str, Any] | None = None,
     tags: str | None = None,
     timeout: int | None = None,
+    *,
+    playbook_content: str | None = None,
+    inventory_content: str | None = None,
 ) -> PlaybookResult:
-    """ansible-playbook을 JSON callback과 함께 실행하고 결과를 파싱합니다."""
+    """ansible-playbook을 JSON callback과 함께 실행하고 결과를 파싱합니다.
 
-    cmd = ["ansible-playbook", playbook_path]
+    ``playbook_content`` 또는 ``inventory_content`` 가 주어지면 임시 파일로
+    materialize 한 뒤 실행하고, 종료 후 정리한다. 둘 다 비어있다면 기존처럼
+    ``playbook_path`` / ``inventory_path`` 를 그대로 사용한다.
+    """
 
-    # inventory
-    if inventory_path:
-        cmd.extend(["-i", inventory_path])
-    else:
-        default_inv = f"{settings.ansible_inventory_dir}/clusters.yml"
-        cmd.extend(["-i", default_inv])
-
-    # extra vars
-    if extra_vars:
-        cmd.extend(["-e", json.dumps(extra_vars)])
-
-    # tags
-    if tags:
-        cmd.extend(["--tags", tags])
+    if not (playbook_path or playbook_content):
+        return PlaybookResult(
+            status="critical",
+            message="playbook_path 또는 playbook_content 중 하나는 필수입니다.",
+            duration_ms=0,
+        )
 
     env = {
         "ANSIBLE_STDOUT_CALLBACK": "json",
@@ -66,41 +88,56 @@ def run_playbook(
         "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "HOME": "/root",
     }
-
     effective_timeout = timeout or settings.check_timeout_seconds
-
     start = datetime.utcnow()
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=effective_timeout,
-            env=env,
-        )
-        elapsed = int((datetime.utcnow() - start).total_seconds() * 1000)
-        return _parse_result(result, elapsed)
 
-    except subprocess.TimeoutExpired:
-        elapsed = int((datetime.utcnow() - start).total_seconds() * 1000)
-        return PlaybookResult(
-            status="critical",
-            message=f"Playbook timed out after {effective_timeout}s",
-            duration_ms=elapsed,
-        )
-    except FileNotFoundError:
-        return PlaybookResult(
-            status="critical",
-            message="ansible-playbook command not found. Install ansible in the execution environment.",
-            duration_ms=0,
-        )
-    except Exception as e:
-        elapsed = int((datetime.utcnow() - start).total_seconds() * 1000)
-        return PlaybookResult(
-            status="critical",
-            message=f"Execution error: {str(e)}",
-            duration_ms=elapsed,
-        )
+    with _materialized(playbook_content, ".yml") as pb_temp, \
+         _materialized(inventory_content, ".ini") as inv_temp:
+        effective_pb = pb_temp or playbook_path
+        effective_inv = inv_temp or inventory_path
+
+        cmd = ["ansible-playbook", str(effective_pb)]
+        if effective_inv:
+            cmd.extend(["-i", str(effective_inv)])
+        else:
+            default_inv = f"{settings.ansible_inventory_dir}/clusters.yml"
+            cmd.extend(["-i", default_inv])
+        if extra_vars:
+            cmd.extend(["-e", json.dumps(extra_vars)])
+        if tags:
+            cmd.extend(["--tags", tags])
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=effective_timeout,
+                env=env,
+            )
+            elapsed = int((datetime.utcnow() - start).total_seconds() * 1000)
+            return _parse_result(result, elapsed)
+
+        except subprocess.TimeoutExpired:
+            elapsed = int((datetime.utcnow() - start).total_seconds() * 1000)
+            return PlaybookResult(
+                status="critical",
+                message=f"Playbook timed out after {effective_timeout}s",
+                duration_ms=elapsed,
+            )
+        except FileNotFoundError:
+            return PlaybookResult(
+                status="critical",
+                message="ansible-playbook command not found. Install ansible in the execution environment.",
+                duration_ms=0,
+            )
+        except Exception as e:
+            elapsed = int((datetime.utcnow() - start).total_seconds() * 1000)
+            return PlaybookResult(
+                status="critical",
+                message=f"Execution error: {str(e)}",
+                duration_ms=elapsed,
+            )
 
 
 def _parse_result(result: subprocess.CompletedProcess, elapsed: int) -> PlaybookResult:

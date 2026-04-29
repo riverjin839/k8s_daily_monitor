@@ -5,6 +5,7 @@ import {
   Cloud, Box, Layers, Cpu, Zap, Globe,
 } from 'lucide-react';
 import { useCreateCluster } from '@/hooks/useCluster';
+import { formatApiError } from '@/lib/utils';
 
 // ── Provider / Environment Types ────────────────────────────────────────────
 interface ProviderOption {
@@ -81,11 +82,8 @@ type Step = 0 | 1 | 2;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function extractApiError(err: unknown): string {
-  if (!err) return 'Failed to create cluster';
-  const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
-  if (axiosErr.response?.data?.detail) return axiosErr.response.data.detail;
-  if (axiosErr.message) return axiosErr.message;
-  return String(err);
+  // formatApiError 는 FastAPI 422 detail(객체 배열) 도 안전하게 문자열화 → React #31 방지
+  return formatApiError(err, 'Failed to create cluster');
 }
 
 // ── Modal ────────────────────────────────────────────────────────────────────

@@ -35,12 +35,26 @@ function formatDateTime(iso: string): string {
 
 // ── Kernel sysctl params 전용 디테일 ─────────────────────────────────────────
 
+// axios response 인터셉터가 키를 재귀적으로 camelCase 로 바꾸는 바람에
+// `net.ipv4.ip_forward` 같은 sysctl 키가 `net.ipv4.ipForward` 처럼 mangling 됨.
+// sysctl 키는 항상 소문자 + 숫자 + 점/하이픈 조합이므로 대문자만 안전하게
+// 다시 `_lowercase` 로 되돌릴 수 있다.
+function unCamelSysctlKey(k: string): string {
+  return k.replace(/([A-Z])/g, (_, c: string) => '_' + c.toLowerCase());
+}
+
 function KernelParamsDetails({ data }: { data: Record<string, unknown> }) {
-  const params = (data?.params && typeof data.params === 'object')
+  const rawParams = (data?.params && typeof data.params === 'object')
     ? data.params as Record<string, string>
     : {};
+  // 키 mangling 복원 — 표시 + 그룹 분류 모두 원본 키로 동작해야 한다.
+  const params: Record<string, string> = {};
+  for (const [k, v] of Object.entries(rawParams)) {
+    params[unCamelSysctlKey(k)] = String(v);
+  }
   const host = typeof data?.host === 'string' ? data.host : null;
-  const collectedAt = typeof data?.collected_at === 'string' ? data.collected_at : null;
+  const collectedAtRaw = data?.collected_at ?? data?.collectedAt;
+  const collectedAt = typeof collectedAtRaw === 'string' ? collectedAtRaw : null;
 
   const [filter, setFilter] = useState('');
   const entries = Object.entries(params).sort(([a], [b]) => a.localeCompare(b));

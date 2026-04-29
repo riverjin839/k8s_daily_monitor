@@ -336,18 +336,15 @@ export function Dashboard() {
 
         {/*
           레이아웃 규칙
-            · "전체 현황" (selectedClusterId === null): ClusterOverviewGrid 를 full-width 로 펼쳐 노드 카드가 짤리지 않게.
-              Prometheus 는 그 아래 전체 폭으로 배치.
-            · 특정 클러스터 선택: 2-column (lg 이상에서) — AddonGrid 는 좁아도 잘 접힘.
+            · "전체 현황" / 단일 클러스터 모두 동일하게 stack 으로 배치.
+              메트릭 카드 수가 늘어나면 좁은 우측 컬럼 안에 grid-cols-3/4 가
+              나오면서 카드가 짤리는 사고가 있어, 항상 전폭으로 펼쳐 카드 잘림
+              사고를 원천 차단한다.
         */}
-        <div className={
-          selectedClusterId === null
-            ? 'space-y-3'
-            : 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(380px,480px)] gap-3'
-        }>
+        <div className="space-y-3 min-w-0">
 
         {/* ── Cluster Status ─────────────────────────────────────────────── */}
-        <MacCard title="Cluster Status" bodyPadding="p-4">
+        <MacCard title="Cluster Status" bodyPadding="p-4" className="overflow-hidden" rootClassName="min-w-0">
           {selectedClusterId === null ? (
             <ClusterOverviewGrid clusters={clusters} addons={addons} onSelectCluster={setSelectedClusterId} />
           ) : (
@@ -381,7 +378,7 @@ export function Dashboard() {
         </MacCard>
 
         {/* ── Prometheus Insights (우측 컬럼) ─────────────────────────────── */}
-        <MacCard title="Prometheus Insights" bodyPadding="p-4">
+        <MacCard title="Prometheus Insights" bodyPadding="p-4" className="overflow-hidden" rootClassName="min-w-0">
           <div className="flex items-center gap-2 text-muted-foreground text-xs mb-3">
             <Activity className="w-4 h-4 text-primary" />
             <span>{metricCards.length} cards</span>

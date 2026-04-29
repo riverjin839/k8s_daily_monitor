@@ -1,0 +1,90 @@
+---
+# 디스크 사용률 점검
+# - df -P 결과를 파싱해 임계값(%) 초과 파티션이 있으면 실패
+# Vars:
+#   warn_pct (default 80): 경고 임계
+#   crit_pct (default 90): 실패 임계
+#   ignore_fs (default tmpfs/devtmpfs/squashfs/overlay): 검사 제외 파일시스템 prefix
+
+- name: 디스크 사용률 점검
+  hosts: all
+  gather_facts: false
+  vars:
+    warn_pct: 80
+    crit_pct: 90
+    ignore_fs: "tmpfs|devtmpfs|squashfs|overlay|proc|sysfs|cgroup"
+
+  tasks:
+    - name: df -P 출력 수집
+      shell: |
+        df -P -x tmpfs -x devtmpfs -x squashfs -x overlay 2>/dev/null \
+          | awk 'NR>1 && $1 !~ /^({{ ignore_fs }})$/ {print $1","$2","$3","$5","$6}'
+      register: df_out
+      changed_when: false
+
+    - name: 결과 파싱 → 임계 초과 파티션 추출
+      set_fact:
+        partitions: "{{ df_out.stdout_lines | map('split', ',') | list }}"
+
+    - name: critical 임계 초과 파티션 식별
+      set_fact:
+        critical_partitions: >-
+          {{
+            partitions
+            | selectattr(3, 'match', '^[0-9]+%$')
+            | selectattr(3, 'replace', '%', '')
+            | rejectattr(3, 'equalto', '-')
+            | list
+          }}
+      when: false   # selectattr+regex 로 깔끔하게 안 풀려 jinja 한 번 더 돌림
+
+    # Ansible 의 task-level `vars` 는 매 루프 iteration 마다 다시 적용되어
+    # 같은 이름의 fact 를 가리므로 set_fact 누적이 무력화된다 (마지막 iteration 만 살아남음).
+    # 별도 init task 로 빈 리스트를 깐 뒤 default([]) 로 안전하게 누적.
+    - name: 분류 버킷 초기화
+      set_fact:
+        crit_partitions: []
+        warn_partitions: []
+
+    - name: critical / warning 분류
+      set_fact:
+        crit_partitions: >-
+          {{
+            (crit_partitions | default([]))
+            + ([item] if (item[3] | regex_replace('%','') | int) >= (crit_pct | int) else [])
+          }}
+        warn_partitions: >-
+          {{
+            (warn_partitions | default([]))
+            + ([item] if (
+                ((item[3] | regex_replace('%','') | int) >= (warn_pct | int)) and
+                ((item[3] | regex_replace('%','') | int) < (crit_pct | int))
+              ) else [])
+          }}
+      loop: "{{ partitions }}"
+
+    - name: 점검 요약 출력
+      debug:
+        msg: >-
+          {{ partitions | length }}개 파티션 검사 ·
+          critical {{ crit_partitions | length }}개 ·
+          warning {{ warn_partitions | length }}개 (warn≥{{ warn_pct }}% · crit≥{{ crit_pct }}%)
+
+    - name: critical 파티션 있으면 실패
+      fail:
+        msg: |
+          디스크 사용률 임계({{ crit_pct }}%) 초과 파티션:
+          {% for p in crit_partitions %}
+          - {{ p[5] | default(p[0]) }}  사용 {{ p[3] }}  ({{ p[0] }})
+          {% endfor %}
+      when: crit_partitions | length > 0
+
+    - name: warning 안내 (changed=true 로 표시 → playbook warning 상태)
+      debug:
+        msg: |
+          경고 임계({{ warn_pct }}%) 초과:
+          {% for p in warn_partitions %}
+          - {{ p[5] | default(p[0]) }}  사용 {{ p[3] }}
+          {% endfor %}
+      changed_when: true
+      when: warn_partitions | length > 0

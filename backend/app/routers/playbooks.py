@@ -1,8 +1,10 @@
 from datetime import datetime
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
+from kubernetes import client as k8s_client, config as k8s_config
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -14,9 +16,39 @@ from app.schemas.playbook import (
     PlaybookListResponse,
     PlaybookRunResponse,
 )
+from app.services.kubeconfig import ensure_kubeconfig_file
 from app.services.playbook_executor import run_playbook
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/playbooks", tags=["playbooks"])
+
+
+def _cluster_node_hosts(cluster: Cluster) -> list[str]:
+    """클러스터의 모든 노드 InternalIP (없으면 노드명) 를 반환.
+
+    Playbook 실행 시 inventory 가 비어있으면 이 결과로 동적 inventory 가 생성된다.
+    실패하면 빈 리스트를 반환 (호출자가 fallback 로직을 결정).
+    """
+    kc = ensure_kubeconfig_file(cluster)
+    if not kc:
+        return []
+    try:
+        api_client = k8s_config.new_client_from_config(config_file=kc)
+        v1 = k8s_client.CoreV1Api(api_client)
+        nodes = v1.list_node(_request_timeout=10)
+    except Exception as e:
+        logger.warning("failed to list nodes for cluster %s: %s", cluster.id, str(e)[:200])
+        return []
+
+    hosts: list[str] = []
+    for n in nodes.items:
+        internal_ip: str | None = None
+        for addr in (n.status.addresses or []):
+            if addr.type == "InternalIP":
+                internal_ip = addr.address
+                break
+        hosts.append(internal_ip or n.metadata.name)
+    return hosts
 
 
 def _serialize(pb: Playbook) -> dict:
@@ -264,9 +296,15 @@ def run_playbook_endpoint(playbook_id: UUID, db: Session = Depends(get_db)):
     playbook.status = "running"
     db.commit()
 
-    # DB 관리형 우선, 없으면 path 기반(구 호환)
+    # 실행 시 inventory 우선순위:
+    #   1) DB 관리형 Inventory  (playbook.inventory.content)
+    #   2) inventory_path        (구 호환 — 실행 호스트의 ini 파일 경로)
+    #   3) K8s 전체 노드          (위 둘 다 없을 때 cluster 의 노드 IP 로 동적 생성)
     pb_content = playbook.playbook_file.content if playbook.playbook_file else None
     inv_content = playbook.inventory.content if playbook.inventory else None
+    inventory_hosts: list[str] | None = None
+    if not inv_content and not playbook.inventory_path:
+        inventory_hosts = _cluster_node_hosts(playbook.cluster) or None
 
     result = run_playbook(
         playbook_path=playbook.playbook_path,
@@ -275,6 +313,7 @@ def run_playbook_endpoint(playbook_id: UUID, db: Session = Depends(get_db)):
         inventory_content=inv_content,
         extra_vars=playbook.extra_vars,
         tags=playbook.tags,
+        inventory_hosts=inventory_hosts,
     )
 
     # 결과 저장

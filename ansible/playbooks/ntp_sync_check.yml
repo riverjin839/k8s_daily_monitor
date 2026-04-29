@@ -1,0 +1,89 @@
+---
+# NTP / Chrony 시간 동기화 점검
+# - chronyc tracking 또는 timedatectl 출력으로 동기화 상태 확인
+# - 시간 drift 가 임계값을 넘거나 NTP 가 비활성이면 task 실패 → playbook critical
+# Vars:
+#   max_drift_ms (default 1000): 허용 drift 상한 (ms)
+
+- name: NTP / Chrony 시간 동기화 점검
+  hosts: all
+  gather_facts: false
+  become: false   # 일반 사용자도 chronyc tracking 가능. 안 되면 -e 'ansible_become=true' 로 sudo
+  vars:
+    max_drift_ms: 1000
+
+  tasks:
+    - name: chronyc 또는 timedatectl 도구 확인
+      shell: |
+        if command -v chronyc >/dev/null 2>&1; then
+          echo TOOL=chrony
+        elif command -v timedatectl >/dev/null 2>&1; then
+          echo TOOL=timedatectl
+        else
+          echo TOOL=none
+        fi
+      register: tool_check
+      changed_when: false
+
+    - name: chrony tracking 출력 수집
+      shell: chronyc tracking
+      register: chrony_out
+      changed_when: false
+      failed_when: false
+      when: "'TOOL=chrony' in tool_check.stdout"
+
+    - name: timedatectl 출력 수집 (chrony 없을 때)
+      shell: timedatectl
+      register: timedatectl_out
+      changed_when: false
+      failed_when: false
+      when: "'TOOL=timedatectl' in tool_check.stdout"
+
+    - name: 시간 동기화 도구 미존재 — 실패 처리
+      fail:
+        msg: "chrony / timedatectl 둘 다 발견되지 않았습니다. NTP 동기화를 확인할 수 없습니다."
+      when: "'TOOL=none' in tool_check.stdout"
+
+    # chrony 분기 ─────────────────────────────────────────────
+    - name: chrony — System time offset 추출 (초 단위 → ms)
+      set_fact:
+        offset_ms: "{{ (chrony_out.stdout | regex_search('System time *: *([0-9.]+) seconds', '\\1') | first | float * 1000) | round(1) }}"
+      when: "'TOOL=chrony' in tool_check.stdout and chrony_out.rc == 0"
+
+    - name: chrony — Leap status / Reference ID 추출
+      set_fact:
+        leap_status: "{{ chrony_out.stdout | regex_search('Leap status *: *([^\\n]+)', '\\1') | first | default('unknown') | trim }}"
+        reference: "{{ chrony_out.stdout | regex_search('Reference ID *: *([^\\n]+)', '\\1') | first | default('unknown') | trim }}"
+      when: "'TOOL=chrony' in tool_check.stdout and chrony_out.rc == 0"
+
+    - name: chrony — drift 임계 초과시 실패
+      fail:
+        msg: "시간 drift {{ offset_ms }}ms 가 임계 {{ max_drift_ms }}ms 를 초과합니다. (leap={{ leap_status | default('?') }}, ref={{ reference | default('?') }})"
+      when:
+        - "'TOOL=chrony' in tool_check.stdout"
+        - chrony_out.rc == 0
+        - (offset_ms | float | abs) > (max_drift_ms | float)
+
+    - name: chrony — Leap status 비정상시 실패
+      fail:
+        msg: "chrony Leap status 가 비정상입니다 ({{ leap_status }}). NTP 동기화가 멈췄을 가능성."
+      when:
+        - "'TOOL=chrony' in tool_check.stdout"
+        - chrony_out.rc == 0
+        - leap_status is defined
+        - leap_status != 'Normal'
+
+    # timedatectl 분기 ────────────────────────────────────────
+    - name: timedatectl — NTP 서비스 active 여부 확인
+      fail:
+        msg: "NTP 동기화가 비활성입니다. timedatectl 출력:\n{{ timedatectl_out.stdout }}"
+      when:
+        - "'TOOL=timedatectl' in tool_check.stdout"
+        - timedatectl_out.rc == 0
+        - "'System clock synchronized: yes' not in timedatectl_out.stdout"
+
+    - name: 점검 요약
+      debug:
+        msg: >-
+          OK · tool={{ tool_check.stdout | default('?') | trim }} ·
+          {% if offset_ms is defined %}offset={{ offset_ms }}ms · 임계={{ max_drift_ms }}ms{% endif %}

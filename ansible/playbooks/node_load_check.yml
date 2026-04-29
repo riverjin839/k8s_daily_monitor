@@ -1,0 +1,58 @@
+---
+# 노드 부하 점검 (load average vs CPU core 수)
+# - /proc/loadavg 와 nproc 으로 1분 평균 부하를 코어수로 나눈 비율 평가
+# - 비율 >= crit 이면 실패, >= warn 이면 changed (warning)
+# Vars:
+#   warn_ratio (default 0.8): load_per_core 경고 임계
+#   crit_ratio (default 1.5): load_per_core 실패 임계
+
+- name: 노드 부하 점검
+  hosts: all
+  gather_facts: false
+  vars:
+    warn_ratio: 0.8
+    crit_ratio: 1.5
+
+  tasks:
+    - name: load average + CPU core 수 수집
+      shell: |
+        LOAD1=$(awk '{print $1}' /proc/loadavg)
+        LOAD5=$(awk '{print $2}' /proc/loadavg)
+        LOAD15=$(awk '{print $3}' /proc/loadavg)
+        CORES=$(nproc)
+        echo "load1=$LOAD1 load5=$LOAD5 load15=$LOAD15 cores=$CORES"
+      register: load_out
+      changed_when: false
+
+    - name: 결과 파싱
+      set_fact:
+        load1:  "{{ load_out.stdout | regex_search('load1=([0-9.]+)', '\\1') | first | float }}"
+        load5:  "{{ load_out.stdout | regex_search('load5=([0-9.]+)', '\\1') | first | float }}"
+        load15: "{{ load_out.stdout | regex_search('load15=([0-9.]+)', '\\1') | first | float }}"
+        cores:  "{{ load_out.stdout | regex_search('cores=([0-9]+)', '\\1') | first | int }}"
+
+    - name: 코어당 부하 비율 계산
+      set_fact:
+        ratio1:  "{{ (load1 | float / (cores | int | max(1))) | round(2) }}"
+        ratio5:  "{{ (load5 | float / (cores | int | max(1))) | round(2) }}"
+        ratio15: "{{ (load15 | float / (cores | int | max(1))) | round(2) }}"
+
+    - name: 점검 요약
+      debug:
+        msg: >-
+          load1={{ load1 }}/{{ cores }} (ratio {{ ratio1 }}) ·
+          load5={{ load5 }} (ratio {{ ratio5 }}) ·
+          load15={{ load15 }} (ratio {{ ratio15 }})
+
+    - name: critical — load5 ratio 초과시 실패
+      fail:
+        msg: "5분 평균 load 비율 {{ ratio5 }} (load5={{ load5 }}, cores={{ cores }}) 가 임계 {{ crit_ratio }} 를 초과"
+      when: ratio5 | float >= crit_ratio | float
+
+    - name: warning — load5 ratio 경고시 changed
+      debug:
+        msg: "load5 비율 {{ ratio5 }} 가 경고 임계 {{ warn_ratio }} 이상"
+      changed_when: true
+      when:
+        - ratio5 | float >= warn_ratio | float
+        - ratio5 | float < crit_ratio | float

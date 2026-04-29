@@ -1,0 +1,104 @@
+---
+# K8s 컨트롤플레인 인증서 만료 점검
+# - /etc/kubernetes/pki/*.crt 들의 NotAfter 까지 남은 일수를 계산
+# - 임계일 이하로 남으면 실패. 워커 노드에는 보통 pki 디렉터리가 없어 무시.
+# Vars:
+#   warn_days (default 60): 경고 임계 (남은 일수)
+#   crit_days (default 14): 실패 임계
+#   pki_dir   (default /etc/kubernetes/pki)
+
+- name: K8s 인증서 만료 점검
+  hosts: all
+  gather_facts: false
+  vars:
+    warn_days: 60
+    crit_days: 14
+    pki_dir: /etc/kubernetes/pki
+
+  tasks:
+    - name: pki 디렉터리 존재 확인 (워커 노드는 보통 없음)
+      stat:
+        path: "{{ pki_dir }}"
+      register: pki_stat
+
+    - name: pki 없는 노드 — 검사 skip
+      debug:
+        msg: "{{ pki_dir }} 가 없는 노드 (워커일 가능성). 검사 skip."
+      when: not pki_stat.stat.exists
+
+    - meta: end_host
+      when: not pki_stat.stat.exists
+
+    - name: pki 디렉터리의 .crt 파일 목록
+      find:
+        paths: "{{ pki_dir }}"
+        patterns: "*.crt"
+        recurse: true
+      register: cert_files
+
+    - name: 각 인증서의 만료일 (NotAfter) 수집
+      shell: |
+        end=$(openssl x509 -in "{{ item.path }}" -noout -enddate | cut -d= -f2)
+        end_epoch=$(date -d "$end" +%s 2>/dev/null || echo 0)
+        now_epoch=$(date +%s)
+        days_left=$(( (end_epoch - now_epoch) / 86400 ))
+        echo "{{ item.path }}|$days_left|$end"
+      loop: "{{ cert_files.files }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+      register: cert_days_raw
+      changed_when: false
+
+    - name: 결과를 list 로 파싱
+      set_fact:
+        certs: >-
+          {{
+            cert_days_raw.results
+            | map(attribute='stdout')
+            | map('split', '|')
+            | list
+          }}
+
+    # Ansible 의 task-level `vars` 는 매 루프 iteration 마다 다시 적용되므로
+    # 같은 이름의 fact 를 가린다 → set_fact 의 누적이 무력화된다.
+    # 그래서 vars 를 쓰지 않고 별도 init task 로 빈 리스트를 깐 뒤 default([]) 로 안전하게 누적.
+    - name: 분류 버킷 초기화
+      set_fact:
+        crit_certs: []
+        warn_certs: []
+
+    - name: critical / warning 분류
+      set_fact:
+        crit_certs: >-
+          {{ (crit_certs | default([])) + ([item] if (item[1] | int) <= (crit_days | int) else []) }}
+        warn_certs: >-
+          {{ (warn_certs | default([])) + ([item] if ((item[1] | int) > (crit_days | int) and (item[1] | int) <= (warn_days | int)) else []) }}
+      loop: "{{ certs }}"
+
+    - name: 점검 요약
+      debug:
+        msg: >-
+          {{ certs | length }}개 인증서 검사 ·
+          critical {{ crit_certs | length }}개 ·
+          warning {{ warn_certs | length }}개 (warn≤{{ warn_days }}일 · crit≤{{ crit_days }}일)
+
+    - name: critical — 곧 만료되는 인증서
+      fail:
+        msg: |
+          {{ crit_days }}일 내 만료 예정 인증서 ({{ crit_certs | length }}개):
+          {% for c in crit_certs %}
+          - {{ c[0] }}  남은 {{ c[1] }}일  (NotAfter {{ c[2] }})
+          {% endfor %}
+
+          `kubeadm certs renew all` 또는 인증서 갱신 절차 즉시 수행 필요.
+      when: crit_certs | length > 0
+
+    - name: warning — 60일 내 만료
+      debug:
+        msg: |
+          {{ warn_days }}일 내 만료 예정 인증서:
+          {% for c in warn_certs %}
+          - {{ c[0] }}  남은 {{ c[1] }}일
+          {% endfor %}
+      changed_when: true
+      when: warn_certs | length > 0

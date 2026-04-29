@@ -25,6 +25,13 @@ interface ClusterSidebarProps {
   allLabel?: string;
   /** 정렬 모드 토글 + 드래그 앤 드랍 활성화. onReorder 가 주어지면 기능 노출. */
   onReorder?: (orderedClusterIds: string[]) => void;
+  /** 다중 선택 모드 — 활성화 시 selectedIds/onMultiSelectChange 가 우선한다.
+   *  noop pages 영향 없음: 기본 false. */
+  multiSelect?: boolean;
+  /** multiSelect 모드일 때 현재 선택된 클러스터 id 들 */
+  selectedIds?: string[];
+  /** multiSelect 모드일 때 선택 변경 콜백 */
+  onMultiSelectChange?: (ids: string[]) => void;
 }
 
 const STATUS_ICON: Record<Status, React.ComponentType<{ className?: string }>> = {
@@ -46,9 +53,12 @@ interface RowProps {
   active: boolean;
   sortMode: boolean;
   onSelect: () => void;
+  /** 다중 선택 모드 — true 면 좌측에 체크박스 노출 */
+  multiSelect?: boolean;
+  checked?: boolean;
 }
 
-function ClusterRow({ cluster, active, sortMode, onSelect }: RowProps) {
+function ClusterRow({ cluster, active, sortMode, onSelect, multiSelect, checked }: RowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: cluster.id,
     disabled: !sortMode,
@@ -73,6 +83,15 @@ function ClusterRow({ cluster, active, sortMode, onSelect }: RowProps) {
         >
           <GripVertical className="w-3.5 h-3.5" />
         </button>
+      )}
+      {multiSelect && !sortMode && (
+        <input
+          type="checkbox"
+          checked={!!checked}
+          onChange={onSelect}
+          aria-label={`${cluster.name} 선택`}
+          className="ml-2 w-4 h-4 accent-primary flex-shrink-0"
+        />
       )}
       <button
         onClick={sortMode ? undefined : onSelect}
@@ -107,7 +126,24 @@ export function ClusterSidebar({
   clusters, selectedId, onSelect, title = '클러스터',
   highlightActive = true, allowAll = false, allLabel = '전체 클러스터',
   onReorder,
+  multiSelect = false, selectedIds, onMultiSelectChange,
 }: ClusterSidebarProps) {
+  const selectedSet = multiSelect ? new Set(selectedIds ?? []) : null;
+  const toggleMulti = (id: string) => {
+    if (!multiSelect || !onMultiSelectChange) return;
+    const next = new Set(selectedSet ?? []);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    // 클러스터 정렬 순서를 유지하기 위해 원본 배열 순서로 정렬해서 내려준다.
+    const ordered = clusters.map((c) => c.id).filter((cid) => next.has(cid));
+    onMultiSelectChange(ordered);
+  };
+  const toggleAllMulti = () => {
+    if (!multiSelect || !onMultiSelectChange) return;
+    const all = clusters.map((c) => c.id);
+    if ((selectedSet?.size ?? 0) === all.length) onMultiSelectChange([]);
+    else onMultiSelectChange(all);
+  };
   const width = useSidebarStore((s) => s.clusterSidebarWidth);
   const setWidth = useSidebarStore((s) => s.setClusterSidebarWidth);
   const reset = useSidebarStore((s) => s.resetClusterSidebar);
@@ -134,8 +170,18 @@ export function ClusterSidebar({
       <div className="flex items-center justify-between px-2 py-1.5">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {title}
-          <span className="ml-1 text-muted-foreground/70">({totalN})</span>
+          <span className="ml-1 text-muted-foreground/70">
+            {multiSelect ? `(${selectedSet?.size ?? 0}/${totalN})` : `(${totalN})`}
+          </span>
         </p>
+        {multiSelect && !sortMode && totalN > 0 && (
+          <button
+            onClick={toggleAllMulti}
+            className="text-[10px] text-primary hover:text-primary/80"
+          >
+            {(selectedSet?.size ?? 0) === totalN ? '전체 해제' : '전체 선택'}
+          </button>
+        )}
         {onReorder && (
           <button
             onClick={() => setSortMode((v) => !v)}
@@ -150,7 +196,7 @@ export function ClusterSidebar({
         )}
       </div>
 
-      {allowAll && !sortMode && (
+      {allowAll && !sortMode && !multiSelect && (
         <button
           onClick={() => onSelect(null)}
           className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors mb-0.5 ${
@@ -177,9 +223,13 @@ export function ClusterSidebar({
                 <ClusterRow
                   key={c.id}
                   cluster={c}
-                  active={highlightActive && c.id === selectedId}
+                  active={multiSelect
+                    ? !!selectedSet?.has(c.id)
+                    : highlightActive && c.id === selectedId}
                   sortMode={sortMode}
-                  onSelect={() => onSelect(c.id)}
+                  onSelect={multiSelect ? () => toggleMulti(c.id) : () => onSelect(c.id)}
+                  multiSelect={multiSelect}
+                  checked={multiSelect ? selectedSet?.has(c.id) : undefined}
                 />
               ))}
             </SortableContext>

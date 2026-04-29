@@ -332,6 +332,10 @@ export interface NodeSummary {
 
 export interface BulkExecResultItem {
   host: string;
+  /** 사용자가 선택한 노드 이름 (있으면 host 대신 이 값을 화면에 표시) */
+  name?: string | null;
+  clusterId?: string | null;
+  clusterName?: string | null;
   status: 'ok' | 'error' | 'timeout' | 'auth_error' | 'connect_error';
   exitCode?: number | null;
   stdout: string;
@@ -353,7 +357,15 @@ export interface BulkExecResponse {
 export interface BulkExecRequest {
   clusterId?: string;
   action: 'ssh' | 'scp';
-  targets: { host: string; username?: string; port?: number }[];
+  targets: {
+    host: string;
+    username?: string;
+    port?: number;
+    /** 표시용 노드 이름 — 결과 테이블에 그대로 echo back 됨 */
+    name?: string;
+    clusterId?: string;
+    clusterName?: string;
+  }[];
   username: string;
   port: number;
   password?: string;

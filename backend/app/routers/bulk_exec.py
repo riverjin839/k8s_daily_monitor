@@ -122,6 +122,10 @@ async def bulk_exec_run(payload: BulkExecRequest):
             username=t.username or payload.username,
             password=payload.password,
             private_key=payload.private_key,
+            name=t.name,
+            # UUID -> str (SSHTarget 는 str 보존; 응답 시 다시 UUID 로 변환)
+            cluster_id=str(t.cluster_id) if t.cluster_id else None,
+            cluster_name=t.cluster_name,
         )
         for t in payload.targets
     ]

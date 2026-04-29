@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
   Terminal, RefreshCw, Play, Square, CheckCircle, XCircle, Key, Upload, ChevronDown, ChevronRight,
-  Wifi, FileText, ShieldAlert, Zap, Clock, Download, LayoutList, Rows,
+  Wifi, FileText, ShieldAlert, Zap, Clock, Download, LayoutList, Rows, Server,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands, DebugLogPanel, Skeleton, EmptyState } from '@/components/common';
@@ -51,7 +51,7 @@ function resultsToCsv(
   command: string,
 ): string {
   const cols = [
-    'host', 'status', 'exit_code', 'duration_ms',
+    'cluster', 'node', 'host', 'status', 'exit_code', 'duration_ms',
     'error', 'stdout_lines', 'stderr_lines', 'stdout', 'stderr',
   ];
   const lines: string[] = [];
@@ -63,6 +63,8 @@ function resultsToCsv(
     const stdout = filteredText(r.stdout, filter);
     const stderr = filteredText(r.stderr, filter);
     lines.push([
+      r.clusterName ?? '',
+      r.name ?? '',
       r.host,
       r.status,
       r.exitCode ?? '',
@@ -90,7 +92,8 @@ function resultsToTxt(
   lines.push(`# total   : ${results.length} (ok=${results.filter((r) => r.status === 'ok').length})`);
   lines.push('');
   for (const r of results) {
-    lines.push(`========== ${r.host}  [${r.status}]  exit=${r.exitCode ?? '-'}  ${r.durationMs}ms ==========`);
+    const label = r.name ? `${r.name}${r.clusterName ? `@${r.clusterName}` : ''} (${r.host})` : r.host;
+    lines.push(`========== ${label}  [${r.status}]  exit=${r.exitCode ?? '-'}  ${r.durationMs}ms ==========`);
     if (r.error) lines.push(`!! error: ${r.error}`);
     const stdout = filteredText(r.stdout, filter);
     if (stdout.trim()) {
@@ -119,6 +122,87 @@ function downloadBlob(text: string, filename: string, mime: string) {
 
 function copyToClipboard(text: string): Promise<boolean> {
   return navigator.clipboard.writeText(text).then(() => true).catch(() => false);
+}
+
+/** 클러스터 단위로 묶어 노드를 보여주는 collapsible 섹션.
+ *  여러 클러스터를 한 화면에서 다룰 때 시각적 구분을 준다. */
+function ClusterNodeGroup({
+  clusterName, nodes, isLoading, isError, errorMsg, onRefetch,
+  selectedCount, isNodeChecked, onToggleNode, onToggleAll,
+}: {
+  clusterName: string;
+  nodes: NodeSummary[];
+  isLoading: boolean;
+  isError: boolean;
+  errorMsg?: string;
+  onRefetch: () => void;
+  selectedCount: number;
+  isNodeChecked: (name: string) => boolean;
+  onToggleNode: (name: string) => void;
+  onToggleAll: () => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const total = nodes.length;
+  const allSelected = total > 0 && selectedCount === total;
+  return (
+    <div className="border-b border-border last:border-b-0">
+      <header className="flex items-center gap-2 px-3 py-2 bg-muted/20 sticky top-0 z-[1]">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="p-0.5 text-muted-foreground hover:text-foreground"
+          aria-label={open ? '접기' : '펼치기'}
+        >
+          {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+        </button>
+        <Server className="w-3.5 h-3.5 text-muted-foreground/80 flex-shrink-0" />
+        <span className="text-xs font-semibold truncate flex-1">{clusterName}</span>
+        <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
+          {selectedCount}/{total}
+        </span>
+        <button
+          onClick={onToggleAll}
+          disabled={total === 0}
+          className="text-[10px] text-primary hover:text-primary/80 disabled:opacity-40"
+        >
+          {allSelected ? '해제' : '모두'}
+        </button>
+      </header>
+      {open && (
+        <div>
+          {isLoading ? (
+            <div className="p-3 space-y-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 py-1.5">
+                  <Skeleton width={14} height={14} />
+                  <Skeleton width={140} height={12} />
+                  <Skeleton width={90} height={10} />
+                </div>
+              ))}
+            </div>
+          ) : isError ? (
+            <div className="px-3 py-2">
+              <p className="text-[11px] text-red-400 mb-1">노드 조회 실패: {errorMsg ?? '연결 오류'}</p>
+              <button
+                onClick={onRefetch}
+                className="text-[10px] text-primary hover:text-primary/80 underline"
+              >다시 시도</button>
+            </div>
+          ) : total === 0 ? (
+            <p className="px-3 py-3 text-[11px] text-muted-foreground/70">노드 없음</p>
+          ) : (
+            nodes.map((n) => (
+              <NodeRow
+                key={n.name}
+                node={n}
+                checked={isNodeChecked(n.name)}
+                onToggle={() => onToggleNode(n.name)}
+              />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function NodeRow({ node, checked, onToggle }: { node: NodeSummary; checked: boolean; onToggle: () => void }) {
@@ -154,6 +238,10 @@ function ResultRow({ result, globalFilter }: { result: BulkExecResultItem; globa
   const [expanded, setExpanded] = useState(result.status !== 'ok');
   const meta = STATUS_META[result.status];
   const Icon = meta.icon;
+  // 노드 이름이 있으면 그것을 주 식별자로, 호스트(IP)는 서브로 표기.
+  // 사용자가 선택한 노드를 그대로 보여주는 것이 핵심 — 더 이상 IP 만 노출되지 않음.
+  const primary = result.name || result.host;
+  const subHost = result.name && result.name !== result.host ? result.host : null;
 
   return (
     <>
@@ -166,7 +254,15 @@ function ResultRow({ result, globalFilter }: { result: BulkExecResultItem; globa
             {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           </button>
         </td>
-        <td className="px-3 py-2 font-mono text-sm">{result.host}</td>
+        <td className="px-3 py-2 font-mono text-sm">
+          <div className="flex flex-col">
+            <span>{primary}</span>
+            {subHost && <span className="text-[10px] text-muted-foreground">{subHost}</span>}
+            {result.clusterName && (
+              <span className="text-[10px] text-muted-foreground/80">{result.clusterName}</span>
+            )}
+          </div>
+        </td>
         <td className="px-3 py-2">
           <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
             <Icon className="w-3 h-3" />
@@ -231,7 +327,7 @@ function SummaryResultsTable({
           </tr>
         </thead>
         <tbody>
-          {results.map((r) => {
+          {results.map((r, idx) => {
             const meta = STATUS_META[r.status];
             const Icon = meta.icon;
             const filteredOut = filteredText(r.stdout, globalFilter);
@@ -243,14 +339,22 @@ function SummaryResultsTable({
             const matchBadge = globalFilter.trim()
               ? (outLines.length + errLines.length)
               : null;
+            // 다중 클러스터에서 같은 host(IP) 가 중복 가능 — 안전한 키 = clusterId + host + idx
+            const rowKey = `${r.clusterId ?? ''}|${r.host}|${idx}`;
+            const primary = r.name || r.host;
+            const subHost = r.name && r.name !== r.host ? r.host : null;
 
             return (
-              <tr key={r.host}
+              <tr key={rowKey}
                 className={`border-b border-border hover:bg-muted/20 align-top ${
                   r.status !== 'ok' ? 'bg-red-500/[0.02]' : ''
                 }`}>
                 <td className="px-3 py-2 align-top whitespace-nowrap">
-                  <p className="font-mono text-xs font-medium">{r.host}</p>
+                  <p className="font-mono text-xs font-medium">{primary}</p>
+                  {subHost && <p className="font-mono text-[10px] text-muted-foreground">{subHost}</p>}
+                  {r.clusterName && (
+                    <p className="text-[10px] text-muted-foreground/80">{r.clusterName}</p>
+                  )}
                 </td>
                 <td className="px-3 py-2 align-top whitespace-nowrap">
                   <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
@@ -301,34 +405,92 @@ function SummaryResultsTable({
   );
 }
 
+// 다중 클러스터 모드에서 같은 노드명이 여러 클러스터에 존재할 수 있어
+// (예: 모든 클러스터에 master-1 이 있음) 클러스터로 한정한 키로 식별한다.
+const SEP = '::';
+const makeKey = (clusterId: string, nodeName: string) => `${clusterId}${SEP}${nodeName}`;
+const splitKey = (k: string): { clusterId: string; nodeName: string } => {
+  const i = k.indexOf(SEP);
+  return i < 0 ? { clusterId: '', nodeName: k } : { clusterId: k.slice(0, i), nodeName: k.slice(i + SEP.length) };
+};
+
 export function BulkExecPage() {
   const { data: clusters = [] } = useClusters();
-  const [clusterId, setClusterId] = useState('');
+  // 다중 클러스터 선택 — 사이드바에서 체크박스로 고른다
+  const [clusterIds, setClusterIds] = useState<string[]>([]);
+  // 첫 진입 시 첫 클러스터를 기본 선택
   useEffect(() => {
-    if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
-  }, [clusters, clusterId]);
+    if (clusterIds.length === 0 && clusters.length > 0) setClusterIds([clusters[0].id]);
+  }, [clusters, clusterIds.length]);
 
-  const nodesQ = useQuery({
-    queryKey: ['bulk-exec', 'nodes', clusterId],
-    queryFn: () => bulkExecApi.nodeList(clusterId).then((r) => r.data),
-    enabled: !!clusterId,
-    staleTime: 30_000,
+  // 선택된 클러스터별로 병렬로 노드 목록을 조회
+  const nodeQueries = useQueries({
+    queries: clusterIds.map((cid) => ({
+      queryKey: ['bulk-exec', 'nodes', cid],
+      queryFn: () => bulkExecApi.nodeList(cid).then((r) => r.data),
+      staleTime: 30_000,
+      enabled: !!cid,
+    })),
   });
+  const refetchAllNodes = () => nodeQueries.forEach((q) => q.refetch());
+  const isAnyFetching = nodeQueries.some((q) => q.isFetching);
 
+  // 클러스터 ID -> 메타. 사이드바 순서를 그대로 따라 클러스터 섹션을 그린다.
+  const clusterMetaById = useMemo(() => {
+    const m = new Map<string, { id: string; name: string }>();
+    for (const c of clusters) m.set(c.id, { id: c.id, name: c.name });
+    return m;
+  }, [clusters]);
+
+  // 노드 선택 — `${clusterId}::${nodeName}` 키 사용
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  // 클러스터 바뀌면 선택 초기화
-  useEffect(() => { setSelected(new Set()); }, [clusterId]);
 
-  const toggle = (name: string) => setSelected((prev) => {
+  // 선택 해제된 클러스터에 속한 노드 선택은 잘라낸다
+  useEffect(() => {
+    setSelected((prev) => {
+      const allowed = new Set(clusterIds);
+      let changed = false;
+      const next = new Set<string>();
+      for (const k of prev) {
+        const { clusterId } = splitKey(k);
+        if (allowed.has(clusterId)) next.add(k);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [clusterIds]);
+
+  const toggleNode = (clusterId: string, nodeName: string) => setSelected((prev) => {
     const next = new Set(prev);
-    if (next.has(name)) next.delete(name);
-    else next.add(name);
+    const key = makeKey(clusterId, nodeName);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
     return next;
   });
-  const toggleAll = () => {
-    const all = (nodesQ.data?.nodes ?? []).map((n) => n.name);
-    setSelected((prev) => prev.size === all.length ? new Set() : new Set(all));
-  };
+  const toggleClusterAll = (clusterId: string, nodeNames: string[]) => setSelected((prev) => {
+    const next = new Set(prev);
+    const allSelectedHere = nodeNames.every((n) => next.has(makeKey(clusterId, n)));
+    if (allSelectedHere) {
+      for (const n of nodeNames) next.delete(makeKey(clusterId, n));
+    } else {
+      for (const n of nodeNames) next.add(makeKey(clusterId, n));
+    }
+    return next;
+  });
+  const toggleAllAcrossClusters = () => setSelected((prev) => {
+    // 현재 보여지는 모든 클러스터의 모든 노드
+    const allKeys: string[] = [];
+    nodeQueries.forEach((q, i) => {
+      const cid = clusterIds[i];
+      for (const n of q.data?.nodes ?? []) allKeys.push(makeKey(cid, n.name));
+    });
+    if (allKeys.length === 0) return prev;
+    const everySelected = allKeys.every((k) => prev.has(k));
+    return everySelected ? new Set() : new Set(allKeys);
+  });
+
+  // 클러스터별 총 노드 수 / 선택 노드 수
+  const totalNodesShown = nodeQueries.reduce((acc, q) => acc + (q.data?.nodes?.length ?? 0), 0);
 
   // 실행 구성
   const [action, setAction] = useState<'ssh' | 'scp'>('ssh');
@@ -347,22 +509,55 @@ export function BulkExecPage() {
   const [chunkSize, setChunkSize] = useState(30);
   const [chunkPauseMs, setChunkPauseMs] = useState(200);
 
-  const selectedHosts = useMemo(() => {
-    const byName = new Map((nodesQ.data?.nodes ?? []).map((n) => [n.name, n]));
-    return Array.from(selected).map((name) => {
-      const n = byName.get(name);
-      return { name, host: n?.internalIp || n?.name || name };
+  // 선택된 클러스터별로 노드를 그룹화 → 화면 렌더 + 페이로드 빌드 양쪽에서 재사용
+  const clusterSections = useMemo(() => {
+    return clusterIds.map((cid, i) => {
+      const meta = clusterMetaById.get(cid);
+      const q = nodeQueries[i];
+      return {
+        clusterId: cid,
+        clusterName: meta?.name ?? cid,
+        query: q,
+        nodes: q?.data?.nodes ?? [],
+      };
     });
-  }, [selected, nodesQ.data]);
+  }, [clusterIds, clusterMetaById, nodeQueries]);
+
+  const selectedHosts = useMemo(() => {
+    const byKey = new Map<string, { name: string; host: string; clusterId: string; clusterName: string }>();
+    for (const sec of clusterSections) {
+      const byName = new Map(sec.nodes.map((n) => [n.name, n]));
+      for (const key of selected) {
+        const { clusterId, nodeName } = splitKey(key);
+        if (clusterId !== sec.clusterId) continue;
+        const n = byName.get(nodeName);
+        if (!n) continue;     // 노드가 사라졌으면 무시 (UI 가 곧 갱신)
+        byKey.set(key, {
+          name: nodeName,
+          host: n.internalIp || n.name || nodeName,
+          clusterId: sec.clusterId,
+          clusterName: sec.clusterName,
+        });
+      }
+    }
+    return Array.from(byKey.values());
+  }, [selected, clusterSections]);
 
   const [runResponse, setRunResponse] = useState<BulkExecResponse | null>(null);
 
   const runMutation = useAbortableMutation({
     mutationFn: async (_: void, signal) => {
       const res = await bulkExecApi.run({
-        clusterId: clusterId || undefined,
+        // 단일 클러스터일 때만 루트 cluster_id 채움 (감사 로그/디버깅 용)
+        clusterId: clusterIds.length === 1 ? clusterIds[0] : undefined,
         action,
-        targets: selectedHosts.map((t) => ({ host: t.host })),
+        targets: selectedHosts.map((t) => ({
+          host: t.host,
+          // 결과를 노드 이름으로 표시하기 위해 메타를 그대로 전달
+          name: t.name,
+          clusterId: t.clusterId,
+          clusterName: t.clusterName,
+        })),
         username,
         port,
         password: authMode === 'password' ? password : undefined,
@@ -383,8 +578,8 @@ export function BulkExecPage() {
   });
 
   const canRun =
-    !!clusterId &&
-    selected.size > 0 &&
+    clusterIds.length > 0 &&
+    selectedHosts.length > 0 &&
     (authMode === 'password' ? !!password : !!privateKey.trim()) &&
     (action === 'ssh' ? !!command.trim() : !!scpRemotePath.trim());
 
@@ -398,77 +593,77 @@ export function BulkExecPage() {
   return (
     <div className="min-h-screen bg-background">
       <main className="max-w-[1800px] mx-auto px-6 py-6 flex gap-5">
-        {/* 좌측: 클러스터 사이드바 */}
+        {/* 좌측: 클러스터 사이드바 — 다중 선택 모드 */}
         <ClusterSidebar
           clusters={clusters}
-          selectedId={clusterId || null}
-          onSelect={(id) => setClusterId(id ?? '')}
+          // 단일선택 props 는 multiSelect 가 true 면 무시되지만 인터페이스 호환을 위해 채워둠
+          selectedId={clusterIds[0] ?? null}
+          onSelect={() => {}}
+          multiSelect
+          selectedIds={clusterIds}
+          onMultiSelectChange={setClusterIds}
         />
 
         <div className="flex-1 min-w-0">
-        <DebugLogPanel pageKey="bulk-exec" extra={{ clusterId, selected: selected.size, action, mode, pending: runMutation.isPending }} />
+        <DebugLogPanel pageKey="bulk-exec" extra={{ clusters: clusterIds.length, selected: selected.size, action, mode, pending: runMutation.isPending }} />
         {/* 헤더 */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Terminal className="w-6 h-6 text-primary" />
             <h1 className="text-xl font-bold">노드 일괄 실행 (SSH / SCP)</h1>
-            {nodesQ.data?.nodes && (
+            {clusterIds.length > 0 && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
-                선택 {selected.size} / {nodesQ.data.nodes.length}
+                클러스터 {clusterIds.length} · 노드 {selected.size} / {totalNodesShown}
               </span>
             )}
           </div>
           <button
-            onClick={() => nodesQ.refetch()}
-            disabled={!clusterId}
+            onClick={refetchAllNodes}
+            disabled={clusterIds.length === 0}
             className="p-2 bg-secondary hover:bg-secondary/80 rounded-lg text-muted-foreground disabled:opacity-50"
             title="노드 목록 새로고침"
           >
-            <RefreshCw className={`w-4 h-4 ${nodesQ.isFetching ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${isAnyFetching ? 'animate-spin' : ''}`} />
           </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          {/* 왼쪽: 노드 선택 */}
+          {/* 왼쪽: 노드 선택 — 클러스터별 그룹 */}
           <section className="bg-card border border-border rounded-xl overflow-hidden">
             <header className="px-4 py-3 border-b border-border bg-muted/20 flex items-center justify-between">
               <h2 className="text-sm font-semibold">타겟 노드</h2>
               <button
-                onClick={toggleAll}
-                disabled={!nodesQ.data?.nodes?.length}
+                onClick={toggleAllAcrossClusters}
+                disabled={totalNodesShown === 0}
                 className="text-xs text-primary hover:text-primary/80 disabled:opacity-40"
               >
-                {selected.size === (nodesQ.data?.nodes?.length ?? 0) ? '전체 해제' : '전체 선택'}
+                {selected.size === totalNodesShown && totalNodesShown > 0 ? '전체 해제' : '전체 선택'}
               </button>
             </header>
             <div className="max-h-[520px] overflow-y-auto">
-              {!clusterId ? (
+              {clusterIds.length === 0 ? (
                 <EmptyState compact title="클러스터를 선택하세요"
-                  description="왼쪽 사이드바에서 대상 클러스터를 먼저 고르세요." />
-              ) : nodesQ.isLoading ? (
-                <div className="p-3 space-y-2">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-3 py-1.5">
-                      <Skeleton width={14} height={14} />
-                      <Skeleton width={160} height={12} />
-                      <Skeleton width={100} height={10} />
-                      <Skeleton width={60} height={10} className="ml-auto" />
-                    </div>
-                  ))}
-                </div>
-              ) : nodesQ.isError ? (
-                <EmptyState compact
-                  title="노드 조회 실패"
-                  description={(nodesQ.error as Error)?.message ?? '연결 오류'}
-                  action={{ label: '다시 시도', onClick: () => nodesQ.refetch(), variant: 'secondary' }}
-                />
-              ) : (nodesQ.data?.nodes ?? []).length === 0 ? (
-                <EmptyState compact title="노드 없음"
-                  description="이 클러스터에서 가져올 수 있는 노드가 없습니다." />
+                  description="왼쪽 사이드바에서 한 개 이상의 클러스터를 체크하세요." />
               ) : (
-                (nodesQ.data!.nodes).map((n) => (
-                  <NodeRow key={n.name} node={n} checked={selected.has(n.name)} onToggle={() => toggle(n.name)} />
-                ))
+                clusterSections.map((sec) => {
+                  const allHere = sec.nodes.map((n) => n.name);
+                  const selectedHere = allHere.filter((n) => selected.has(makeKey(sec.clusterId, n))).length;
+                  return (
+                    <ClusterNodeGroup
+                      key={sec.clusterId}
+                      clusterName={sec.clusterName}
+                      nodes={sec.nodes}
+                      isLoading={sec.query?.isLoading ?? false}
+                      isError={sec.query?.isError ?? false}
+                      errorMsg={(sec.query?.error as Error | undefined)?.message}
+                      onRefetch={() => sec.query?.refetch()}
+                      selectedCount={selectedHere}
+                      isNodeChecked={(name) => selected.has(makeKey(sec.clusterId, name))}
+                      onToggleNode={(name) => toggleNode(sec.clusterId, name)}
+                      onToggleAll={() => toggleClusterAll(sec.clusterId, allHere)}
+                    />
+                  );
+                })
               )}
             </div>
           </section>
@@ -860,8 +1055,12 @@ export function BulkExecPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {runResponse.results.map((r) => (
-                      <ResultRow key={r.host} result={r} globalFilter={globalFilter} />
+                    {runResponse.results.map((r, idx) => (
+                      <ResultRow
+                        key={`${r.clusterId ?? ''}|${r.host}|${idx}`}
+                        result={r}
+                        globalFilter={globalFilter}
+                      />
                     ))}
                   </tbody>
                 </table>
@@ -876,7 +1075,7 @@ export function BulkExecPage() {
       <ConfirmDialog
         open={confirmOpen}
         title={action === 'ssh' ? '노드 일괄 SSH 실행 확인' : '노드 일괄 SCP 업로드 확인'}
-        description={`이 작업은 ${selected.size}개 노드에 ${mode === 'parallel' ? '병렬' : '순차'}로 실행됩니다.`}
+        description={`이 작업은 ${clusterIds.length}개 클러스터의 ${selectedHosts.length}개 노드에 ${mode === 'parallel' ? '병렬' : '순차'}로 실행됩니다.`}
         confirmLabel={action === 'ssh' ? '실행' : '업로드'}
         danger={action === 'ssh'}
         onCancel={() => setConfirmOpen(false)}
@@ -888,7 +1087,7 @@ export function BulkExecPage() {
             <p className="font-mono">
               <span className="text-primary">{username}</span>
               <span className="text-muted-foreground">@</span>
-              <span className="text-foreground">(선택된 {selected.size}개 host)</span>
+              <span className="text-foreground">(선택된 {selectedHosts.length}개 host, {clusterIds.length}개 클러스터)</span>
               <span className="text-muted-foreground">:{port}</span>
               <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded border border-border bg-secondary">
                 {authMode === 'password' ? '비밀번호' : 'Private Key'}
@@ -912,17 +1111,30 @@ export function BulkExecPage() {
             </div>
           )}
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">대상 호스트</p>
-            <div className="text-[11px] font-mono max-h-24 overflow-auto bg-background border border-border rounded p-2">
-              {selectedHosts.slice(0, 10).map((t) => (
-                <div key={t.name}>
-                  <span className="text-foreground">{t.name}</span>
-                  {t.host !== t.name && <span className="text-muted-foreground"> ({t.host})</span>}
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">대상 호스트 (클러스터별)</p>
+            <div className="text-[11px] font-mono max-h-40 overflow-auto bg-background border border-border rounded p-2 space-y-1.5">
+              {Object.entries(
+                selectedHosts.reduce<Record<string, typeof selectedHosts>>((acc, t) => {
+                  const k = t.clusterName || t.clusterId || '-';
+                  (acc[k] = acc[k] || []).push(t);
+                  return acc;
+                }, {})
+              ).map(([cname, items]) => (
+                <div key={cname}>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground/80">
+                    {cname} <span className="text-muted-foreground/60">({items.length})</span>
+                  </p>
+                  {items.slice(0, 8).map((t) => (
+                    <div key={`${t.clusterId}::${t.name}`} className="pl-2">
+                      <span className="text-foreground">{t.name}</span>
+                      {t.host !== t.name && <span className="text-muted-foreground"> ({t.host})</span>}
+                    </div>
+                  ))}
+                  {items.length > 8 && (
+                    <div className="pl-2 text-muted-foreground">+ {items.length - 8}개 더…</div>
+                  )}
                 </div>
               ))}
-              {selectedHosts.length > 10 && (
-                <div className="text-muted-foreground">+ {selectedHosts.length - 10}개 더…</div>
-              )}
             </div>
           </div>
         </div>

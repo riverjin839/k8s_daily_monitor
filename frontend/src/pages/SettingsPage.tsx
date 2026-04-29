@@ -60,8 +60,7 @@ function EditClusterModal({
       });
       onClose();
     } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
-      setError(axiosErr.response?.data?.detail ?? axiosErr.message ?? '수정에 실패했습니다.');
+      setError(formatApiError(err, '수정에 실패했습니다.'));
     }
   };
 
@@ -218,8 +217,7 @@ function ManagementServerModal({
       onSaved();
       onClose();
     } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
-      setError(axiosErr.response?.data?.detail ?? axiosErr.message ?? '저장에 실패했습니다.');
+      setError(formatApiError(err, '저장에 실패했습니다.'));
     } finally {
       setSaving(false);
     }
@@ -410,7 +408,12 @@ export function SettingsPage() {
       const res = await clustersApi.verify(cluster.id);
       const data = res.data;
       const summary = data.results
-        .map((r) => `${r.check === 'api_server' ? 'API서버' : r.check === 'kubeconfig_auth' ? '인증' : '노드조회'}: ${r.ok === null ? '건너뜀' : r.ok ? '✓' : '✗'} ${r.detail}`)
+        .map((r) => {
+          const detailStr = typeof r.detail === 'string' ? r.detail : JSON.stringify(r.detail ?? '');
+          const label = r.check === 'api_server' ? 'API서버' : r.check === 'kubeconfig_auth' ? '인증' : '노드조회';
+          const mark = r.ok === null ? '건너뜀' : r.ok ? '✓' : '✗';
+          return `${label}: ${mark} ${detailStr}`;
+        })
         .join(' | ');
       setVerifyResults((prev) => ({ ...prev, [cluster.id]: { ok: data.ok, detail: summary } }));
     } catch {
@@ -425,7 +428,8 @@ export function SettingsPage() {
     try {
       const res = await managementServersApi.ping(server.id);
       const d = res.data;
-      const detail = d.latency_ms != null ? `${d.latency_ms}ms — ${d.detail}` : d.detail;
+      const rawDetail = typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail ?? '');
+      const detail = d.latency_ms != null ? `${d.latency_ms}ms — ${rawDetail}` : rawDetail;
       setPingResults((prev) => ({ ...prev, [server.id]: { ok: d.ok, detail } }));
       await refetchServers();
     } catch {

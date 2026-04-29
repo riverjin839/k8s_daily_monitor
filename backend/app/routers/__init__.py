@@ -29,6 +29,10 @@ from app.routers.cluster_custom_fields import router as cluster_custom_fields_ro
 from app.routers.backup import router as backup_router
 from app.routers.service_entries import router as service_entries_router
 from app.routers.batch_jobs import router as batch_jobs_router
+from app.routers.ansible_assets import (
+    files_router as ansible_files_router,
+    inv_router as ansible_inventories_router,
+)
 
 __all__ = [
     "clusters_router",
@@ -62,4 +66,6 @@ __all__ = [
     "backup_router",
     "service_entries_router",
     "batch_jobs_router",
+    "ansible_files_router",
+    "ansible_inventories_router",
 ]

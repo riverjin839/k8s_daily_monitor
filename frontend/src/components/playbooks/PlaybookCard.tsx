@@ -55,9 +55,20 @@ export function PlaybookCard({ playbook, isRunning, onRun, onDelete, onEdit, onT
         </span>
       </div>
 
-      {/* Playbook path */}
-      <div className="text-xs text-muted-foreground font-mono bg-background/50 rounded px-2 py-1 mb-3 truncate">
-        {playbook.playbookPath}
+      {/* Playbook 출처 — DB 파일명 우선, 없으면 path */}
+      <div className="text-xs text-muted-foreground font-mono bg-background/50 rounded px-2 py-1 mb-3 space-y-0.5">
+        {playbook.playbookFileName ? (
+          <div className="truncate">
+            <span className="text-foreground/80">📄 {playbook.playbookFileName}</span>
+            {playbook.inventoryName && (
+              <span className="ml-2 text-foreground/60">· {playbook.inventoryName}</span>
+            )}
+          </div>
+        ) : playbook.playbookPath ? (
+          <div className="truncate">{playbook.playbookPath}</div>
+        ) : (
+          <div className="italic text-muted-foreground/70">(no playbook source)</div>
+        )}
       </div>
 
       {/* Stats (if available) */}

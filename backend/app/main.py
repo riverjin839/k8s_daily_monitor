@@ -39,6 +39,8 @@ from app.routers import (
     backup_router,
     service_entries_router,
     batch_jobs_router,
+    ansible_files_router,
+    ansible_inventories_router,
 )
 
 
@@ -58,6 +60,24 @@ def _run_migrations():
         if "show_on_dashboard" not in columns:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE playbooks ADD COLUMN show_on_dashboard BOOLEAN DEFAULT FALSE"))
+        # 신규: DB 관리형 Playbook 파일 / Inventory FK
+        if "playbook_file_id" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE playbooks ADD COLUMN playbook_file_id UUID "
+                    "REFERENCES ansible_playbook_files(id)"
+                ))
+        if "inventory_id" not in columns:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE playbooks ADD COLUMN inventory_id UUID "
+                    "REFERENCES ansible_inventories(id)"
+                ))
+        # 기존 NOT NULL 제약 완화 — 이제 playbook_file_id 로도 충분.
+        cols_meta = {c["name"]: c for c in inspector.get_columns("playbooks")}
+        if cols_meta.get("playbook_path", {}).get("nullable") is False:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE playbooks ALTER COLUMN playbook_path DROP NOT NULL"))
     if "clusters" in inspector.get_table_names():
         columns = [col["name"] for col in inspector.get_columns("clusters")]
         new_cluster_cols = [
@@ -528,6 +548,8 @@ app.include_router(cluster_custom_fields_router, prefix="/api/v1")
 app.include_router(backup_router, prefix="/api/v1")
 app.include_router(service_entries_router, prefix="/api/v1")
 app.include_router(batch_jobs_router, prefix="/api/v1")
+app.include_router(ansible_files_router, prefix="/api/v1")
+app.include_router(ansible_inventories_router, prefix="/api/v1")
 
 
 @app.get("/")

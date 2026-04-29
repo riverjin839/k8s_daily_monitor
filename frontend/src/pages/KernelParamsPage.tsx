@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
@@ -147,27 +147,38 @@ function NodeRow({ node, checked, onToggle }: { node: NodeSummary; checked: bool
 // ── 결과 카드 (노드별) ──────────────────────────────────────────────────────
 
 function ResultCard({
-  result, command, globalFilter,
-}: { result: BulkExecResultItem; command: string; globalFilter: string }) {
-  const [open, setOpen] = useState(result.status === 'ok');
+  result, command, globalFilter, defaultOpen,
+}: { result: BulkExecResultItem; command: string; globalFilter: string; defaultOpen: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   const meta = STATUS_META[result.status];
   const Icon = meta.icon;
+
+  // 실패한 노드도 사용자가 즉시 사유를 알 수 있게 헤더에 한 줄 미리보기 표시.
+  const inlinePreview =
+    result.status !== 'ok'
+      ? (result.error?.trim() || result.stderr.trim().split('\n')[0] || '')
+      : '';
 
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors"
+        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors text-left"
       >
-        {open ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
-        <span className="font-mono text-sm text-foreground">{result.host}</span>
-        <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-medium ${meta.cls}`}>
+        {open ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
+        <span className="font-mono text-sm text-foreground flex-shrink-0">{result.host}</span>
+        <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-medium flex-shrink-0 ${meta.cls}`}>
           <Icon className="w-3 h-3" />
           {meta.label}
         </span>
-        <span className="ml-auto text-xs font-mono text-muted-foreground">
+        {inlinePreview && !open && (
+          <span className="text-[11px] text-red-400/90 font-mono truncate min-w-0">
+            {inlinePreview}
+          </span>
+        )}
+        <span className="ml-auto text-xs font-mono text-muted-foreground flex-shrink-0">
           {result.exitCode !== null && result.exitCode !== undefined ? `exit ${result.exitCode} · ` : ''}
-          {result.durationMs}ms
+          {result.durationMs}ms · {result.stdout.length}B
         </span>
       </button>
       {open && (
@@ -176,15 +187,23 @@ function ResultCard({
           <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap break-all max-h-24">
             {command}
           </pre>
+          {result.error && (
+            <p className="text-xs text-red-400 font-mono break-all">⚠ {result.error}</p>
+          )}
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground">stdout</p>
-          <LogViewer text={result.stdout} maxHeight="max-h-96" filterOverride={globalFilter || undefined} hideToolbar={!!globalFilter.trim()} />
+          {result.stdout.trim() ? (
+            <LogViewer text={result.stdout} maxHeight="max-h-96" filterOverride={globalFilter || undefined} hideToolbar={!!globalFilter.trim()} />
+          ) : (
+            <p className="text-[11px] text-muted-foreground italic px-2 py-1.5 bg-background border border-border rounded">
+              (no output — 명령은 실행됐지만 stdout 이 비어있음. stderr 또는 exit code 를 확인하세요.)
+            </p>
+          )}
           {result.stderr && (
             <>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">stderr</p>
               <LogViewer text={result.stderr} maxHeight="max-h-40" asError filterOverride={globalFilter || undefined} hideToolbar={!!globalFilter.trim()} />
             </>
           )}
-          {result.error && <p className="text-xs text-red-400">⚠ {result.error}</p>}
         </div>
       )}
     </div>
@@ -243,6 +262,8 @@ export function KernelParamsPage() {
   const [runResponse, setRunResponse] = useState<BulkExecResponse | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [globalFilter, setGlobalFilter] = useState('');
+  const [allOpen, setAllOpen] = useState(true);
+  const resultsRef = useRef<HTMLElement | null>(null);
 
   const runMut = useAbortableMutation({
     mutationFn: async (_: void, signal) => {
@@ -261,7 +282,14 @@ export function KernelParamsPage() {
       }, signal);
       return res.data;
     },
-    onSuccess: (d) => setRunResponse(d),
+    onSuccess: (d) => {
+      setRunResponse(d);
+      setAllOpen(true);
+      // 결과가 화면 아래쪽에 그려져 사용자가 못 볼 가능성을 줄이기 위해 자동 스크롤
+      requestAnimationFrame(() => {
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    },
   });
 
   const canRun = !!clusterId && selected.size > 0
@@ -463,7 +491,7 @@ export function KernelParamsPage() {
 
           {/* 결과: 노드별 카드 */}
           {runResponse && (
-            <section className="mt-6 space-y-3">
+            <section ref={resultsRef} className="mt-6 space-y-3 scroll-mt-6">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-sm font-semibold">결과 — {runResponse.total}개 노드</h2>
                 <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
@@ -477,6 +505,13 @@ export function KernelParamsPage() {
                 <span className="text-[11px] text-muted-foreground">
                   {runResponse.totalDurationMs}ms · {runResponse.mode}
                 </span>
+                {/* 전체 펼침/접힘 토글 — 키 변경으로 카드 defaultOpen 다시 적용 */}
+                <button
+                  onClick={() => setAllOpen((v) => !v)}
+                  className="text-[11px] px-2 py-1 rounded-md border border-border bg-card hover:bg-secondary"
+                >
+                  {allOpen ? '전체 접기' : '전체 펼치기'}
+                </button>
                 {/* 전 노드 공통 필터 */}
                 <div className="ml-auto flex items-center gap-1.5">
                   <div className="relative">
@@ -497,9 +532,22 @@ export function KernelParamsPage() {
                   </div>
                 </div>
               </div>
-              {runResponse.results.map((r) => (
-                <ResultCard key={r.host} result={r} command={commandToRun} globalFilter={globalFilter} />
-              ))}
+              {runResponse.results.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic px-3 py-2 bg-card border border-border rounded-lg">
+                  (노드 결과가 비어있음 — targets 가 비어있었는지 확인하세요.)
+                </p>
+              ) : (
+                runResponse.results.map((r) => (
+                  <ResultCard
+                    // allOpen 토글 시 카드 강제 재마운트로 defaultOpen 재적용
+                    key={`${r.host}-${allOpen ? 'open' : 'closed'}`}
+                    result={r}
+                    command={commandToRun}
+                    globalFilter={globalFilter}
+                    defaultOpen={allOpen}
+                  />
+                ))
+              )}
             </section>
           )}
         </div>

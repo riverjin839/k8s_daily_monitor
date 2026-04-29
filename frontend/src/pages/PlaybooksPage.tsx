@@ -4,6 +4,7 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type D
 import { SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { PlaybookCard, AddPlaybookModal } from '@/components/playbooks';
+import type { PlaybookFormSubmit } from '@/components/playbooks/AddPlaybookModal';
 import { usePlaybooks, useCreatePlaybook, useUpdatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
 import { playbooksApi } from '@/services/api';
 import { usePlaybookStore } from '@/stores/playbookStore';
@@ -75,40 +76,31 @@ export function PlaybooksPage() {
     return sorted;
   }, [dndPlaybooks, sortKey, sortDir]);
 
-  const handleCreate = (data: {
-    name: string;
-    description: string;
-    playbookPath: string;
-    inventoryPath: string;
-    tags: string;
-    clusterId: string;
-  }) => {
+  const handleCreate = (data: PlaybookFormSubmit) => {
     createPlaybook.mutate({
       name: data.name,
       description: data.description || undefined,
+      playbookFileId: data.playbookFileId,
+      inventoryId: data.inventoryId,
       playbookPath: data.playbookPath,
-      inventoryPath: data.inventoryPath || undefined,
+      inventoryPath: data.inventoryPath,
       tags: data.tags || undefined,
       clusterId: data.clusterId,
     });
   };
 
-  const handleUpdate = (data: {
-    name: string;
-    description: string;
-    playbookPath: string;
-    inventoryPath: string;
-    tags: string;
-    clusterId: string;
-  }) => {
+  const handleUpdate = (data: PlaybookFormSubmit) => {
     if (!editPlaybook) return;
     updatePlaybook.mutate({
       id: editPlaybook.id,
       data: {
         name: data.name,
         description: data.description || undefined,
-        playbookPath: data.playbookPath,
-        inventoryPath: data.inventoryPath || undefined,
+        // 모드 전환 시 반대편 필드를 비워줘야 backend 에서 충돌 안 남
+        playbookFileId: data.playbookFileId ?? null,
+        inventoryId: data.inventoryId ?? null,
+        playbookPath: data.playbookPath ?? null,
+        inventoryPath: data.inventoryPath ?? null,
         tags: data.tags || undefined,
         clusterId: data.clusterId,
       },

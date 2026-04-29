@@ -3,6 +3,7 @@ from app.models.addon import Addon
 from app.models.check_log import CheckLog
 from app.models.daily_check import DailyCheckLog, CheckSchedule, CheckScheduleType
 from app.models.playbook import Playbook
+from app.models.ansible_assets import AnsiblePlaybookFile, AnsibleInventory
 from app.models.metric_card import MetricCard
 from app.models.issue import Issue
 from app.models.task import Task
@@ -29,6 +30,8 @@ __all__ = [
     "CheckSchedule",
     "CheckScheduleType",
     "Playbook",
+    "AnsiblePlaybookFile",
+    "AnsibleInventory",
     "MetricCard",
     "Issue",
     "Task",

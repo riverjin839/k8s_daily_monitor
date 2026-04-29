@@ -171,8 +171,14 @@ export interface Playbook {
   clusterId: string;
   name: string;
   description?: string;
-  playbookPath: string;
-  inventoryPath?: string;
+  // 신: DB 에 저장된 Playbook 파일 / Inventory 참조
+  playbookFileId?: string | null;
+  inventoryId?: string | null;
+  playbookFileName?: string | null;
+  inventoryName?: string | null;
+  // 구: 호스트 경로 직접 지정 (호환 유지)
+  playbookPath?: string | null;
+  inventoryPath?: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   extraVars?: Record<string, any>;
   tags?: string;
@@ -181,6 +187,27 @@ export interface Playbook {
   lastRunAt?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lastResult?: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnsiblePlaybookFile {
+  id: string;
+  name: string;
+  description?: string | null;
+  content: string;
+  tags?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnsibleInventory {
+  id: string;
+  clusterId: string;
+  name: string;
+  description?: string | null;
+  content: string;
+  isDefault: boolean;
   createdAt: string;
   updatedAt: string;
 }

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle, CheckCircle, Info, Loader2, Search, Zap,
-  Server, Layers, Package, RefreshCw, Download,
+  Server, Layers, Package, RefreshCw, Download, Play, Square, Filter, X,
 } from 'lucide-react';
 import {
   useAnalyzeIncident, useAnalyzerHealth,
@@ -215,6 +215,65 @@ export function IncidentAnalysisPage() {
   const currentSelection = `${clusterId}/${namespace}/${podName}`;
   const autofillStale = autofilledFor && autofilledFor !== currentSelection;
 
+  // ── 실시간 로그 스트리밍 ──
+  // 백엔드는 SSE/WebSocket 미지원이라 동일 fetch-context 엔드포인트를 N초마다 폴링.
+  // 폴링은 탭이 활성일 때만, 사용자 textarea 편집 직후 짧게 정지(아래 hover/focus).
+  const [streaming, setStreaming] = useState(false);
+  const [streamIntervalSec, setStreamIntervalSec] = useState(5);
+  const [lastStreamAt, setLastStreamAt] = useState<number | null>(null);
+  const editingRef = useRef(false);   // textarea focus 시 true → 폴링 일시 정지
+
+  useEffect(() => {
+    if (!streaming) return;
+    if (!clusterId || !namespace || !podName) return;
+    let cancelled = false;
+    const tick = () => {
+      if (cancelled) return;
+      if (editingRef.current) return;     // 사용자 입력중이면 갱신 미루기
+      fetchCtx.mutate(
+        { clusterId, namespace, podName, tailLines: 200 },
+        {
+          onSuccess: (data) => {
+            if (cancelled) return;
+            setLogs(data.currentLogs ?? '');
+            setPreviousLogs(data.previousLogs ?? '');
+            setDescribe(data.describeOutput ?? '');
+            setStructuredEvents(data.events ?? []);
+            setRawEvents('');
+            setAutofilledFor(`${clusterId}/${namespace}/${podName}`);
+            setLastStreamAt(Date.now());
+          },
+          // 실패해도 폴링 자체는 계속 — 일시적 오류에 사용자가 수동 개입할 필요 없도록.
+        },
+      );
+    };
+    tick();   // 즉시 한 번
+    const id = window.setInterval(tick, Math.max(1, streamIntervalSec) * 1000);
+    return () => { cancelled = true; window.clearInterval(id); };
+    // fetchCtx 객체 자체는 mutation 이라 dep 에 넣지 않음 — 무한 루프 회피.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streaming, streamIntervalSec, clusterId, namespace, podName]);
+
+  // 선택이 바뀌면 스트리밍 정지 (다른 pod 의 로그가 섞이는 사고 방지)
+  useEffect(() => { setStreaming(false); }, [clusterId, namespace, podName]);
+
+  // ── 로그 라인 필터 ──
+  // 필터가 있으면 별도 read-only 패널에 매칭 라인만 보여준다 (textarea 편집 가능성 보존).
+  const [logFilter, setLogFilter] = useState('');
+  const filterLines = (text: string): { lines: string[]; total: number } => {
+    if (!text) return { lines: [], total: 0 };
+    const all = text.split('\n');
+    if (!logFilter.trim()) return { lines: [], total: all.length };
+    const q = logFilter.toLowerCase();
+    return { lines: all.filter((l) => l.toLowerCase().includes(q)), total: all.length };
+  };
+  const curFiltered = useMemo(() => filterLines(currentLogs),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentLogs, logFilter]);
+  const prevFiltered = useMemo(() => filterLines(previousLogs),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [previousLogs, logFilter]);
+
   const handleSubmit = () => {
     if (!podName.trim() || !namespace.trim()) return;
     const payload: IncidentAnalysisRequest = {
@@ -403,71 +462,178 @@ export function IncidentAnalysisPage() {
           )}
         </div>
 
-        {/* ── 입력 + 결과 ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-          <div className="space-y-4">
-            <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                이벤트 ({events.length}건)
-              </p>
-              {events.length > 0 ? (
-                <div className="rounded-lg border border-border overflow-hidden">
-                  <div className="grid grid-cols-[80px_70px_60px_1fr] gap-2 px-3 py-1.5 bg-secondary/50 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    <span>Type</span><span>Reason</span><span className="text-center">Count</span><span>Message</span>
-                  </div>
-                  {events.slice(0, 20).map((ev, i) => <EventRow key={i} event={ev} index={i} />)}
+        {/* ── 입력 (전폭) ── */}
+        {/* 전폭으로 펼쳐 textarea 폭이 "대상 선택" 패널과 동일. 결과 패널은 아래로. */}
+        <div className="space-y-4">
+          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              이벤트 ({events.length}건)
+            </p>
+            {events.length > 0 ? (
+              <div className="rounded-lg border border-border overflow-hidden">
+                <div className="grid grid-cols-[80px_70px_60px_1fr] gap-2 px-3 py-1.5 bg-secondary/50 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  <span>Type</span><span>Reason</span><span className="text-center">Count</span><span>Message</span>
                 </div>
-              ) : (
-                <p className="text-xs text-muted-foreground italic">
-                  자동 채우기를 누르거나, 아래에 직접 붙여넣으세요.
-                </p>
-              )}
-              <div>
-                <label className={lc}>kubectl get events 출력 (선택, 직접 입력 시)</label>
-                <textarea
-                  value={rawEvents}
-                  onChange={(e) => { setRawEvents(e.target.value); setStructuredEvents([]); }}
-                  placeholder={'Warning  BackOff  3  Back-off restarting failed container'}
-                  rows={3}
-                  className={`${ic} font-mono text-xs resize-none`}
-                />
+                {events.slice(0, 20).map((ev, i) => <EventRow key={i} event={ev} index={i} />)}
               </div>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">
+                자동 채우기를 누르거나, 아래에 직접 붙여넣으세요.
+              </p>
+            )}
+            <div>
+              <label className={lc}>kubectl get events 출력 (선택, 직접 입력 시)</label>
+              <textarea
+                value={rawEvents}
+                onChange={(e) => { setRawEvents(e.target.value); setStructuredEvents([]); }}
+                placeholder={'Warning  BackOff  3  Back-off restarting failed container'}
+                rows={3}
+                className={`${ic} font-mono text-xs resize-none`}
+              />
             </div>
-
-            <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">로그 / Describe</p>
-              <div>
-                <label className={lc}>현재 컨테이너 로그</label>
-                <textarea value={currentLogs} onChange={(e) => setLogs(e.target.value)}
-                  placeholder="자동 채우기를 누르거나 직접 붙여넣으세요..."
-                  rows={6} className={`${ic} font-mono text-xs resize-none`} />
-              </div>
-              <div>
-                <label className={lc}>이전 컨테이너 로그 (재시작 직전)</label>
-                <textarea value={previousLogs} onChange={(e) => setPreviousLogs(e.target.value)}
-                  placeholder="kubectl logs --previous 출력 (재시작이 있을 때만)"
-                  rows={4} className={`${ic} font-mono text-xs resize-none`} />
-              </div>
-              <div>
-                <label className={lc}>kubectl describe pod 출력</label>
-                <textarea value={describeOut} onChange={(e) => setDescribe(e.target.value)}
-                  placeholder="kubectl describe pod 출력을 붙여넣으세요..."
-                  rows={6} className={`${ic} font-mono text-xs resize-none`} />
-              </div>
-            </div>
-
-            <button
-              onClick={handleSubmit}
-              disabled={analyzing || !podName.trim() || !namespace.trim()}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-semibold transition-colors disabled:opacity-60"
-            >
-              {analyzing
-                ? <><Loader2 className="w-4 h-4 animate-spin" />분석 중...</>
-                : <><Search className="w-4 h-4" />장애 분석 시작</>}
-            </button>
           </div>
 
+          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">로그 / Describe</p>
+
+              {/* 실시간 스트리밍 + 로그 라인 필터 컨트롤 */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* 라인 필터 */}
+                <div className="relative">
+                  <Filter className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                  <input
+                    value={logFilter}
+                    onChange={(e) => setLogFilter(e.target.value)}
+                    placeholder="로그 라인 필터 (예: ERROR, OOMKilled)"
+                    className="pl-7 pr-7 py-1.5 text-[11px] font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-72"
+                  />
+                  {logFilter && (
+                    <button
+                      onClick={() => setLogFilter('')}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground"
+                      aria-label="필터 지우기"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* 폴링 간격 */}
+                <label className="flex items-center gap-1 text-[11px] text-muted-foreground"
+                  title="실시간 로그 갱신 간격 (초)">
+                  매
+                  <input
+                    type="number"
+                    min={1}
+                    max={300}
+                    value={streamIntervalSec}
+                    onChange={(e) => setStreamIntervalSec(Number(e.target.value) || 5)}
+                    className="w-12 px-1 py-0.5 text-[11px] font-mono bg-background border border-border rounded text-center"
+                  />초
+                </label>
+
+                {/* 실시간 토글 */}
+                {streaming ? (
+                  <button
+                    onClick={() => setStreaming(false)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-md"
+                    title="실시간 갱신 중지"
+                  >
+                    <Square className="w-3 h-3 fill-current" />
+                    LIVE 중지
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setStreaming(true)}
+                    disabled={!canAutofill}
+                    title="N초마다 fetch-context 를 다시 호출해 로그/이벤트/describe 를 갱신"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-md disabled:opacity-50"
+                  >
+                    <Play className="w-3 h-3" />
+                    실시간 시작
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {streaming && (
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <span className="relative flex w-2 h-2">
+                  <span className="absolute inline-flex w-full h-full rounded-full bg-emerald-500 opacity-60 animate-ping" />
+                  <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-500" />
+                </span>
+                <span>LIVE · 매 {streamIntervalSec}초 갱신</span>
+                {lastStreamAt && (
+                  <span className="text-muted-foreground/70">
+                    마지막 {Math.max(0, Math.round((Date.now() - lastStreamAt) / 1000))}초 전
+                  </span>
+                )}
+                {fetchCtx.isPending && <Loader2 className="w-3 h-3 animate-spin" />}
+              </div>
+            )}
+
+            <div>
+              <label className={lc}>
+                현재 컨테이너 로그
+                {logFilter && (
+                  <span className="ml-2 text-primary">
+                    필터 일치 {curFiltered.lines.length} / {curFiltered.total}
+                  </span>
+                )}
+              </label>
+              <textarea value={currentLogs} onChange={(e) => setLogs(e.target.value)}
+                onFocus={() => { editingRef.current = true; }}
+                onBlur={() => { editingRef.current = false; }}
+                placeholder="자동 채우기를 누르거나 직접 붙여넣으세요..."
+                rows={12} className={`${ic} font-mono text-xs resize-y`} />
+              {logFilter && curFiltered.lines.length > 0 && (
+                <pre className="mt-1 text-[11px] font-mono bg-muted/30 border border-border rounded-md p-2 max-h-64 overflow-auto whitespace-pre-wrap">
+                  {curFiltered.lines.join('\n')}
+                </pre>
+              )}
+            </div>
+            <div>
+              <label className={lc}>
+                이전 컨테이너 로그 (재시작 직전)
+                {logFilter && previousLogs && (
+                  <span className="ml-2 text-primary">
+                    필터 일치 {prevFiltered.lines.length} / {prevFiltered.total}
+                  </span>
+                )}
+              </label>
+              <textarea value={previousLogs} onChange={(e) => setPreviousLogs(e.target.value)}
+                onFocus={() => { editingRef.current = true; }}
+                onBlur={() => { editingRef.current = false; }}
+                placeholder="kubectl logs --previous 출력 (재시작이 있을 때만)"
+                rows={8} className={`${ic} font-mono text-xs resize-y`} />
+              {logFilter && prevFiltered.lines.length > 0 && (
+                <pre className="mt-1 text-[11px] font-mono bg-muted/30 border border-border rounded-md p-2 max-h-48 overflow-auto whitespace-pre-wrap">
+                  {prevFiltered.lines.join('\n')}
+                </pre>
+              )}
+            </div>
+            <div>
+              <label className={lc}>kubectl describe pod 출력</label>
+              <textarea value={describeOut} onChange={(e) => setDescribe(e.target.value)}
+                onFocus={() => { editingRef.current = true; }}
+                onBlur={() => { editingRef.current = false; }}
+                placeholder="kubectl describe pod 출력을 붙여넣으세요..."
+                rows={10} className={`${ic} font-mono text-xs resize-y`} />
+            </div>
+          </div>
+
+          <button
+            onClick={handleSubmit}
+            disabled={analyzing || !podName.trim() || !namespace.trim()}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-semibold transition-colors disabled:opacity-60"
+          >
+            {analyzing
+              ? <><Loader2 className="w-4 h-4 animate-spin" />분석 중...</>
+              : <><Search className="w-4 h-4" />장애 분석 시작</>}
+          </button>
+
+          {/* 결과 — 입력 아래로 이동 (입력 영역이 전폭이라 결과는 stack) */}
           <div>
             {response?.result ? (
               <ResultPanel result={response.result} />
@@ -476,10 +642,9 @@ export function IncidentAnalysisPage() {
                 분석 실패: {response.error}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-muted-foreground/50 rounded-xl border border-dashed border-border">
-                <Zap className="w-12 h-12 mb-3" />
-                <p className="text-sm">클러스터 → namespace → pod 선택 후</p>
-                <p className="text-sm">자동 채우기 → 분석을 시작하세요</p>
+              <div className="flex flex-col items-center justify-center min-h-[160px] text-muted-foreground/50 rounded-xl border border-dashed border-border">
+                <Zap className="w-10 h-10 mb-2" />
+                <p className="text-sm">로그 / 이벤트 / describe 입력 후 분석을 시작하세요</p>
               </div>
             )}
           </div>

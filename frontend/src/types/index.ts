@@ -923,6 +923,47 @@ export interface KernelParamsCollectResponse {
   errors: string[];
 }
 
+// ── kubelet config 수집 (SSH) ────────────────────────────────────────────
+
+export interface KubeletConfigCollectRequest {
+  hosts: string[];
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  useSudo?: boolean;
+  connectTimeout?: number;
+  fallbackPaths?: string[];
+  maxContentBytes?: number;
+  parallelism?: number;
+  chunkSize?: number;
+  chunkPauseMs?: number;
+}
+
+export interface KubeletConfigPerHost {
+  host: string;
+  status: string;
+  configFile?: string | null;
+  configContent?: string | null;
+  psCmdline?: string | null;
+  kubeconfig?: string | null;
+  containerRuntimeEndpoint?: string | null;
+  nodeIp?: string | null;
+  cgroupDriver?: string | null;
+  /** 각 필드의 출처 (`ps -ef:--config`, `fallback path probe`, `file:/path`) */
+  sources?: Record<string, string> | null;
+  stored?: boolean;
+  error?: string | null;
+}
+
+export interface KubeletConfigCollectResponse {
+  clusterId: string;
+  changed: number;
+  hosts: KubeletConfigPerHost[];
+  componentKey: string;
+  errors: string[];
+}
+
 export interface EtcdctlConfigCollectRequest {
   hosts: string[];
   port?: number;

@@ -143,12 +143,14 @@ def _collect_all(cluster: Cluster, kc_path: str, db: Session) -> dict:
         errors.append(f"k8s_server: {str(e)[:120]}")
 
     # 2. Nodes — kubelet, kube-proxy (container-runtime, kernel, os)
+    # 모든 값은 K8s API 의 Node.status.nodeInfo 에서 옴 — 출처를 명시해 사용자가
+    # SSH 기반 수집(`kubelet_config:{host}`) 결과와 구분할 수 있게 한다.
     try:
         nodes = v1.list_node(_request_timeout=_K8S_TIMEOUT)
         for node in nodes.items:
             ni = node.status.node_info
             name = node.metadata.name
-            data = {
+            kubelet_fields = {
                 "kubeletVersion":         getattr(ni, "kubelet_version", None),
                 "kubeProxyVersion":       getattr(ni, "kube_proxy_version", None),
                 "containerRuntime":       getattr(ni, "container_runtime_version", None),
@@ -156,6 +158,11 @@ def _collect_all(cluster: Cluster, kc_path: str, db: Session) -> dict:
                 "osImage":                getattr(ni, "os_image", None),
                 "operatingSystem":        getattr(ni, "operating_system", None),
                 "architecture":           getattr(ni, "architecture", None),
+            }
+            data = {
+                **kubelet_fields,
+                # 모든 필드의 출처는 동일 — Node.status.nodeInfo (kubeconfig 로 K8s API 조회)
+                "_sources": {k: "k8s_api:Node.status.nodeInfo" for k in kubelet_fields},
             }
             if _store_if_changed(db, cluster.id, f"kubelet:{name}", "kubelet",
                                  data.get("kubeletVersion"), data, now):
@@ -336,6 +343,8 @@ class EtcdSystemdCollectRequest(BaseModel):
 _SYSTEMCTL_SHOW_PROPS = [
     "ActiveState", "SubState", "MainPID", "FragmentPath", "ExecStart",
     "UnitFileState", "LoadState",
+    # systemd 가 기록한 EnvironmentFile (`/etc/etcd.env` 같은 경로) — 직접 보여줄 출처.
+    "EnvironmentFile", "Environment",
 ]
 
 
@@ -360,6 +369,36 @@ def _clean_exec_start(val: str) -> str:
     if m:
         return m.group(1).strip()
     return val.strip()
+
+
+def _extract_cli_arg(cmdline: str, *flag_names: str) -> str | None:
+    """프로세스 커맨드라인에서 `--flag=value` 또는 `--flag value` 형태로 값 추출.
+    여러 별칭(예: `--config`, `--config-file`, `-c`)을 차례로 시도.
+    """
+    if not cmdline:
+        return None
+    tokens = cmdline.split()
+    for flag in flag_names:
+        for i, tok in enumerate(tokens):
+            if tok == flag and i + 1 < len(tokens):
+                return tokens[i + 1].strip().strip('"').strip("'")
+            prefix = flag + "="
+            if tok.startswith(prefix):
+                return tok[len(prefix):].strip().strip('"').strip("'")
+    return None
+
+
+def _systemd_env_file_path(prop: str | None) -> str | None:
+    """systemctl show EnvironmentFile 출력은 `path (ignore_errors=no)` 또는
+    여러 줄을 합친 형태. 첫 path 만 깔끔하게 뽑는다.
+    """
+    if not prop:
+        return None
+    s = prop.strip()
+    # 다중 — 줄바꿈/공백/ ; 으로 분리해 첫 토큰 후보를 본다
+    first = re.split(r"[\s;]+", s, maxsplit=1)[0]
+    # `(ignore_errors=...)` suffix 제거
+    return first.split("(", 1)[0].strip() or None
 
 
 @router.post("/{cluster_id}/collect-etcd-systemd")
@@ -391,6 +430,9 @@ async def collect_etcd_systemd(
     sudo = "sudo -n " if payload.use_sudo else ""
     show_cmd = f"{sudo}systemctl show {payload.unit} -p {',-p '.join(_SYSTEMCTL_SHOW_PROPS)}"
     ver_cmd = f"{sudo}etcd --version 2>/dev/null | head -2"
+    # ps -ef 에서 etcd 프로세스의 전체 cmdline → 실행 시 사용된 --config-file / EnvironmentFile 경로 추정.
+    # `[e]tcd` 트릭으로 grep 자기자신 제외.
+    ps_cmd = "ps -eo pid,args 2>/dev/null | grep -E '/usr.*[e]tcd($| )' | head -1"
 
     # env 파일 후보를 한 번에 체크 — 단일 SSH 세션에서 처음 존재하는 것의 내용을 출력.
     # 경로 검증: 허용된 문자만.
@@ -412,6 +454,7 @@ async def collect_etcd_systemd(
         )
         r_show = _exec_ssh(target, show_cmd, connect_timeout=payload.connect_timeout, exec_timeout=15)
         r_ver  = _exec_ssh(target, ver_cmd,  connect_timeout=payload.connect_timeout, exec_timeout=10)
+        r_ps   = _exec_ssh(target, ps_cmd,   connect_timeout=payload.connect_timeout, exec_timeout=10)
         r_env  = (
             _exec_ssh(target, env_cmd, connect_timeout=payload.connect_timeout, exec_timeout=10)
             if env_cmd else None
@@ -430,15 +473,42 @@ async def collect_etcd_systemd(
         entry["main_pid"]        = int(props["MainPID"]) if props.get("MainPID", "").isdigit() else None
         entry["fragment_path"]   = props.get("FragmentPath")
         entry["exec_start"]      = _clean_exec_start(props.get("ExecStart", ""))
-        entry["raw"]             = props
+        # 출처를 명시 — 사용자가 "이 값이 어디서 왔는지" 한눈에 파악 가능.
+        sources: dict[str, str] = {
+            "active_state":    "systemctl show",
+            "sub_state":       "systemctl show",
+            "unit_file_state": "systemctl show",
+            "main_pid":        "systemctl show",
+            "fragment_path":   "systemctl show",
+            "exec_start":      "systemctl show:ExecStart",
+        }
+        # systemd 가 기록한 EnvironmentFile (다중일 수 있음 — 첫 경로만)
+        systemd_env_path = _systemd_env_file_path(props.get("EnvironmentFile"))
+        if systemd_env_path:
+            entry["systemd_env_file"] = systemd_env_path
+            sources["systemd_env_file"] = "systemctl show:EnvironmentFile"
+        entry["raw"] = props
         if r_ver and r_ver.status == "ok":
             entry["version"] = _parse_etcd_version(r_ver.stdout)
+            sources["version"] = "etcd --version"
+        # ps -ef 결과 → cmdline + --config-file 추출
+        if r_ps and r_ps.status == "ok" and r_ps.stdout.strip():
+            ps_line = r_ps.stdout.strip().splitlines()[0]
+            entry["ps_cmdline"] = ps_line
+            sources["ps_cmdline"] = "ps -eo pid,args"
+            cfg = _extract_cli_arg(ps_line, "--config-file", "--config")
+            if cfg:
+                entry["config_file_arg"] = cfg
+                sources["config_file_arg"] = "ps -ef:--config-file"
         if r_env and r_env.status == "ok" and r_env.stdout.strip():
             # "===ENVFILE===:/path" 마커 파싱
             m = re.match(r"===ENVFILE===:([^\n]+)\n(.*)", r_env.stdout, re.DOTALL)
             if m:
                 entry["env_file"] = m.group(1).strip()
                 entry["env_content"] = m.group(2)
+                sources["env_file"] = f"file:{entry['env_file']}"
+                sources["env_content"] = f"file:{entry['env_file']}"
+        entry["_sources"] = sources
         return entry
 
     per_host: list[dict] = await _parallel_collect(
@@ -472,6 +542,11 @@ async def collect_etcd_systemd(
             "version": entry.get("version"),
             "env_file": entry.get("env_file"),
             "env_content": entry.get("env_content"),
+            # 신규 — 어디서 환경 파일/설정 경로를 알아냈는지를 모두 기록 (출처가 다를 수 있음)
+            "systemd_env_file": entry.get("systemd_env_file"),
+            "ps_cmdline": entry.get("ps_cmdline"),
+            "config_file_arg": entry.get("config_file_arg"),
+            "_sources": entry.get("_sources"),
             "raw": entry.get("raw"),
         }
         if _store_if_changed(
@@ -616,6 +691,216 @@ async def collect_kernel_params(
         "cluster_id": str(cluster_id),
         "changed": changed,
         "hosts": per_host,
+        "errors": errors,
+    }
+
+
+# ── kubelet config 수집 (SSH) ───────────────────────────────────────────────
+
+class KubeletConfigCollectRequest(BaseModel):
+    """각 노드에 SSH 로 접속해 kubelet 의 실행 인자 + 설정 파일을 수집한다.
+
+    1) `ps -ef` 에서 kubelet 프로세스의 cmdline 추출 → `--config=<path>` 인자에서
+       config 파일 경로 추출. (없으면 fallback 후보 경로를 차례로 시도)
+    2) 그 경로의 YAML 내용을 그대로 읽어 `config_content` 에 저장.
+    3) 다른 주요 인자(--kubeconfig, --container-runtime-endpoint 등)도 추출.
+
+    K8s API 가 노출하지 않는 *실제 디스크 위에 어떤 config 가 적용 중인지* 를
+    드러내는 게 핵심 — 사용자가 자주 묻는 "kubelet config 어디서 오는데?"
+    에 대한 답.
+
+    저장: `kubelet_config:{host}` (category=kubelet)
+    """
+    hosts: list[str] = Field(..., min_length=1, max_length=2000)
+    port: int = Field(default=22, ge=1, le=65535)
+    username: str = Field(default="root", min_length=1, max_length=64)
+    password: str | None = None
+    private_key: str | None = None
+    use_sudo: bool = False
+    connect_timeout: int = Field(default=8, ge=1, le=60)
+    # ps 추출 실패 시 차례로 시도할 fallback 경로들 (k8s 배포판마다 다를 수 있음)
+    fallback_paths: list[str] = Field(default_factory=lambda: [
+        "/var/lib/kubelet/config.yaml",
+        "/etc/kubernetes/kubelet-config.yaml",
+        "/etc/kubernetes/kubelet/kubelet-config.yaml",
+        "/etc/kubernetes/kubelet/config.yaml",
+    ])
+    # 본문 길이 안전상한 — 이상한 거대한 파일을 통째로 저장하지 않도록 컷.
+    max_content_bytes: int = Field(default=64 * 1024, ge=1024, le=1024 * 1024)
+    parallelism: int = Field(default=10, ge=1, le=50)
+    chunk_size: int = Field(default=30, ge=1, le=200)
+    chunk_pause_ms: int = Field(default=200, ge=0, le=5000)
+
+
+def _extract_kubelet_version_from_ps(cmdline: str) -> str | None:
+    """`ps` 결과에서 kubelet 바이너리 경로의 버전을 끌어내기는 어려우니
+    그 대신 `--v=<level>` 같은 보조 정보는 무시하고 None 반환. (kubelet:{name}
+    스냅샷이 K8s API 로 이미 버전을 갖고 있음.)
+    """
+    return None
+
+
+@router.post("/{cluster_id}/collect-kubelet-config")
+async def collect_kubelet_config(
+    cluster_id: UUID,
+    payload: KubeletConfigCollectRequest,
+    db: Session = Depends(get_db),
+):
+    """kubelet 의 실제 사용중 config 파일 경로 + 내용을 SSH 로 호스트별 수집.
+
+    - `ps -eo args` 에서 kubelet 프로세스 발견 → `--config=` 추출
+    - 추출 못하면 fallback_paths 중 처음 존재하는 파일
+    - 모든 출처(`_sources`)가 결과 dict 에 명시적으로 기록됨
+    """
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    if not payload.password and not payload.private_key:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="password 또는 private_key 중 하나는 필수입니다.",
+        )
+
+    now = datetime.utcnow()
+    sudo = "sudo -n " if payload.use_sudo else ""
+
+    # ps 출력은 args 컬럼이 끝까지 잘리지 않도록 args 만 뽑는다.
+    # `[k]ubelet` 트릭으로 grep 자기자신 제외.
+    ps_cmd = "ps -eo pid,args 2>/dev/null | grep -E '(/|^)[k]ubelet( |$)' | head -1"
+
+    # fallback path 안전성 검증 — sh 인터폴레이션 사고 방지.
+    safe_fallbacks = [
+        p for p in (payload.fallback_paths or [])
+        if re.match(r"^[A-Za-z0-9_./-]+$", p)
+    ]
+
+    def _read_file_cmd(path: str) -> str:
+        # 길이 컷오프는 head -c 로 적용해 거대한 파일 통째로 읽는 위험 차단
+        return (
+            f"(test -f {path} && echo '===KCFG_FILE===:{path}' && "
+            f"{sudo}head -c {payload.max_content_bytes} {path}) 2>/dev/null"
+        )
+
+    def _try_files_cmd(paths: list[str]) -> str:
+        if not paths:
+            return "true"
+        return " || ".join([_read_file_cmd(p) for p in paths]) + " || true"
+
+    fallback_cmd = _try_files_cmd(safe_fallbacks)
+
+    def _one(host: str) -> dict:
+        target = SSHTarget(
+            host=host, port=payload.port, username=payload.username,
+            password=payload.password, private_key=payload.private_key,
+        )
+        r_ps = _exec_ssh(target, ps_cmd, connect_timeout=payload.connect_timeout, exec_timeout=10)
+        entry: dict = {"host": host, "status": "ok"}
+        sources: dict[str, str] = {}
+
+        ps_line: str | None = None
+        if r_ps.status == "ok" and r_ps.stdout.strip():
+            ps_line = r_ps.stdout.strip().splitlines()[0]
+            entry["ps_cmdline"] = ps_line
+            sources["ps_cmdline"] = "ps -eo pid,args"
+
+        # cmdline 인자에서 핵심 path 들 추출
+        config_path_from_ps = _extract_cli_arg(ps_line or "", "--config")
+        kubeconfig_path     = _extract_cli_arg(ps_line or "", "--kubeconfig")
+        runtime_endpoint    = _extract_cli_arg(ps_line or "", "--container-runtime-endpoint")
+        node_ip             = _extract_cli_arg(ps_line or "", "--node-ip")
+        cgroup_driver       = _extract_cli_arg(ps_line or "", "--cgroup-driver")
+        if kubeconfig_path:
+            entry["kubeconfig"] = kubeconfig_path
+            sources["kubeconfig"] = "ps -ef:--kubeconfig"
+        if runtime_endpoint:
+            entry["container_runtime_endpoint"] = runtime_endpoint
+            sources["container_runtime_endpoint"] = "ps -ef:--container-runtime-endpoint"
+        if node_ip:
+            entry["node_ip"] = node_ip
+            sources["node_ip"] = "ps -ef:--node-ip"
+        if cgroup_driver:
+            entry["cgroup_driver"] = cgroup_driver
+            sources["cgroup_driver"] = "ps -ef:--cgroup-driver"
+
+        # 1) ps 에서 추출된 경로가 있으면 그것을 우선 시도, 2) 안 되면 fallback 순회
+        config_attempts: list[str] = []
+        if config_path_from_ps and re.match(r"^[A-Za-z0-9_./-]+$", config_path_from_ps):
+            config_attempts.append(config_path_from_ps)
+        config_attempts.extend([p for p in safe_fallbacks if p not in config_attempts])
+
+        cfg_cmd = _try_files_cmd(config_attempts) if config_attempts else fallback_cmd
+        r_cfg = _exec_ssh(target, cfg_cmd, connect_timeout=payload.connect_timeout, exec_timeout=15)
+
+        chosen_path: str | None = None
+        chosen_content: str | None = None
+        if r_cfg.status == "ok" and r_cfg.stdout.strip():
+            m = re.match(r"===KCFG_FILE===:([^\n]+)\n(.*)", r_cfg.stdout, re.DOTALL)
+            if m:
+                chosen_path = m.group(1).strip()
+                chosen_content = m.group(2)
+        if chosen_path:
+            entry["config_file"] = chosen_path
+            entry["config_content"] = chosen_content or ""
+            # 출처를 명시 — `--config=` 로 발견됐는지 fallback 으로 발견됐는지 구분.
+            if config_path_from_ps and chosen_path == config_path_from_ps:
+                sources["config_file"] = "ps -ef:--config"
+            else:
+                sources["config_file"] = "fallback path probe"
+            sources["config_content"] = f"file:{chosen_path}"
+
+        if not entry.get("ps_cmdline") and not entry.get("config_file"):
+            entry["status"] = "error"
+            entry["error"] = "kubelet 프로세스/설정 파일을 찾지 못했습니다 (ps + fallback 모두 실패)"
+        entry["_sources"] = sources
+        return entry
+
+    per_host: list[dict] = await _parallel_collect(
+        payload.hosts,
+        worker=_one,
+        parallelism=payload.parallelism,
+        chunk_size=payload.chunk_size,
+        chunk_pause_ms=payload.chunk_pause_ms,
+    )
+
+    changed = 0
+    errors: list[str] = []
+    for entry in per_host:
+        if entry.get("status") != "ok":
+            errors.append(f"{entry.get('host')}: {entry.get('error') or entry.get('status')}")
+            continue
+        host = entry["host"]
+        data = {
+            "source": "ssh",
+            "host": host,
+            "ps_cmdline":                 entry.get("ps_cmdline"),
+            "config_file":                entry.get("config_file"),
+            "config_content":             entry.get("config_content"),
+            "kubeconfig":                 entry.get("kubeconfig"),
+            "container_runtime_endpoint": entry.get("container_runtime_endpoint"),
+            "node_ip":                    entry.get("node_ip"),
+            "cgroup_driver":              entry.get("cgroup_driver"),
+            "_sources":                   entry.get("_sources"),
+            "collected_at":               now.isoformat(),
+        }
+        stored = _store_if_changed(
+            db, cluster_id,
+            component=f"kubelet_config:{host}",
+            category="kubelet",
+            version=None,
+            data=data, now=now,
+        )
+        entry["stored"] = stored
+        if stored:
+            changed += 1
+
+    if changed:
+        db.commit()
+
+    return {
+        "cluster_id": str(cluster_id),
+        "changed": changed,
+        "hosts": per_host,
+        "component_key": "kubelet_config:{host}",
         "errors": errors,
     }
 
@@ -871,6 +1156,126 @@ def diff_snapshots(
         "versionChanged": from_snap.version != to_snap.version,
         "changes": changes,
     }
+
+
+# ── CSV export ───────────────────────────────────────────────────────────────
+
+def _csv_cell(v) -> str:
+    """CSV 셀 이스케이프. dict/list 는 JSON 직렬화."""
+    if v is None:
+        return ""
+    if isinstance(v, (dict, list)):
+        v = json.dumps(v, ensure_ascii=False, default=str)
+    s = str(v)
+    if any(c in s for c in (',', '"', '\n', '\r')):
+        return '"' + s.replace('"', '""') + '"'
+    return s
+
+
+@router.get("/{cluster_id}/versions/export.csv")
+def export_versions_csv(
+    cluster_id: UUID,
+    detail: str = Query("summary", regex="^(summary|full|none)$",
+                        description="summary=주요 필드, full=data 전체 JSON, none=메타만"),
+    categories: str | None = Query(None, description="콤마로 구분한 카테고리 필터"),
+    components: str | None = Query(None, description="콤마로 구분한 component 키 필터"),
+    db: Session = Depends(get_db),
+):
+    """현재 스냅샷을 CSV 로 내보낸다. detail 로 컬럼 풍부도를 조절.
+
+    - summary: cluster, component, category, version, collected_at, host, config_path, brief
+    - full:    summary 컬럼 + data_json (전체 data dict 직렬화)
+    - none:    cluster, component, category, version, collected_at 만
+    """
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+
+    # 카테고리/컴포넌트 화이트리스트 — 비면 전체.
+    cat_set = {c.strip() for c in (categories or "").split(",") if c.strip()}
+    comp_set = {c.strip() for c in (components or "").split(",") if c.strip()}
+
+    all_snaps = (
+        db.query(ClusterConfigSnapshot)
+        .filter(ClusterConfigSnapshot.cluster_id == cluster_id)
+        .order_by(ClusterConfigSnapshot.component, ClusterConfigSnapshot.collected_at.desc())
+        .all()
+    )
+    seen: set[str] = set()
+    rows: list[ClusterConfigSnapshot] = []
+    for s in all_snaps:
+        if s.component in seen:
+            continue
+        seen.add(s.component)
+        if cat_set and (s.category or "") not in cat_set:
+            continue
+        if comp_set and s.component not in comp_set:
+            continue
+        rows.append(s)
+
+    # 컬럼 정의 — detail 별로 분기
+    if detail == "none":
+        cols = ["cluster", "component", "category", "version", "collected_at"]
+    elif detail == "summary":
+        cols = ["cluster", "component", "category", "version", "collected_at",
+                "host", "config_path", "brief"]
+    else:  # full
+        cols = ["cluster", "component", "category", "version", "collected_at",
+                "host", "config_path", "brief", "data_json"]
+
+    def _summary(d: dict) -> tuple[str | None, str | None, str]:
+        """data 에서 사람이 읽을 수 있는 (host, config_path, brief) 추출.
+        component 별 데이터 모양이 달라 best-effort.
+        """
+        if not isinstance(d, dict):
+            return (None, None, "")
+        host = d.get("host")
+        # config 경로 후보 (kubelet_config / etcd_systemd / 일반 image+flag 컴포넌트)
+        config_path = (
+            d.get("config_file")
+            or d.get("config_file_arg")
+            or d.get("env_file")
+            or d.get("systemd_env_file")
+            or d.get("fragment_path")
+        )
+        brief_parts: list[str] = []
+        for k in ("kubeletVersion", "version", "image", "active_state", "container_runtime_endpoint"):
+            v = d.get(k)
+            if v:
+                brief_parts.append(f"{k}={v}")
+        # flags 가 있으면 갯수만
+        flags = d.get("flags")
+        if isinstance(flags, dict) and flags:
+            brief_parts.append(f"flags={len(flags)}")
+        return (host, config_path, "; ".join(brief_parts))
+
+    out_lines = [",".join(cols)]
+    for s in rows:
+        d = s.data if isinstance(s.data, dict) else {}
+        host, config_path, brief = _summary(d)
+        record = {
+            "cluster":      cluster.name,
+            "component":    s.component,
+            "category":     s.category or "",
+            "version":      s.version or "",
+            "collected_at": s.collected_at.isoformat() if s.collected_at else "",
+            "host":         host or "",
+            "config_path":  config_path or "",
+            "brief":        brief,
+            "data_json":    d,
+        }
+        out_lines.append(",".join(_csv_cell(record.get(c)) for c in cols))
+
+    csv_text = "\n".join(out_lines) + "\n"
+    # 한글 호환을 위한 UTF-8 BOM
+    body = "﻿" + csv_text
+    fname = f"versions-{cluster.name}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.csv"
+    from fastapi.responses import Response
+    return Response(
+        content=body,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 @router.get("/{cluster_id}/versions/graph")

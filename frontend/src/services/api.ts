@@ -291,6 +291,35 @@ export const versionsApi = {
     api.post<import('@/types').MinioCollectResponse>(
       `/clusters/${clusterId}/collect-minio`, undefined, { signal, timeout: 120_000 },
     ),
+  collectKubeletConfig: (
+    clusterId: string,
+    payload: import('@/types').KubeletConfigCollectRequest,
+    signal?: AbortSignal,
+  ) => {
+    const n = payload.hosts.length;
+    const parallel = payload.parallelism ?? 10;
+    const perHost = ((payload.connectTimeout ?? 8) + 20) * 1000;
+    const est = Math.ceil(n / parallel) * perHost + 10_000;
+    const timeout = Math.max(60_000, Math.min(est, 30 * 60_000));
+    return api.post<import('@/types').KubeletConfigCollectResponse>(
+      `/clusters/${clusterId}/collect-kubelet-config`, payload, { signal, timeout },
+    );
+  },
+  /** 현재 스냅샷 CSV 내보내기. detail 로 컬럼 풍부도 조절. */
+  exportCsv: (
+    clusterId: string,
+    opts: { detail?: 'summary' | 'full' | 'none'; categories?: string[]; components?: string[] } = {},
+    signal?: AbortSignal,
+  ) => {
+    const q = new URLSearchParams();
+    if (opts.detail) q.set('detail', opts.detail);
+    if (opts.categories?.length) q.set('categories', opts.categories.join(','));
+    if (opts.components?.length) q.set('components', opts.components.join(','));
+    return api.get<Blob>(
+      `/clusters/${clusterId}/versions/export.csv?${q.toString()}`,
+      { signal, responseType: 'blob' },
+    );
+  },
   current: (clusterId: string) =>
     api.get<{ clusterId: string; components: ComponentSnapshot[] }>(
       `/clusters/${clusterId}/versions/current`,

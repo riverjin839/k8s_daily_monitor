@@ -3,14 +3,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
   GitCommit, RefreshCw, Square, Clock, Share2, X, ChevronDown, ChevronUp,
-  Server, Cpu, Network, Settings2, HardDrive,
+  Server, Cpu, Network, Settings2, HardDrive, Search, FileSpreadsheet, FileText,
 } from 'lucide-react';
 import { useClusters, useReorderClusters } from '@/hooks/useCluster';
 import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, SkeletonCard } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { versionsApi, type ComponentSnapshot } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
-import { EtcdSystemdModal, KernelParamsCollectModal, NodeNicsCollectModal } from '@/components/versions';
+import {
+  EtcdSystemdModal, KernelParamsCollectModal, NodeNicsCollectModal,
+  KubeletConfigCollectModal, CsvExportModal,
+} from '@/components/versions';
 import { Database } from 'lucide-react';
 
 // ── 유틸 ────────────────────────────────────────────────────────────────────
@@ -115,13 +118,255 @@ function KernelParamsDetails({ data }: { data: Record<string, unknown> }) {
 
 // ── Component detail (flags / data) ─────────────────────────────────────────
 
+/** 값의 출처(`_sources[k]`)가 있으면 작은 뱃지로 표기. 없으면 null. */
+function SourceBadge({ src }: { src?: string | null }) {
+  if (!src) return null;
+  return (
+    <span
+      title={`출처: ${src}`}
+      className="ml-1.5 text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border"
+    >
+      {src}
+    </span>
+  );
+}
+
+/** 출처를 설명적으로 풀어주는 작은 카드 — etcd_systemd / kubelet_config 디테일에서 재사용. */
+function SourcesNote({ sources }: { sources?: Record<string, string> | null }) {
+  if (!sources || Object.keys(sources).length === 0) return null;
+  const groups = new Map<string, string[]>();
+  for (const [field, src] of Object.entries(sources)) {
+    if (!groups.has(src)) groups.set(src, []);
+    groups.get(src)!.push(field);
+  }
+  return (
+    <div className="rounded-md border border-border bg-muted/20 p-2">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">데이터 출처</p>
+      <ul className="space-y-0.5">
+        {Array.from(groups.entries()).map(([src, fields]) => (
+          <li key={src} className="font-mono text-[11px] break-all">
+            <span className="text-primary">{src}</span>
+            <span className="text-muted-foreground"> → </span>
+            <span className="text-foreground/80">{fields.join(', ')}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** etcd_systemd:{host} 전용 디테일 — config 경로(env file / systemd / ps -ef) 와 내용 강조. */
+function EtcdSystemdDetails({ data }: { data: Record<string, unknown> }) {
+  const sources = (data?._sources && typeof data._sources === 'object')
+    ? data._sources as Record<string, string>
+    : null;
+  const str = (k: string) => typeof data?.[k] === 'string' ? (data[k] as string) : null;
+  const num = (k: string) => typeof data?.[k] === 'number' ? (data[k] as number) : null;
+  const host = str('host');
+  const fragmentPath = str('fragment_path');
+  const envFile = str('env_file');
+  const envContent = str('env_content');
+  const systemdEnvFile = str('systemd_env_file');
+  const configFileArg = str('config_file_arg');
+  const psCmdline = str('ps_cmdline');
+  const execStart = str('exec_start');
+  const activeState = str('active_state');
+  const subState = str('sub_state');
+  const version = str('version');
+  const mainPid = num('main_pid');
+
+  // 사용자가 가장 궁금해하는 건 "어디에 어떤 config 가 있는지". 출처 별로 모두 보여준다.
+  const pathRows: { label: string; value: string | null; src: string | null }[] = [
+    { label: 'EnvironmentFile (file)',     value: envFile,       src: sources?.env_file ?? null },
+    { label: 'EnvironmentFile (systemd)',  value: systemdEnvFile, src: sources?.systemd_env_file ?? null },
+    { label: 'config-file (ps -ef)',       value: configFileArg, src: sources?.config_file_arg ?? null },
+    { label: 'unit fragment',              value: fragmentPath,  src: sources?.fragment_path ?? null },
+  ];
+
+  const [envFilter, setEnvFilter] = useState('');
+  const filteredEnv = useMemo(() => {
+    if (!envContent) return null;
+    if (!envFilter.trim()) return envContent;
+    const q = envFilter.toLowerCase();
+    return envContent
+      .split('\n')
+      .filter((l) => l.toLowerCase().includes(q))
+      .join('\n');
+  }, [envContent, envFilter]);
+
+  return (
+    <div className="space-y-3 text-xs">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+        {host && (
+          <div><span className="text-[10px] text-muted-foreground">Host</span>
+            <p className="font-mono">{host}</p></div>
+        )}
+        {version && (
+          <div><span className="text-[10px] text-muted-foreground">version<SourceBadge src={sources?.version} /></span>
+            <p className="font-mono">{version}</p></div>
+        )}
+        {activeState && (
+          <div><span className="text-[10px] text-muted-foreground">ActiveState<SourceBadge src={sources?.active_state} /></span>
+            <p className={`font-mono ${activeState === 'active' ? 'text-emerald-500' : 'text-amber-500'}`}>
+              {activeState}{subState ? ` / ${subState}` : ''}
+            </p></div>
+        )}
+        {mainPid !== null && (
+          <div><span className="text-[10px] text-muted-foreground">MainPID</span>
+            <p className="font-mono">{mainPid}</p></div>
+        )}
+      </div>
+
+      <div>
+        <p className="text-[10px] text-muted-foreground uppercase mb-1">설정 파일 경로 (출처별)</p>
+        <div className="space-y-1 rounded-md bg-muted/30 p-2">
+          {pathRows.map((r) => (
+            <div key={r.label} className="font-mono text-[11px] break-all flex flex-wrap items-center gap-1">
+              <span className="text-primary">{r.label}:</span>
+              {r.value
+                ? <span className="text-foreground/90">{r.value}</span>
+                : <span className="text-muted-foreground/60">(없음)</span>}
+              <SourceBadge src={r.src} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {execStart && (
+        <div>
+          <p className="text-[10px] text-muted-foreground uppercase mb-1">
+            ExecStart<SourceBadge src={sources?.exec_start} />
+          </p>
+          <pre className="text-[11px] font-mono bg-muted/30 rounded-md p-2 break-all whitespace-pre-wrap max-h-32 overflow-auto">{execStart}</pre>
+        </div>
+      )}
+
+      {psCmdline && (
+        <div>
+          <p className="text-[10px] text-muted-foreground uppercase mb-1">
+            ps -ef cmdline<SourceBadge src={sources?.ps_cmdline} />
+          </p>
+          <pre className="text-[11px] font-mono bg-muted/30 rounded-md p-2 break-all whitespace-pre-wrap max-h-24 overflow-auto">{psCmdline}</pre>
+        </div>
+      )}
+
+      {envContent && (
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[10px] text-muted-foreground uppercase">
+              env 파일 내용 ({envFile})<SourceBadge src={sources?.env_content} />
+            </p>
+          </div>
+          <input
+            value={envFilter}
+            onChange={(e) => setEnvFilter(e.target.value)}
+            placeholder="env 파일 라인 필터 (예: ETCD_LISTEN_CLIENT_URLS)"
+            className="w-full px-2 py-1 mb-1 text-[11px] font-mono bg-background border border-border rounded-md"
+          />
+          <pre className="text-[11px] font-mono bg-muted/30 rounded-md p-2 max-h-72 overflow-auto whitespace-pre-wrap">
+            {filteredEnv || (envFilter ? '(필터 매칭 없음)' : '')}
+          </pre>
+        </div>
+      )}
+
+      <SourcesNote sources={sources} />
+    </div>
+  );
+}
+
+/** kubelet_config:{host} 전용 디테일 — config 경로 + YAML 내용 강조. */
+function KubeletConfigDetails({ data }: { data: Record<string, unknown> }) {
+  const sources = (data?._sources && typeof data._sources === 'object')
+    ? data._sources as Record<string, string>
+    : null;
+  const str = (k: string) => typeof data?.[k] === 'string' ? (data[k] as string) : null;
+  const host = str('host');
+  const configFile = str('config_file');
+  const configContent = str('config_content');
+  const psCmdline = str('ps_cmdline');
+  const kubeconfig = str('kubeconfig');
+  const cre = str('container_runtime_endpoint');
+  const nodeIp = str('node_ip');
+  const cgroup = str('cgroup_driver');
+
+  const [filter, setFilter] = useState('');
+  const filtered = useMemo(() => {
+    if (!configContent) return null;
+    if (!filter.trim()) return configContent;
+    const q = filter.toLowerCase();
+    return configContent
+      .split('\n')
+      .filter((l) => l.toLowerCase().includes(q))
+      .join('\n');
+  }, [configContent, filter]);
+
+  return (
+    <div className="space-y-3 text-xs">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+        {host && <div><span className="text-[10px] text-muted-foreground">Host</span><p className="font-mono">{host}</p></div>}
+        {configFile && (
+          <div><span className="text-[10px] text-muted-foreground">config 파일<SourceBadge src={sources?.config_file} /></span>
+            <p className="font-mono break-all">{configFile}</p></div>
+        )}
+        {kubeconfig && (
+          <div><span className="text-[10px] text-muted-foreground">kubeconfig<SourceBadge src={sources?.kubeconfig} /></span>
+            <p className="font-mono break-all">{kubeconfig}</p></div>
+        )}
+        {cre && (
+          <div><span className="text-[10px] text-muted-foreground">container-runtime-endpoint<SourceBadge src={sources?.container_runtime_endpoint} /></span>
+            <p className="font-mono break-all">{cre}</p></div>
+        )}
+        {nodeIp && (
+          <div><span className="text-[10px] text-muted-foreground">node-ip<SourceBadge src={sources?.node_ip} /></span>
+            <p className="font-mono">{nodeIp}</p></div>
+        )}
+        {cgroup && (
+          <div><span className="text-[10px] text-muted-foreground">cgroup-driver<SourceBadge src={sources?.cgroup_driver} /></span>
+            <p className="font-mono">{cgroup}</p></div>
+        )}
+      </div>
+
+      {psCmdline && (
+        <div>
+          <p className="text-[10px] text-muted-foreground uppercase mb-1">
+            ps -ef cmdline<SourceBadge src={sources?.ps_cmdline} />
+          </p>
+          <pre className="text-[11px] font-mono bg-muted/30 rounded-md p-2 break-all whitespace-pre-wrap max-h-24 overflow-auto">{psCmdline}</pre>
+        </div>
+      )}
+
+      {configContent && (
+        <div>
+          <p className="text-[10px] text-muted-foreground uppercase mb-1">
+            config 파일 내용<SourceBadge src={sources?.config_content} />
+          </p>
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="라인 필터 (예: cgroupDriver, runtimeRequestTimeout)"
+            className="w-full px-2 py-1 mb-1 text-[11px] font-mono bg-background border border-border rounded-md"
+          />
+          <pre className="text-[11px] font-mono bg-muted/30 rounded-md p-2 max-h-96 overflow-auto whitespace-pre-wrap">
+            {filtered || (filter ? '(필터 매칭 없음)' : '')}
+          </pre>
+        </div>
+      )}
+
+      <SourcesNote sources={sources} />
+    </div>
+  );
+}
+
 function ComponentDetails({ snap }: { snap: ComponentSnapshot }) {
   const data = snap.data as Record<string, unknown>;
   const flags = (data?.flags && typeof data.flags === 'object') ? data.flags as Record<string, string> : null;
   const image = typeof data?.image === 'string' ? data.image : null;
   const cmData = (data?.data && typeof data.data === 'object') ? data.data as Record<string, string> : null;
+  const sources = (data?._sources && typeof data._sources === 'object')
+    ? data._sources as Record<string, string>
+    : null;
 
-  // MinIO Tenant / DirectPV / Kernel — 전용 디테일 (다른 데이터 모양)
+  // 모듈별 전용 디테일 (데이터 모양이 다른 컴포넌트는 별도 렌더)
   if (snap.component.startsWith('minio_tenant:')) {
     return <MinioTenantDetails data={data} />;
   }
@@ -131,6 +376,51 @@ function ComponentDetails({ snap }: { snap: ComponentSnapshot }) {
   if (snap.component.startsWith('kernel_params:')) {
     return <KernelParamsDetails data={data} />;
   }
+  if (snap.component.startsWith('etcd_systemd:')) {
+    return <EtcdSystemdDetails data={data} />;
+  }
+  if (snap.component.startsWith('kubelet_config:')) {
+    return <KubeletConfigDetails data={data} />;
+  }
+
+  // 일반 컴포넌트 — flags / configmap / 원시 필드 모두 필터로 검색 가능.
+  return <GenericComponentDetails
+    image={image}
+    flags={flags}
+    cmData={cmData}
+    rawData={(!flags && !cmData) ? data : null}
+    sources={sources}
+  />;
+}
+
+/** flags / configmap / raw 데이터를 공통 필터로 검색할 수 있는 디테일 패널.
+ *  키나 값 어느 쪽이든 매칭. 노드/모듈에 값이 많을 때 빠르게 찾기 위함. */
+function GenericComponentDetails({
+  image, flags, cmData, rawData, sources,
+}: {
+  image: string | null;
+  flags: Record<string, string> | null;
+  cmData: Record<string, string> | null;
+  rawData: Record<string, unknown> | null;
+  sources: Record<string, string> | null;
+}) {
+  const [filter, setFilter] = useState('');
+  const matches = useCallback((k: string, v: unknown) => {
+    if (!filter.trim()) return true;
+    const q = filter.toLowerCase();
+    const sv = typeof v === 'object' ? JSON.stringify(v) : String(v);
+    return k.toLowerCase().includes(q) || sv.toLowerCase().includes(q);
+  }, [filter]);
+
+  const flagsEntries = flags ? Object.entries(flags).filter(([k, v]) => matches(k, v)).sort() : [];
+  const cmEntries = cmData ? Object.entries(cmData).filter(([k, v]) => matches(k, v)).sort() : [];
+  const rawEntries = rawData
+    ? Object.entries(rawData).filter(([k, v]) => k !== '_sources' && matches(k, v))
+    : [];
+
+  const totalSearchable = (flags ? Object.keys(flags).length : 0)
+    + (cmData ? Object.keys(cmData).length : 0)
+    + (rawData ? Object.keys(rawData).filter((k) => k !== '_sources').length : 0);
 
   return (
     <div className="space-y-3 text-xs">
@@ -140,11 +430,25 @@ function ComponentDetails({ snap }: { snap: ComponentSnapshot }) {
           <p className="font-mono text-foreground break-all">{image}</p>
         </div>
       )}
-      {flags && Object.keys(flags).length > 0 && (
+
+      {totalSearchable >= 6 && (
+        <input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder={`이 모듈의 키/값 필터 (총 ${totalSearchable}개)`}
+          className="w-full px-2 py-1 text-[11px] font-mono bg-background border border-border rounded-md"
+        />
+      )}
+
+      {flags && (
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase mb-0.5">Flags ({Object.keys(flags).length})</p>
+          <p className="text-[10px] text-muted-foreground uppercase mb-0.5">
+            Flags ({flagsEntries.length}{filter ? ` / ${Object.keys(flags).length}` : ''})
+          </p>
           <div className="max-h-60 overflow-y-auto space-y-0.5 rounded-md bg-muted/30 p-2">
-            {Object.entries(flags).sort().map(([k, v]) => (
+            {flagsEntries.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground/70">(필터 매칭 없음)</p>
+            ) : flagsEntries.map(([k, v]) => (
               <div key={k} className="font-mono text-[11px] break-all">
                 <span className="text-primary">--{k}</span>
                 <span className="text-muted-foreground">=</span>
@@ -156,9 +460,13 @@ function ComponentDetails({ snap }: { snap: ComponentSnapshot }) {
       )}
       {cmData && (
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase mb-0.5">ConfigMap data ({Object.keys(cmData).length})</p>
+          <p className="text-[10px] text-muted-foreground uppercase mb-0.5">
+            ConfigMap data ({cmEntries.length}{filter ? ` / ${Object.keys(cmData).length}` : ''})
+          </p>
           <div className="max-h-60 overflow-y-auto space-y-0.5 rounded-md bg-muted/30 p-2">
-            {Object.entries(cmData).sort().map(([k, v]) => (
+            {cmEntries.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground/70">(필터 매칭 없음)</p>
+            ) : cmEntries.map(([k, v]) => (
               <div key={k} className="font-mono text-[11px] break-all">
                 <span className="text-primary">{k}</span>:{' '}
                 <span className="text-foreground/80">{String(v)}</span>
@@ -167,17 +475,21 @@ function ComponentDetails({ snap }: { snap: ComponentSnapshot }) {
           </div>
         </div>
       )}
-      {/* 나머지 원시 필드 (kubeletVersion, kernel 등) */}
-      {!flags && !cmData && Object.keys(data || {}).length > 0 && (
+      {rawData && (
         <div className="space-y-0.5 rounded-md bg-muted/30 p-2">
-          {Object.entries(data).map(([k, v]) => (
+          {rawEntries.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground/70">(필터 매칭 없음)</p>
+          ) : rawEntries.map(([k, v]) => (
             <div key={k} className="font-mono text-[11px] break-all">
-              <span className="text-primary">{k}</span>:{' '}
+              <span className="text-primary">{k}</span>
+              <SourceBadge src={sources?.[k]} />
+              <span className="text-muted-foreground">: </span>
               <span className="text-foreground/80">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
             </div>
           ))}
         </div>
       )}
+      <SourcesNote sources={sources} />
     </div>
   );
 }
@@ -487,6 +799,11 @@ export function VersionsPage() {
   const [etcdModalOpen, setEtcdModalOpen] = useState(false);
   const [kernelModalOpen, setKernelModalOpen] = useState(false);
   const [nicsModalOpen, setNicsModalOpen] = useState(false);
+  const [kubeletModalOpen, setKubeletModalOpen] = useState(false);
+  const [csvModalOpen, setCsvModalOpen] = useState(false);
+  // 노드/컴포넌트 키워드 검색 — 노드가 많을 때 빠르게 찾기 위함.
+  // component 이름·version·data 의 host/config_path 어디든 매칭하면 표시.
+  const [nodeSearch, setNodeSearch] = useState('');
 
   // 사이드바 진입 시 자동으로 첫 클러스터 선택
   useEffect(() => {
@@ -559,8 +876,24 @@ export function VersionsPage() {
   const [diffPair, setDiffPair] = useState<{ from: ComponentSnapshot; to: ComponentSnapshot } | null>(null);
 
   const grouped = useMemo(() => {
+    const q = nodeSearch.trim().toLowerCase();
+    const matchSnap = (c: ComponentSnapshot): boolean => {
+      if (!q) return true;
+      if (c.component.toLowerCase().includes(q)) return true;
+      if ((c.version ?? '').toLowerCase().includes(q)) return true;
+      // data 안의 host / config 경로 같은 핵심 식별 필드도 검색.
+      const d = c.data as Record<string, unknown> | null;
+      if (!d) return false;
+      const probe = ['host', 'config_file', 'config_file_arg', 'env_file', 'systemd_env_file', 'fragment_path'];
+      for (const k of probe) {
+        const v = d[k];
+        if (typeof v === 'string' && v.toLowerCase().includes(q)) return true;
+      }
+      return false;
+    };
     const byCategory = new Map<string, ComponentSnapshot[]>();
     for (const c of current?.components ?? []) {
+      if (!matchSnap(c)) continue;
       const key = c.category || 'other';
       if (!byCategory.has(key)) byCategory.set(key, []);
       byCategory.get(key)!.push(c);
@@ -571,7 +904,10 @@ export function VersionsPage() {
       category: k,
       items: byCategory.get(k)!.sort((a, b) => a.component.localeCompare(b.component)),
     }));
-  }, [current]);
+  }, [current, nodeSearch]);
+
+  const totalComponents = current?.components?.length ?? 0;
+  const visibleComponents = grouped.reduce((acc, g) => acc + g.items.length, 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -614,12 +950,29 @@ export function VersionsPage() {
                 3D 그래프
               </Link>
               <button
+                onClick={() => setCsvModalOpen(true)}
+                disabled={totalComponents === 0}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors disabled:opacity-50"
+                title="현재 스냅샷을 CSV 로 내보내기 (디테일 레벨 선택 가능)"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                CSV 내보내기
+              </button>
+              <button
                 onClick={() => setEtcdModalOpen(true)}
                 className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors"
-                title="etcd (systemd) — SSH 로 수집"
+                title="etcd (systemd) — SSH 로 수집. ps -ef 와 systemctl 양쪽에서 config 경로 추정."
               >
                 <Database className="w-4 h-4" />
                 etcd (systemd)
+              </button>
+              <button
+                onClick={() => setKubeletModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg text-foreground transition-colors"
+                title="kubelet 의 *실제 사용중* config 파일을 SSH 로 발견 (ps -eo args | grep kubelet → --config) + 내용 읽기"
+              >
+                <FileText className="w-4 h-4" />
+                kubelet config
               </button>
               <button
                 onClick={() => setKernelModalOpen(true)}
@@ -688,6 +1041,35 @@ export function VersionsPage() {
               kubeconfig 를 통해 K8s/Cilium 버전, core component image tag, command/args 플래그, cilium-config ConfigMap 을 수집합니다.
               동일 hash 가 감지되면 저장하지 않으므로 반복 실행해도 안전. 변경이 발생한 시점에만 히스토리에 새 레코드가 생깁니다.
             </div>
+
+            {/* 노드/컴포넌트 검색 — 노드가 많을 때 빠르게 찾기.
+                키워드는 component 이름 / version / data 의 host·config_path 에 매칭한다. */}
+            {totalComponents > 0 && (
+              <div className="bg-card border border-border rounded-xl px-4 py-2.5 mb-4 flex items-center gap-3">
+                <Search className="w-4 h-4 text-muted-foreground" />
+                <input
+                  value={nodeSearch}
+                  onChange={(e) => setNodeSearch(e.target.value)}
+                  placeholder="노드 이름·컴포넌트·버전·config 경로로 검색 (예: master-1, kubelet, /var/lib)"
+                  className="flex-1 bg-transparent border-0 text-sm font-mono focus:outline-none focus:ring-0"
+                />
+                {nodeSearch && (
+                  <>
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                      {visibleComponents} / {totalComponents}
+                    </span>
+                    <button
+                      onClick={() => setNodeSearch('')}
+                      className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
+                      aria-label="검색 지우기"
+                      title="검색 지우기"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </>
         )}
 
@@ -702,6 +1084,13 @@ export function VersionsPage() {
             title="아직 수집된 스냅샷이 없습니다"
             description="kubeconfig 에 연결해 현재 K8s 버전/설정을 스냅샷으로 저장합니다."
             action={{ label: '지금 수집', onClick: () => collect.mutate() }}
+          />
+        ) : nodeSearch.trim() && grouped.length === 0 ? (
+          <EmptyState
+            icon={Search}
+            title="검색 결과 없음"
+            description={`"${nodeSearch}" 와 매칭되는 컴포넌트/노드/config 경로가 없습니다.`}
+            action={{ label: '검색 지우기', onClick: () => setNodeSearch(''), variant: 'secondary' }}
           />
         ) : (
           <div className="space-y-5">
@@ -831,6 +1220,22 @@ export function VersionsPage() {
           // Cluster 정보 (node_ips) 가 갱신됐을 수 있으므로 클러스터 캐시 무효화
           queryClient.invalidateQueries({ queryKey: ['clusters'] });
         }}
+      />
+      <KubeletConfigCollectModal
+        open={kubeletModalOpen && !!clusterId}
+        clusterId={clusterId}
+        onClose={() => {
+          setKubeletModalOpen(false);
+          // 새 kubelet_config 스냅샷이 생겼을 수 있으니 current 캐시 무효화
+          queryClient.invalidateQueries({ queryKey: ['versions', 'current', clusterId] });
+        }}
+      />
+      <CsvExportModal
+        open={csvModalOpen && !!clusterId}
+        clusterId={clusterId}
+        clusterName={clusters.find((c) => c.id === clusterId)?.name ?? clusterId}
+        components={current?.components ?? []}
+        onClose={() => setCsvModalOpen(false)}
       />
     </div>
   );

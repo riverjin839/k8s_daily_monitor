@@ -21,14 +21,17 @@ class NodeListResponse(BaseModel):
 
 
 class SSHTargetIn(BaseModel):
-    host: str = Field(..., description="IP 또는 FQDN")
+    host: str = Field(..., description="IP 또는 FQDN — 실제 SSH 접속 대상")
+    name: Optional[str] = Field(default=None, description="화면에 표시할 노드 이름 (k8s 노드명)")
+    cluster_id: Optional[UUID] = Field(default=None, description="이 타겟이 속한 클러스터")
+    cluster_name: Optional[str] = Field(default=None, description="화면 표시용 클러스터 이름")
     # 아래 인증 정보는 target 별로 override 가능. 빈 값이면 요청 루트의 기본값을 사용.
     username: Optional[str] = None
     port: Optional[int] = None
 
 
 class BulkExecRequest(BaseModel):
-    cluster_id: Optional[UUID] = None  # 참조용 (선택)
+    cluster_id: Optional[UUID] = None  # 단일 클러스터 모드 호환용 (선택)
 
     action: Literal["ssh", "scp"] = "ssh"
     targets: list[SSHTargetIn] = Field(..., min_length=1, max_length=2000)
@@ -59,6 +62,9 @@ class BulkExecRequest(BaseModel):
 
 class BulkExecResultItem(BaseModel):
     host: str
+    name: Optional[str] = None             # 사용자가 선택한 노드 이름 (있으면 화면에 우선 표시)
+    cluster_id: Optional[UUID] = None
+    cluster_name: Optional[str] = None
     status: Literal["ok", "error", "timeout", "auth_error", "connect_error"]
     exit_code: Optional[int] = None
     stdout: str = ""

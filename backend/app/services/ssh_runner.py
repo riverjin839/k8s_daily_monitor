@@ -27,6 +27,11 @@ class SSHResult:
     stderr: str
     duration_ms: int
     error: Optional[str]
+    # 선택적 메타데이터 — 호출자가 SSHTarget 에 실어 보낸 식별자.
+    # 결과를 사용자 선택과 1:1 로 매핑하기 위해 그대로 echo back 한다.
+    name: Optional[str] = None
+    cluster_id: Optional[str] = None
+    cluster_name: Optional[str] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -40,6 +45,10 @@ class SSHTarget:
     # 아래 둘 중 하나만 사용
     password: Optional[str] = None
     private_key: Optional[str] = None  # 개인키 내용 (PEM)
+    # 식별 메타데이터 — SSH 연결에는 쓰이지 않고 결과로 그대로 반환됨.
+    name: Optional[str] = None
+    cluster_id: Optional[str] = None
+    cluster_name: Optional[str] = None
 
 
 def _build_client(tgt: SSHTarget, connect_timeout: int) -> paramiko.SSHClient:
@@ -209,10 +218,17 @@ async def run_bulk(
 
     def one(t: SSHTarget) -> SSHResult:
         if action == "ssh":
-            return _exec_ssh(t, command or "", connect_timeout, exec_timeout)
-        if action == "scp":
-            return _exec_scp_push(t, scp_content or b"", scp_remote_path or "", connect_timeout)
-        raise ValueError(f"unknown action: {action}")
+            res = _exec_ssh(t, command or "", connect_timeout, exec_timeout)
+        elif action == "scp":
+            res = _exec_scp_push(t, scp_content or b"", scp_remote_path or "", connect_timeout)
+        else:
+            raise ValueError(f"unknown action: {action}")
+        # 결과를 호출자가 보낸 노드/클러스터에 1:1 로 묶기 위해 메타를 echo back.
+        # 같은 IP 가 여러 노드에 매핑된 환경에서도 어떤 노드가 어떤 결과인지 식별 가능.
+        res.name = t.name
+        res.cluster_id = t.cluster_id
+        res.cluster_name = t.cluster_name
+        return res
 
     if mode == "sequential":
         return [await asyncio.get_event_loop().run_in_executor(None, one, t) for t in targets]

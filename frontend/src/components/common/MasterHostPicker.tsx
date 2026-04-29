@@ -41,7 +41,12 @@ export function MasterHostPicker({
     retry: 1,
   });
 
-  const candidates = mastersQ.data?.candidates ?? [];
+  // `?? []` 가 매 렌더마다 새 배열을 만들어 아래 useMemo deps 가 매번 무효화되던
+  // 문제 — react-hooks/exhaustive-deps 경고 회피 + 안정 참조.
+  const candidates = useMemo<EtcdMasterCandidate[]>(
+    () => mastersQ.data?.candidates ?? [],
+    [mastersQ.data],
+  );
 
   const computeHost = (c: EtcdMasterCandidate | undefined) =>
     c?.internalIp || c?.externalIp || c?.name || '';

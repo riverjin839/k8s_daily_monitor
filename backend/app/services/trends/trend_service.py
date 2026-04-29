@@ -22,10 +22,20 @@ class TrendService:
 
     # ── 수집 진입점 ─────────────────────────────────────────────
 
-    async def run_daily_collect(self, target_date: date | None = None) -> TrendDigest:
-        """하루 치 트렌드 수집 + Ollama 요약"""
+    async def run_daily_collect(
+        self,
+        target_date: date | None = None,
+        lookback_days: int = 90,
+    ) -> TrendDigest:
+        """N일 치 트렌드 수집 + Ollama 요약.
+
+        ``lookback_days`` — 며칠 전까지의 release/blog 를 가져올지. 기본 90일.
+        K8s/Cilium 의 마이너 릴리즈 주기가 길어서 1일만 보면 거의 항상 비어있다.
+        """
         if target_date is None:
             target_date = date.today()
+        if lookback_days < 1:
+            lookback_days = 1
 
         # 기존 digest 재사용 or 신규 생성
         digest = self.db.query(TrendDigest).filter(TrendDigest.digest_date == target_date).first()
@@ -39,7 +49,7 @@ class TrendService:
             digest.error_message = None
             self.db.commit()
 
-        since = datetime.combine(target_date - timedelta(days=1), datetime.min.time())
+        since = datetime.combine(target_date - timedelta(days=lookback_days), datetime.min.time())
 
         try:
             sources = self.db.query(TrendSource).filter(TrendSource.enabled == True).all()

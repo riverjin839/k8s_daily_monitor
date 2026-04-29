@@ -875,13 +875,31 @@ export const analyzeApi = {
     api.post<import('@/types').IncidentAnalysisResponse>('/analyze/incident', data),
   health: () =>
     api.get<import('@/types').AnalyzerHealthResponse>('/analyze/health'),
+  listNamespaces: (clusterId: string, onlyWithIssues = false) =>
+    api.get<import('@/types').AnalyzeNamespacesResponse>(
+      `/analyze/clusters/${clusterId}/namespaces`,
+      { params: { only_with_issues: onlyWithIssues } },
+    ),
+  listPods: (clusterId: string, namespace: string, onlyWithIssues = false) =>
+    api.get<import('@/types').AnalyzePodsResponse>(
+      `/analyze/clusters/${clusterId}/namespaces/${namespace}/pods`,
+      { params: { only_with_issues: onlyWithIssues } },
+    ),
+  fetchContext: (clusterId: string, namespace: string, podName: string, tailLines = 200) =>
+    api.get<import('@/types').AnalyzeIncidentContext>(
+      `/analyze/clusters/${clusterId}/namespaces/${namespace}/pods/${podName}/context`,
+      { params: { tail_lines: tailLines } },
+    ),
 };
 
 // Trend Digest API
 export const trendsApi = {
-  triggerCollect: (targetDate?: string) =>
+  triggerCollect: (targetDate?: string, lookbackDays?: number) =>
     api.post<TrendDigest>('/trends/collect', undefined, {
-      params: targetDate ? { target_date: targetDate } : {},
+      params: {
+        ...(targetDate ? { target_date: targetDate } : {}),
+        ...(lookbackDays ? { lookback_days: lookbackDays } : {}),
+      },
     }),
   listDigests: (limit = 30) =>
     api.get<TrendDigest[]>('/trends/digests', { params: { limit } }),

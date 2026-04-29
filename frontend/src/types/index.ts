@@ -1305,6 +1305,50 @@ export interface AnalyzerHealthResponse {
   available: boolean;
 }
 
+// Cluster → Namespace → Pod 드릴다운 (장애 분석용)
+export interface AnalyzeNamespaceItem {
+  name: string;
+  podCount?: number | null;
+  hasUnhealthy: boolean;
+}
+
+export interface AnalyzeNamespacesResponse {
+  clusterId: string;
+  clusterName: string;
+  namespaces: AnalyzeNamespaceItem[];
+}
+
+export interface AnalyzePodItem {
+  name: string;
+  namespace: string;
+  phase: string;
+  ready: string;
+  restartCount: number;
+  node?: string | null;
+  ageSeconds?: number | null;
+  hasIssue: boolean;
+  issueReason?: string | null;
+}
+
+export interface AnalyzePodsResponse {
+  clusterId: string;
+  clusterName: string;
+  namespace: string;
+  pods: AnalyzePodItem[];
+}
+
+export interface AnalyzeIncidentContext {
+  clusterId: string;
+  clusterName: string;
+  podName: string;
+  namespace: string;
+  timestamp: string;
+  events: KubeEvent[];
+  currentLogs: string;
+  previousLogs?: string | null;
+  describeOutput: string;
+}
+
 // Trend Digest
 export type TrendCategory = 'k8s' | 'cilium' | 'linux' | 'cncf' | string;
 export type TrendItemType = 'release' | 'blog' | 'news';

@@ -401,9 +401,18 @@ function SourcesPanel() {
 }
 
 // ── 메인 페이지 ──────────────────────────────────────────────────
+const LOOKBACK_OPTIONS: { value: number; label: string }[] = [
+  { value: 7,   label: '최근 7일' },
+  { value: 30,  label: '최근 30일' },
+  { value: 90,  label: '최근 90일' },
+  { value: 180, label: '최근 180일' },
+  { value: 365, label: '최근 1년' },
+];
+
 export function TrendDigestPage() {
   const [activeTab, setActiveTab] = useState<'digest' | 'sources'>('digest');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [lookbackDays, setLookbackDays] = useState<number>(90);
 
   const { data: digests = [], isLoading: digestsLoading } = useTrendDigests(30);
   const triggerCollect = useTriggerCollect();
@@ -414,7 +423,7 @@ export function TrendDigestPage() {
     : displayDigests[0];
 
   const handleCollect = () => {
-    triggerCollect.mutate(undefined);
+    triggerCollect.mutate({ lookbackDays });
   };
 
   return (
@@ -426,7 +435,18 @@ export function TrendDigestPage() {
           <p className="text-[11px] text-muted-foreground mt-0.5">K8s · Cilium · Linux</p>
         </div>
 
-        <div className="px-3 py-3 border-b border-border">
+        <div className="px-3 py-3 border-b border-border space-y-2">
+          <select
+            value={lookbackDays}
+            onChange={(e) => setLookbackDays(Number(e.target.value) || 90)}
+            disabled={triggerCollect.isPending}
+            title="며칠 전까지의 릴리즈/블로그를 가져올지 — k8s/cilium 마이너 릴리즈 주기가 길어서 1~7일만 보면 거의 비어있다."
+            className="w-full text-xs px-2 py-1.5 bg-background border border-border rounded-lg disabled:opacity-60"
+          >
+            {LOOKBACK_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
           <button
             onClick={handleCollect}
             disabled={triggerCollect.isPending}
@@ -498,10 +518,19 @@ export function TrendDigestPage() {
             </>
           ) : activeDigest ? (
             <>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
                 <h1 className="text-lg font-bold">
                   {activeDigest.digestDate} 기술 동향
                 </h1>
+                <button
+                  onClick={handleCollect}
+                  disabled={triggerCollect.isPending}
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border bg-card hover:bg-secondary disabled:opacity-60"
+                  title={`${LOOKBACK_OPTIONS.find((o) => o.value === lookbackDays)?.label ?? '최근'} 범위로 다시 수집`}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${triggerCollect.isPending ? 'animate-spin' : ''}`} />
+                  {LOOKBACK_OPTIONS.find((o) => o.value === lookbackDays)?.label ?? '재수집'} 다시 수집
+                </button>
               </div>
               <DigestPanel digest={activeDigest} />
             </>

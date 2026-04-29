@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
-import { ConfirmDialog, LogViewer } from '@/components/common';
+import { ConfirmDialog, LogViewer, MasterHostPicker } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import {
   useBatchJobRuns,
@@ -53,6 +53,8 @@ function CreateJobModal({ open, clusterId, onClose, onCreated }: CreateJobModalP
   const [description, setDescription] = useState('');
   const [jobType, setJobType] = useState('');
   const [defaultHost, setDefaultHost] = useState('');
+  const [hostSelectedName, setHostSelectedName] = useState('');
+  const [hostCustom, setHostCustom] = useState('');
   const [defaultPort, setDefaultPort] = useState(22);
   const [defaultUsername, setDefaultUsername] = useState('root');
   const [cron, setCron] = useState('');
@@ -110,6 +112,7 @@ function CreateJobModal({ open, clusterId, onClose, onCreated }: CreateJobModalP
       onCreated();
       onClose();
       setName(''); setDescription(''); setDefaultHost(''); setCron('');
+      setHostSelectedName(''); setHostCustom('');
     } catch (e) {
       setError(formatApiError(e));
     }
@@ -177,12 +180,16 @@ function CreateJobModal({ open, clusterId, onClose, onCreated }: CreateJobModalP
 
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
-              <label className="block text-xs text-muted-foreground mb-1">기본 호스트 (선택)</label>
-              <input
-                value={defaultHost}
-                onChange={(e) => setDefaultHost(e.target.value)}
-                placeholder="master1.example.com"
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl font-mono"
+              <MasterHostPicker
+                clusterId={clusterId}
+                customHost={hostCustom}
+                selectedName={hostSelectedName}
+                label="기본 호스트 (master 노드 후보)"
+                onChange={({ selectedName, customHost, effectiveHost }) => {
+                  setHostSelectedName(selectedName);
+                  setHostCustom(customHost);
+                  setDefaultHost(effectiveHost);
+                }}
               />
             </div>
             <div>
@@ -257,6 +264,9 @@ interface RunModalProps {
 function RunModal({ job, onClose }: RunModalProps) {
   const run = useRunBatchJob();
   const [host, setHost] = useState(job.defaultHost ?? '');
+  // 직접 입력이 비어있을 때만 master 후보 드롭다운을 따라간다.
+  const [hostSelectedName, setHostSelectedName] = useState('');
+  const [hostCustom, setHostCustom] = useState(job.defaultHost ?? '');
   const [port, setPort] = useState(job.defaultPort);
   const [username, setUsername] = useState(job.defaultUsername);
   const [password, setPassword] = useState('');
@@ -316,11 +326,16 @@ function RunModal({ job, onClose }: RunModalProps) {
         <div className="p-5 space-y-4">
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
-              <label className="block text-xs text-muted-foreground mb-1">호스트</label>
-              <input
-                value={host}
-                onChange={(e) => setHost(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl font-mono"
+              <MasterHostPicker
+                clusterId={job.clusterId}
+                customHost={hostCustom}
+                selectedName={hostSelectedName}
+                label="호스트 (master 노드 후보)"
+                onChange={({ selectedName, customHost, effectiveHost }) => {
+                  setHostSelectedName(selectedName);
+                  setHostCustom(customHost);
+                  setHost(effectiveHost);
+                }}
               />
             </div>
             <div>

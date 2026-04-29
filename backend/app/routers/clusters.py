@@ -305,6 +305,26 @@ def create_cluster(cluster_data: ClusterCreate, db: Session = Depends(get_db)):
     for addon_config in DEFAULT_ADDONS:
         db.add(Addon(cluster_id=cluster.id, **addon_config))
 
+    # 새 클러스터에도 샘플 점검 playbook 을 자동으로 채워 넣는다.
+    # main.py 의 _seed_default_playbooks 와 동일한 정의를 재사용해 일관성 유지.
+    try:
+        from app.main import _SAMPLE_PLAYBOOKS
+        from app.models.playbook import Playbook as PlaybookModel
+
+        for sp in _SAMPLE_PLAYBOOKS:
+            db.add(PlaybookModel(
+                cluster_id=cluster.id,
+                name=sp["name"],
+                description=sp["description"],
+                playbook_path=f"{settings.ansible_playbook_dir.rstrip('/')}/{sp['playbook_path']}",
+                inventory_path=None,
+                extra_vars=sp.get("extra_vars"),
+                show_on_dashboard=sp.get("show_on_dashboard", False),
+            ))
+    except Exception:
+        # 샘플 seed 실패해도 클러스터 등록 자체는 성공시킴 — 추후 lifespan 의 seed 가 보완.
+        pass
+
     db.commit()
 
     # pending 상태가 아닌 경우에만 초기 점검 수행

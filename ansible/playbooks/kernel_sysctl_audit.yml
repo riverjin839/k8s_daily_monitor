@@ -1,0 +1,63 @@
+---
+# K8s 권장 sysctl 값 감사
+# - net.bridge.bridge-nf-call-iptables, ip_forward, swappiness 등 권장값 확인
+# - 권장값과 다르면 실패. 사용자 환경에 맞게 expected 변수로 override 가능.
+# Vars:
+#   expected (dict): 검사할 sysctl 키와 기대값 매핑
+
+- name: K8s 권장 sysctl 감사
+  hosts: all
+  gather_facts: false
+  vars:
+    # K8s 공식 권장값 + 일반적인 노드 운영 권장값
+    expected:
+      net.bridge.bridge-nf-call-iptables: "1"
+      net.bridge.bridge-nf-call-ip6tables: "1"
+      net.ipv4.ip_forward: "1"
+      net.ipv4.conf.all.rp_filter: "1"
+      vm.swappiness: "0"           # K8s 1.22+: kubelet 이 swap on 도 지원하지만 보수적으로 0
+      fs.inotify.max_user_watches: "524288"
+      fs.inotify.max_user_instances: "8192"
+      fs.file-max: "9223372036854775807"   # 너무 작지 않으면 통과 (아래 비교 로직)
+      kernel.pid_max: "4194304"
+      net.core.somaxconn: "32768"
+
+  tasks:
+    - name: 모든 sysctl 값 dump
+      shell: sysctl -a 2>/dev/null
+      register: sysctl_dump
+      changed_when: false
+
+    - name: 결과를 dict 로 파싱
+      set_fact:
+        actual: "{{ actual | default({}) | combine({ (item.split('=')[0] | trim): (item.split('=')[1] | trim) }) }}"
+      loop: "{{ sysctl_dump.stdout_lines | select('search', '=') | list }}"
+      loop_control:
+        label: "{{ item.split('=')[0] | trim }}"
+
+    - name: 권장값 비교
+      set_fact:
+        violations: "{{ violations | default([]) + [{'key': item.key, 'expected': item.value, 'actual': actual[item.key] | default('(missing)')}] }}"
+      when:
+        - actual[item.key] is not defined or actual[item.key] != item.value
+        # fs.file-max / pid_max 처럼 너무 큰 기대값은 "이상이면 OK" 로 간주
+        - not (item.key in ['fs.file-max', 'kernel.pid_max'] and (actual[item.key] | default('0') | int) >= 65536)
+      loop: "{{ expected | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: 점검 요약
+      debug:
+        msg: >-
+          {{ expected | length }}개 권장값 검사 · 위반 {{ (violations | default([])) | length }}개
+
+    - name: 위반시 실패
+      fail:
+        msg: |
+          sysctl 권장값 위반 ({{ violations | length }}개):
+          {% for v in violations %}
+          - {{ v.key }}: 권장 {{ v.expected }}  실제 {{ v.actual }}
+          {% endfor %}
+
+          /etc/sysctl.d/ 또는 /etc/sysctl.conf 에 적용 후 `sysctl --system` 실행 필요.
+      when: (violations | default([])) | length > 0

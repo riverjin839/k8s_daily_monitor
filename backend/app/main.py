@@ -454,6 +454,86 @@ def _seed_default_trend_sources():
         db.close()
 
 
+_SAMPLE_PLAYBOOKS = [
+    {
+        "name": "NTP / Chrony 동기화 점검",
+        "description": "각 노드의 시간 동기화 상태와 drift 를 점검 (chronyc tracking / timedatectl).",
+        "playbook_path": "ntp_sync_check.yml",
+        "extra_vars": {"max_drift_ms": 1000},
+        "show_on_dashboard": True,
+    },
+    {
+        "name": "디스크 사용률 점검",
+        "description": "df -P 결과를 파싱해 임계 (warn 80%, crit 90%) 초과 파티션 검출.",
+        "playbook_path": "disk_usage_check.yml",
+        "extra_vars": {"warn_pct": 80, "crit_pct": 90},
+        "show_on_dashboard": True,
+    },
+    {
+        "name": "K8s 권장 sysctl 감사",
+        "description": "net.bridge.bridge-nf-call-iptables, ip_forward, swappiness 등 권장값 위반 검출.",
+        "playbook_path": "kernel_sysctl_audit.yml",
+        "extra_vars": None,
+        "show_on_dashboard": False,
+    },
+    {
+        "name": "노드 부하 (load average) 점검",
+        "description": "load5 / CPU코어 비율로 부하 경고 (warn 0.8, crit 1.5).",
+        "playbook_path": "node_load_check.yml",
+        "extra_vars": {"warn_ratio": 0.8, "crit_ratio": 1.5},
+        "show_on_dashboard": True,
+    },
+    {
+        "name": "K8s 인증서 만료 점검",
+        "description": "/etc/kubernetes/pki/*.crt 들의 NotAfter 까지 남은 일수 (warn 60일 · crit 14일).",
+        "playbook_path": "cert_expiry_check.yml",
+        "extra_vars": {"warn_days": 60, "crit_days": 14},
+        "show_on_dashboard": True,
+    },
+]
+
+
+def _seed_default_playbooks():
+    """등록된 모든 클러스터에 대해 샘플 점검 playbook 을 (cluster_id, name) 기준으로
+    한 번씩만 insert. inventory_path 는 비워둠 → 실행 시 K8s API 로 동적 inventory 생성.
+    """
+    from app.models.cluster import Cluster
+    from app.models.playbook import Playbook
+
+    db = SessionLocal()
+    try:
+        clusters = db.query(Cluster).all()
+        if not clusters:
+            return  # 클러스터가 등록될 때까지 보류 (재기동 시 다시 시도됨)
+
+        added = 0
+        for cluster in clusters:
+            # 이미 어떤 playbook 이라도 있으면 보수적으로 skip — 사용자가 직접 정리한 클러스터는 건드리지 않음.
+            existing_names = {
+                row[0] for row in db.query(Playbook.name)
+                .filter(Playbook.cluster_id == cluster.id).all()
+            }
+            for sp in _SAMPLE_PLAYBOOKS:
+                if sp["name"] in existing_names:
+                    continue
+                pb = Playbook(
+                    cluster_id=cluster.id,
+                    name=sp["name"],
+                    description=sp["description"],
+                    # ansible_playbook_dir 기준 절대경로로 저장 — 컨테이너 안에서 그대로 실행 가능
+                    playbook_path=f"{settings.ansible_playbook_dir.rstrip('/')}/{sp['playbook_path']}",
+                    inventory_path=None,   # ← K8s 전체 노드를 동적 inventory 로 사용
+                    extra_vars=sp.get("extra_vars"),
+                    show_on_dashboard=sp.get("show_on_dashboard", False),
+                )
+                db.add(pb)
+                added += 1
+        if added:
+            db.commit()
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: DB 테이블 생성
@@ -461,6 +541,7 @@ async def lifespan(app: FastAPI):
     _run_migrations()
     _seed_default_metric_cards()
     _seed_default_trend_sources()
+    _seed_default_playbooks()
     yield
     # Shutdown: 필요한 정리 작업
 

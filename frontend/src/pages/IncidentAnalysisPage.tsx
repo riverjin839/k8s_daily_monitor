@@ -1,7 +1,17 @@
-import { useState } from 'react';
-import { AlertTriangle, CheckCircle, Info, Loader2, Search, Zap } from 'lucide-react';
-import { useAnalyzeIncident, useAnalyzerHealth } from '@/hooks/useIncidentAnalysis';
-import type { IncidentAnalysisRequest, IncidentAnalysisResult, KubeEvent } from '@/types';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  AlertTriangle, CheckCircle, Info, Loader2, Search, Zap,
+  Server, Layers, Package, RefreshCw, Download,
+} from 'lucide-react';
+import {
+  useAnalyzeIncident, useAnalyzerHealth,
+  useAnalyzeNamespaces, useAnalyzePods, useFetchIncidentContext,
+} from '@/hooks/useIncidentAnalysis';
+import { useClusters } from '@/hooks/useCluster';
+import type {
+  IncidentAnalysisRequest, IncidentAnalysisResult, KubeEvent, AnalyzePodItem,
+} from '@/types';
+import { formatApiError } from '@/lib/utils';
 
 const SEVERITY_STYLE: Record<string, { icon: typeof AlertTriangle; bg: string; border: string; text: string; badge: string }> = {
   critical: { icon: AlertTriangle, bg: 'bg-red-500/10',    border: 'border-red-500/40',    text: 'text-red-400',    badge: 'bg-red-500/15 text-red-400 border-red-500/30' },
@@ -34,7 +44,6 @@ function ResultPanel({ result }: { result: IncidentAnalysisResult }) {
 
   return (
     <div className={`rounded-xl border ${st.border} ${st.bg} p-5 space-y-4`}>
-      {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <SeverityIcon className={`w-5 h-5 flex-shrink-0 ${st.text}`} />
@@ -50,19 +59,16 @@ function ResultPanel({ result }: { result: IncidentAnalysisResult }) {
         </div>
       </div>
 
-      {/* Root cause */}
       <div className="rounded-lg bg-background/60 border border-border px-4 py-3">
         <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">근본 원인</p>
         <p className="text-sm text-foreground">{result.rootCause}</p>
       </div>
 
-      {/* Confidence */}
       <div>
         <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">신뢰도</p>
         <ConfidenceBar value={result.confidence} />
       </div>
 
-      {/* Actions */}
       {result.suggestedActions.length > 0 && (
         <div>
           <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">조치 방안</p>
@@ -79,7 +85,6 @@ function ResultPanel({ result }: { result: IncidentAnalysisResult }) {
         </div>
       )}
 
-      {/* Runbooks */}
       {result.relatedRunbooks && result.relatedRunbooks.length > 0 && (
         <div>
           <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">관련 런북</p>
@@ -107,20 +112,70 @@ function EventRow({ event, index }: { event: KubeEvent; index: number }) {
   );
 }
 
+function podOptionLabel(pod: AnalyzePodItem): string {
+  const restart = pod.restartCount > 0 ? ` ↻${pod.restartCount}` : '';
+  const node = pod.node ? ` @ ${pod.node}` : '';
+  const issue = pod.issueReason ? ` — ${pod.issueReason}` : '';
+  return `${pod.hasIssue ? '⚠ ' : ''}${pod.name}  [${pod.ready} ${pod.phase}${restart}]${node}${issue}`;
+}
+
 export function IncidentAnalysisPage() {
   const { data: health } = useAnalyzerHealth();
-  const { mutate: analyze, isPending, data: response } = useAnalyzeIncident();
+  const { mutate: analyze, isPending: analyzing, data: response } = useAnalyzeIncident();
+  const fetchCtx = useFetchIncidentContext();
 
-  const [podName, setPodName]     = useState('');
-  const [namespace, setNamespace] = useState('default');
-  const [currentLogs, setLogs]    = useState('');
+  // ── 클러스터 / namespace / pod 선택 상태 ──
+  const { data: clusters = [] } = useClusters();
+  const [clusterId, setClusterId] = useState('');
+  const [namespace, setNamespace] = useState('');
+  const [podName, setPodName] = useState('');
+  const [onlyIssues, setOnlyIssues] = useState(true);
+
+  useEffect(() => {
+    if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
+  }, [clusters, clusterId]);
+
+  const nsQ   = useAnalyzeNamespaces(clusterId, onlyIssues);
+  const podsQ = useAnalyzePods(clusterId, namespace, onlyIssues);
+
+  // 클러스터 변경 시 ns/pod 초기화
+  useEffect(() => { setNamespace(''); setPodName(''); }, [clusterId]);
+  // namespace 변경 시 pod 초기화
+  useEffect(() => { setPodName(''); }, [namespace]);
+
+  // 첫 namespace 자동 선택 (이슈 있는 ns 우선)
+  useEffect(() => {
+    if (!nsQ.data) return;
+    if (namespace) return;
+    const first = nsQ.data.namespaces[0];
+    if (first) setNamespace(first.name);
+  }, [nsQ.data, namespace]);
+
+  // 첫 pod 자동 선택 (이슈 있는 pod 우선)
+  useEffect(() => {
+    if (!podsQ.data) return;
+    if (podName) return;
+    const first = podsQ.data.pods[0];
+    if (first) setPodName(first.name);
+  }, [podsQ.data, podName]);
+
+  const selectedPod = useMemo(
+    () => podsQ.data?.pods.find((p) => p.name === podName),
+    [podsQ.data, podName],
+  );
+
+  // ── 페이로드 (자동 채워졌거나 사용자가 붙여넣은 텍스트) ──
+  const [currentLogs, setLogs] = useState('');
+  const [previousLogs, setPreviousLogs] = useState('');
   const [describeOut, setDescribe] = useState('');
-  const [rawEvents, setRawEvents]  = useState('');
+  const [rawEvents, setRawEvents] = useState('');
+  const [structuredEvents, setStructuredEvents] = useState<KubeEvent[]>([]);
+  const [autofilledFor, setAutofilledFor] = useState<string>('');
 
   const ic = 'w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary';
   const lc = 'block text-xs font-medium text-muted-foreground mb-1';
 
-  const parseEvents = (): KubeEvent[] => {
+  const parseEventsFromText = (): KubeEvent[] => {
     if (!rawEvents.trim()) return [];
     return rawEvents
       .split('\n')
@@ -138,24 +193,47 @@ export function IncidentAnalysisPage() {
       });
   };
 
+  const events = structuredEvents.length > 0 ? structuredEvents : parseEventsFromText();
+
+  const handleAutofill = () => {
+    if (!clusterId || !namespace || !podName) return;
+    fetchCtx.mutate(
+      { clusterId, namespace, podName, tailLines: 200 },
+      {
+        onSuccess: (data) => {
+          setLogs(data.currentLogs ?? '');
+          setPreviousLogs(data.previousLogs ?? '');
+          setDescribe(data.describeOutput ?? '');
+          setStructuredEvents(data.events ?? []);
+          setRawEvents(''); // 구조화된 events 가 우선이므로 raw 는 비움
+          setAutofilledFor(`${clusterId}/${namespace}/${podName}`);
+        },
+      },
+    );
+  };
+
+  const currentSelection = `${clusterId}/${namespace}/${podName}`;
+  const autofillStale = autofilledFor && autofilledFor !== currentSelection;
+
   const handleSubmit = () => {
-    if (!podName.trim()) return;
+    if (!podName.trim() || !namespace.trim()) return;
     const payload: IncidentAnalysisRequest = {
       podName:       podName.trim(),
-      namespace:     namespace.trim() || 'default',
+      namespace:     namespace.trim(),
       timestamp:     new Date().toISOString(),
-      events:        parseEvents(),
-      currentLogs:   currentLogs,
+      events,
+      currentLogs,
+      previousLogs:  previousLogs || undefined,
       describeOutput: describeOut,
     };
     analyze(payload);
   };
 
-  const events = parseEvents();
+  const canAutofill = !!clusterId && !!namespace && !!podName;
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1400px] mx-auto px-6 py-8">
+      <main className="max-w-[1500px] mx-auto px-6 py-8">
 
         {/* 헤더 */}
         <div className="flex items-center justify-between mb-6">
@@ -176,51 +254,200 @@ export function IncidentAnalysisPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* ── 드릴다운 선택 (Cluster → Namespace → Pod) ── */}
+        <div className="bg-card border border-border rounded-xl p-5 mb-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              대상 선택
+            </p>
+            <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
+              <input
+                type="checkbox"
+                checked={onlyIssues}
+                onChange={(e) => setOnlyIssues(e.target.checked)}
+                className="w-3.5 h-3.5 accent-primary"
+              />
+              이슈 있는 항목만 보기
+            </label>
+          </div>
 
-          {/* 입력 패널 */}
-          <div className="space-y-4">
-            <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pod 정보</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={lc}>Pod 이름 *</label>
-                  <input type="text" value={podName} onChange={(e) => setPodName(e.target.value)}
-                    placeholder="my-app-7d9f8b-xxxx" className={ic} />
-                </div>
-                <div>
-                  <label className={lc}>Namespace</label>
-                  <input type="text" value={namespace} onChange={(e) => setNamespace(e.target.value)}
-                    placeholder="default" className={ic} />
-                </div>
-              </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            {/* Cluster */}
+            <div>
+              <label className={lc}>
+                <Server className="w-3 h-3 inline mr-1" />
+                Kubernetes 클러스터
+              </label>
+              <select
+                value={clusterId}
+                onChange={(e) => setClusterId(e.target.value)}
+                className={ic}
+              >
+                <option value="">— 클러스터 선택 —</option>
+                {clusters.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
             </div>
 
-            <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">이벤트 (선택)</p>
-              <div>
-                <label className={lc}>kubectl get events 출력 붙여넣기</label>
-                <textarea value={rawEvents} onChange={(e) => setRawEvents(e.target.value)}
-                  placeholder={"Warning  BackOff  3  Back-off restarting failed container\nWarning  OOMKilling  1  Memory limit reached"}
-                  rows={4} className={`${ic} font-mono text-xs resize-none`} />
+            {/* Namespace */}
+            <div>
+              <label className={lc}>
+                <Layers className="w-3 h-3 inline mr-1" />
+                Namespace
+                {nsQ.isLoading && <Loader2 className="w-3 h-3 inline ml-1 animate-spin" />}
+                {nsQ.data && (
+                  <span className="ml-1 text-[10px] opacity-60">
+                    ({nsQ.data.namespaces.length})
+                  </span>
+                )}
+              </label>
+              <select
+                value={namespace}
+                onChange={(e) => setNamespace(e.target.value)}
+                disabled={!clusterId || nsQ.isLoading}
+                className={ic}
+              >
+                <option value="">— namespace 선택 —</option>
+                {(nsQ.data?.namespaces ?? []).map((n) => (
+                  <option key={n.name} value={n.name}>
+                    {n.hasUnhealthy ? '⚠ ' : ''}{n.name}
+                    {typeof n.podCount === 'number' ? ` (${n.podCount} pods)` : ''}
+                  </option>
+                ))}
+              </select>
+              {nsQ.isError && (
+                <p className="text-[11px] text-red-400 mt-1">
+                  {formatApiError(nsQ.error)}
+                </p>
+              )}
+            </div>
+
+            {/* Pod */}
+            <div>
+              <label className={lc}>
+                <Package className="w-3 h-3 inline mr-1" />
+                Pod
+                {podsQ.isLoading && <Loader2 className="w-3 h-3 inline ml-1 animate-spin" />}
+                {podsQ.data && (
+                  <span className="ml-1 text-[10px] opacity-60">
+                    ({podsQ.data.pods.length})
+                  </span>
+                )}
+              </label>
+              <select
+                value={podName}
+                onChange={(e) => setPodName(e.target.value)}
+                disabled={!namespace || podsQ.isLoading}
+                className={`${ic} font-mono text-xs`}
+              >
+                <option value="">— pod 선택 —</option>
+                {(podsQ.data?.pods ?? []).map((p) => (
+                  <option key={p.name} value={p.name}>
+                    {podOptionLabel(p)}
+                  </option>
+                ))}
+              </select>
+              {podsQ.isError && (
+                <p className="text-[11px] text-red-400 mt-1">
+                  {formatApiError(podsQ.error)}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* 선택된 Pod 요약 + 자동 채우기 버튼 */}
+          {selectedPod && (
+            <div className="flex items-center justify-between gap-3 flex-wrap pt-2 border-t border-border">
+              <div className="text-xs space-y-0.5">
+                <p className="font-mono text-foreground">
+                  {namespace}/<span className="text-primary">{selectedPod.name}</span>
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {selectedPod.phase} · ready {selectedPod.ready} · restart {selectedPod.restartCount}
+                  {selectedPod.node && ` · node ${selectedPod.node}`}
+                  {selectedPod.issueReason && (
+                    <span className="text-amber-500 ml-1">· {selectedPod.issueReason}</span>
+                  )}
+                </p>
               </div>
-              {events.length > 0 && (
+              <button
+                onClick={handleAutofill}
+                disabled={!canAutofill || fetchCtx.isPending}
+                title="kubectl logs / events / describe 를 자동으로 가져와 아래 입력란을 채웁니다."
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-lg disabled:opacity-50"
+              >
+                {fetchCtx.isPending
+                  ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />수집 중...</>
+                  : <><Download className="w-3.5 h-3.5" />로그/이벤트/Describe 자동 채우기</>}
+              </button>
+            </div>
+          )}
+
+          {fetchCtx.isError && (
+            <p className="text-[11px] text-red-400">
+              자동 수집 실패: {formatApiError(fetchCtx.error)}
+            </p>
+          )}
+          {autofilledFor && !autofillStale && fetchCtx.isSuccess && (
+            <p className="text-[11px] text-emerald-500 flex items-center gap-1">
+              <CheckCircle className="w-3 h-3" />
+              자동 수집 완료 — events {events.length}건, logs {currentLogs.length} 자.
+            </p>
+          )}
+          {autofillStale && (
+            <p className="text-[11px] text-amber-500 flex items-center gap-1">
+              <RefreshCw className="w-3 h-3" />
+              선택이 변경되었습니다. 다시 자동 채우기를 누르세요.
+            </p>
+          )}
+        </div>
+
+        {/* ── 입력 + 결과 ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          <div className="space-y-4">
+            <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                이벤트 ({events.length}건)
+              </p>
+              {events.length > 0 ? (
                 <div className="rounded-lg border border-border overflow-hidden">
                   <div className="grid grid-cols-[80px_70px_60px_1fr] gap-2 px-3 py-1.5 bg-secondary/50 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                     <span>Type</span><span>Reason</span><span className="text-center">Count</span><span>Message</span>
                   </div>
-                  {events.map((ev, i) => <EventRow key={i} event={ev} index={i} />)}
+                  {events.slice(0, 20).map((ev, i) => <EventRow key={i} event={ev} index={i} />)}
                 </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">
+                  자동 채우기를 누르거나, 아래에 직접 붙여넣으세요.
+                </p>
               )}
+              <div>
+                <label className={lc}>kubectl get events 출력 (선택, 직접 입력 시)</label>
+                <textarea
+                  value={rawEvents}
+                  onChange={(e) => { setRawEvents(e.target.value); setStructuredEvents([]); }}
+                  placeholder={'Warning  BackOff  3  Back-off restarting failed container'}
+                  rows={3}
+                  className={`${ic} font-mono text-xs resize-none`}
+                />
+              </div>
             </div>
 
             <div className="bg-card border border-border rounded-xl p-5 space-y-4">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">로그 / Describe</p>
               <div>
-                <label className={lc}>kubectl logs (현재 컨테이너)</label>
+                <label className={lc}>현재 컨테이너 로그</label>
                 <textarea value={currentLogs} onChange={(e) => setLogs(e.target.value)}
-                  placeholder="Pod 로그를 붙여넣으세요..."
+                  placeholder="자동 채우기를 누르거나 직접 붙여넣으세요..."
                   rows={6} className={`${ic} font-mono text-xs resize-none`} />
+              </div>
+              <div>
+                <label className={lc}>이전 컨테이너 로그 (재시작 직전)</label>
+                <textarea value={previousLogs} onChange={(e) => setPreviousLogs(e.target.value)}
+                  placeholder="kubectl logs --previous 출력 (재시작이 있을 때만)"
+                  rows={4} className={`${ic} font-mono text-xs resize-none`} />
               </div>
               <div>
                 <label className={lc}>kubectl describe pod 출력</label>
@@ -232,16 +459,15 @@ export function IncidentAnalysisPage() {
 
             <button
               onClick={handleSubmit}
-              disabled={isPending || !podName.trim()}
+              disabled={analyzing || !podName.trim() || !namespace.trim()}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm font-semibold transition-colors disabled:opacity-60"
             >
-              {isPending
+              {analyzing
                 ? <><Loader2 className="w-4 h-4 animate-spin" />분석 중...</>
                 : <><Search className="w-4 h-4" />장애 분석 시작</>}
             </button>
           </div>
 
-          {/* 결과 패널 */}
           <div>
             {response?.result ? (
               <ResultPanel result={response.result} />
@@ -252,8 +478,8 @@ export function IncidentAnalysisPage() {
             ) : (
               <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-muted-foreground/50 rounded-xl border border-dashed border-border">
                 <Zap className="w-12 h-12 mb-3" />
-                <p className="text-sm">Pod 정보와 로그를 입력하고</p>
-                <p className="text-sm">분석을 시작하세요</p>
+                <p className="text-sm">클러스터 → namespace → pod 선택 후</p>
+                <p className="text-sm">자동 채우기 → 분석을 시작하세요</p>
               </div>
             )}
           </div>

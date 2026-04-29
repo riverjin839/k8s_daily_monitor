@@ -29,8 +29,10 @@ export function useTrendSources() {
 export function useTriggerCollect() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (targetDate?: string) =>
-      trendsApi.triggerCollect(targetDate).then((r) => r.data),
+    mutationFn: (vars?: { targetDate?: string; lookbackDays?: number }) =>
+      trendsApi
+        .triggerCollect(vars?.targetDate, vars?.lookbackDays)
+        .then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['trends'] });
     },

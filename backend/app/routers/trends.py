@@ -82,12 +82,18 @@ class ToggleSourceRequest(BaseModel):
 @router.post("/collect", response_model=TrendDigestOut)
 async def trigger_collect(
     target_date: Optional[date] = None,
+    lookback_days: int = 90,
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
 ):
-    """트렌드 수집 수동 트리거 (백그라운드 실행)"""
+    """트렌드 수집 수동 트리거 (백그라운드 실행).
+
+    ``lookback_days`` — 며칠 전까지의 릴리즈/블로그를 가져올지 (기본 90일).
+    """
+    if lookback_days < 1 or lookback_days > 365:
+        raise HTTPException(status_code=422, detail="lookback_days 는 1~365 사이여야 합니다")
     svc = TrendService(db)
-    digest = await svc.run_daily_collect(target_date)
+    digest = await svc.run_daily_collect(target_date, lookback_days=lookback_days)
     return _digest_out(digest)
 
 

@@ -566,6 +566,34 @@ export const playbooksApi = {
     }),
 };
 
+// Ansible Playbook 파일 / Inventory — DB 자체 관리 (path 입력 대체)
+export const ansibleAssetsApi = {
+  // Playbook YAML files (공용 — 클러스터 무관)
+  listFiles: () =>
+    api.get<import('@/types').AnsiblePlaybookFile[]>('/playbook-files'),
+  getFile: (id: string) =>
+    api.get<import('@/types').AnsiblePlaybookFile>(`/playbook-files/${id}`),
+  createFile: (data: { name: string; description?: string; content: string; tags?: string }) =>
+    api.post<import('@/types').AnsiblePlaybookFile>('/playbook-files', data),
+  updateFile: (id: string, data: Partial<{ name: string; description: string; content: string; tags: string }>) =>
+    api.put<import('@/types').AnsiblePlaybookFile>(`/playbook-files/${id}`, data),
+  deleteFile: (id: string) => api.delete(`/playbook-files/${id}`),
+
+  // Inventories (per-cluster, multiple)
+  listInventories: (clusterId?: string) =>
+    api.get<import('@/types').AnsibleInventory[]>('/playbook-inventories', {
+      params: clusterId ? { cluster_id: clusterId } : {},
+    }),
+  getInventory: (id: string) =>
+    api.get<import('@/types').AnsibleInventory>(`/playbook-inventories/${id}`),
+  createInventory: (data: {
+    clusterId: string; name: string; description?: string; content: string; isDefault?: boolean;
+  }) => api.post<import('@/types').AnsibleInventory>('/playbook-inventories', data),
+  updateInventory: (id: string, data: Partial<{ name: string; description: string; content: string; isDefault: boolean }>) =>
+    api.put<import('@/types').AnsibleInventory>(`/playbook-inventories/${id}`, data),
+  deleteInventory: (id: string) => api.delete(`/playbook-inventories/${id}`),
+};
+
 // Agent API (AI Mode — fail-safe)
 export const agentApi = {
   chat: (data: AgentChatRequest) =>

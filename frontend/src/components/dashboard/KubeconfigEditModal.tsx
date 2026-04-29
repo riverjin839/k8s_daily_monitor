@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, AlertTriangle, Loader2, Upload, Save, Eye, EyeOff } from 'lucide-react';
 import { useKubeconfig, useUpdateKubeconfig } from '@/hooks/useCluster';
+import { formatApiError } from '@/lib/utils';
 
 interface KubeconfigEditModalProps {
   clusterId: string;
@@ -10,11 +11,7 @@ interface KubeconfigEditModalProps {
 }
 
 function extractApiError(err: unknown): string {
-  if (!err) return '알 수 없는 오류가 발생했습니다.';
-  const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
-  if (axiosErr.response?.data?.detail) return axiosErr.response.data.detail;
-  if (axiosErr.message) return axiosErr.message;
-  return String(err);
+  return formatApiError(err, '알 수 없는 오류가 발생했습니다.');
 }
 
 export function KubeconfigEditModal({

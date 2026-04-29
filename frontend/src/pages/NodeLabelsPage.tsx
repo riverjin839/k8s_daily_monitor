@@ -4,14 +4,10 @@ import { useClusters } from '@/hooks/useCluster';
 import { useNodeList, usePatchNodeLabels, NodeInfo } from '@/hooks/useNodeLabels';
 import { NodeLabelEditorModal, NodeLabelsTable } from '@/components/node-labels';
 import { ClusterSidebar } from '@/components/common';
+import { formatApiError } from '@/lib/utils';
 
 function extractErrorMessage(error: unknown): string {
-  if (!error) return '알 수 없는 오류가 발생했습니다.';
-  // axios error
-  const axiosErr = error as { response?: { data?: { detail?: string } }; message?: string };
-  if (axiosErr.response?.data?.detail) return axiosErr.response.data.detail;
-  if (axiosErr.message) return axiosErr.message;
-  return String(error);
+  return formatApiError(error, '알 수 없는 오류가 발생했습니다.');
 }
 
 export function NodeLabelsPage() {

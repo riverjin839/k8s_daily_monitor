@@ -38,19 +38,24 @@
           }}
       when: false   # selectattr+regex 로 깔끔하게 안 풀려 jinja 한 번 더 돌림
 
-    - name: critical / warning 분류
-      vars:
+    # Ansible 의 task-level `vars` 는 매 루프 iteration 마다 다시 적용되어
+    # 같은 이름의 fact 를 가리므로 set_fact 누적이 무력화된다 (마지막 iteration 만 살아남음).
+    # 별도 init task 로 빈 리스트를 깐 뒤 default([]) 로 안전하게 누적.
+    - name: 분류 버킷 초기화
+      set_fact:
         crit_partitions: []
         warn_partitions: []
+
+    - name: critical / warning 분류
       set_fact:
         crit_partitions: >-
           {{
-            crit_partitions
+            (crit_partitions | default([]))
             + ([item] if (item[3] | regex_replace('%','') | int) >= (crit_pct | int) else [])
           }}
         warn_partitions: >-
           {{
-            warn_partitions
+            (warn_partitions | default([]))
             + ([item] if (
                 ((item[3] | regex_replace('%','') | int) >= (warn_pct | int)) and
                 ((item[3] | regex_replace('%','') | int) < (crit_pct | int))

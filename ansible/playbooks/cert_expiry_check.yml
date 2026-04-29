@@ -59,15 +59,20 @@
             | list
           }}
 
-    - name: critical / warning 분류
-      vars:
+    # Ansible 의 task-level `vars` 는 매 루프 iteration 마다 다시 적용되므로
+    # 같은 이름의 fact 를 가린다 → set_fact 의 누적이 무력화된다.
+    # 그래서 vars 를 쓰지 않고 별도 init task 로 빈 리스트를 깐 뒤 default([]) 로 안전하게 누적.
+    - name: 분류 버킷 초기화
+      set_fact:
         crit_certs: []
         warn_certs: []
+
+    - name: critical / warning 분류
       set_fact:
         crit_certs: >-
-          {{ crit_certs + ([item] if (item[1] | int) <= (crit_days | int) else []) }}
+          {{ (crit_certs | default([])) + ([item] if (item[1] | int) <= (crit_days | int) else []) }}
         warn_certs: >-
-          {{ warn_certs + ([item] if ((item[1] | int) > (crit_days | int) and (item[1] | int) <= (warn_days | int)) else []) }}
+          {{ (warn_certs | default([])) + ([item] if ((item[1] | int) > (crit_days | int) and (item[1] | int) <= (warn_days | int)) else []) }}
       loop: "{{ certs }}"
 
     - name: 점검 요약

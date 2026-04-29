@@ -8,7 +8,7 @@ from kubernetes import client as k8s_client, config as k8s_config
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Cluster, Playbook
+from app.models import AnsibleInventory, AnsiblePlaybookFile, Cluster, Playbook
 from app.schemas.playbook import (
     PlaybookCreate,
     PlaybookUpdate,
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/playbooks", tags=["playbooks"])
 def _cluster_node_hosts(cluster: Cluster) -> list[str]:
     """클러스터의 모든 노드 InternalIP (없으면 노드명) 를 반환.
 
-    Playbook 실행 시 inventory_path 가 비어있으면 이 결과로 동적 inventory 가 생성된다.
+    Playbook 실행 시 inventory 가 비어있으면 이 결과로 동적 inventory 가 생성된다.
     실패하면 빈 리스트를 반환 (호출자가 fallback 로직을 결정).
     """
     kc = ensure_kubeconfig_file(cluster)
@@ -50,6 +50,30 @@ def _cluster_node_hosts(cluster: Cluster) -> list[str]:
         hosts.append(internal_ip or n.metadata.name)
     return hosts
 
+
+def _serialize(pb: Playbook) -> dict:
+    """Playbook → dict (FK joined name 포함). PlaybookResponse 와 호환."""
+    return {
+        "id": pb.id,
+        "cluster_id": pb.cluster_id,
+        "name": pb.name,
+        "description": pb.description,
+        "playbook_file_id": pb.playbook_file_id,
+        "inventory_id": pb.inventory_id,
+        "playbook_path": pb.playbook_path,
+        "inventory_path": pb.inventory_path,
+        "extra_vars": pb.extra_vars,
+        "tags": pb.tags,
+        "status": pb.status,
+        "show_on_dashboard": pb.show_on_dashboard,
+        "last_run_at": pb.last_run_at,
+        "last_result": pb.last_result,
+        "created_at": pb.created_at,
+        "updated_at": pb.updated_at,
+        "playbook_file_name": pb.playbook_file.name if pb.playbook_file else None,
+        "inventory_name": pb.inventory.name if pb.inventory else None,
+    }
+
 STATUS_LABEL = {
     "healthy": "OK",
     "warning": "Changed",
@@ -69,7 +93,7 @@ def list_playbooks(
     if cluster_id:
         query = query.filter(Playbook.cluster_id == cluster_id)
     playbooks = query.order_by(Playbook.created_at.desc()).all()
-    return PlaybookListResponse(data=playbooks)
+    return PlaybookListResponse(data=[_serialize(p) for p in playbooks])
 
 
 @router.get("/report")
@@ -161,7 +185,7 @@ def get_dashboard_playbooks(cluster_id: UUID, db: Session = Depends(get_db)):
         .order_by(Playbook.name)
         .all()
     )
-    return PlaybookListResponse(data=playbooks)
+    return PlaybookListResponse(data=[_serialize(p) for p in playbooks])
 
 
 @router.patch("/{playbook_id}/dashboard", response_model=PlaybookResponse)
@@ -174,7 +198,7 @@ def toggle_dashboard(playbook_id: UUID, db: Session = Depends(get_db)):
     playbook.show_on_dashboard = not playbook.show_on_dashboard
     db.commit()
     db.refresh(playbook)
-    return playbook
+    return _serialize(playbook)
 
 
 @router.get("/{playbook_id}", response_model=PlaybookResponse)
@@ -183,18 +207,37 @@ def get_playbook(playbook_id: UUID, db: Session = Depends(get_db)):
     playbook = db.query(Playbook).filter(Playbook.id == playbook_id).first()
     if not playbook:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playbook not found")
-    return playbook
+    return _serialize(playbook)
+
+
+def _validate_assets(payload, db: Session, current_cluster_id: UUID | None = None):
+    """playbook_file_id / inventory_id 무결성 검증."""
+    if payload.playbook_file_id:
+        if not db.query(AnsiblePlaybookFile).filter(
+            AnsiblePlaybookFile.id == payload.playbook_file_id,
+        ).first():
+            raise HTTPException(status_code=422, detail="playbook_file_id 가 유효하지 않습니다.")
+    if payload.inventory_id:
+        inv = db.query(AnsibleInventory).filter(
+            AnsibleInventory.id == payload.inventory_id,
+        ).first()
+        if not inv:
+            raise HTTPException(status_code=422, detail="inventory_id 가 유효하지 않습니다.")
+        target_cluster = current_cluster_id or getattr(payload, "cluster_id", None)
+        if target_cluster and inv.cluster_id != target_cluster:
+            raise HTTPException(
+                status_code=422,
+                detail="inventory 가 이 cluster 에 속하지 않습니다.",
+            )
 
 
 @router.post("", response_model=PlaybookResponse, status_code=status.HTTP_201_CREATED)
 def create_playbook(payload: PlaybookCreate, db: Session = Depends(get_db)):
     """새 Playbook 등록"""
-    # 클러스터 존재 확인
     cluster = db.query(Cluster).filter(Cluster.id == payload.cluster_id).first()
     if not cluster:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
 
-    # 중복 체크 (같은 클러스터에 같은 이름)
     existing = (
         db.query(Playbook)
         .filter(Playbook.cluster_id == payload.cluster_id, Playbook.name == payload.name)
@@ -206,11 +249,12 @@ def create_playbook(payload: PlaybookCreate, db: Session = Depends(get_db)):
             detail=f"Playbook '{payload.name}' already exists for this cluster",
         )
 
+    _validate_assets(payload, db)
     playbook = Playbook(**payload.model_dump())
     db.add(playbook)
     db.commit()
     db.refresh(playbook)
-    return playbook
+    return _serialize(playbook)
 
 
 @router.put("/{playbook_id}", response_model=PlaybookResponse)
@@ -220,12 +264,13 @@ def update_playbook(playbook_id: UUID, payload: PlaybookUpdate, db: Session = De
     if not playbook:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playbook not found")
 
+    _validate_assets(payload, db, current_cluster_id=playbook.cluster_id)
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(playbook, key, value)
 
     db.commit()
     db.refresh(playbook)
-    return playbook
+    return _serialize(playbook)
 
 
 @router.delete("/{playbook_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -251,16 +296,21 @@ def run_playbook_endpoint(playbook_id: UUID, db: Session = Depends(get_db)):
     playbook.status = "running"
     db.commit()
 
-    # inventory 가 명시되지 않았으면 K8s API 로 클러스터의 모든 노드를 inventory 로 사용.
-    # 사용자 기대치: "inventory 지정 안하면 = k8s 전체 노드 수행".
+    # 실행 시 inventory 우선순위:
+    #   1) DB 관리형 Inventory  (playbook.inventory.content)
+    #   2) inventory_path        (구 호환 — 실행 호스트의 ini 파일 경로)
+    #   3) K8s 전체 노드          (위 둘 다 없을 때 cluster 의 노드 IP 로 동적 생성)
+    pb_content = playbook.playbook_file.content if playbook.playbook_file else None
+    inv_content = playbook.inventory.content if playbook.inventory else None
     inventory_hosts: list[str] | None = None
-    if not playbook.inventory_path:
+    if not inv_content and not playbook.inventory_path:
         inventory_hosts = _cluster_node_hosts(playbook.cluster) or None
 
-    # 실행
     result = run_playbook(
         playbook_path=playbook.playbook_path,
         inventory_path=playbook.inventory_path,
+        playbook_content=pb_content,
+        inventory_content=inv_content,
         extra_vars=playbook.extra_vars,
         tags=playbook.tags,
         inventory_hosts=inventory_hosts,

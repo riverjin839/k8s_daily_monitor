@@ -634,7 +634,11 @@ async def collect_kernel_params(
         ])
         cmd = cmds
     else:
-        grep_expr = "|".join(re.escape(p) + r"\\." for p in payload.default_prefixes if "." not in p)
+        # 주의: 여기서 '\\.' (Python raw 두 글자) 를 쓰면 bash 에서 grep -E 가
+        # "백슬래시 + 임의 문자" 를 찾게 되어 sysctl 출력 (`vm.swappiness=60`)에
+        # 단 한 줄도 매칭되지 않음 → 수집된 정보가 비어보이는 원인.
+        # ERE 에서 literal dot 은 '\.' 한 글자만 필요하다.
+        grep_expr = "|".join(re.escape(p) + r"\." for p in payload.default_prefixes if "." not in p)
         exact_expr = "|".join(re.escape(p) for p in payload.default_prefixes if "." in p)
         parts = [e for e in (grep_expr, exact_expr) if e]
         regex = "|".join(parts) if parts else "."

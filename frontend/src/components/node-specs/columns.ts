@@ -34,53 +34,52 @@ export const NODE_SPEC_COLUMNS: NodeSpecColumn[] = [
   { field: 'role',              csvKey: 'role',              label: '역할',            type: 'string', aliases: ['역할'],              editable: true },
   { field: 'status',            csvKey: 'status',            label: '상태',            type: 'string', aliases: ['상태'],              editable: true },
 
-  { field: 'internalIp',        csvKey: 'internal_ip',       label: '내부 IP',         type: 'string', aliases: ['ip', '내부ip'],      editable: true },
-  { field: 'externalIp',        csvKey: 'external_ip',       label: '외부 IP',         type: 'string', aliases: ['외부ip'],            editable: true },
-  { field: 'bmcIp',             csvKey: 'bmc_ip',            label: 'BMC IP',          type: 'string', aliases: ['idrac', 'ilo', 'bmc'], editable: true },
-  { field: 'bond0Ip',           csvKey: 'bond0_ip',          label: 'bond0 IP',        type: 'string',                                editable: true },
+  // 네트워크 — 사용자 요청: bond0 = public IP, bond1 = private IP 로 명명.
+  { field: 'bond0Ip',           csvKey: 'public_ip',         label: 'public IP (bond0)', type: 'string', aliases: ['bond0_ip', 'public', 'publicip', 'bond0'], editable: true },
+  { field: 'bond1Ip',           csvKey: 'private_ip',        label: 'private IP (bond1)', type: 'string', aliases: ['bond1_ip', 'private', 'privateip', 'bond1'], editable: true },
   { field: 'bond0Mac',          csvKey: 'bond0_mac',         label: 'bond0 MAC',       type: 'string',                                editable: true },
   { field: 'bond0Speed',        csvKey: 'bond0_speed',       label: 'bond0 속도',      type: 'string',                                editable: true },
-  { field: 'bond1Ip',           csvKey: 'bond1_ip',          label: 'bond1 IP',        type: 'string',                                editable: true },
   { field: 'bond1Mac',          csvKey: 'bond1_mac',         label: 'bond1 MAC',       type: 'string',                                editable: true },
   { field: 'bond1Speed',        csvKey: 'bond1_speed',       label: 'bond1 속도',      type: 'string',                                editable: true },
+  // 호환을 위해 internal/external/bmc 는 alias 만 받음 (대시보드 표시 X). 기존 CSV 도 무시되지 않도록.
+  { field: 'internalIp',        csvKey: 'internal_ip',       label: '내부 IP',         type: 'string', aliases: ['ip', '내부ip'],      editable: true },
+  { field: 'externalIp',        csvKey: 'external_ip',       label: '외부 IP',         type: 'string', aliases: ['외부ip'],            editable: true },
 
-  { field: 'vendor',            csvKey: 'vendor',            label: 'Vendor',          type: 'string', aliases: ['제조사'],            editable: true },
-  { field: 'model',             csvKey: 'model',             label: 'Model',           type: 'string', aliases: ['모델'],              editable: true },
-  { field: 'serialNumber',      csvKey: 'serial_number',     label: '시리얼',          type: 'string', aliases: ['serial', '시리얼'],   editable: true },
+  // CPU
   { field: 'cpuModel',          csvKey: 'cpu_model',         label: 'CPU 모델',         type: 'string', aliases: ['cpu모델'],           editable: true },
   { field: 'cpuSockets',        csvKey: 'cpu_sockets',       label: 'CPU 소켓',         type: 'number', aliases: ['sockets', '소켓'],   editable: true },
   { field: 'cpuCores',          csvKey: 'cpu_cores',         label: 'CPU 코어',         type: 'number', aliases: ['cores', '코어'],     editable: true },
   { field: 'cpuThreads',        csvKey: 'cpu_threads',       label: 'CPU 스레드',        type: 'number', aliases: ['threads', '스레드'], editable: true },
-  { field: 'memoryGb',          csvKey: 'memory_gb',         label: '메모리(GB)',       type: 'number', aliases: ['memory', 'ram_gb', '메모리'], editable: true },
+  // RAM
+  { field: 'memoryGb',          csvKey: 'memory_gb',         label: '메모리(GB)',       type: 'number', aliases: ['memory', 'ram_gb', '메모리', 'ram'], editable: true },
   { field: 'memoryModules',     csvKey: 'memory_modules',    label: '메모리 모듈',       type: 'string',                                editable: true },
 
+  // DISK (GPU 항목 제거)
   { field: 'diskTotalGb',       csvKey: 'disk_total_gb',     label: 'DISK 총용량(GB)',  type: 'number', aliases: ['disk_total', 'disk', 'disk총용량', '디스크'], editable: true },
-  { field: 'diskType',          csvKey: 'disk_type',         label: '디스크 종류',       type: 'string',                                editable: true },
+  { field: 'nonOsDiskGb',       csvKey: 'non_os_disk_gb',    label: 'OS제외 DISK(GB)',  type: 'number', aliases: ['data_disk_gb', 'os제외디스크', 'data디스크'], editable: true },
+  { field: 'diskType',          csvKey: 'disk_type',         label: '디스크 종류',       type: 'string', aliases: ['디스크종류'],         editable: true },
   { field: 'diskCount',         csvKey: 'disk_count',        label: '디스크 개수',       type: 'number',                                editable: true },
   { field: 'raidConfig',        csvKey: 'raid_config',       label: 'RAID',            type: 'string', aliases: ['raid'],              editable: true },
-  { field: 'gpuModel',          csvKey: 'gpu_model',         label: 'GPU 모델',         type: 'string', aliases: ['gpu'],              editable: true },
-  { field: 'gpuCount',          csvKey: 'gpu_count',         label: 'GPU 개수',         type: 'number',                                editable: true },
 
+  // 분류
   { field: 'isSsd',             csvKey: 'ssd',               label: 'SSD',             type: 'boolean', aliases: ['is_ssd'],           editable: true },
   { field: 'isVm',              csvKey: 'vm',                label: 'VM',              type: 'boolean', aliases: ['is_vm'],            editable: true },
 
+  // 위치
   { field: 'datacenter',        csvKey: 'datacenter',        label: '데이터센터',       type: 'string', aliases: ['dc'],               editable: true },
   { field: 'room',              csvKey: 'room',              label: 'Room',            type: 'string',                                editable: true },
   { field: 'rack',              csvKey: 'rack',              label: 'Rack',            type: 'string', aliases: ['랙'],               editable: true },
   { field: 'rackUnit',          csvKey: 'rack_unit',         label: 'U',               type: 'string', aliases: ['u'],                editable: true },
 
+  // OS / 런타임
   { field: 'osImage',           csvKey: 'os',                label: 'OS',              type: 'string', aliases: ['os_image', 'os이미지'], editable: true },
   { field: 'kernelVersion',     csvKey: 'kernel',            label: 'Kernel',          type: 'string', aliases: ['kernel_version'],    editable: true },
   { field: 'kubeletVersion',    csvKey: 'kubelet',           label: 'Kubelet',         type: 'string', aliases: ['kubelet_version'],   editable: true },
   { field: 'containerRuntime',  csvKey: 'runtime',           label: 'Runtime',         type: 'string', aliases: ['container_runtime'], editable: true },
 
-  { field: 'assetTag',          csvKey: 'asset_tag',         label: '자산태그',         type: 'string', aliases: ['자산태그'],          editable: true },
-  { field: 'purchaseDate',      csvKey: 'purchase_date',     label: '구매일',           type: 'date',   aliases: ['구매일'],            editable: true },
-  { field: 'warrantyEnd',       csvKey: 'warranty_end',      label: '보증종료',         type: 'date',   aliases: ['보증종료'],          editable: true },
-  { field: 'owner',             csvKey: 'owner',             label: '담당자',           type: 'string', aliases: ['담당자'],            editable: true },
+  // 운영 메모 — 자산/계약 항목(asset_tag/purchase_date/warranty_end/owner/purchase_purpose) 은 사용자 요청으로 제거.
+  // currentUsage 는 운영적 의미(이 노드의 용도) 라 유지.
   { field: 'currentUsage',      csvKey: 'current_usage',     label: '현재 용도',        type: 'string', aliases: ['용도', '현재용도'],   editable: true },
-  { field: 'purchasePurpose',   csvKey: 'purchase_purpose',  label: '구입 목적',        type: 'string', aliases: ['목적', '구입목적'],   editable: true },
-
   { field: 'description',       csvKey: 'description',       label: '메모',            type: 'string', aliases: ['설명', '비고'],       editable: true },
 ];
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ClipboardCheck, Plus, Search, RefreshCw, Download, Upload, Trash2, Pencil,
-  Server, Cpu, HardDrive, MapPin, Square, Copy, ClipboardPaste, FileDown,
+  Server, Cpu, HardDrive, MapPin, Square, Copy, ClipboardPaste, FileDown, Terminal,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import {
@@ -126,6 +126,13 @@ export function NodeSpecPage() {
   const [confirmDelete, setConfirmDelete] = useState<NodeServerSpec | null>(null);
   const [csvOpen, setCsvOpen] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
+  const [hostFactsOpen, setHostFactsOpen] = useState(false);
+  const [collectingFacts, setCollectingFacts] = useState(false);
+  const [sshUser, setSshUser] = useState('root');
+  const [sshPassword, setSshPassword] = useState('');
+  const [sshPrivateKey, setSshPrivateKey] = useState('');
+  const [hostList, setHostList] = useState('');
+  const [useSudo, setUseSudo] = useState(false);
 
   const listQ = useQuery({
     queryKey: ['node-specs', clusterId, statusFilter, roleFilter, search],
@@ -275,6 +282,38 @@ export function NodeSpecPage() {
     }
   };
 
+  const handleCollectHostFacts = async () => {
+    if (!clusterId) return;
+    const hosts = hostList.split(/[\n,\s]+/).map((h) => h.trim()).filter(Boolean);
+    if (hosts.length === 0) {
+      toast.warning('호스트 목록 필요', 'IP/hostname 을 1개 이상 입력하세요.');
+      return;
+    }
+    if (!sshPassword && !sshPrivateKey.trim()) {
+      toast.warning('인증정보 필요', 'password 또는 private key 중 하나는 필수입니다.');
+      return;
+    }
+    setCollectingFacts(true);
+    try {
+      const res = await nodeSpecsApi.collectHostFacts(clusterId, {
+        hosts,
+        username: sshUser || 'root',
+        password: sshPassword || undefined,
+        privateKey: sshPrivateKey.trim() || undefined,
+        useSudo,
+        upsert: true,
+      });
+      qc.invalidateQueries({ queryKey: ['node-specs'] });
+      toast.success('Host Facts 수집 완료', `신규 ${res.data.inserted} · 업데이트 ${res.data.updated} · 스킵 ${res.data.skipped}`);
+      if (res.data.errors.length > 0) toast.warning('일부 오류', `${res.data.errors.length}건`);
+      setHostFactsOpen(false);
+    } catch (e: unknown) {
+      toast.error('Host Facts 수집 실패', formatApiError(e));
+    } finally {
+      setCollectingFacts(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <main className="max-w-[1800px] mx-auto px-4 py-3 flex gap-3">
@@ -315,6 +354,12 @@ export function NodeSpecPage() {
                 title="엑셀/구글시트에서 복사한 블록 붙여넣기">
                 <ClipboardPaste className="w-3 h-3" /> 엑셀 붙여넣기
               </button>
+              {clusterId && (
+                <button onClick={() => setHostFactsOpen(true)}
+                  className="px-2.5 py-1 text-xs font-medium bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-500 border border-indigo-500/30 rounded-lg flex items-center gap-1">
+                  <Terminal className="w-3 h-3" /> Host Facts 수집
+                </button>
+              )}
               {clusterId && (
                 importMut.isPending ? (
                   <button onClick={importMut.abort}
@@ -669,6 +714,31 @@ export function NodeSpecPage() {
         displayColumns={NODE_SPEC_COLUMNS}
         initialText={pasteInitialText}
       />
+
+      {hostFactsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => !collectingFacts && setHostFactsOpen(false)} />
+          <div className="relative w-full max-w-2xl bg-card border border-border rounded-xl p-5 shadow-2xl">
+            <h3 className="text-base font-semibold mb-3">Host Facts 수집 (bond/disk/vm)</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <input value={sshUser} onChange={(e) => setSshUser(e.target.value)} placeholder="SSH user (root)" className="px-3 py-2 text-sm bg-background border border-border rounded-lg" />
+              <input type="password" value={sshPassword} onChange={(e) => setSshPassword(e.target.value)} placeholder="SSH password (선택)" className="px-3 py-2 text-sm bg-background border border-border rounded-lg" />
+            </div>
+            <textarea value={sshPrivateKey} onChange={(e) => setSshPrivateKey(e.target.value)} placeholder="Private Key (선택, PEM)" className="mt-3 w-full h-24 px-3 py-2 text-xs font-mono bg-background border border-border rounded-lg" />
+            <textarea value={hostList} onChange={(e) => setHostList(e.target.value)} placeholder={'호스트 목록 (공백/콤마/줄바꿈 구분)\n10.0.0.11\n10.0.0.12'} className="mt-3 w-full h-28 px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg" />
+            <label className="mt-2 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={useSudo} onChange={(e) => setUseSudo(e.target.checked)} />
+              sudo -n 사용
+            </label>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setHostFactsOpen(false)} disabled={collectingFacts} className="px-3 py-1.5 text-sm rounded-lg border border-border bg-secondary hover:bg-secondary/80">취소</button>
+              <button onClick={handleCollectHostFacts} disabled={collectingFacts} className="px-3 py-1.5 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90">
+                {collectingFacts ? '수집 중...' : '수집 실행'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

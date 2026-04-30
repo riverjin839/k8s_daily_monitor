@@ -355,7 +355,8 @@ def _run_migrations():
 
     # node_server_specs: 자산 대장 신규 필드
     if "node_server_specs" in inspector.get_table_names():
-        ns_cols = [col["name"] for col in inspector.get_columns("node_server_specs")]
+        ns_cols_info = inspector.get_columns("node_server_specs")
+        ns_cols = [col["name"] for col in ns_cols_info]
         for col_name, col_type in [
             ("is_ssd", "BOOLEAN"),
             ("is_vm", "BOOLEAN"),
@@ -365,6 +366,15 @@ def _run_migrations():
             if col_name not in ns_cols:
                 with engine.begin() as conn:
                     conn.execute(text(f"ALTER TABLE node_server_specs ADD COLUMN {col_name} {col_type}"))
+
+        # disk_type: VARCHAR(32) → VARCHAR(255) 로 확장 ("NVMe (nvme0n1, ...)" 같은 자동수집 문자열 수용)
+        for col in ns_cols_info:
+            if col["name"] == "disk_type":
+                col_len = getattr(col["type"], "length", None)
+                if col_len is not None and col_len < 255:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE node_server_specs ALTER COLUMN disk_type TYPE VARCHAR(255)"))
+                break
 
 
 def _seed_default_metric_cards():

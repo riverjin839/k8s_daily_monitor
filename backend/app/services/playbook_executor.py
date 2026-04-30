@@ -46,6 +46,24 @@ class PlaybookResult:
         self.raw_output = raw_output
 
 
+def _truncate(text: str, limit: int = 5000) -> str:
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}\n...<truncated {len(text) - limit} chars>"
+
+
+def _build_raw_output(stdout: str, stderr: str) -> str:
+    """stdout/stderr를 함께 저장해 장애 분석 시 단서를 잃지 않도록 한다."""
+    chunks: list[str] = []
+    if stdout:
+        chunks.append("=== STDOUT ===")
+        chunks.append(stdout)
+    if stderr:
+        chunks.append("=== STDERR ===")
+        chunks.append(stderr)
+    return _truncate("\n".join(chunks), limit=10000)
+
+
 @contextlib.contextmanager
 def _materialized(content: str | None, suffix: str):
     """주어진 content 를 임시 파일로 쓰고 경로를 yield. None 이면 None yield."""
@@ -194,6 +212,8 @@ def run_playbook(
 def _parse_result(result: subprocess.CompletedProcess, elapsed: int) -> PlaybookResult:
     """ansible JSON callback 출력을 파싱하여 상태를 결정합니다."""
     raw = result.stdout or ""
+    stderr = result.stderr or ""
+    combined_output = _build_raw_output(raw, stderr)
 
     # JSON 파싱 시도
     try:
@@ -205,13 +225,13 @@ def _parse_result(result: subprocess.CompletedProcess, elapsed: int) -> Playbook
                 status="healthy",
                 message="Playbook completed successfully (non-JSON output)",
                 duration_ms=elapsed,
-                raw_output=raw[:2000],
+                raw_output=combined_output,
             )
         return PlaybookResult(
             status="critical",
-            message=f"Playbook failed (rc={result.returncode}): {result.stderr[:500]}",
+            message=f"Playbook failed (rc={result.returncode}): {stderr[:500]}",
             duration_ms=elapsed,
-            raw_output=raw[:2000],
+            raw_output=combined_output,
         )
 
     # stats 파싱
@@ -224,7 +244,7 @@ def _parse_result(result: subprocess.CompletedProcess, elapsed: int) -> Playbook
             message="Playbook completed" if status == "healthy" else "Playbook failed",
             duration_ms=elapsed,
             stats=stats,
-            raw_output=raw[:2000],
+            raw_output=combined_output,
         )
 
     # 호스트별 통계 집계
@@ -256,13 +276,40 @@ def _parse_result(result: subprocess.CompletedProcess, elapsed: int) -> Playbook
             "skipped": skipped,
         }
 
+    # 실패/도달불가 태스크 요약 (JSON callback 이벤트 기반)
+    failed_tasks = []
+    unreachable_tasks = []
+    for play in data.get("plays", []):
+        play_name = play.get("play", {}).get("name") or "unnamed-play"
+        for task in play.get("tasks", []):
+            task_name = task.get("task", {}).get("name") or "unnamed-task"
+            for host, host_result in (task.get("hosts") or {}).items():
+                if host_result.get("failed") is True:
+                    failed_tasks.append({
+                        "play": play_name,
+                        "task": task_name,
+                        "host": host,
+                        "msg": host_result.get("msg") or host_result.get("stderr") or "task failed",
+                    })
+                if host_result.get("unreachable") is True:
+                    unreachable_tasks.append({
+                        "play": play_name,
+                        "task": task_name,
+                        "host": host,
+                        "msg": host_result.get("msg") or "host unreachable",
+                    })
+
     # 상태 결정
     if total_failures > 0:
         status = "critical"
-        message = f"Failed: {total_failures} task(s) failed across {len(stats)} host(s)"
+        first = failed_tasks[0] if failed_tasks else None
+        tail = f" First failure: [{first['host']}] {first['task']} ({first['play']}) - {first['msg'][:140]}" if first else ""
+        message = f"Failed: {total_failures} task(s) failed across {len(stats)} host(s).{tail}"
     elif total_unreachable > 0:
         status = "warning"
-        message = f"Warning: {total_unreachable} host(s) unreachable"
+        first = unreachable_tasks[0] if unreachable_tasks else None
+        tail = f" First unreachable: [{first['host']}] {first['task']} ({first['play']}) - {first['msg'][:140]}" if first else ""
+        message = f"Warning: {total_unreachable} host(s) unreachable.{tail}"
     elif total_changed > 0:
         status = "warning"
         message = f"Changed: {total_changed} task(s) changed across {len(stats)} host(s)"
@@ -280,6 +327,9 @@ def _parse_result(result: subprocess.CompletedProcess, elapsed: int) -> Playbook
             "skipped": total_skipped,
             "host_count": len(stats),
         },
+        "returncode": result.returncode,
+        "failed_tasks": failed_tasks[:20],
+        "unreachable_tasks": unreachable_tasks[:20],
     }
 
     return PlaybookResult(
@@ -287,5 +337,5 @@ def _parse_result(result: subprocess.CompletedProcess, elapsed: int) -> Playbook
         message=message,
         duration_ms=elapsed,
         stats=summary_stats,
-        raw_output=raw[:5000],
+        raw_output=combined_output,
     )

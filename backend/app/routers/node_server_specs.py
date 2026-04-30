@@ -5,6 +5,7 @@
 """
 from typing import Optional
 from uuid import UUID
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from kubernetes import client as k8s_client, config as k8s_config
@@ -144,6 +145,7 @@ _AUTOSYNC_FIELDS = {
     "os_image", "kernel_version", "kubelet_version", "container_runtime",
     "role",
     "disk_type", "is_ssd",
+    "is_vm", "bond0_ip", "bond0_mac", "bond1_ip", "bond1_mac",
 }
 
 
@@ -245,6 +247,61 @@ def _node_role(labels: dict) -> Optional[str]:
     return "worker"
 
 
+def _detect_vm(labels: dict) -> Optional[bool]:
+    """노드 라벨에서 VM 여부를 추정."""
+    vm_truthy = {"true", "1", "yes", "y"}
+    vm_falsy = {"false", "0", "no", "n"}
+    vm_keys = (
+        "node.kubernetes.io/instance-type",
+        "beta.kubernetes.io/instance-type",
+        "feature.node.kubernetes.io/system-product_name",
+    )
+    for key in vm_keys:
+        raw = labels.get(key)
+        if raw is None:
+            continue
+        v = str(raw).strip().lower()
+        if v in vm_truthy:
+            return True
+        if v in vm_falsy:
+            return False
+        if any(x in v for x in ("vm", "virtual", "kvm", "qemu", "openstack", "ec2", "gce", "azure", "hyper-v", "vsphere")):
+            return True
+    return None
+
+
+def _bond_info_from_cluster_node_ips(cluster: Cluster, hostname: str) -> dict[str, Optional[str]]:
+    """Cluster.node_ips(collect-node-nics 결과)에서 bond0/bond1 IP/MAC 추출."""
+    raw = cluster.node_ips
+    if not raw:
+        return {"bond0_ip": None, "bond0_mac": None, "bond1_ip": None, "bond1_mac": None}
+    try:
+        nodes = json.loads(raw)
+    except Exception:
+        return {"bond0_ip": None, "bond0_mac": None, "bond1_ip": None, "bond1_mac": None}
+    if not isinstance(nodes, list):
+        return {"bond0_ip": None, "bond0_mac": None, "bond1_ip": None, "bond1_mac": None}
+    target = next((n for n in nodes if isinstance(n, dict) and n.get("name") == hostname), None)
+    if not target:
+        return {"bond0_ip": None, "bond0_mac": None, "bond1_ip": None, "bond1_mac": None}
+    ifaces = target.get("interfaces") or []
+    if not isinstance(ifaces, list):
+        return {"bond0_ip": None, "bond0_mac": None, "bond1_ip": None, "bond1_mac": None}
+    out = {"bond0_ip": None, "bond0_mac": None, "bond1_ip": None, "bond1_mac": None}
+    for ifc in ifaces:
+        if not isinstance(ifc, dict):
+            continue
+        name = str(ifc.get("name") or "").lower()
+        ips = ifc.get("ips") or []
+        if name == "bond0":
+            out["bond0_ip"] = ips[0] if isinstance(ips, list) and ips else None
+            out["bond0_mac"] = ifc.get("mac")
+        elif name == "bond1":
+            out["bond1_ip"] = ips[0] if isinstance(ips, list) and ips else None
+            out["bond1_mac"] = ifc.get("mac")
+    return out
+
+
 @router.post("/import/{cluster_id}", response_model=NodeSpecImportResult)
 def import_from_cluster(
     cluster_id: UUID,
@@ -303,6 +360,8 @@ def import_from_cluster(
             memory_gb = _gi_to_gb(cap.get("memory") or alloc.get("memory") or "")
 
             disk_type, is_ssd_detected = _detect_disk_info(labels)
+            vm_detected = _detect_vm(labels)
+            bond_info = _bond_info_from_cluster_node_ips(cluster, host)
 
             collected = {
                 "node_name": host,
@@ -318,6 +377,11 @@ def import_from_cluster(
                 "container_runtime": getattr(ni, "container_runtime_version", None),
                 "disk_type": disk_type,
                 "is_ssd": is_ssd_detected,
+                "is_vm": vm_detected,
+                "bond0_ip": bond_info.get("bond0_ip"),
+                "bond0_mac": bond_info.get("bond0_mac"),
+                "bond1_ip": bond_info.get("bond1_ip"),
+                "bond1_mac": bond_info.get("bond1_mac"),
             }
             collected = {k: v for k, v in collected.items() if v is not None and v != ""}
 

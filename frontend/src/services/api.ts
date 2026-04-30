@@ -954,15 +954,19 @@ export const analyzeApi = {
     api.post<import('@/types').IncidentAnalysisResponse>('/analyze/incident', data),
   health: () =>
     api.get<import('@/types').AnalyzerHealthResponse>('/analyze/health'),
-  listNamespaces: (clusterId: string, onlyWithIssues = false) =>
+  listNamespaces: (clusterId: string, onlyWithIssues = false, withCounts = false) =>
     api.get<import('@/types').AnalyzeNamespacesResponse>(
       `/analyze/clusters/${clusterId}/namespaces`,
-      { params: { only_with_issues: onlyWithIssues } },
+      {
+        params: { only_with_issues: onlyWithIssues, with_counts: withCounts },
+        // 거대 클러스터에서 with_counts/only_with_issues 일 때만 무거우므로 그 경우만 긴 타임아웃.
+        timeout: (onlyWithIssues || withCounts) ? 150_000 : 30_000,
+      },
     ),
   listPods: (clusterId: string, namespace: string, onlyWithIssues = false) =>
     api.get<import('@/types').AnalyzePodsResponse>(
       `/analyze/clusters/${clusterId}/namespaces/${namespace}/pods`,
-      { params: { only_with_issues: onlyWithIssues } },
+      { params: { only_with_issues: onlyWithIssues }, timeout: 120_000 },
     ),
   fetchContext: (clusterId: string, namespace: string, podName: string, tailLines = 200) =>
     api.get<import('@/types').AnalyzeIncidentContext>(

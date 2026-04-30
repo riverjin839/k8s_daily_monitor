@@ -34,6 +34,12 @@ from app.services.kubeconfig import ensure_kubeconfig_file
 logger = logging.getLogger(__name__)
 
 _K8S_TIMEOUT = 15
+# 큰 클러스터(수천 namespace · 수만 pod) 대비 — 무거운 list 호출은 별도 타임아웃.
+_K8S_NS_LIST_TIMEOUT = 30
+_K8S_POD_LIST_TIMEOUT = 90
+# K8s API 페이지네이션 한 번에 가져올 항목 수.
+_K8S_LIST_PAGE = 500
+_K8S_POD_LIST_PAGE = 1000
 
 router = APIRouter(prefix="/analyze", tags=["analyze"])
 
@@ -228,39 +234,79 @@ class PodsResponse(BaseModel):
 def list_namespaces(
     cluster_id: UUID,
     only_with_issues: bool = False,
+    with_counts: bool = False,
     db: Session = Depends(get_db),
 ):
-    """장애 분석 UI 의 namespace 드롭다운용 — 각 ns 의 pod 수 + 비정상 여부 표시.
+    """장애 분석 UI 의 namespace 드롭다운용.
 
-    ``only_with_issues=true`` 면 비정상 pod 가 1개라도 있는 ns 만 반환.
+    **빠른 경로 (기본)**: pod 목록을 가져오지 않고 ns 이름만 반환 → 거대 클러스터에서도
+    즉시 응답. ``pod_count`` / ``has_unhealthy`` 는 모두 None / False.
+
+    **느린 경로 (opt-in)**:
+      - ``only_with_issues=true`` → 비정상 pod 가 있는 ns 만 (필터)
+      - ``with_counts=true``      → 각 ns 의 pod 수 + 이상 여부 표기
+    둘 중 하나라도 켜지면 ``list_pod_for_all_namespaces`` 를 페이지네이션으로
+    스트리밍하면서 불필요한 본문(annotations 등)을 무시한다.
+
+    namespace 자체도 페이지네이션(_continue) 으로 가져와 ns 가 1만개여도 견딘다.
     """
     cluster = _require_cluster(cluster_id, db)
     v1 = _get_core_v1(cluster)
 
+    # 1) namespace 페이지네이션 fetch
     try:
-        ns_list = v1.list_namespace(_request_timeout=_K8S_TIMEOUT)
+        ns_items = []
+        token: str | None = None
+        # 안전 상한 — ns 가 5만개 같은 비현실적인 케이스 방어.
+        for _ in range(200):
+            kwargs: dict = {"_request_timeout": _K8S_NS_LIST_TIMEOUT, "limit": _K8S_LIST_PAGE}
+            if token:
+                kwargs["_continue"] = token
+            page = v1.list_namespace(**kwargs)
+            ns_items.extend(page.items)
+            token = (page.metadata._continue or None) if page.metadata else None
+            if not token:
+                break
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"namespace 조회 실패: {str(e)[:200]}") from e
+        # 타임아웃이면 504, 그 외는 502.
+        msg = str(e)[:200]
+        is_timeout = "timeout" in msg.lower() or "timed out" in msg.lower()
+        raise HTTPException(
+            status_code=504 if is_timeout else 502,
+            detail=f"namespace 조회 실패: {msg}",
+        ) from e
 
-    # pod 카운트 + unhealthy 여부 — 한 번에 가져오기 (300 노드 환경에선 무겁지만 ns 단위)
     counts: dict[str, int] = {}
     unhealthy: dict[str, bool] = {}
-    try:
-        all_pods = v1.list_pod_for_all_namespaces(_request_timeout=_K8S_TIMEOUT * 3)
-        for p in all_pods.items:
-            ns = p.metadata.namespace
-            counts[ns] = counts.get(ns, 0) + 1
-            if _is_pod_unhealthy(p):
-                unhealthy[ns] = True
-    except Exception as e:
-        logger.warning("pod 카운트 실패 (namespaces 응답에 카운트 없이 반환): %s", e)
+
+    # 2) pod fetch — 사용자가 명시적으로 요구할 때만.
+    if only_with_issues or with_counts:
+        try:
+            pod_token: str | None = None
+            for _ in range(200):
+                kwargs = {"_request_timeout": _K8S_POD_LIST_TIMEOUT, "limit": _K8S_POD_LIST_PAGE}
+                if pod_token:
+                    kwargs["_continue"] = pod_token
+                page = v1.list_pod_for_all_namespaces(**kwargs)
+                for p in page.items:
+                    ns = p.metadata.namespace
+                    if with_counts:
+                        counts[ns] = counts.get(ns, 0) + 1
+                    if _is_pod_unhealthy(p):
+                        unhealthy[ns] = True
+                pod_token = (page.metadata._continue or None) if page.metadata else None
+                if not pod_token:
+                    break
+        except Exception as e:
+            # pod 조회 실패는 경고만 — namespace 리스트 자체는 반환.
+            logger.warning("pod list 실패 (counts/unhealthy 미반영): %s", str(e)[:200])
 
     items: list[NamespaceItem] = []
-    for ns in ns_list.items:
+    for ns in ns_items:
         name = ns.metadata.name
         item = NamespaceItem(
             name=name,
-            pod_count=counts.get(name),
+            pod_count=counts.get(name) if with_counts else None,
             has_unhealthy=unhealthy.get(name, False),
         )
         if only_with_issues and not item.has_unhealthy:
@@ -286,10 +332,31 @@ def list_pods(
     cluster = _require_cluster(cluster_id, db)
     v1 = _get_core_v1(cluster)
 
+    # ns 안에 pod 가 수만 개일 수도 있으므로 페이지네이션 + 긴 타임아웃 사용.
     try:
-        pods = v1.list_namespaced_pod(namespace, _request_timeout=_K8S_TIMEOUT * 2)
+        pod_items = []
+        token: str | None = None
+        for _ in range(200):
+            kwargs: dict = {"_request_timeout": _K8S_POD_LIST_TIMEOUT, "limit": _K8S_POD_LIST_PAGE}
+            if token:
+                kwargs["_continue"] = token
+            page = v1.list_namespaced_pod(namespace, **kwargs)
+            pod_items.extend(page.items)
+            token = (page.metadata._continue or None) if page.metadata else None
+            if not token:
+                break
+
+        class _Bag:
+            pass
+        pods = _Bag()
+        pods.items = pod_items
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"pod 조회 실패: {str(e)[:200]}") from e
+        msg = str(e)[:200]
+        is_timeout = "timeout" in msg.lower() or "timed out" in msg.lower()
+        raise HTTPException(
+            status_code=504 if is_timeout else 502,
+            detail=f"pod 조회 실패: {msg}",
+        ) from e
 
     items: list[PodItem] = []
     now = datetime.utcnow()

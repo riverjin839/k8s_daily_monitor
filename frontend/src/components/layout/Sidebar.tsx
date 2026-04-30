@@ -213,7 +213,8 @@ export function Sidebar() {
           {NAV_GROUPS.map(({ id, label, paths }, groupIdx) => {
             const validPaths = paths.filter((p) => NAV_MAP[p]);
             if (validPaths.length === 0) return null;
-            const isCollapsed = !iconOnly && (collapsedGroups[id] ?? true);
+            const containsActive = validPaths.includes(location.pathname);
+            const isCollapsed = !iconOnly && !containsActive && (collapsedGroups[id] ?? true);
             return (
               <div key={id}>
                 {iconOnly

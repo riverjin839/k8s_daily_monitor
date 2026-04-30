@@ -188,28 +188,49 @@ export function IssueFormPage() {
   const labelClass = 'block text-sm font-medium mb-1';
 
   const submitting = createIssue.isPending || updateIssue.isPending;
+  const pageTitle = isEdit ? '이슈 수정' : '이슈 등록';
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1200px] mx-auto px-8 py-8">
-        {/* Page header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate('/issues')}
-              className="p-2 hover:bg-secondary rounded-lg transition-colors"
-              title="목록으로"
-            >
-              <ArrowLeft className="w-4 h-4" />
+      {/* 노션 스타일 sticky bar */}
+      <div className="sticky top-0 z-10 bg-background/85 backdrop-blur-md border-b border-border">
+        <div className="max-w-[1400px] mx-auto px-8 py-2.5 flex items-center gap-2">
+          <button
+            onClick={() => navigate('/issues')}
+            className="p-1.5 hover:bg-secondary rounded-lg transition-colors text-muted-foreground hover:text-foreground"
+            title="목록으로"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <ClipboardList className="w-4 h-4 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">{pageTitle}</span>
+          <div className="ml-auto flex items-center gap-2">
+            <button type="button" onClick={() => navigate('/issues')}
+              className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg">
+              취소
             </button>
-            <ClipboardList className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">{isEdit ? '이슈 수정' : '이슈 등록'}</h1>
+            <button type="submit" form="issue-form" disabled={submitting}
+              className="px-4 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg disabled:opacity-50">
+              {submitting ? '저장 중…' : isEdit ? '저장' : '등록'}
+            </button>
           </div>
+        </div>
+      </div>
+
+      <main className="max-w-[1400px] mx-auto px-8 pt-10 pb-16">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-foreground tracking-tight">{pageTitle}</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {isEdit
+              ? '필요한 항목을 수정한 뒤 상단의 저장 버튼을 누르세요.'
+              : '담당자, 영역, 발생일을 입력하고 이슈 내용·조치 내용을 작성하세요.'}
+          </p>
         </div>
 
         <form
+          id="issue-form"
           onSubmit={handleSubmit}
-          className="bg-card border border-border rounded-xl p-6 space-y-5"
+          className="bg-card border border-border rounded-2xl p-8 space-y-6 mac-shadow"
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* 담당자(정/부) */}
@@ -411,23 +432,6 @@ export function IssueFormPage() {
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex justify-end gap-3 pt-3 border-t border-border">
-            <button
-              type="button"
-              onClick={() => navigate('/issues')}
-              className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
-            >
-              취소
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isEdit ? '저장' : '등록'}
-            </button>
-          </div>
         </form>
       </main>
     </div>

@@ -6,7 +6,8 @@ import {
   Wifi, FileText, ShieldAlert, Zap, Clock, Download, LayoutList, Rows, Server,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands, DebugLogPanel, Skeleton, EmptyState } from '@/components/common';
+import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands, DebugLogPanel, Skeleton, EmptyState, ResizeGrip } from '@/components/common';
+import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { bulkExecApi, type NodeSummary, type BulkExecResponse, type BulkExecResultItem } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
 
@@ -312,17 +313,33 @@ function SummaryResultsTable({
   results, globalFilter,
 }: { results: BulkExecResultItem[]; globalFilter: string }) {
   const maxPreviewLines = 3;
+  const colW = useColumnWidths('bulk-exec-summary-table', {
+    defaults: { node: 200, status: 130, exit: 130, output: 600 },
+    min: 60, max: 1600,
+  });
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
+        <colgroup>
+          {(['node', 'status', 'exit', 'output'] as const).map((k) => (
+            <col key={k} style={{ width: `${colW.getWidth(k)}px` }} />
+          ))}
+        </colgroup>
         <thead className="bg-muted/30 sticky top-0">
           <tr className="text-left border-b border-border">
-            <th className="px-3 py-2 text-[11px] font-semibold text-muted-foreground">실행 노드</th>
-            <th className="px-3 py-2 text-[11px] font-semibold text-muted-foreground">수행 결과</th>
-            <th className="px-3 py-2 text-[11px] font-semibold text-muted-foreground">exit · 소요</th>
-            <th className="px-3 py-2 text-[11px] font-semibold text-muted-foreground">
+            <th className="relative px-3 py-2 text-[11px] font-semibold text-muted-foreground">실행 노드
+              <ResizeGrip onMouseDown={(e) => colW.beginResize('node', e)} onDoubleClick={() => colW.autoFit('node')} />
+            </th>
+            <th className="relative px-3 py-2 text-[11px] font-semibold text-muted-foreground">수행 결과
+              <ResizeGrip onMouseDown={(e) => colW.beginResize('status', e)} onDoubleClick={() => colW.autoFit('status')} />
+            </th>
+            <th className="relative px-3 py-2 text-[11px] font-semibold text-muted-foreground">exit · 소요
+              <ResizeGrip onMouseDown={(e) => colW.beginResize('exit', e)} onDoubleClick={() => colW.autoFit('exit')} />
+            </th>
+            <th className="relative px-3 py-2 text-[11px] font-semibold text-muted-foreground">
               결과 {globalFilter.trim() ? `(필터: "${globalFilter.length > 20 ? globalFilter.slice(0, 20) + '…' : globalFilter}")` : ''}
+              <ResizeGrip onMouseDown={(e) => colW.beginResize('output', e)} onDoubleClick={() => colW.autoFit('output')} />
             </th>
           </tr>
         </thead>
@@ -418,6 +435,10 @@ export function BulkExecPage() {
   const { data: clusters = [] } = useClusters();
   // 다중 클러스터 선택 — 사이드바에서 체크박스로 고른다
   const [clusterIds, setClusterIds] = useState<string[]>([]);
+  const detailColW = useColumnWidths('bulk-exec-detail-table', {
+    defaults: { expand: 28, host: 200, status: 130, exit: 80, dur: 100, summary: 500 },
+    min: 60, max: 1200,
+  });
   // 첫 진입 시 첫 클러스터를 기본 선택
   useEffect(() => {
     if (clusterIds.length === 0 && clusters.length > 0) setClusterIds([clusters[0].id]);
@@ -1043,15 +1064,30 @@ export function BulkExecPage() {
               <SummaryResultsTable results={runResponse.results} globalFilter={globalFilter} />
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
+                  <colgroup>
+                    {(['expand', 'host', 'status', 'exit', 'dur', 'summary'] as const).map((k) => (
+                      <col key={k} style={{ width: `${detailColW.getWidth(k)}px` }} />
+                    ))}
+                  </colgroup>
                   <thead>
                     <tr className="border-b border-border bg-muted/30 text-left">
-                      <th className="w-7"></th>
-                      <th className="px-3 py-2 text-xs font-medium text-muted-foreground">호스트</th>
-                      <th className="px-3 py-2 text-xs font-medium text-muted-foreground">상태</th>
-                      <th className="px-3 py-2 text-xs font-medium text-muted-foreground">exit</th>
-                      <th className="px-3 py-2 text-xs font-medium text-muted-foreground">소요</th>
-                      <th className="px-3 py-2 text-xs font-medium text-muted-foreground">요약</th>
+                      <th></th>
+                      <th className="relative px-3 py-2 text-xs font-medium text-muted-foreground">호스트
+                        <ResizeGrip onMouseDown={(e) => detailColW.beginResize('host', e)} onDoubleClick={() => detailColW.autoFit('host')} />
+                      </th>
+                      <th className="relative px-3 py-2 text-xs font-medium text-muted-foreground">상태
+                        <ResizeGrip onMouseDown={(e) => detailColW.beginResize('status', e)} onDoubleClick={() => detailColW.autoFit('status')} />
+                      </th>
+                      <th className="relative px-3 py-2 text-xs font-medium text-muted-foreground">exit
+                        <ResizeGrip onMouseDown={(e) => detailColW.beginResize('exit', e)} onDoubleClick={() => detailColW.autoFit('exit')} />
+                      </th>
+                      <th className="relative px-3 py-2 text-xs font-medium text-muted-foreground">소요
+                        <ResizeGrip onMouseDown={(e) => detailColW.beginResize('dur', e)} onDoubleClick={() => detailColW.autoFit('dur')} />
+                      </th>
+                      <th className="relative px-3 py-2 text-xs font-medium text-muted-foreground">요약
+                        <ResizeGrip onMouseDown={(e) => detailColW.beginResize('summary', e)} onDoubleClick={() => detailColW.autoFit('summary')} />
+                      </th>
                     </tr>
                   </thead>
                   <tbody>

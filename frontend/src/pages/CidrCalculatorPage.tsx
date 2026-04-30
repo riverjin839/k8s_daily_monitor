@@ -3,6 +3,8 @@ import { Calculator, Copy, Check, Plus, Trash2, ExternalLink, AlertTriangle } fr
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { clustersApi } from '@/services/api';
+import { ResizeGrip } from '@/components/common';
+import { useColumnWidths } from '@/hooks/useColumnWidths';
 
 // ── Pure CIDR logic ───────────────────────────────────────────────────────────
 
@@ -173,6 +175,11 @@ export function CidrCalculatorPage() {
   const [divideCount, setDivideCount] = useState(4);
   const [subnets, setSubnets] = useState<string[]>([]);
   const [divideError, setDivideError] = useState('');
+
+  const compareColW = useColumnWidths('cidr-compare-table', {
+    defaults: { label: 140, network: 180, mask: 160, hosts: 140, overlap: 200 },
+    min: 60, max: 600,
+  });
 
   // Apply CIDR to cluster
   const { clusters } = useClusterStore();
@@ -496,14 +503,29 @@ export function CidrCalculatorPage() {
 
             {/* Comparison table */}
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="text-xs" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
+                <colgroup>
+                  {(['label', 'network', 'mask', 'hosts', 'overlap'] as const).map((k) => (
+                    <col key={k} style={{ width: `${compareColW.getWidth(k)}px` }} />
+                  ))}
+                </colgroup>
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left py-2 text-muted-foreground font-medium pr-3">Label</th>
-                    <th className="text-left py-2 text-muted-foreground font-medium pr-3">Network</th>
-                    <th className="text-left py-2 text-muted-foreground font-medium pr-3">Mask</th>
-                    <th className="text-right py-2 text-muted-foreground font-medium pr-3">Usable Hosts</th>
-                    <th className="text-left py-2 text-muted-foreground font-medium">겹침</th>
+                    <th className="relative text-left py-2 text-muted-foreground font-medium pr-3">Label
+                      <ResizeGrip onMouseDown={(e) => compareColW.beginResize('label', e)} onDoubleClick={() => compareColW.autoFit('label')} />
+                    </th>
+                    <th className="relative text-left py-2 text-muted-foreground font-medium pr-3">Network
+                      <ResizeGrip onMouseDown={(e) => compareColW.beginResize('network', e)} onDoubleClick={() => compareColW.autoFit('network')} />
+                    </th>
+                    <th className="relative text-left py-2 text-muted-foreground font-medium pr-3">Mask
+                      <ResizeGrip onMouseDown={(e) => compareColW.beginResize('mask', e)} onDoubleClick={() => compareColW.autoFit('mask')} />
+                    </th>
+                    <th className="relative text-right py-2 text-muted-foreground font-medium pr-3">Usable Hosts
+                      <ResizeGrip onMouseDown={(e) => compareColW.beginResize('hosts', e)} onDoubleClick={() => compareColW.autoFit('hosts')} />
+                    </th>
+                    <th className="relative text-left py-2 text-muted-foreground font-medium">겹침
+                      <ResizeGrip onMouseDown={(e) => compareColW.beginResize('overlap', e)} onDoubleClick={() => compareColW.autoFit('overlap')} />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>

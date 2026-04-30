@@ -10,8 +10,9 @@ import { useClusterStore } from '@/stores/clusterStore';
 import { AddClusterModal, KubeconfigEditModal } from '@/components/dashboard';
 import { Cluster, ManagementServer, ManagementServerCreate, Assignee } from '@/types';
 import { getStatusIcon, formatDateTime, formatApiError } from '@/lib/utils';
-import { useToast } from '@/components/common';
+import { useToast, ResizeGrip } from '@/components/common';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useColumnWidths } from '@/hooks/useColumnWidths';
 
 // ── Edit Cluster Modal ──────────────────────────────────────────────────────
 
@@ -330,6 +331,11 @@ export function SettingsPage() {
   const [editForm, setEditForm] = useState<Assignee>({ name: '' });
   const [showAddRow, setShowAddRow] = useState(false);
   const [addForm, setAddForm] = useState<Assignee>({ name: '' });
+
+  const assigneeColW = useColumnWidths('settings-assignee-table', {
+    defaults: { empId: 100, name: 140, email: 220, ip: 150, primaryRole: 200, secondaryRole: 200, actions: 90 },
+    min: 60, max: 600,
+  });
 
   const handleSaveAssignee = (idx: number) => {
     if (!editForm.name.trim()) return;
@@ -800,16 +806,35 @@ export function SettingsPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
+              <colgroup>
+                {(['empId', 'name', 'email', 'ip', 'primaryRole', 'secondaryRole', 'actions'] as const).map((k) => (
+                  <col key={k} style={{ width: `${assigneeColW.getWidth(k)}px` }} />
+                ))}
+              </colgroup>
               <thead>
                 <tr className="bg-secondary/40 border-b border-border text-xs text-muted-foreground">
-                  <th className="text-left px-4 py-3 font-medium w-24">사번</th>
-                  <th className="text-left px-4 py-3 font-medium w-32">이름 *</th>
-                  <th className="text-left px-4 py-3 font-medium">이메일</th>
-                  <th className="text-left px-4 py-3 font-medium w-36">IP 주소</th>
-                  <th className="text-left px-4 py-3 font-medium">정 담당역할</th>
-                  <th className="text-left px-4 py-3 font-medium">부담당 역할</th>
-                  <th className="px-3 py-3 w-20"></th>
+                  <th className="relative text-left px-4 py-3 font-medium">사번
+                    <ResizeGrip onMouseDown={(e) => assigneeColW.beginResize('empId', e)} onDoubleClick={() => assigneeColW.autoFit('empId')} />
+                  </th>
+                  <th className="relative text-left px-4 py-3 font-medium">이름 *
+                    <ResizeGrip onMouseDown={(e) => assigneeColW.beginResize('name', e)} onDoubleClick={() => assigneeColW.autoFit('name')} />
+                  </th>
+                  <th className="relative text-left px-4 py-3 font-medium">이메일
+                    <ResizeGrip onMouseDown={(e) => assigneeColW.beginResize('email', e)} onDoubleClick={() => assigneeColW.autoFit('email')} />
+                  </th>
+                  <th className="relative text-left px-4 py-3 font-medium">IP 주소
+                    <ResizeGrip onMouseDown={(e) => assigneeColW.beginResize('ip', e)} onDoubleClick={() => assigneeColW.autoFit('ip')} />
+                  </th>
+                  <th className="relative text-left px-4 py-3 font-medium">정 담당역할
+                    <ResizeGrip onMouseDown={(e) => assigneeColW.beginResize('primaryRole', e)} onDoubleClick={() => assigneeColW.autoFit('primaryRole')} />
+                  </th>
+                  <th className="relative text-left px-4 py-3 font-medium">부담당 역할
+                    <ResizeGrip onMouseDown={(e) => assigneeColW.beginResize('secondaryRole', e)} onDoubleClick={() => assigneeColW.autoFit('secondaryRole')} />
+                  </th>
+                  <th className="relative px-3 py-3">
+                    <ResizeGrip onMouseDown={(e) => assigneeColW.beginResize('actions', e)} onDoubleClick={() => assigneeColW.autoFit('actions')} />
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">

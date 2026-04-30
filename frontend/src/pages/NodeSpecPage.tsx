@@ -40,6 +40,30 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+/** OS 이미지 문자열을 짧게 — "Red Hat Enterprise Linux 9.4 (Plow)" → "RHEL 9.4". */
+function shortOs(os: string): string {
+  if (!os) return '';
+  const trimmed = os.trim();
+  let m = trimmed.match(/Red\s*Hat\s*Enterprise\s*Linux\s+(\d+(?:\.\d+)?)/i);
+  if (m) return `RHEL ${m[1]}`;
+  m = trimmed.match(/Rocky\s*Linux\s+(\d+(?:\.\d+)?)/i);
+  if (m) return `Rocky ${m[1]}`;
+  m = trimmed.match(/AlmaLinux\s+(\d+(?:\.\d+)?)/i);
+  if (m) return `Alma ${m[1]}`;
+  m = trimmed.match(/CentOS\s+(?:Linux\s+|Stream\s+)?(\d+(?:\.\d+)?)/i);
+  if (m) return `CentOS ${m[1]}`;
+  m = trimmed.match(/Ubuntu\s+(\d+\.\d+)/i);
+  if (m) return `Ubuntu ${m[1]}`;
+  m = trimmed.match(/Debian.*?(\d+(?:\.\d+)?)/i);
+  if (m) return `Debian ${m[1]}`;
+  m = trimmed.match(/Oracle\s*Linux\s+(?:Server\s+)?(\d+(?:\.\d+)?)/i);
+  if (m) return `Oracle ${m[1]}`;
+  m = trimmed.match(/Photon\s*OS\s+(\d+(?:\.\d+)?)/i);
+  if (m) return `Photon ${m[1]}`;
+  // 짧은 문자열은 그대로, 긴 건 처음 20자만.
+  return trimmed.length <= 20 ? trimmed : `${trimmed.slice(0, 20)}…`;
+}
+
 function csvEscape(s: string): string {
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
@@ -66,12 +90,15 @@ function downloadCsvTemplate() {
   const header = EXPORT_COLUMNS.map((c) => c.csvKey).join(',');
   const example = EXPORT_COLUMNS.map((c) => {
     if (c.field === 'hostname') return 'srv-master-01';
-    if (c.field === 'osImage') return 'RHEL9';
-    if (c.field === 'diskTotalGb') return '18';
+    if (c.field === 'osImage') return 'Red Hat Enterprise Linux 9.4';
+    if (c.field === 'diskTotalGb') return '1920';
+    if (c.field === 'nonOsDiskGb') return '1820';
+    if (c.field === 'diskType') return 'NVMe (nvme0n1)';
+    if (c.field === 'bond0Ip') return '10.0.10.21';
+    if (c.field === 'bond1Ip') return '192.168.10.21';
     if (c.field === 'isSsd') return 'O';
     if (c.field === 'isVm') return 'X';
     if (c.field === 'currentUsage') return 'NEW K8S MASTER';
-    if (c.field === 'purchasePurpose') return '장비 분석용';
     return '';
   }).join(',');
   const blob = new Blob(['﻿', `${header}\n${example}\n`], { type: 'text/csv;charset=utf-8' });
@@ -113,25 +140,41 @@ export function NodeSpecPage() {
 
   // ── Grid 블록 선택 + 복사 ────────────────────────────────────────────
   const tableRef = useRef<HTMLDivElement>(null);
+  // 사용자 요청 반영 (자산 / vendor / GPU 항목 제거, CPU·RAM 분리, IP→public/private bond 분리)
   const GRID_COLS = useMemo(() => [
-    'hostname', 'status', 'cluster', 'ip', 'vendor', 'cpu', 'disk',
-    'os', 'ssd', 'vm', 'currentUsage', 'purchasePurpose', 'location', 'asset',
+    'hostname', 'status', 'cluster', 'publicIp', 'privateIp',
+    'cpu', 'ram', 'disk', 'os', 'ssd', 'vm', 'currentUsage', 'location',
   ], []);
   const rowIds = useMemo(() => rows.map((r) => r.id), [rows]);
 
   // 컬럼 너비 (드래그로 조정, localStorage 영속화)
   const COL_LABELS: Record<string, string> = {
-    hostname: '호스트명', status: '상태', cluster: '클러스터/역할', ip: 'IP / BMC',
-    vendor: 'Vendor / Model', cpu: 'CPU / RAM', disk: 'Disk / GPU', os: 'OS',
-    ssd: 'SSD', vm: 'VM', currentUsage: '현재 용도', purchasePurpose: '구입 목적',
-    location: '위치', asset: '자산',
+    hostname: '호스트명', status: '상태', cluster: '클러스터/역할',
+    publicIp: 'public IP (bond0)', privateIp: 'private IP (bond1)',
+    cpu: 'CPU', ram: 'RAM', disk: 'DISK', os: 'OS',
+    ssd: 'SSD', vm: 'VM', currentUsage: '현재 용도', location: '위치',
   };
-  const colW = useColumnWidths('node-spec-table', {
+  const COL_TIPS: Record<string, string> = {
+    hostname: 'OS hostname (등록 시 입력 또는 클러스터 임포트로 자동수집)',
+    status: '운영중 / 예비 / 점검 / 폐기 — 자산 운용 상태',
+    cluster: '소속 클러스터 + k8s 역할 (control-plane / worker / etcd / spare)',
+    publicIp: '공인망 IP — node 의 ip addr 출력에서 bond0 에 할당된 IP. NIC 수집(SSH) 으로 자동 채워짐.',
+    privateIp: '내부망 IP — node 의 ip addr 출력에서 bond1 에 할당된 IP.',
+    cpu: 'CPU 모델 + 소켓/코어/스레드. 클러스터 임포트 시 logical thread 만 자동수집되고 sockets/cores 는 수기 입력.',
+    ram: '메모리 총량(GB) + 모듈 구성 (예: 16x64GB DDR4-3200).',
+    disk: 'DISK 총용량 + OS 디스크 제외 사용 가능 용량 + 종류(NVMe/SSD/HDD). lsblk -o NAME,MODEL,TRAN,ROTA 로 SSD/NVMe 구분.',
+    os: 'OS 이미지 — 길어서 RHEL9.4, Rocky 8.8 형식으로 축약 표기. 커널 버전은 그 아래.',
+    ssd: 'SSD 여부 (자동수집: NVMe 또는 비회전 디스크 발견 시 O). lsblk TRAN 컬럼 기반.',
+    vm: 'VM 여부 (수기 입력). VM 이면 O, bare-metal 이면 X.',
+    currentUsage: '이 노드의 현재 용도 (예: NEW K8S MASTER, GPU 워크로드).',
+    location: '데이터센터 / Room / Rack / U — 물리 위치.',
+  };
+  const colW = useColumnWidths('node-spec-table-v2', {
     defaults: {
-      hostname: 140, status: 80, cluster: 120, ip: 160, vendor: 160,
-      cpu: 140, disk: 140, os: 140, ssd: 60, vm: 60,
-      currentUsage: 140, purchasePurpose: 140, location: 140,
-      asset: 160, actions: 80,
+      hostname: 140, status: 80, cluster: 120,
+      publicIp: 140, privateIp: 140,
+      cpu: 130, ram: 110, disk: 160, os: 130,
+      ssd: 70, vm: 60, currentUsage: 160, location: 140, actions: 80,
     },
     min: 60, max: 600,
   });
@@ -143,17 +186,16 @@ export function NodeSpecPage() {
       case 'hostname': return r.hostname;
       case 'status': return r.status;
       case 'cluster': return `${r.clusterName ?? ''}${r.role ? ` (${r.role})` : ''}`;
-      case 'ip': return [r.internalIp, r.bmcIp && `BMC ${r.bmcIp}`].filter(Boolean).join(' · ');
-      case 'vendor': return [r.vendor, r.model, r.serialNumber].filter(Boolean).join(' ');
-      case 'cpu': return `${r.cpuSockets ?? ''}s/${r.cpuCores ?? ''}c/${r.cpuThreads ?? ''}t ${r.memoryGb ?? ''}GB`;
-      case 'disk': return `${r.diskTotalGb ?? ''}GB ${r.diskType ?? ''}${r.gpuModel ? ` · GPU ${r.gpuModel}` : ''}`;
+      case 'publicIp': return r.bond0Ip ?? '';
+      case 'privateIp': return r.bond1Ip ?? '';
+      case 'cpu': return `${r.cpuSockets ?? ''}s/${r.cpuCores ?? ''}c/${r.cpuThreads ?? ''}t ${r.cpuModel ?? ''}`.trim();
+      case 'ram': return `${r.memoryGb ?? ''}GB ${r.memoryModules ?? ''}`.trim();
+      case 'disk': return `${r.diskTotalGb ?? ''}GB / non-OS ${r.nonOsDiskGb ?? '-'}GB ${r.diskType ?? ''}`.trim();
       case 'os': return r.osImage ?? '';
       case 'ssd': return r.diskType ?? (r.isSsd === true ? 'O' : r.isSsd === false ? 'X' : '-');
       case 'vm': return r.isVm === true ? 'O' : r.isVm === false ? 'X' : '-';
       case 'currentUsage': return r.currentUsage ?? '';
-      case 'purchasePurpose': return r.purchasePurpose ?? '';
       case 'location': return [r.datacenter, r.room, r.rack, r.rackUnit].filter(Boolean).join('/');
-      case 'asset': return [r.assetTag, r.warrantyEnd ? `~${r.warrantyEnd}` : '', r.owner].filter(Boolean).join(' · ');
       default: return '';
     }
   };
@@ -361,8 +403,12 @@ export function NodeSpecPage() {
                   <tr className="border-b border-border">
                     {GRID_COLS.map((k) => (
                       <th key={k}
+                        title={COL_TIPS[k] ?? COL_LABELS[k]}
                         className={`relative px-2 py-2 text-[11px] font-semibold text-muted-foreground ${k === 'ssd' || k === 'vm' ? 'text-center' : ''}`}>
-                        <span className="truncate inline-block max-w-full align-middle">{COL_LABELS[k]}</span>
+                        <span className="truncate inline-flex items-center gap-1 max-w-full align-middle cursor-help">
+                          {COL_LABELS[k]}
+                          <span className="text-[9px] text-muted-foreground/50">ⓘ</span>
+                        </span>
                         <ResizeGrip onMouseDown={(e) => colW.beginResize(k, e)} onDoubleClick={() => colW.autoFit(k)} />
                       </th>
                     ))}
@@ -402,60 +448,79 @@ export function NodeSpecPage() {
                         <p className="text-xs">{r.clusterName ?? <span className="text-muted-foreground/60">미배정</span>}</p>
                         <p className="text-[10px] text-muted-foreground">{r.role ?? '-'}</p>
                       </GridCell>
-                      <GridCell row={r.id} col="ip" selection={selection}
+                      <GridCell row={r.id} col="publicIp" selection={selection}
                         className="px-2 py-2 align-top font-mono text-[11px]">
-                        <p className="text-foreground">{r.internalIp ?? '-'}</p>
-                        {r.bmcIp && <p className="text-muted-foreground">BMC {r.bmcIp}</p>}
-                        {(r.bond0Ip || r.bond1Ip) && (
-                          <p className="text-muted-foreground/80 text-[10px]">
-                            {r.bond0Ip && `bond0 ${r.bond0Ip}`}{r.bond0Ip && r.bond1Ip ? ' · ' : ''}{r.bond1Ip && `bond1 ${r.bond1Ip}`}
+                        {r.bond0Ip ? (
+                          <p className="text-foreground" title="ip addr → bond0 의 IP">
+                            <InlineTextCell value={r.bond0Ip} placeholder="bond0 IP"
+                              onSave={(v) => saveField(r.id, { bond0Ip: v })} />
                           </p>
+                        ) : (
+                          <span className="text-muted-foreground/50 italic" title="NIC 수집(SSH) 후 자동 채워지거나 수기 입력">
+                            미수집
+                          </span>
                         )}
+                        {r.bond0Speed && <p className="text-[10px] text-muted-foreground">{r.bond0Speed}</p>}
                       </GridCell>
-                      <GridCell row={r.id} col="vendor" selection={selection}
-                        className="px-2 py-2 align-top text-xs">
-                        <p className="font-medium">
-                          <InlineTextCell value={r.vendor ?? ''} placeholder="Dell / HPE"
-                            onSave={(v) => saveField(r.id, { vendor: v })} />
-                        </p>
-                        <p className="text-muted-foreground">
-                          <InlineTextCell value={r.model ?? ''} placeholder="PowerEdge R750"
-                            onSave={(v) => saveField(r.id, { model: v })} />
-                        </p>
-                        {r.serialNumber && <p className="text-[10px] font-mono text-muted-foreground/70">SN: {r.serialNumber}</p>}
+                      <GridCell row={r.id} col="privateIp" selection={selection}
+                        className="px-2 py-2 align-top font-mono text-[11px]">
+                        {r.bond1Ip ? (
+                          <p className="text-foreground" title="ip addr → bond1 의 IP">
+                            <InlineTextCell value={r.bond1Ip} placeholder="bond1 IP"
+                              onSave={(v) => saveField(r.id, { bond1Ip: v })} />
+                          </p>
+                        ) : (
+                          <span className="text-muted-foreground/50 italic" title="NIC 수집(SSH) 후 자동 채워지거나 수기 입력">
+                            미수집
+                          </span>
+                        )}
+                        {r.bond1Speed && <p className="text-[10px] text-muted-foreground">{r.bond1Speed}</p>}
                       </GridCell>
                       <GridCell row={r.id} col="cpu" selection={selection}
                         className="px-2 py-2 align-top text-xs">
                         <p className="font-mono">
                           <Cpu className="w-3 h-3 inline mr-0.5 text-muted-foreground" />
-                          {r.cpuSockets ? `${r.cpuSockets}소켓 · ` : ''}
+                          {r.cpuSockets ? `${r.cpuSockets}s · ` : ''}
                           {r.cpuCores != null ? `${r.cpuCores}c` : '?'}
                           {r.cpuThreads ? `/${r.cpuThreads}t` : ''}
                         </p>
                         <p className="text-muted-foreground text-[10px] truncate max-w-[180px]" title={r.cpuModel ?? ''}>
                           {r.cpuModel ?? '-'}
                         </p>
-                        <p className="font-mono">RAM {r.memoryGb ? `${r.memoryGb}GB` : '-'}</p>
+                      </GridCell>
+                      <GridCell row={r.id} col="ram" selection={selection}
+                        className="px-2 py-2 align-top text-xs">
+                        <p className="font-mono">
+                          {r.memoryGb ? `${r.memoryGb}GB` : '-'}
+                        </p>
+                        {r.memoryModules && (
+                          <p className="text-[10px] text-muted-foreground truncate max-w-[160px]" title={r.memoryModules}>
+                            {r.memoryModules}
+                          </p>
+                        )}
                       </GridCell>
                       <GridCell row={r.id} col="disk" selection={selection}
                         className="px-2 py-2 align-top text-xs">
                         <p className="font-mono">
                           <HardDrive className="w-3 h-3 inline mr-0.5 text-muted-foreground" />
-                          {r.diskTotalGb ? `${r.diskTotalGb}GB` : '-'}
-                          {r.diskType ? ` ${r.diskType}` : ''}
+                          {r.diskTotalGb ? `총 ${r.diskTotalGb}GB` : '-'}
                           {r.diskCount ? ` ×${r.diskCount}` : ''}
                         </p>
-                        {r.gpuModel && (
-                          <p className="text-[10px] text-muted-foreground">
-                            GPU {r.gpuCount ? `${r.gpuCount}× ` : ''}{r.gpuModel}
+                        <p className="text-[10px] text-muted-foreground" title="OS 디스크 제외한 사용 가능 디스크 합계 (lsblk 자동수집 또는 수기)">
+                          OS 제외 {r.nonOsDiskGb != null ? `${r.nonOsDiskGb}GB` : '-'}
+                        </p>
+                        {r.diskType && (
+                          <p className="text-[10px] font-mono text-cyan-500/80 truncate max-w-[180px]" title={r.diskType}>
+                            {r.diskType}
                           </p>
                         )}
                       </GridCell>
                       <GridCell row={r.id} col="os" selection={selection}
-                        className="px-2 py-2 align-top text-xs font-mono max-w-[200px]">
-                        <p className="truncate" title={r.osImage ?? ''}>
-                          <InlineTextCell value={r.osImage ?? ''} placeholder="RHEL9"
-                            onSave={(v) => saveField(r.id, { osImage: v })} />
+                        className="px-2 py-2 align-top text-xs font-mono max-w-[160px]">
+                        <p className="truncate font-semibold" title={r.osImage ?? ''}>
+                          {shortOs(r.osImage ?? '') || (
+                            <InlineTextCell value="" placeholder="OS" onSave={(v) => saveField(r.id, { osImage: v })} />
+                          )}
                         </p>
                         {r.kernelVersion && (
                           <p className="text-[10px] text-muted-foreground truncate" title={r.kernelVersion}>
@@ -513,13 +578,6 @@ export function NodeSpecPage() {
                             onSave={(v) => saveField(r.id, { currentUsage: v })} />
                         </p>
                       </GridCell>
-                      <GridCell row={r.id} col="purchasePurpose" selection={selection}
-                        className="px-2 py-2 align-top text-xs max-w-[160px]">
-                        <p className="truncate text-muted-foreground" title={r.purchasePurpose ?? ''}>
-                          <InlineTextCell value={r.purchasePurpose ?? ''} placeholder="장비 분석용"
-                            onSave={(v) => saveField(r.id, { purchasePurpose: v })} />
-                        </p>
-                      </GridCell>
                       <GridCell row={r.id} col="location" selection={selection}
                         className="px-2 py-2 align-top text-xs">
                         {(r.datacenter || r.rack || r.rackUnit) ? (
@@ -528,20 +586,6 @@ export function NodeSpecPage() {
                             {[r.datacenter, r.room, r.rack, r.rackUnit].filter(Boolean).join('/')}
                           </p>
                         ) : <span className="text-muted-foreground/60">-</span>}
-                      </GridCell>
-                      <GridCell row={r.id} col="asset" selection={selection}
-                        className="px-2 py-2 align-top text-xs">
-                        <p className="font-mono">
-                          <InlineTextCell value={r.assetTag ?? ''} placeholder="자산태그"
-                            onSave={(v) => saveField(r.id, { assetTag: v })} />
-                        </p>
-                        {r.warrantyEnd && (
-                          <p className="text-[10px] text-muted-foreground">~{r.warrantyEnd}</p>
-                        )}
-                        <p className="text-[10px] text-muted-foreground">
-                          <InlineTextCell value={r.owner ?? ''} placeholder="담당자"
-                            onSave={(v) => saveField(r.id, { owner: v })} />
-                        </p>
                       </GridCell>
                       <td className="px-2 py-2 align-top">
                         <div className="flex items-center gap-1">

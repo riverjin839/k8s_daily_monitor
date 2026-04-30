@@ -58,6 +58,7 @@ class NodeServerSpec(Base):
     memory_gb = Column(Integer, nullable=True)
     memory_modules = Column(String(255), nullable=True)         # "16x64GB DDR4-3200"
     disk_total_gb = Column(Integer, nullable=True)
+    non_os_disk_gb = Column(Integer, nullable=True)             # OS 디스크 제외 사용 가능 디스크 총량 (lsblk 자동수집 또는 수기)
     disk_type = Column(String(255), nullable=True)              # "NVMe (nvme0n1)" 등 자동수집 결과 포함
     disk_count = Column(Integer, nullable=True)
     raid_config = Column(String(64), nullable=True)             # RAID10, JBOD

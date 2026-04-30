@@ -1133,6 +1133,7 @@ export interface NodeServerSpec {
   memoryGb?: number | null;
   memoryModules?: string | null;
   diskTotalGb?: number | null;
+  nonOsDiskGb?: number | null;
   diskType?: string | null;
   diskCount?: number | null;
   raidConfig?: string | null;

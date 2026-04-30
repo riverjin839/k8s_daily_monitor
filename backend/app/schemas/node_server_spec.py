@@ -32,6 +32,7 @@ class NodeServerSpecBase(BaseModel):
     memory_gb: Optional[int] = Field(default=None, ge=0, le=65536)
     memory_modules: Optional[str] = Field(default=None, max_length=255)
     disk_total_gb: Optional[int] = Field(default=None, ge=0)
+    non_os_disk_gb: Optional[int] = Field(default=None, ge=0)
     disk_type: Optional[str] = Field(default=None, max_length=255)
     disk_count: Optional[int] = Field(default=None, ge=0, le=1024)
     raid_config: Optional[str] = Field(default=None, max_length=64)
@@ -94,6 +95,7 @@ class NodeServerSpecUpdate(BaseModel):
     memory_gb: Optional[int] = None
     memory_modules: Optional[str] = None
     disk_total_gb: Optional[int] = None
+    non_os_disk_gb: Optional[int] = None
     disk_type: Optional[str] = None
     disk_count: Optional[int] = None
     raid_config: Optional[str] = None
@@ -188,6 +190,7 @@ class NodeSpecCsvRow(BaseModel):
     memory_gb: Optional[int] = None
     memory_modules: Optional[str] = None
     disk_total_gb: Optional[int] = None
+    non_os_disk_gb: Optional[int] = None
     disk_type: Optional[str] = None
     disk_count: Optional[int] = None
     raid_config: Optional[str] = None

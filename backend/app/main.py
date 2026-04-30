@@ -362,6 +362,7 @@ def _run_migrations():
             ("is_vm", "BOOLEAN"),
             ("current_usage", "VARCHAR(255)"),
             ("purchase_purpose", "VARCHAR(255)"),
+            ("non_os_disk_gb", "INTEGER"),
         ]:
             if col_name not in ns_cols:
                 with engine.begin() as conn:

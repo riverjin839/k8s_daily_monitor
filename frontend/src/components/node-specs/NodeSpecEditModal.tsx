@@ -146,18 +146,9 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
           <section>
             <h3 className="text-xs font-bold text-muted-foreground uppercase mb-2">네트워크</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Field label="Internal IP">
-                <input value={form.internalIp ?? ''} onChange={set('internalIp')} className={monoCls} />
-              </Field>
-              <Field label="External IP">
-                <input value={form.externalIp ?? ''} onChange={set('externalIp')} className={monoCls} />
-              </Field>
-              <Field label="BMC / iDRAC IP">
-                <input value={form.bmcIp ?? ''} onChange={set('bmcIp')} className={monoCls} />
-              </Field>
-              <div />
-              <Field label="bond0 IP">
-                <input value={form.bond0Ip ?? ''} onChange={set('bond0Ip')} className={monoCls} />
+              <Field label="public IP (bond0)">
+                <input value={form.bond0Ip ?? ''} onChange={set('bond0Ip')} className={monoCls}
+                  placeholder="ip addr 의 bond0 IP" />
               </Field>
               <Field label="bond0 MAC">
                 <input value={form.bond0Mac ?? ''} onChange={set('bond0Mac')} className={monoCls} placeholder="00:11:22:..." />
@@ -166,8 +157,9 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
                 <input value={form.bond0Speed ?? ''} onChange={set('bond0Speed')} className={monoCls} placeholder="25G" />
               </Field>
               <div />
-              <Field label="bond1 IP">
-                <input value={form.bond1Ip ?? ''} onChange={set('bond1Ip')} className={monoCls} />
+              <Field label="private IP (bond1)">
+                <input value={form.bond1Ip ?? ''} onChange={set('bond1Ip')} className={monoCls}
+                  placeholder="ip addr 의 bond1 IP" />
               </Field>
               <Field label="bond1 MAC">
                 <input value={form.bond1Mac ?? ''} onChange={set('bond1Mac')} className={monoCls} />
@@ -182,19 +174,6 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
           <section>
             <h3 className="text-xs font-bold text-muted-foreground uppercase mb-2">하드웨어</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Field label="Vendor">
-                <input value={form.vendor ?? ''} onChange={set('vendor')} className={inputCls} placeholder="Dell / HPE / Supermicro" />
-              </Field>
-              <Field label="Model">
-                <input value={form.model ?? ''} onChange={set('model')} className={inputCls} placeholder="PowerEdge R750" />
-              </Field>
-              <Field label="Serial Number">
-                <input value={form.serialNumber ?? ''} onChange={set('serialNumber')} className={monoCls} />
-              </Field>
-              <Field label="Asset Tag">
-                <input value={form.assetTag ?? ''} onChange={set('assetTag')} className={monoCls} />
-              </Field>
-
               <div className="md:col-span-2">
                 <Field label="CPU 모델">
                   <input value={form.cpuModel ?? ''} onChange={set('cpuModel')} className={inputCls} placeholder="Intel Xeon Gold 6338" />
@@ -221,6 +200,10 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
               <Field label="디스크 총 용량 (GB)">
                 <input type="number" value={form.diskTotalGb ?? ''} onChange={setNum('diskTotalGb')} className={inputCls} min={0} />
               </Field>
+              <Field label="OS 제외 디스크 (GB)">
+                <input type="number" value={form.nonOsDiskGb ?? ''} onChange={setNum('nonOsDiskGb')} className={inputCls} min={0}
+                  placeholder="OS 디스크 제외 합계" />
+              </Field>
               <Field label="디스크 종류">
                 <select value={form.diskType ?? ''} onChange={set('diskType')} className={inputCls}>
                   <option value="">-</option>
@@ -234,15 +217,6 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
                 <input value={form.raidConfig ?? ''} onChange={set('raidConfig')} className={inputCls} placeholder="RAID10" />
               </Field>
 
-              <div className="md:col-span-2">
-                <Field label="GPU 모델">
-                  <input value={form.gpuModel ?? ''} onChange={set('gpuModel')} className={inputCls} placeholder="NVIDIA A100" />
-                </Field>
-              </div>
-              <Field label="GPU 개수">
-                <input type="number" value={form.gpuCount ?? ''} onChange={setNum('gpuCount')} className={inputCls} min={0} max={64} />
-              </Field>
-
               <Field label="SSD 여부">
                 <select
                   value={form.isSsd === true ? 'y' : form.isSsd === false ? 'n' : ''}
@@ -250,8 +224,8 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
                   className={inputCls}
                 >
                   <option value="">미지정</option>
-                  <option value="y">O (SSD)</option>
-                  <option value="n">X (HDD 등)</option>
+                  <option value="y">O (SSD/NVMe)</option>
+                  <option value="n">X (HDD)</option>
                 </select>
               </Field>
               <Field label="VM 여부">
@@ -310,29 +284,14 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
             </div>
           </section>
 
-          {/* 자산/계약 */}
+          {/* 운영 정보 — 자산/계약 항목(자산태그·구매일·보증·담당자·구입목적) 은 사용자 요청으로 제거. */}
           <section>
-            <h3 className="text-xs font-bold text-muted-foreground uppercase mb-2">자산 / 계약</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Field label="구매일">
-                <input type="date" value={form.purchaseDate ?? ''} onChange={set('purchaseDate')} className={inputCls} />
-              </Field>
-              <Field label="보증 종료일">
-                <input type="date" value={form.warrantyEnd ?? ''} onChange={set('warrantyEnd')} className={inputCls} />
-              </Field>
-              <Field label="담당자/팀">
-                <input value={form.owner ?? ''} onChange={set('owner')} className={inputCls} />
-              </Field>
+            <h3 className="text-xs font-bold text-muted-foreground uppercase mb-2">운영</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="md:col-span-2">
                 <Field label="현재 용도">
                   <input value={form.currentUsage ?? ''} onChange={set('currentUsage')} className={inputCls}
                     placeholder="NEW K8S MASTER" />
-                </Field>
-              </div>
-              <div className="md:col-span-2">
-                <Field label="구입 목적">
-                  <input value={form.purchasePurpose ?? ''} onChange={set('purchasePurpose')} className={inputCls}
-                    placeholder="장비 분석용" />
                 </Field>
               </div>
             </div>

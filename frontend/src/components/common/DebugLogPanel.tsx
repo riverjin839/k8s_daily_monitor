@@ -15,6 +15,19 @@ const KIND_CLS: Record<string, string> = {
   info:     'text-muted-foreground',
 };
 
+/** React child 로 안전하게 렌더 가능한 형태로 변환.
+ *  객체/배열이 message·url 등에 들어오면 minified error #31 을 일으키므로 방어. */
+function safeText(v: unknown, fallback = '-'): string {
+  if (v === null || v === undefined || v === '') return fallback;
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return fallback;
+  }
+}
+
 /** 페이지 상단 또는 하단에 부착하는 접이식 debug 패널.
  *  `settings → Debug` 탭에서 해당 페이지가 켜져야만 렌더된다.
  *  global 도 같이 켜져 있어야 API 호출 로그가 흐른다 (interceptor가 전역 플래그 기반).
@@ -78,23 +91,27 @@ export function DebugLogPanel({ pageKey, extra }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {events.map((e) => (
-                    <tr key={e.id} className="border-b border-border/30">
-                      <td className="px-2 py-0.5 text-muted-foreground">
-                        {new Date(e.ts).toISOString().slice(11, 23)}
-                      </td>
-                      <td className={`px-2 py-0.5 ${KIND_CLS[e.kind] ?? ''}`}>{e.kind}</td>
-                      <td className="px-2 py-0.5">{e.method ?? '-'}</td>
-                      <td className="px-2 py-0.5 max-w-[280px] truncate" title={e.url ?? ''}>
-                        {e.url ?? '-'}
-                      </td>
-                      <td className="px-2 py-0.5">{e.status ?? '-'}</td>
-                      <td className="px-2 py-0.5">{e.durationMs ?? '-'}</td>
-                      <td className="px-2 py-0.5 max-w-[300px] truncate" title={e.message ?? ''}>
-                        {e.message ?? '-'}
-                      </td>
-                    </tr>
-                  ))}
+                  {events.map((e) => {
+                    const urlText = safeText(e.url);
+                    const messageText = safeText(e.message);
+                    return (
+                      <tr key={e.id} className="border-b border-border/30">
+                        <td className="px-2 py-0.5 text-muted-foreground">
+                          {new Date(e.ts).toISOString().slice(11, 23)}
+                        </td>
+                        <td className={`px-2 py-0.5 ${KIND_CLS[e.kind] ?? ''}`}>{e.kind}</td>
+                        <td className="px-2 py-0.5">{safeText(e.method)}</td>
+                        <td className="px-2 py-0.5 max-w-[280px] truncate" title={urlText}>
+                          {urlText}
+                        </td>
+                        <td className="px-2 py-0.5">{safeText(e.status)}</td>
+                        <td className="px-2 py-0.5">{safeText(e.durationMs)}</td>
+                        <td className="px-2 py-0.5 max-w-[300px] truncate" title={messageText}>
+                          {messageText}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}

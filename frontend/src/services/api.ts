@@ -90,13 +90,22 @@ api.interceptors.response.use(
   (error) => {
     if (isDebugEnabled('global')) {
       const start = (error?.config as DebugConfig | undefined)?.__debugStart;
+      // FastAPI 422 등은 detail 이 배열/객체로 올 수 있음 — 객체를 그대로 React child 로
+      // 넣으면 minified error #31 ("Objects are not valid as a React child").
+      // DebugLogPanel 의 안전을 위해 문자열로 정규화한다.
+      const rawDetail = error?.response?.data?.detail;
+      const detailStr = typeof rawDetail === 'string'
+        ? rawDetail
+        : rawDetail !== undefined && rawDetail !== null
+          ? JSON.stringify(rawDetail)
+          : undefined;
       useDebugStore.getState().pushEvent({
         kind: 'error',
         method: error?.config?.method?.toUpperCase(),
         url: error?.config?.url,
         status: error?.response?.status,
         durationMs: start ? Math.round(performance.now() - start) : undefined,
-        message: error?.response?.data?.detail ?? error?.message,
+        message: detailStr ?? (typeof error?.message === 'string' ? error.message : String(error?.message ?? '')),
       });
     }
     console.error('API Error:', error.response?.data || error.message);

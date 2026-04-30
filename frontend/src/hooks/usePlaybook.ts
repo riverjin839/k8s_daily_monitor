@@ -89,15 +89,15 @@ export function useRunPlaybook() {
   const { setRunning, clearRunning } = usePlaybookStore();
 
   return useMutation({
-    mutationFn: (id: string) => {
+    mutationFn: ({ id, creds }: { id: string; creds?: import('@/types').PlaybookSshCreds }) => {
       setRunning(id);
-      return playbooksApi.run(id);
+      return playbooksApi.run(id, creds);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: playbookKeys.all });
     },
-    onSettled: (_, __, id) => {
-      clearRunning(id);
+    onSettled: (_, __, vars) => {
+      clearRunning(vars.id);
     },
   });
 }

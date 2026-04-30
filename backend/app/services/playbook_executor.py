@@ -96,6 +96,7 @@ def run_playbook(
     playbook_content: str | None = None,
     inventory_content: str | None = None,
     inventory_hosts: list[str] | None = None,
+    ssh_private_key: str | None = None,
 ) -> PlaybookResult:
     """ansible-playbook을 JSON callback과 함께 실행하고 결과를 파싱합니다.
 
@@ -129,9 +130,17 @@ def run_playbook(
     start = datetime.utcnow()
 
     with _materialized(playbook_content, ".yml") as pb_temp, \
-         _materialized(effective_inv_content, ".ini") as inv_temp:
+         _materialized(effective_inv_content, ".ini") as inv_temp, \
+         _materialized(ssh_private_key, ".pem") as key_temp:
         effective_pb = pb_temp or playbook_path
         effective_inv = inv_temp or inventory_path
+
+        # 임시 키 파일은 0600 으로 권한 강제 — ansible/SSH 가 거부하지 않도록.
+        if key_temp:
+            try:
+                os.chmod(key_temp, 0o600)
+            except OSError:
+                pass
 
         cmd = ["ansible-playbook", str(effective_pb)]
         if effective_inv:
@@ -139,8 +148,13 @@ def run_playbook(
         else:
             default_inv = f"{settings.ansible_inventory_dir}/clusters.yml"
             cmd.extend(["-i", default_inv])
-        if extra_vars:
-            cmd.extend(["-e", json.dumps(extra_vars)])
+
+        # 인라인 자격증명을 -e 로 머지 — 키 경로는 임시 파일이라 extra_vars 와 합친 뒤 전달.
+        merged_vars: dict[str, Any] = dict(extra_vars or {})
+        if key_temp:
+            merged_vars["ansible_ssh_private_key_file"] = key_temp
+        if merged_vars:
+            cmd.extend(["-e", json.dumps(merged_vars)])
         if tags:
             cmd.extend(["--tags", tags])
 

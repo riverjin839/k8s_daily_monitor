@@ -60,6 +60,21 @@ class PlaybookListResponse(BaseModel):
     data: list[PlaybookResponse]
 
 
+class PlaybookRunRequest(BaseModel):
+    """Playbook 실행 시 인라인으로 전달되는 SSH 자격증명.
+
+    - DB 에는 저장하지 않는다 (휘발성). bulk_exec 의 패턴을 따른다.
+    - inventory 에 이미 ansible_user / ansible_ssh_pass 등이 들어있으면 그쪽이 우선.
+    - 비어있는 채로 실행하면 동적 inventory 만 채워지고 인증 실패가 날 수 있음.
+    """
+    ssh_username: Optional[str] = Field(default=None, max_length=64)
+    ssh_password: Optional[str] = Field(default=None, max_length=255)
+    ssh_private_key: Optional[str] = Field(default=None)  # PEM 본문
+    ssh_port: Optional[int] = Field(default=None, ge=1, le=65535)
+    become: Optional[bool] = Field(default=None, description="sudo 권한 상승 (true) / 일반 사용자 (false)")
+    become_password: Optional[str] = Field(default=None, max_length=255)
+
+
 class PlaybookRunResponse(BaseModel):
     id: UUID
     status: str

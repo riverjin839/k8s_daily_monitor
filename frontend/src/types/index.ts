@@ -221,6 +221,16 @@ export interface PlaybookRunResult {
   durationMs: number;
 }
 
+/** Playbook 실행 시 휘발성으로 전달되는 SSH 자격증명 — 서버에 저장되지 않음. */
+export interface PlaybookSshCreds {
+  ssh_username?: string;
+  ssh_password?: string;
+  ssh_private_key?: string;
+  ssh_port?: number;
+  become?: boolean;
+  become_password?: string;
+}
+
 // AI Agent
 export interface AgentChatRequest {
   query: string;

@@ -3,8 +3,9 @@ import { Plus, Play, BookOpen, Download, ArrowUpDown } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { PlaybookCard, AddPlaybookModal } from '@/components/playbooks';
+import { PlaybookCard, AddPlaybookModal, RunCredsModal } from '@/components/playbooks';
 import type { PlaybookFormSubmit } from '@/components/playbooks/AddPlaybookModal';
+import type { PlaybookSshCreds } from '@/types';
 import { usePlaybooks, useCreatePlaybook, useUpdatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
 import { playbooksApi } from '@/services/api';
 import { usePlaybookStore } from '@/stores/playbookStore';
@@ -36,12 +37,29 @@ function SortablePlaybookCard({ playbook, isRunning, onRun, onEdit, onDelete, on
   );
 }
 
+const SESSION_CREDS_KEY = 'k8s:playbook-ssh-creds';
+
+function readSessionCreds(): PlaybookSshCreds | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_CREDS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PlaybookSshCreds & { authMode?: string };
+    // 비어있는 객체는 자격증명으로 취급하지 않음
+    if (!parsed.ssh_username && !parsed.ssh_password && !parsed.ssh_private_key) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 export function PlaybooksPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editPlaybook, setEditPlaybook] = useState<Playbook | null>(null);
   const [selectedClusterId, setSelectedClusterId] = useState<string>('');
   const [sortKey, setSortKey] = useState<PlaybookSortKey>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  // 단일 실행 시 자격증명 모달용 — 어떤 playbook 을 실행할지 보관.
+  const [credsTarget, setCredsTarget] = useState<Playbook | null>(null);
 
   const { clusters } = useClusterStore();
   useClusters(); // fetch
@@ -118,10 +136,22 @@ export function PlaybooksPage() {
     setEditPlaybook(null);
   };
 
+  // 카드의 ▶ 버튼 클릭 — 세션에 저장된 자격증명이 있으면 그대로 실행, 없으면 모달.
+  const handleRunOne = (pb: Playbook) => {
+    if (runningIds.has(pb.id)) return;
+    const cached = readSessionCreds();
+    if (cached) {
+      runPlaybook.mutate({ id: pb.id, creds: cached });
+    } else {
+      setCredsTarget(pb);
+    }
+  };
+
   const handleRunAll = () => {
+    const cached = readSessionCreds();
     filteredPlaybooks.forEach((p) => {
       if (!runningIds.has(p.id)) {
-        runPlaybook.mutate(p.id);
+        runPlaybook.mutate({ id: p.id, creds: cached ?? undefined });
       }
     });
   };
@@ -269,7 +299,7 @@ export function PlaybooksPage() {
                   key={playbook.id}
                   playbook={playbook}
                   isRunning={runningIds.has(playbook.id)}
-                  onRun={() => runPlaybook.mutate(playbook.id)}
+                  onRun={() => handleRunOne(playbook)}
                   onEdit={() => handleOpenEdit(playbook)}
                   onDelete={() => {
                     if (confirm(`Delete playbook "${playbook.name}"?`)) {
@@ -292,6 +322,19 @@ export function PlaybooksPage() {
         clusters={clusters}
         defaultClusterId={activeClusterId}
         initialData={editPlaybook}
+      />
+
+      {/* SSH 자격증명 모달 — 단일 실행 시 자동 표시. */}
+      <RunCredsModal
+        open={!!credsTarget}
+        playbookName={credsTarget?.name ?? ''}
+        onClose={() => setCredsTarget(null)}
+        onRun={(creds) => {
+          if (credsTarget) {
+            runPlaybook.mutate({ id: credsTarget.id, creds });
+            setCredsTarget(null);
+          }
+        }}
       />
       </main>
     </div>

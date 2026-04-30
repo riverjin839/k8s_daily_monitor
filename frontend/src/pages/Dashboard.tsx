@@ -11,7 +11,8 @@ import {
   KubeconfigEditModal,
   KanbanSummaryCharts,
 } from '@/components/dashboard';
-import { PlaybookCard, AddPlaybookModal } from '@/components/playbooks';
+import { PlaybookCard, AddPlaybookModal, RunCredsModal } from '@/components/playbooks';
+import type { PlaybookSshCreds } from '@/types';
 import { MacCard } from '@/components/ui/MacCard';
 import { ClusterSidebar, DebugLogPanel } from '@/components/common';
 import { useClusterStore } from '@/stores/clusterStore';
@@ -154,6 +155,7 @@ export function Dashboard() {
   const [showAddMetric, setShowAddMetric] = useState(false);
   const [showPlaybookModal, setShowPlaybookModal] = useState(false);
   const [editingPlaybook, setEditingPlaybook] = useState<Playbook | null>(null);
+  const [credsTarget, setCredsTarget] = useState<Playbook | null>(null);
   const [showKubeconfig, setShowKubeconfig] = useState(false);
   const [editingMetricCard, setEditingMetricCard] = useState<MetricCard | null>(null);
   const { clusters, summary, addons, isChecking, lastCheckTime } = useClusterStore();
@@ -409,7 +411,19 @@ export function Dashboard() {
                     key={playbook.id}
                     playbook={playbook}
                     isRunning={runningIds.has(playbook.id)}
-                    onRun={() => runPlaybook.mutate(playbook.id)}
+                    onRun={() => {
+                      // 세션 캐시된 자격증명이 있으면 바로 실행, 없으면 모달.
+                      let cached: PlaybookSshCreds | null = null;
+                      try {
+                        const raw = sessionStorage.getItem('k8s:playbook-ssh-creds');
+                        if (raw) cached = JSON.parse(raw);
+                      } catch { /* ignore */ }
+                      if (cached && (cached.ssh_username || cached.ssh_password || cached.ssh_private_key)) {
+                        runPlaybook.mutate({ id: playbook.id, creds: cached });
+                      } else {
+                        setCredsTarget(playbook);
+                      }
+                    }}
                     onDelete={() => { if (confirm(`Delete playbook "${playbook.name}"?`)) deletePlaybook.mutate(playbook.id); }}
                     onToggleDashboard={() => toggleDashboard.mutate(playbook.id)}
                     onEdit={() => { setEditingPlaybook(playbook); setShowPlaybookModal(true); }}
@@ -498,6 +512,18 @@ export function Dashboard() {
         clusters={clusters}
         defaultClusterId={activeClusterId}
         initialData={editingPlaybook}
+      />
+
+      <RunCredsModal
+        open={!!credsTarget}
+        playbookName={credsTarget?.name ?? ''}
+        onClose={() => setCredsTarget(null)}
+        onRun={(creds) => {
+          if (credsTarget) {
+            runPlaybook.mutate({ id: credsTarget.id, creds });
+            setCredsTarget(null);
+          }
+        }}
       />
     </div>
   );

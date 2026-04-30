@@ -524,21 +524,61 @@ _SAMPLE_PLAYBOOKS = [
 
 
 def _seed_default_playbooks():
-    """등록된 모든 클러스터에 대해 샘플 점검 playbook 을 (cluster_id, name) 기준으로
-    한 번씩만 insert. inventory_path 는 비워둠 → 실행 시 K8s API 로 동적 inventory 생성.
+    """샘플 playbook 시드.
+
+    구조: ``ansible/playbooks/*.yml`` 본문을 DB(``ansible_playbook_files``) 에 적재한 뒤,
+    각 클러스터에 대해 ``Playbook`` 행을 생성하고 ``playbook_file_id`` 로 연결한다.
+    이렇게 하면 사용자가 운영 중 카드 본문을 수정·재배포할 때도 컨테이너 이미지를
+    다시 만들 필요 없이 DB 만으로 관리된다.
+
+    이미 같은 name 으로 등록된 playbook 이 있으면 skip — 사용자 변경을 보존.
     """
+    from app.models.ansible_assets import AnsiblePlaybookFile
     from app.models.cluster import Cluster
     from app.models.playbook import Playbook
 
+    # 1) 디스크의 .yml 본문을 읽어 ansible_playbook_files 에 upsert.
+    base_dir = settings.ansible_playbook_dir.rstrip("/")
+    file_id_by_sample: dict[str, "uuid.UUID"] = {}
     db = SessionLocal()
     try:
+        for sp in _SAMPLE_PLAYBOOKS:
+            disk_path = f"{base_dir}/{sp['playbook_path']}"
+            if not os.path.exists(disk_path):
+                # 파일이 없으면 스킵 — 컨테이너 빌드 컨텍스트에 ansible/ 가 빠진 경우.
+                continue
+            try:
+                with open(disk_path, "r", encoding="utf-8") as f:
+                    body = f.read()
+            except OSError:
+                continue
+
+            existing = db.query(AnsiblePlaybookFile).filter(
+                AnsiblePlaybookFile.name == sp["name"],
+            ).first()
+            if existing is None:
+                row = AnsiblePlaybookFile(
+                    name=sp["name"],
+                    description=sp["description"],
+                    content=body,
+                )
+                db.add(row)
+                db.flush()
+                file_id_by_sample[sp["name"]] = row.id
+            else:
+                # 기존 description 만 갱신 (content 는 사용자 편집 가능성 있어 보존).
+                if existing.description != sp["description"]:
+                    existing.description = sp["description"]
+                file_id_by_sample[sp["name"]] = existing.id
+        db.commit()
+
+        # 2) 등록된 클러스터마다 Playbook 행을 생성, playbook_file_id 로 연결.
         clusters = db.query(Cluster).all()
         if not clusters:
             return  # 클러스터가 등록될 때까지 보류 (재기동 시 다시 시도됨)
 
         added = 0
         for cluster in clusters:
-            # 이미 어떤 playbook 이라도 있으면 보수적으로 skip — 사용자가 직접 정리한 클러스터는 건드리지 않음.
             existing_names = {
                 row[0] for row in db.query(Playbook.name)
                 .filter(Playbook.cluster_id == cluster.id).all()
@@ -550,8 +590,8 @@ def _seed_default_playbooks():
                     cluster_id=cluster.id,
                     name=sp["name"],
                     description=sp["description"],
-                    # ansible_playbook_dir 기준 절대경로로 저장 — 컨테이너 안에서 그대로 실행 가능
-                    playbook_path=f"{settings.ansible_playbook_dir.rstrip('/')}/{sp['playbook_path']}",
+                    # 신 모델: DB 본문을 가리키는 FK 사용. (구 playbook_path 는 더 이상 의존하지 않음)
+                    playbook_file_id=file_id_by_sample.get(sp["name"]),
                     inventory_path=None,   # ← K8s 전체 노드를 동적 inventory 로 사용
                     extra_vars=sp.get("extra_vars"),
                     show_on_dashboard=sp.get("show_on_dashboard", False),

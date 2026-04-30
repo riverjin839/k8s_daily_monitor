@@ -6,7 +6,7 @@ import {
   Settings, Link2, Tags, Calculator, Server, GitFork, BookMarked, Layers,
   Pencil, Moon, Sun, Monitor, Map, BarChart3, Network,
   Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
-  PanelLeftOpen, X, ClipboardCheck, ListTree,
+  PanelLeftOpen, X, ClipboardCheck, ListTree, ChevronRight,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
@@ -136,6 +136,8 @@ export function Sidebar() {
   const navWidth = useSidebarStore((s) => s.navWidth);
   const setNavWidth = useSidebarStore((s) => s.setNavWidth);
   const resetNav = useSidebarStore((s) => s.resetNav);
+  const collapsedGroups = useSidebarStore((s) => s.collapsedGroups);
+  const toggleGroup = useSidebarStore((s) => s.toggleGroup);
 
   const iconOnly = navWidth < NAV_COLLAPSE_AT;
 
@@ -203,30 +205,47 @@ export function Sidebar() {
           {NAV_GROUPS.map(({ id, label, paths }, groupIdx) => {
             const validPaths = paths.filter((p) => NAV_MAP[p]);
             if (validPaths.length === 0) return null;
+            // icon-only 모드는 그룹 접힘 무시 (라벨이 안 보이므로 의미 없음).
+            // 현재 페이지가 속한 그룹은 자동 펼침 — 사용자가 어디 있는지 보이게.
+            const containsActive = validPaths.includes(location.pathname);
+            const isCollapsed = !iconOnly && !containsActive && (collapsedGroups[id] ?? true);
             return (
               <div key={id}>
                 {iconOnly
                   ? (groupIdx > 0 && <div className="mx-3 my-1.5 border-t border-border/40" aria-hidden="true" />)
                   : (
-                    <p className={`${groupIdx > 0 ? 'mt-3' : ''} px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70`}>
-                      {label}
-                    </p>
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(id)}
+                      className={`${groupIdx > 0 ? 'mt-3' : ''} w-full flex items-center gap-1 px-3 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors`}
+                      aria-expanded={!isCollapsed}
+                    >
+                      <ChevronRight
+                        className={`w-3 h-3 flex-shrink-0 transition-transform ${isCollapsed ? '' : 'rotate-90'}`}
+                      />
+                      <span className="flex-1 text-left">{label}</span>
+                      <span className="text-[10px] text-muted-foreground/60 font-medium normal-case tracking-normal">
+                        {validPaths.length}
+                      </span>
+                    </button>
                   )
                 }
-                <div className={`flex flex-col gap-0.5 ${iconOnly ? 'px-1.5' : 'px-2'}`}>
-                  {validPaths.map((path) => (
-                    <NavItem
-                      key={path}
-                      path={path}
-                      label={getLabel(path)}
-                      Icon={NAV_MAP[path].icon}
-                      isActive={location.pathname === path}
-                      showLabel={!iconOnly}
-                      onHover={onNavHover}
-                      onLeave={onNavLeave}
-                    />
-                  ))}
-                </div>
+                {!isCollapsed && (
+                  <div className={`flex flex-col gap-0.5 ${iconOnly ? 'px-1.5' : 'px-2'}`}>
+                    {validPaths.map((path) => (
+                      <NavItem
+                        key={path}
+                        path={path}
+                        label={getLabel(path)}
+                        Icon={NAV_MAP[path].icon}
+                        isActive={location.pathname === path}
+                        showLabel={!iconOnly}
+                        onHover={onNavHover}
+                        onLeave={onNavLeave}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}

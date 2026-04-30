@@ -71,9 +71,10 @@ function EditClusterModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6">
-        <h2 className="text-lg font-semibold mb-5">클러스터 수정</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-8 max-h-[90vh] overflow-y-auto">
+        <h2 className="text-2xl font-bold tracking-tight mb-1">클러스터 수정</h2>
+        <p className="text-sm text-muted-foreground mb-6">이름·API Endpoint·kubeconfig 경로만 변경됩니다. 자세한 설정은 클러스터 관리 페이지에서 가능합니다.</p>
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-muted-foreground mb-1.5">클러스터 이름 *</label>
             <input
@@ -230,9 +231,10 @@ function ManagementServerModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg font-semibold mb-5">{server ? '관리서버 수정' : '관리서버 추가'}</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 p-8 max-h-[90vh] overflow-y-auto">
+        <h2 className="text-2xl font-bold tracking-tight mb-1">{server ? '관리서버 수정' : '관리서버 추가'}</h2>
+        <p className="text-sm text-muted-foreground mb-6">SSH 접속 정보와 라벨 / 카테고리만 등록되며, 비밀번호 / 키는 DB 에 저장하지 않습니다.</p>
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="block text-sm font-medium text-muted-foreground mb-1.5">서버 이름 *</label>
@@ -469,7 +471,7 @@ export function SettingsPage() {
     cicd: 'CI/CD',
   };
 
-  type TabId = 'cluster' | 'server' | 'assignee' | 'debug' | 'backup';
+  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'debug' | 'backup';
   const [activeTab, setActiveTab] = useState<TabId>('cluster');
 
   // Debug 설정
@@ -482,6 +484,7 @@ export function SettingsPage() {
     { id: 'cluster', label: '클러스터', icon: <Server className="w-4 h-4" />, count: clusters.length },
     { id: 'server', label: '관리서버', icon: <MonitorDot className="w-4 h-4" />, count: servers.length },
     { id: 'assignee', label: '담당자', icon: <UserCheck className="w-4 h-4" />, count: assignees.length },
+    { id: 'operations', label: '운영레벨', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
     { id: 'debug', label: 'Debug', icon: <Bug className="w-4 h-4" />, count: debugActiveCount },
     { id: 'backup', label: '백업 / 복구', icon: <HardDrive className="w-4 h-4" />, count: 0 },
   ];
@@ -552,8 +555,8 @@ export function SettingsPage() {
           </div>
         </div>}
 
-        {/* 운영레벨 관리 */}
-        {activeTab === 'cluster' && (
+        {/* 운영레벨 관리 — 별도 탭 */}
+        {activeTab === 'operations' && (
           <div className="mb-8">
             <OperationLevelsManager />
           </div>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ClipboardList } from 'lucide-react';
+import { ArrowLeft, ClipboardList, Plus, Settings2 } from 'lucide-react';
 import { Issue, IssueCreate, IssueUpdate } from '@/types';
 import { loadIssueImages, saveIssueImages } from '@/lib/issueImages';
 import { RichTextEditor } from '@/components/editor';
@@ -9,7 +9,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useIssues, useCreateIssue, useUpdateIssue } from '@/hooks/useIssues';
 
-const ISSUE_AREAS = [
+const DEFAULT_ISSUE_AREAS = [
   'API Server',
   'etcd',
   'Node',
@@ -21,8 +21,22 @@ const ISSUE_AREAS = [
   'Keycloak',
   'Nexus',
   'Monitoring',
-  '기타',
 ];
+const ISSUE_AREAS = [...DEFAULT_ISSUE_AREAS, '기타'];
+const AREA_STORAGE_KEY = 'k8s:issue:areas';
+
+function loadCustomAreas(): string[] {
+  try {
+    const raw = localStorage.getItem(AREA_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomAreas(areas: string[]) {
+  localStorage.setItem(AREA_STORAGE_KEY, JSON.stringify(areas));
+}
 
 function todayDatetimeLocal(): string {
   const d = new Date();
@@ -58,6 +72,9 @@ export function IssueFormPage() {
   const [clusterId, setClusterId] = useState('');
   const [issueArea, setIssueArea] = useState('');
   const [issueAreaCustom, setIssueAreaCustom] = useState('');
+  const [customAreas, setCustomAreas] = useState<string[]>(loadCustomAreas);
+  const [showAreaManage, setShowAreaManage] = useState(false);
+  const [newAreaInput, setNewAreaInput] = useState('');
   const [issueContent, setIssueContent] = useState('');
   const [actionContent, setActionContent] = useState('');
   const [detailContent, setDetailContent] = useState('');
@@ -67,6 +84,25 @@ export function IssueFormPage() {
   const [images, setImages] = useState<string[]>([]);
   const [hydrated, setHydrated] = useState(!isEdit);
 
+  const allAreas = [...DEFAULT_ISSUE_AREAS, ...customAreas, '기타'];
+
+  const addCustomArea = () => {
+    const a = newAreaInput.trim();
+    if (!a || allAreas.includes(a)) return;
+    const updated = [...customAreas, a];
+    setCustomAreas(updated);
+    saveCustomAreas(updated);
+    setNewAreaInput('');
+    setIssueArea(a);
+  };
+
+  const deleteCustomArea = (a: string) => {
+    const updated = customAreas.filter((x) => x !== a);
+    setCustomAreas(updated);
+    saveCustomAreas(updated);
+    if (issueArea === a) setIssueArea('');
+  };
+
   // Hydrate form when editing and data is available
   useEffect(() => {
     if (!isEdit || hydrated) return;
@@ -74,7 +110,8 @@ export function IssueFormPage() {
     setPrimaryAssignee(editIssue.primaryAssignee ?? editIssue.assignee);
     setSecondaryAssignee(editIssue.secondaryAssignee ?? '');
     setClusterId(editIssue.clusterId ?? '');
-    const predefined = ISSUE_AREAS.includes(editIssue.issueArea);
+    const allKnown = [...ISSUE_AREAS, ...loadCustomAreas()];
+    const predefined = allKnown.includes(editIssue.issueArea);
     setIssueArea(predefined ? editIssue.issueArea : '기타');
     setIssueAreaCustom(predefined ? '' : editIssue.issueArea);
     setIssueContent(editIssue.issueContent);
@@ -151,28 +188,49 @@ export function IssueFormPage() {
   const labelClass = 'block text-sm font-medium mb-1';
 
   const submitting = createIssue.isPending || updateIssue.isPending;
+  const pageTitle = isEdit ? '이슈 수정' : '이슈 등록';
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1200px] mx-auto px-8 py-8">
-        {/* Page header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate('/issues')}
-              className="p-2 hover:bg-secondary rounded-lg transition-colors"
-              title="목록으로"
-            >
-              <ArrowLeft className="w-4 h-4" />
+      {/* 노션 스타일 sticky bar */}
+      <div className="sticky top-0 z-10 bg-background/85 backdrop-blur-md border-b border-border">
+        <div className="max-w-[1400px] mx-auto px-8 py-2.5 flex items-center gap-2">
+          <button
+            onClick={() => navigate('/issues')}
+            className="p-1.5 hover:bg-secondary rounded-lg transition-colors text-muted-foreground hover:text-foreground"
+            title="목록으로"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <ClipboardList className="w-4 h-4 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">{pageTitle}</span>
+          <div className="ml-auto flex items-center gap-2">
+            <button type="button" onClick={() => navigate('/issues')}
+              className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg">
+              취소
             </button>
-            <ClipboardList className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">{isEdit ? '이슈 수정' : '이슈 등록'}</h1>
+            <button type="submit" form="issue-form" disabled={submitting}
+              className="px-4 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg disabled:opacity-50">
+              {submitting ? '저장 중…' : isEdit ? '저장' : '등록'}
+            </button>
           </div>
+        </div>
+      </div>
+
+      <main className="max-w-[1400px] mx-auto px-8 pt-10 pb-16">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-foreground tracking-tight">{pageTitle}</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {isEdit
+              ? '필요한 항목을 수정한 뒤 상단의 저장 버튼을 누르세요.'
+              : '담당자, 영역, 발생일을 입력하고 이슈 내용·조치 내용을 작성하세요.'}
+          </p>
         </div>
 
         <form
+          id="issue-form"
           onSubmit={handleSubmit}
-          className="bg-card border border-border rounded-xl p-6 space-y-5"
+          className="bg-card border border-border rounded-2xl p-8 space-y-6 mac-shadow"
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* 담당자(정/부) */}
@@ -219,7 +277,18 @@ export function IssueFormPage() {
                 ))}
               </select>
 
-              <label className={`${labelClass} mt-3`}>이슈 부분 *</label>
+              <div className="flex items-center justify-between mt-3 mb-1">
+                <label className="text-sm font-medium">이슈 부분 *</label>
+                <button
+                  type="button"
+                  onClick={() => setShowAreaManage((v) => !v)}
+                  className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  title="이슈 부분 관리"
+                >
+                  <Settings2 className="w-3 h-3" />
+                  관리
+                </button>
+              </div>
               <div className="flex gap-2">
                 <select
                   value={issueArea}
@@ -228,7 +297,7 @@ export function IssueFormPage() {
                   required={issueArea !== '기타'}
                 >
                   <option value="">— 선택 —</option>
-                  {ISSUE_AREAS.map((area) => (
+                  {allAreas.map((area) => (
                     <option key={area} value={area}>
                       {area}
                     </option>
@@ -245,6 +314,48 @@ export function IssueFormPage() {
                   />
                 )}
               </div>
+              {showAreaManage && (
+                <div className="mt-2 p-3 bg-muted/20 border border-border rounded-lg space-y-2">
+                  {customAreas.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground font-medium">사용자 분류</p>
+                      {customAreas.map((a) => (
+                        <div key={a} className="flex items-center justify-between py-0.5">
+                          <span className="text-xs text-foreground/80">{a}</span>
+                          <button
+                            type="button"
+                            onClick={() => deleteCustomArea(a)}
+                            className="text-xs text-muted-foreground hover:text-red-400 transition-colors px-1"
+                            title="삭제"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={newAreaInput}
+                      onChange={(e) => setNewAreaInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); addCustomArea(); }
+                      }}
+                      placeholder="새 이슈 부분 입력 (예: Backup, IDM)"
+                      className="flex-1 px-2 py-1 text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={addCustomArea}
+                      className="flex items-center gap-0.5 px-2 py-1 text-xs bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                      추가
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -321,23 +432,6 @@ export function IssueFormPage() {
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex justify-end gap-3 pt-3 border-t border-border">
-            <button
-              type="button"
-              onClick={() => navigate('/issues')}
-              className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
-            >
-              취소
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isEdit ? '저장' : '등록'}
-            </button>
-          </div>
         </form>
       </main>
     </div>

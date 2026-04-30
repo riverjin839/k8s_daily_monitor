@@ -306,17 +306,38 @@ def create_cluster(cluster_data: ClusterCreate, db: Session = Depends(get_db)):
         db.add(Addon(cluster_id=cluster.id, **addon_config))
 
     # 새 클러스터에도 샘플 점검 playbook 을 자동으로 채워 넣는다.
-    # main.py 의 _seed_default_playbooks 와 동일한 정의를 재사용해 일관성 유지.
+    # 본문은 ansible_playbook_files (DB 라이브러리) 를 통해 공유 — 이미 lifespan 시드에서
+    # upsert 됐다면 그 row 를 재사용하고, 없으면 디스크에서 읽어 새로 등록한다.
     try:
         from app.main import _SAMPLE_PLAYBOOKS
+        from app.models.ansible_assets import AnsiblePlaybookFile
         from app.models.playbook import Playbook as PlaybookModel
 
+        base_dir = settings.ansible_playbook_dir.rstrip("/")
         for sp in _SAMPLE_PLAYBOOKS:
+            file_row = db.query(AnsiblePlaybookFile).filter(
+                AnsiblePlaybookFile.name == sp["name"],
+            ).first()
+            if file_row is None:
+                disk_path = f"{base_dir}/{sp['playbook_path']}"
+                if os.path.exists(disk_path):
+                    try:
+                        with open(disk_path, "r", encoding="utf-8") as f:
+                            body = f.read()
+                        file_row = AnsiblePlaybookFile(
+                            name=sp["name"],
+                            description=sp["description"],
+                            content=body,
+                        )
+                        db.add(file_row)
+                        db.flush()
+                    except OSError:
+                        file_row = None
             db.add(PlaybookModel(
                 cluster_id=cluster.id,
                 name=sp["name"],
                 description=sp["description"],
-                playbook_path=f"{settings.ansible_playbook_dir.rstrip('/')}/{sp['playbook_path']}",
+                playbook_file_id=file_row.id if file_row else None,
                 inventory_path=None,
                 extra_vars=sp.get("extra_vars"),
                 show_on_dashboard=sp.get("show_on_dashboard", False),

@@ -4,7 +4,7 @@ import { ViewModeBar, DebugLogPanel, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import {
   Server, AlertTriangle, Search, ChevronDown,
-  LayoutList, LayoutGrid, Network, Loader2,
+  LayoutList, LayoutGrid, Network, Loader2, GripVertical,
 } from 'lucide-react';
 import type { Cluster } from '@/types';
 import { useClusters } from '@/hooks/useCluster';
@@ -19,11 +19,16 @@ import {
   ClusterCustomFieldsManager,
   type DiffRow,
 } from '@/components/cluster-manage';
-import { useOperationLevels } from '@/hooks/useOperationLevels';
+import { useOperationLevels, levelLabel } from '@/hooks/useOperationLevels';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { ResizeGrip } from '@/components/common';
 import { useClusterCustomFields, sortedFields } from '@/hooks/useClusterCustomFields';
 import { Settings2 } from 'lucide-react';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+type GroupByMode = 'none' | 'region' | 'level';
 
 // ── CIDR 겹침 유틸 ────────────────────────────────────────────────────────────
 function cidrIpToNum(ip: string): number {
@@ -47,6 +52,31 @@ function cidrsOverlap(a: string, b: string): boolean {
 
 const STATUS_ORDER: Record<string, number> = { critical: 0, warning: 1, healthy: 2, pending: 3 };
 
+// ── 드래그 가능한 ClusterCard 래퍼 ────────────────────────────────────────────
+function SortableClusterCard(
+  props: Parameters<typeof ClusterCard>[0],
+) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.cluster.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="relative group/card">
+      <button
+        {...attributes} {...listeners}
+        className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded text-muted-foreground/30 opacity-0 group-hover/card:opacity-100 hover:text-muted-foreground hover:bg-secondary transition-all"
+        title="드래그하여 순서 변경"
+        aria-label="순서 변경 핸들"
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
+      <ClusterCard {...props} />
+    </div>
+  );
+}
+
 // ── 메인 페이지 ───────────────────────────────────────────────────────────────
 export function ClusterManagePage() {
   const navigate = useNavigate();
@@ -62,7 +92,8 @@ export function ClusterManagePage() {
   const [bulkCollecting, setBulkCollecting] = useState(false);
   const [search, setSearch]               = useState('');
   const [filterLevel, setFilterLevel]     = useState('');
-  const [sortBy, setSortBy]               = useState<'name' | 'status' | 'level'>('name');
+  const [sortBy, setSortBy]               = useState<'name' | 'status' | 'level' | 'manual'>('manual');
+  const [groupBy, setGroupBy]             = useState<GroupByMode>('none');
   const [showFilter, setShowFilter]       = useState(false);
   const [viewMode, setViewMode]           = useState<'table' | 'card'>('table');
   const [ciliumCluster, setCiliumCluster] = useState<Cluster | null>(null);
@@ -113,10 +144,72 @@ export function ClusterManagePage() {
     list.sort((a, b) => {
       if (sortBy === 'status') return (STATUS_ORDER[a.status] ?? 3) - (STATUS_ORDER[b.status] ?? 3);
       if (sortBy === 'level')  return (a.operationLevel ?? '').localeCompare(b.operationLevel ?? '');
+      if (sortBy === 'manual') return (a.seq ?? 0) - (b.seq ?? 0);
       return a.name.localeCompare(b.name);
     });
     return list;
   }, [clusters, search, filterLevel, sortBy]);
+
+  // ── 그룹화 ──────────────────────────────────────────────────────────────────
+  // groupBy === 'none' 면 단일 그룹 (label 없음). 그 외는 키별로 묶고 빈 값은 "(미지정)" 으로 표시.
+  const groupedClusters = useMemo(() => {
+    if (groupBy === 'none') {
+      return [{ key: '_all', label: '', clusters: filteredClusters }];
+    }
+    const buckets = new Map<string, Cluster[]>();
+    for (const c of filteredClusters) {
+      const raw = groupBy === 'region' ? c.region : c.operationLevel;
+      const key = (raw ?? '').trim() || '_unset';
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key)!.push(c);
+    }
+    // 그룹 정렬: 미지정은 마지막, 나머지는 알파벳/사용자 정의 순.
+    const entries = Array.from(buckets.entries());
+    entries.sort((a, b) => {
+      if (a[0] === '_unset') return 1;
+      if (b[0] === '_unset') return -1;
+      return a[0].localeCompare(b[0]);
+    });
+    return entries.map(([key, list]) => ({
+      key,
+      label: key === '_unset'
+        ? '(미지정)'
+        : (groupBy === 'level' ? levelLabel(opsLevels, key) : key),
+      clusters: list,
+    }));
+  }, [filteredClusters, groupBy, opsLevels]);
+
+  // ── 드래그 순서 변경 ─────────────────────────────────────────────────────
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const handleDragEnd = async (e: DragEndEvent) => {
+    if (!e.over || e.active.id === e.over.id) return;
+    const activeId = String(e.active.id);
+    const overId = String(e.over.id);
+
+    // 같은 그룹 내에서만 순서 변경 — 그룹간 이동은 region/operationLevel 자체 편집을 요구.
+    const activeGroup = groupedClusters.find((g) => g.clusters.some((c) => c.id === activeId));
+    const overGroup = groupedClusters.find((g) => g.clusters.some((c) => c.id === overId));
+    if (!activeGroup || !overGroup || activeGroup.key !== overGroup.key) return;
+
+    const oldIdx = activeGroup.clusters.findIndex((c) => c.id === activeId);
+    const newIdx = activeGroup.clusters.findIndex((c) => c.id === overId);
+    if (oldIdx < 0 || newIdx < 0) return;
+
+    const reorderedGroup = arrayMove(activeGroup.clusters, oldIdx, newIdx);
+    // 전체 클러스터 정렬: 영향받지 않은 그룹은 그대로 + 영향받은 그룹만 새 순서.
+    const fullOrder: string[] = [];
+    for (const g of groupedClusters) {
+      const slice = g.key === activeGroup.key ? reorderedGroup : g.clusters;
+      for (const c of slice) fullOrder.push(c.id);
+    }
+    try {
+      await clustersApi.reorder(fullOrder);
+      queryClient.invalidateQueries({ queryKey: ['clusters'] });
+    } catch (err) {
+      toast.error('순서 변경 실패', formatApiError(err));
+    }
+  };
 
   const cidrOverlapGroups = useMemo(() => {
     if (clusters.length < 2) return new Map<string, number>();
@@ -348,11 +441,21 @@ export function ClusterManagePage() {
             </div>
             <div className="min-w-[140px]">
               <label className="block text-xs text-muted-foreground mb-1">정렬</label>
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'name' | 'status' | 'level')}
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'name' | 'status' | 'level' | 'manual')}
                 className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
+                <option value="manual">수동(드래그)</option>
                 <option value="name">이름순</option>
                 <option value="status">상태순</option>
                 <option value="level">운영레벨순</option>
+              </select>
+            </div>
+            <div className="min-w-[140px]">
+              <label className="block text-xs text-muted-foreground mb-1">그룹</label>
+              <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupByMode)}
+                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
+                <option value="none">그룹 없음</option>
+                <option value="region">지역별</option>
+                <option value="level">운영레벨별</option>
               </select>
             </div>
             {(search || filterLevel) && (
@@ -409,41 +512,80 @@ export function ClusterManagePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredClusters.map(cluster => (
-                    <ClusterTableRow
-                      key={cluster.id}
-                      cluster={cluster}
-                      onEdit={c => navigate(`/cluster-manage/${c.id}/edit`)}
-                      onDelete={handleDelete}
-                      deletingId={deletingId}
-                      overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
-                      onCilium={c => setCiliumCluster(c)}
-                      onAutoUpdate={handleAutoUpdate}
-                      autoUpdatingId={autoUpdatingId}
-                      customFields={customFields}
-                      onCollectNodeIps={collectNodeIps}
-                      collectingNodeIpsId={collectingNodeIpsId}
-                    />
-                  ))}
+                  {groupedClusters.flatMap((group) => {
+                    const rows: React.ReactNode[] = [];
+                    if (group.label) {
+                      rows.push(
+                        <tr key={`hdr-${group.key}`} className="bg-primary/5 border-y border-primary/20">
+                          <td colSpan={COLUMNS.length + customFields.length + 1}
+                            className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-primary">
+                            {groupBy === 'region' ? '🌐' : '🏷️'} {group.label}
+                            <span className="ml-2 text-muted-foreground font-normal normal-case tracking-normal">
+                              {group.clusters.length}개
+                            </span>
+                          </td>
+                        </tr>,
+                      );
+                    }
+                    for (const cluster of group.clusters) {
+                      rows.push(
+                        <ClusterTableRow
+                          key={cluster.id}
+                          cluster={cluster}
+                          onEdit={c => navigate(`/cluster-manage/${c.id}/edit`)}
+                          onDelete={handleDelete}
+                          deletingId={deletingId}
+                          overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
+                          onCilium={c => setCiliumCluster(c)}
+                          onAutoUpdate={handleAutoUpdate}
+                          autoUpdatingId={autoUpdatingId}
+                          customFields={customFields}
+                          onCollectNodeIps={collectNodeIps}
+                          collectingNodeIpsId={collectingNodeIpsId}
+                        />,
+                      );
+                    }
+                    return rows;
+                  })}
                 </tbody>
               </table>
             </div>
           </div>
         ) : (
-          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-            {filteredClusters.map(cluster => (
-              <ClusterCard
-                key={cluster.id}
-                cluster={cluster}
-                onEdit={c => navigate(`/cluster-manage/${c.id}/edit`)}
-                onDelete={handleDelete}
-                deletingId={deletingId}
-                overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
-                onAutoUpdate={handleAutoUpdate}
-                autoUpdatingId={autoUpdatingId}
-              />
-            ))}
-          </div>
+          <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <div className="space-y-5">
+              {groupedClusters.map((group) => (
+                <div key={group.key}>
+                  {group.label && (
+                    <div className="flex items-baseline gap-2 mb-2 px-1 border-l-2 border-primary pl-3">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-primary">
+                        {groupBy === 'region' ? '🌐' : '🏷️'} {group.label}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {group.clusters.length}개
+                      </span>
+                    </div>
+                  )}
+                  <SortableContext items={group.clusters.map((c) => c.id)} strategy={rectSortingStrategy}>
+                    <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+                      {group.clusters.map((cluster) => (
+                        <SortableClusterCard
+                          key={cluster.id}
+                          cluster={cluster}
+                          onEdit={c => navigate(`/cluster-manage/${c.id}/edit`)}
+                          onDelete={handleDelete}
+                          deletingId={deletingId}
+                          overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
+                          onAutoUpdate={handleAutoUpdate}
+                          autoUpdatingId={autoUpdatingId}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </div>
+              ))}
+            </div>
+          </DndContext>
         )}
 
         <p className="text-xs text-muted-foreground mt-6 text-center">

@@ -23,7 +23,10 @@ RUN if [ -n "${ALPINE_MIRROR_URL}" ]; then \
     fi
 
 # 시스템 패키지 (ansible SSH 연결, kubectl 다운로드용)
-RUN apk add --no-cache openssh-client sshpass curl ca-certificates
+# - ansible / ansible-core 는 pip 로 설치하므로 여기서는 아래 의존성만 둔다.
+# - py3-cryptography 등 ansible-core 빌드 의존성은 alpine 의 python 3.11 패키지로 충당.
+RUN apk add --no-cache openssh-client sshpass curl ca-certificates \
+    gcc musl-dev libffi-dev openssl-dev python3-dev cargo
 
 # kubectl 설치 — 체커/자동업데이트에서 subprocess 로 호출
 # 폐쇄망이면 KUBECTL_MIRROR_URL 로 Nexus raw 저장소를 가리키게 함

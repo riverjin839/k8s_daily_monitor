@@ -14,6 +14,7 @@ from app.schemas.playbook import (
     PlaybookUpdate,
     PlaybookResponse,
     PlaybookListResponse,
+    PlaybookRunRequest,
     PlaybookRunResponse,
 )
 from app.services.kubeconfig import ensure_kubeconfig_file
@@ -286,8 +287,16 @@ def delete_playbook(playbook_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/{playbook_id}/run", response_model=PlaybookRunResponse)
-def run_playbook_endpoint(playbook_id: UUID, db: Session = Depends(get_db)):
-    """Playbook 실행 (동기)"""
+def run_playbook_endpoint(
+    playbook_id: UUID,
+    payload: PlaybookRunRequest = PlaybookRunRequest(),
+    db: Session = Depends(get_db),
+):
+    """Playbook 실행 (동기).
+
+    payload 로 전달된 SSH 자격증명은 휘발성 — DB 에 저장되지 않고
+    extra_vars 에 합쳐 ``ansible-playbook -e`` 로만 전달된다.
+    """
     playbook = db.query(Playbook).filter(Playbook.id == playbook_id).first()
     if not playbook:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playbook not found")
@@ -306,14 +315,30 @@ def run_playbook_endpoint(playbook_id: UUID, db: Session = Depends(get_db)):
     if not inv_content and not playbook.inventory_path:
         inventory_hosts = _cluster_node_hosts(playbook.cluster) or None
 
+    # SSH 자격증명을 extra_vars 로 머지 — playbook 의 hostvars 기본값을 덮음.
+    # (인벤토리에 이미 동일 변수가 있으면 ansible 우선순위 규칙상 group/host vars 가 이김 →
+    #  여기서는 dynamic inventory 케이스를 위해 -e 로 전달.)
+    merged_vars: dict = dict(playbook.extra_vars or {})
+    if payload.ssh_username:
+        merged_vars["ansible_user"] = payload.ssh_username
+    if payload.ssh_password:
+        merged_vars["ansible_ssh_pass"] = payload.ssh_password
+    if payload.ssh_port:
+        merged_vars["ansible_port"] = payload.ssh_port
+    if payload.become is not None:
+        merged_vars["ansible_become"] = bool(payload.become)
+    if payload.become_password:
+        merged_vars["ansible_become_pass"] = payload.become_password
+
     result = run_playbook(
         playbook_path=playbook.playbook_path,
         inventory_path=playbook.inventory_path,
         playbook_content=pb_content,
         inventory_content=inv_content,
-        extra_vars=playbook.extra_vars,
+        extra_vars=merged_vars or None,
         tags=playbook.tags,
         inventory_hosts=inventory_hosts,
+        ssh_private_key=payload.ssh_private_key,
     )
 
     # 결과 저장

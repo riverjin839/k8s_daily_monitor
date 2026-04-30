@@ -41,11 +41,12 @@ function StatusPill({ status }: { status: string }) {
 interface CreateJobModalProps {
   open: boolean;
   clusterId: string;
+  defaultJobType?: string;
   onClose: () => void;
   onCreated: () => void;
 }
 
-function CreateJobModal({ open, clusterId, onClose, onCreated }: CreateJobModalProps) {
+function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }: CreateJobModalProps) {
   const typesQ = useBatchJobTypes();
   const create = useCreateBatchJob();
 
@@ -66,12 +67,15 @@ function CreateJobModal({ open, clusterId, onClose, onCreated }: CreateJobModalP
     [typesQ.data, jobType],
   );
 
+  // 모달이 열릴 때마다 defaultJobType 우선, 없으면 첫 번째 타입을 기본값으로.
   useEffect(() => {
     if (!open) return;
-    if (!jobType && typesQ.data && typesQ.data.length > 0) {
+    if (defaultJobType) {
+      setJobType(defaultJobType);
+    } else if (!jobType && typesQ.data && typesQ.data.length > 0) {
       setJobType(typesQ.data[0].jobType);
     }
-  }, [open, typesQ.data, jobType]);
+  }, [open, defaultJobType, typesQ.data, jobType]);
 
   useEffect(() => {
     if (selectedType) {
@@ -471,116 +475,216 @@ function RunsList({ jobId }: { jobId: string }) {
   );
 }
 
+// ── 매트릭스 셀 — (클러스터 × jobType) 교차점 하나의 잡 + 마지막 실행 표시 ─────
+interface JobCellProps {
+  job: BatchJob;
+  extraCount: number;          // 같은 (cluster, jobType) 의 잡이 더 있을 때 +N more
+  onRun: () => void;
+  onDelete: () => void;
+}
+
+function JobCell({ job, extraCount, onRun, onDelete }: JobCellProps) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <StatusPill status={job.lastStatus} />
+        {!job.enabled && (
+          <span className="text-[10px] px-1 rounded bg-muted text-muted-foreground">disabled</span>
+        )}
+      </div>
+      <div className="text-[11px] font-medium text-foreground truncate" title={job.name}>{job.name}</div>
+      {job.lastRunAt && (
+        <div className="text-[10px] text-muted-foreground font-mono">
+          {job.lastRunAt.replace('T', ' ').slice(0, 16)}
+        </div>
+      )}
+      {job.cron && (
+        <div className="text-[10px] text-muted-foreground font-mono truncate" title={`cron: ${job.cron}`}>
+          ⏱ {job.cron}
+        </div>
+      )}
+      <div className="flex items-center gap-1 mt-0.5">
+        <button
+          onClick={onRun}
+          className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
+          title="실행"
+        >
+          <Play className="w-2.5 h-2.5" /> 실행
+        </button>
+        <button
+          onClick={onDelete}
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-md text-muted-foreground hover:bg-red-500/10 hover:text-red-500"
+          title="삭제"
+        >
+          <Trash2 className="w-2.5 h-2.5" />
+        </button>
+        {extraCount > 0 && (
+          <span className="text-[10px] text-muted-foreground/70 ml-auto" title="같은 분류의 다른 잡 존재">
+            +{extraCount}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function BatchJobsPage() {
   const { data: clusters = [] } = useClusters();
-  const [clusterId, setClusterId] = useState('');
-  useEffect(() => {
-    if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
-  }, [clusters, clusterId]);
-
-  const jobsQ = useBatchJobs(clusterId);
+  const allJobsQ = useBatchJobs();           // 인자 없으면 전체 클러스터의 잡을 모두 받음
+  const typesQ = useBatchJobTypes();
   const del = useDeleteBatchJob();
 
-  const [showCreate, setShowCreate] = useState(false);
+  const [createCtx, setCreateCtx] = useState<{ clusterId: string; jobType?: string } | null>(null);
   const [runJob, setRunJob] = useState<BatchJob | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<BatchJob | null>(null);
 
+  const jobs = useMemo(() => allJobsQ.data ?? [], [allJobsQ.data]);
+  const types = useMemo(() => typesQ.data ?? [], [typesQ.data]);
+
+  // 매트릭스: matrix[clusterId][jobType] = BatchJob[]
+  const matrix = useMemo(() => {
+    const m: Record<string, Record<string, BatchJob[]>> = {};
+    for (const j of jobs) {
+      if (!m[j.clusterId]) m[j.clusterId] = {};
+      if (!m[j.clusterId][j.jobType]) m[j.clusterId][j.jobType] = [];
+      m[j.clusterId][j.jobType].push(j);
+    }
+    return m;
+  }, [jobs]);
+
+  // 화면에 표시할 jobType 컬럼 — 등록된 타입(useBatchJobTypes) 우선, 정의에 없는 커스텀
+  // jobType 도 누락 없이 보이도록 실제 데이터의 jobType set 과 합집합.
+  const columns = useMemo(() => {
+    const seen = new Set<string>();
+    const cols: { jobType: string; label: string }[] = [];
+    for (const t of types) {
+      if (!seen.has(t.jobType)) { seen.add(t.jobType); cols.push({ jobType: t.jobType, label: t.label }); }
+    }
+    for (const j of jobs) {
+      if (!seen.has(j.jobType)) { seen.add(j.jobType); cols.push({ jobType: j.jobType, label: j.jobType }); }
+    }
+    return cols;
+  }, [types, jobs]);
+
   return (
-    <main className="max-w-[1400px] mx-auto p-5 space-y-5">
+    <main className="max-w-[1800px] mx-auto p-5 space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold flex items-center gap-2">
             <ListTree className="w-5 h-5" /> Batch Jobs
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            클러스터 단위 운영성 잡 (etcdctl defrag, 스냅샷, 로그 정리 등) 등록 · 실행 · 이력.
+            행 = 클러스터, 열 = 잡 종류. 셀 = 해당 클러스터에 등록된 잡과 마지막 실행 결과. 빈 셀의 + 등록 버튼으로 새 잡을 추가합니다.
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <select
-            value={clusterId}
-            onChange={(e) => setClusterId(e.target.value)}
-            className="px-3 py-1.5 text-xs bg-card border border-border rounded-xl"
-          >
-            {clusters.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          <button
-            onClick={() => setShowCreate(true)}
-            disabled={!clusterId}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-xl bg-primary text-primary-foreground disabled:opacity-60"
-          >
-            <Plus className="w-3.5 h-3.5" /> 새 잡
-          </button>
         </div>
       </div>
 
-      <MacCard title="등록된 잡">
-        {jobsQ.isLoading ? (
-          <p className="text-xs text-muted-foreground">로딩 중…</p>
-        ) : (jobsQ.data ?? []).length === 0 ? (
-          <p className="text-xs text-muted-foreground">등록된 잡이 없습니다. 우측 상단 "새 잡" 버튼으로 추가하세요.</p>
+      <MacCard title="배치 잡 매트릭스" bodyPadding="p-0">
+        {allJobsQ.isLoading ? (
+          <p className="text-xs text-muted-foreground p-5">로딩 중…</p>
+        ) : clusters.length === 0 ? (
+          <p className="text-xs text-muted-foreground p-5">등록된 클러스터가 없습니다.</p>
+        ) : columns.length === 0 ? (
+          <p className="text-xs text-muted-foreground p-5">사용 가능한 잡 타입이 없습니다 — 백엔드 batch-jobs/types 응답을 확인해 주세요.</p>
         ) : (
-          <div className="space-y-3">
-            {(jobsQ.data ?? []).map((j) => (
-              <div key={j.id} className="border border-border rounded-xl p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-sm font-semibold truncate">{j.name}</h3>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">
-                        {j.jobType}
-                      </span>
-                      <StatusPill status={j.lastStatus} />
-                      {j.cron && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">
-                          cron: {j.cron}
-                        </span>
+          <div className="overflow-x-auto">
+            <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
+              <colgroup>
+                <col style={{ width: 200 }} />
+                {columns.map((c) => <col key={c.jobType} style={{ width: 220 }} />)}
+              </colgroup>
+              <thead>
+                <tr className="border-b border-border bg-secondary/40">
+                  <th className="sticky left-0 z-10 bg-secondary/40 px-3 py-2 text-left text-xs font-semibold text-muted-foreground border-r border-border">
+                    클러스터
+                  </th>
+                  {columns.map((c) => (
+                    <th key={c.jobType}
+                      title={`Job 타입: ${c.jobType}`}
+                      className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground border-r border-border last:border-r-0">
+                      <div className="truncate" title={c.label}>{c.label}</div>
+                      <div className="text-[10px] font-mono text-muted-foreground/60 truncate">{c.jobType}</div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {clusters.map((cluster) => (
+                  <tr key={cluster.id} className="border-b border-border hover:bg-muted/10 last:border-b-0">
+                    <td className="sticky left-0 z-10 bg-card px-3 py-3 align-top border-r border-border">
+                      <div className="text-sm font-semibold truncate" title={cluster.name}>{cluster.name}</div>
+                      {cluster.region && (
+                        <div className="text-[10px] text-muted-foreground">{cluster.region}</div>
                       )}
-                      {!j.enabled && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">disabled</span>
-                      )}
-                    </div>
-                    {j.description && (
-                      <p className="text-[11px] text-muted-foreground mt-1">{j.description}</p>
-                    )}
-                    <p className="text-[11px] text-muted-foreground mt-1 font-mono">
-                      target: {j.defaultUsername}@{j.defaultHost ?? '(per-run)'}:{j.defaultPort}
-                      {j.lastRunAt && <> · last run: {j.lastRunAt.replace('T', ' ').slice(0, 19)}</>}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => setRunJob(j)}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded-lg bg-primary text-primary-foreground"
-                    >
-                      <Play className="w-3 h-3" /> 실행
-                    </button>
-                    <button
-                      onClick={() => setConfirmDelete(j)}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded-lg bg-secondary text-secondary-foreground"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-2 pt-2 border-t border-border">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">최근 실행</p>
-                  <RunsList jobId={j.id} />
-                </div>
-              </div>
-            ))}
+                    </td>
+                    {columns.map((col) => {
+                      const cellJobs = matrix[cluster.id]?.[col.jobType] ?? [];
+                      const j = cellJobs[0];
+                      return (
+                        <td key={col.jobType}
+                          className="px-3 py-3 align-top border-r border-border last:border-r-0">
+                          {j ? (
+                            <JobCell
+                              job={j}
+                              extraCount={cellJobs.length - 1}
+                              onRun={() => setRunJob(j)}
+                              onDelete={() => setConfirmDelete(j)}
+                            />
+                          ) : (
+                            <button
+                              onClick={() => setCreateCtx({ clusterId: cluster.id, jobType: col.jobType })}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-md border border-dashed border-border hover:border-primary/40 w-full justify-center"
+                              title={`${cluster.name} 에 ${col.label} 잡 등록`}
+                            >
+                              <Plus className="w-3 h-3" /> 등록
+                            </button>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </MacCard>
 
-      {showCreate && (
+      {/* 선택된 잡의 최근 실행 이력 — 매트릭스 아래에 별도 카드로 노출 */}
+      {runJob === null && (
+        <details className="bg-card border border-border rounded-xl">
+          <summary className="px-4 py-2.5 cursor-pointer text-xs font-semibold text-muted-foreground hover:text-foreground">
+            등록된 모든 잡의 최근 실행 이력 보기
+          </summary>
+          <div className="p-4 space-y-3">
+            {jobs.length === 0 ? (
+              <p className="text-xs text-muted-foreground">등록된 잡이 없습니다.</p>
+            ) : (
+              jobs.map((j) => (
+                <div key={j.id} className="border border-border rounded-lg p-2.5">
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                    <span className="text-xs font-semibold">
+                      {clusters.find((c) => c.id === j.clusterId)?.name ?? j.clusterId.slice(0, 8)}
+                    </span>
+                    <span className="text-muted-foreground/60 text-xs">·</span>
+                    <span className="text-xs font-medium">{j.name}</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">{j.jobType}</span>
+                  </div>
+                  <RunsList jobId={j.id} />
+                </div>
+              ))
+            )}
+          </div>
+        </details>
+      )}
+
+      {createCtx && (
         <CreateJobModal
-          open={showCreate}
-          clusterId={clusterId}
-          onClose={() => setShowCreate(false)}
-          onCreated={() => jobsQ.refetch()}
+          open={!!createCtx}
+          clusterId={createCtx.clusterId}
+          defaultJobType={createCtx.jobType}
+          onClose={() => setCreateCtx(null)}
+          onCreated={() => allJobsQ.refetch()}
         />
       )}
 

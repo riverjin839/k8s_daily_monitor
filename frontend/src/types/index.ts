@@ -1222,6 +1222,46 @@ export interface NodeSpecImportResult {
   items: NodeServerSpec[];
 }
 
+export interface NodeSpecHostFactsCollectRequest {
+  hosts: string[];
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  port?: number;
+  useSudo?: boolean;
+  connectTimeout?: number;
+  execTimeout?: number;
+  parallelism?: number;
+  chunkSize?: number;
+  chunkPauseMs?: number;
+  upsert?: boolean;
+}
+
+export interface NodeSpecHostFactsItem {
+  host: string;
+  status: string;
+  message?: string | null;
+  specId?: string | null;
+  hostname?: string | null;
+  bond0Ip?: string | null;
+  bond1Ip?: string | null;
+  diskCount?: number | null;
+  diskTotalGb?: number | null;
+  nonOsDiskGb?: number | null;
+  diskType?: string | null;
+  isSsd?: boolean | null;
+  isVm?: boolean | null;
+}
+
+export interface NodeSpecHostFactsCollectResponse {
+  clusterId: string;
+  updated: number;
+  inserted: number;
+  skipped: number;
+  errors: string[];
+  items: NodeSpecHostFactsItem[];
+}
+
 // ── tcpdump ────────────────────────────────────────────────────────────
 export interface TcpdumpCaptureRequest {
   clusterId?: string;
@@ -1521,4 +1561,3 @@ export interface ServiceCatalogItem {
 }
 export interface ServiceCatalogResponse { services: ServiceCatalogItem[] }
 export interface ServiceEntryListResponse { data: ServiceEntry[]; total: number }
-

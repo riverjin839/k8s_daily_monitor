@@ -896,6 +896,12 @@ export const nodeSpecsApi = {
     signal?: AbortSignal,
   ) =>
     api.post<import('@/types').NodeSpecImportResult>(`/node-specs/import/${clusterId}`, payload, { signal }),
+  collectHostFacts: (
+    clusterId: string,
+    payload: import('@/types').NodeSpecHostFactsCollectRequest,
+    signal?: AbortSignal,
+  ) =>
+    api.post<import('@/types').NodeSpecHostFactsCollectResponse>(`/node-specs/collect-host-facts/${clusterId}`, payload, { signal, timeout: 180000 }),
   csvPreview: (
     payload: import('@/types').NodeSpecCsvUploadRequest,
     signal?: AbortSignal,

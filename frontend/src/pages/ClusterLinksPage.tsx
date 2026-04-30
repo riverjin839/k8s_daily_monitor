@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Link2, Plus, Pencil, Trash2, ExternalLink, X, Check, Globe,
-  GripVertical, Table2, LayoutList, LayoutGrid,
+  GripVertical, Table2, LayoutList, LayoutGrid, Sparkles, Search,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -229,6 +229,29 @@ export function ClusterLinksPage() {
       })
     : allGroups;
 
+
+  const [keyword, setKeyword] = useState('');
+
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  const filteredCommonLinks = normalizedKeyword
+    ? commonLinks.filter(link =>
+        [link.label, link.description ?? '', link.url].join(' ').toLowerCase().includes(normalizedKeyword),
+      )
+    : commonLinks;
+
+  const filteredOrderedGroups = orderedGroups
+    .map(group => ({
+      ...group,
+      links: normalizedKeyword
+        ? group.links.filter(link =>
+            [link.label, link.description ?? '', link.url].join(' ').toLowerCase().includes(normalizedKeyword),
+          )
+        : group.links,
+    }))
+    .filter(group => !normalizedKeyword || group.links.length > 0 || group.clusterName.toLowerCase().includes(normalizedKeyword));
+
+  const totalLinks = commonLinks.length + orderedGroups.reduce((acc, g) => acc + g.links.length, 0);
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const handleDragEnd = (ev: DragEndEvent) => {
     const { active, over } = ev;
@@ -285,8 +308,8 @@ export function ClusterLinksPage() {
 
   // ── Table view renderer ────────────────────────────────────────────────────
   const renderTableView = () => {
-    const groups = orderedGroups; // show all — no pagination
-    const maxRows = Math.max(commonLinks.length, ...groups.map(g => g.links.length), 0);
+    const groups = filteredOrderedGroups; // show all — no pagination
+    const maxRows = Math.max(filteredCommonLinks.length, ...groups.map(g => g.links.length), 0);
 
     // Build grid template
     const gridCols = [
@@ -305,7 +328,7 @@ export function ClusterLinksPage() {
       <div key="h-common" className={`relative flex items-center gap-1.5 border-b border-r ${borderCls} px-3 py-2 bg-emerald-500/[0.08] sticky top-0 z-10`}>
         <Globe className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
         <span className="font-semibold text-xs text-emerald-400 truncate">공통 링크</span>
-        <span className="ml-auto text-[10px] text-muted-foreground/60 flex-shrink-0">({commonLinks.length})</span>
+        <span className="ml-auto text-[10px] text-muted-foreground/60 flex-shrink-0">({filteredCommonLinks.length})</span>
         <button onClick={() => { setTableFormTarget('common'); setEditingCommon(null); setEditingLink(null); }}
           className="ml-1 p-0.5 rounded text-emerald-400/50 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors flex-shrink-0" title="공통 링크 추가">
           <Plus className="w-3 h-3" />
@@ -353,13 +376,13 @@ export function ClusterLinksPage() {
           <div key={`c-${rowIdx}`}
             className={`border-r ${borderCls}${isLast ? '' : ` border-b ${borderCls}`} ${padClass} ${rowAlt}`}
             style={{ minHeight: rowMinH }}>
-            {commonLinks[rowIdx] ? (
-              editingCommon?.id === commonLinks[rowIdx].id ? (
-                <LinkForm initial={commonLinks[rowIdx]} onSave={handleEditCommon} onCancel={() => setEditingCommon(null)} />
+            {filteredCommonLinks[rowIdx] ? (
+              editingCommon?.id === filteredCommonLinks[rowIdx].id ? (
+                <LinkForm initial={filteredCommonLinks[rowIdx]} onSave={handleEditCommon} onCancel={() => setEditingCommon(null)} />
               ) : (
-                <CompactLinkCell link={commonLinks[rowIdx]} fontClass={fontClass} fsClass={fsClass}
-                  onEdit={() => { setEditingCommon(commonLinks[rowIdx]); setTableFormTarget(null); }}
-                  onDelete={() => handleDeleteCommon(commonLinks[rowIdx].id)} />
+                <CompactLinkCell link={filteredCommonLinks[rowIdx]} fontClass={fontClass} fsClass={fsClass}
+                  onEdit={() => { setEditingCommon(filteredCommonLinks[rowIdx]); setTableFormTarget(null); }}
+                  onDelete={() => handleDeleteCommon(filteredCommonLinks[rowIdx].id)} />
               )
             ) : null}
           </div>,
@@ -506,18 +529,50 @@ export function ClusterLinksPage() {
   );
 
   return (
-    <div className="min-h-screen bg-background">
-      <main className="max-w-[1600px] mx-auto px-8 py-8">
+    <div className="min-h-screen bg-gradient-to-b from-background via-background to-primary/5">
+      <main className="max-w-[1600px] mx-auto px-5 md:px-8 py-6 md:py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Link2 className="w-5 h-5 text-primary" />
-            <h1 className="text-xl font-bold">클러스터 주요 링크</h1>
-            <span className="hidden md:inline text-sm text-muted-foreground/60">
-              — 운영 클러스터별 대시보드 · 모니터링 · 관리 콘솔 링크 등록
-            </span>
+        <div className="mb-6 rounded-2xl border border-primary/15 bg-card/70 backdrop-blur px-4 md:px-6 py-4 md:py-5 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary">
+                  <Link2 className="w-4 h-4" />
+                </span>
+                <h1 className="text-xl font-bold">클러스터 주요 링크</h1>
+                <Sparkles className="w-4 h-4 text-amber-400" />
+              </div>
+              <p className="text-sm text-muted-foreground/70">운영 클러스터별 대시보드 · 모니터링 · 관리 콘솔을 한 곳에서 빠르게 접근하세요.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <ViewModeBar modes={VIEW_MODES} active={layout} onChange={changeLayout} />
+            </div>
           </div>
-          <ViewModeBar modes={VIEW_MODES} active={layout} onChange={changeLayout} />
+
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
+              <p className="text-[11px] text-muted-foreground">전체 링크</p>
+              <p className="text-lg font-semibold">{totalLinks}개</p>
+            </div>
+            <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
+              <p className="text-[11px] text-muted-foreground">클러스터 수</p>
+              <p className="text-lg font-semibold">{orderedGroups.length}개</p>
+            </div>
+            <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
+              <p className="text-[11px] text-muted-foreground">공통 링크</p>
+              <p className="text-lg font-semibold text-emerald-400">{commonLinks.length}개</p>
+            </div>
+          </div>
+
+          <div className="mt-3 relative">
+            <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              value={keyword}
+              onChange={e => setKeyword(e.target.value)}
+              placeholder="링크 이름, 설명, URL 검색"
+              className="w-full rounded-xl border border-border/60 bg-background pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
         </div>
 
         {/* ── Table view ── */}
@@ -537,7 +592,7 @@ export function ClusterLinksPage() {
                 <div className="flex items-center gap-2">
                   <Globe className="w-4 h-4 text-emerald-400" />
                   <span className="font-semibold text-sm text-emerald-400">공통 서비스 링크</span>
-                  <span className="text-xs text-muted-foreground">({commonLinks.length})</span>
+                  <span className="text-xs text-muted-foreground">({filteredCommonLinks.length})</span>
                 </div>
                 <button onClick={() => { setAddingCommon(true); setEditingCommon(null); }}
                   className="px-3 py-1.5 text-xs font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-lg transition-colors flex items-center gap-1">
@@ -546,7 +601,7 @@ export function ClusterLinksPage() {
               </div>
               <div className="p-4 space-y-2">
                 {addingCommon && <LinkForm onSave={handleAddCommon} onCancel={() => setAddingCommon(false)} />}
-                {commonLinks.length === 0 && !addingCommon && (
+                {filteredCommonLinks.length === 0 && !addingCommon && (
                   <div className="text-center py-8">
                     <Globe className="w-8 h-8 mx-auto mb-2 text-muted-foreground/20" />
                     <p className="text-sm text-muted-foreground">등록된 공통 링크가 없습니다.</p>
@@ -556,7 +611,7 @@ export function ClusterLinksPage() {
                   </div>
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-                  {commonLinks.map(link => (
+                  {filteredCommonLinks.map(link => (
                     <div key={link.id}>
                       {editingCommon?.id === link.id ? (
                         <LinkForm initial={link} onSave={handleEditCommon} onCancel={() => setEditingCommon(null)} />
@@ -580,11 +635,11 @@ export function ClusterLinksPage() {
             ) : (
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                 <SortableContext
-                  items={orderedGroups.map(g => g.clusterId)}
+                  items={filteredOrderedGroups.map(g => g.clusterId)}
                   strategy={layout === 'vertical' ? verticalListSortingStrategy : horizontalListSortingStrategy}
                 >
                   <div className={layout === 'horizontal' ? 'grid grid-cols-1 md:grid-cols-2 gap-6' : 'flex flex-col gap-6'}>
-                    {orderedGroups.map(g => (
+                    {filteredOrderedGroups.map(g => (
                       <SortableItem key={g.clusterId} id={g.clusterId}>
                         {h => renderGroupCard(g, false, h)}
                       </SortableItem>

@@ -257,3 +257,44 @@ class NodeSpecCsvApplyResponse(BaseModel):
     skipped: int
     errors: list[str]
     items: list[NodeServerSpecOut]
+
+
+class NodeSpecHostFactsCollectRequest(BaseModel):
+    """SSH로 bond/디스크/VM 정보를 수집해 node_server_specs에 반영."""
+    hosts: list[str] = Field(..., min_length=1, max_length=500)
+    username: str = Field(default="root", min_length=1, max_length=64)
+    password: Optional[str] = None
+    private_key: Optional[str] = None
+    port: int = Field(default=22, ge=1, le=65535)
+    use_sudo: bool = False
+    connect_timeout: int = Field(default=8, ge=1, le=60)
+    exec_timeout: int = Field(default=20, ge=1, le=120)
+    parallelism: int = Field(default=10, ge=1, le=100)
+    chunk_size: int = Field(default=30, ge=1, le=500)
+    chunk_pause_ms: int = Field(default=200, ge=0, le=10000)
+    upsert: bool = True
+
+
+class NodeSpecHostFactsItem(BaseModel):
+    host: str
+    status: str
+    message: Optional[str] = None
+    spec_id: Optional[UUID] = None
+    hostname: Optional[str] = None
+    bond0_ip: Optional[str] = None
+    bond1_ip: Optional[str] = None
+    disk_count: Optional[int] = None
+    disk_total_gb: Optional[int] = None
+    non_os_disk_gb: Optional[int] = None
+    disk_type: Optional[str] = None
+    is_ssd: Optional[bool] = None
+    is_vm: Optional[bool] = None
+
+
+class NodeSpecHostFactsCollectResponse(BaseModel):
+    cluster_id: UUID
+    updated: int
+    inserted: int
+    skipped: int
+    errors: list[str] = Field(default_factory=list)
+    items: list[NodeSpecHostFactsItem] = Field(default_factory=list)

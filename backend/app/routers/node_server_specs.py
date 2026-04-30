@@ -24,8 +24,12 @@ from app.schemas.node_server_spec import (
     NodeSpecCsvUploadRequest,
     NodeSpecImportRequest,
     NodeSpecImportResult,
+    NodeSpecHostFactsCollectRequest,
+    NodeSpecHostFactsCollectResponse,
+    NodeSpecHostFactsItem,
 )
 from app.services.kubeconfig import ensure_kubeconfig_file
+from app.services.ssh_runner import SSHTarget, run_bulk
 
 router = APIRouter(prefix="/node-specs", tags=["node-specs"])
 
@@ -302,6 +306,77 @@ def _bond_info_from_cluster_node_ips(cluster: Cluster, hostname: str) -> dict[st
     return out
 
 
+def _parse_host_fact_stdout(stdout: str) -> dict:
+    """SSH 수집 결과 파싱."""
+    parts = stdout.split("\n__NODE_SPEC_SPLIT__\n")
+    if len(parts) != 3:
+        raise ValueError("수집 출력 파싱 실패")
+    ip_raw, lsblk_raw, vm_raw = parts
+    ip_data = json.loads(ip_raw.strip() or "[]")
+    lsblk_data = json.loads(lsblk_raw.strip() or "{}")
+    vm_type = (vm_raw or "").strip().lower()
+
+    out = {
+        "bond0_ip": None, "bond0_mac": None, "bond1_ip": None, "bond1_mac": None,
+        "disk_count": 0, "disk_total_gb": 0, "non_os_disk_gb": 0, "disk_type": None, "is_ssd": None, "is_vm": None,
+    }
+    for ifc in ip_data if isinstance(ip_data, list) else []:
+        name = str(ifc.get("ifname") or "").lower()
+        if name not in ("bond0", "bond1"):
+            continue
+        addr_info = ifc.get("addr_info") or []
+        ipv4s = [a.get("local") for a in addr_info if isinstance(a, dict) and a.get("family") == "inet" and a.get("local")]
+        if name == "bond0":
+            out["bond0_ip"] = ipv4s[0] if ipv4s else None
+            out["bond0_mac"] = ifc.get("address")
+        elif name == "bond1":
+            out["bond1_ip"] = ipv4s[0] if ipv4s else None
+            out["bond1_mac"] = ifc.get("address")
+
+    disks = (lsblk_data or {}).get("blockdevices") or []
+    types: set[str] = set()
+    ssd_flag: Optional[bool] = None
+    for d in disks:
+        if not isinstance(d, dict):
+            continue
+        typ = str(d.get("type") or "")
+        name = str(d.get("name") or "")
+        if typ != "disk" or not name:
+            continue
+        size_b = int(d.get("size") or 0)
+        tran = str(d.get("tran") or "").lower()
+        mountpoint = str(d.get("mountpoint") or "")
+        model = str(d.get("model") or "").strip()
+        rota = str(d.get("rota") or "")
+        if mountpoint == "/":
+            out["disk_total_gb"] += round(size_b / (1024 ** 3))
+            continue
+        out["disk_count"] += 1
+        gb = round(size_b / (1024 ** 3))
+        out["disk_total_gb"] += gb
+        out["non_os_disk_gb"] += gb
+        if tran == "nvme":
+            types.add(f"NVMe ({name})")
+            ssd_flag = True
+        elif tran in ("sata", "sas"):
+            if rota == "0":
+                types.add(f"SSD ({name})")
+                ssd_flag = True if ssd_flag is None else ssd_flag
+            elif rota == "1":
+                types.add(f"HDD ({name})")
+                if ssd_flag is None:
+                    ssd_flag = False
+        else:
+            types.add(f"{(tran or 'unknown').upper()} ({name}{', ' + model if model else ''})")
+    out["disk_type"] = " + ".join(sorted(types)) if types else None
+    out["is_ssd"] = ssd_flag
+    if vm_type and vm_type not in ("none", "no", "n/a"):
+        out["is_vm"] = True
+    elif vm_type == "none":
+        out["is_vm"] = False
+    return out
+
+
 @router.post("/import/{cluster_id}", response_model=NodeSpecImportResult)
 def import_from_cluster(
     cluster_id: UUID,
@@ -431,6 +506,72 @@ def import_from_cluster(
         errors=errors,
         items=[_to_out(s) for s in out_items],
     )
+
+
+@router.post("/collect-host-facts/{cluster_id}", response_model=NodeSpecHostFactsCollectResponse)
+async def collect_host_facts(
+    cluster_id: UUID,
+    payload: NodeSpecHostFactsCollectRequest,
+    db: Session = Depends(get_db),
+):
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    if not payload.password and not payload.private_key:
+        raise HTTPException(status_code=422, detail="password 또는 private_key 중 하나는 필수입니다.")
+
+    sudo = "sudo -n " if payload.use_sudo else ""
+    command = (
+        f"{sudo}ip -j addr show 2>/dev/null; "
+        "echo __NODE_SPEC_SPLIT__; "
+        f"{sudo}lsblk -b -J -o NAME,TYPE,MODEL,SIZE,TRAN,ROTA,MOUNTPOINT 2>/dev/null; "
+        "echo __NODE_SPEC_SPLIT__; "
+        f"{sudo}systemd-detect-virt 2>/dev/null || echo none"
+    )
+    targets = [SSHTarget(host=h, port=payload.port, username=payload.username, password=payload.password, private_key=payload.private_key) for h in payload.hosts]
+    results = await run_bulk(
+        targets,
+        action="ssh",
+        command=command,
+        mode="parallel",
+        connect_timeout=payload.connect_timeout,
+        exec_timeout=payload.exec_timeout,
+        parallelism=payload.parallelism,
+        chunk_size=payload.chunk_size,
+        chunk_pause_ms=payload.chunk_pause_ms,
+    )
+    inserted = updated = skipped = 0
+    errors: list[str] = []
+    items: list[NodeSpecHostFactsItem] = []
+    for r in results:
+        if r.status != "ok":
+            msg = r.error or r.stderr or r.status
+            errors.append(f"{r.host}: {msg}")
+            items.append(NodeSpecHostFactsItem(host=r.host, status="error", message=msg))
+            continue
+        try:
+            facts = _parse_host_fact_stdout(r.stdout)
+        except Exception as e:
+            errors.append(f"{r.host}: {str(e)[:160]}")
+            items.append(NodeSpecHostFactsItem(host=r.host, status="error", message=str(e)[:160]))
+            continue
+        existing = db.query(NodeServerSpec).filter(NodeServerSpec.cluster_id == cluster_id, NodeServerSpec.hostname == r.host).first()
+        if not existing and payload.upsert:
+            existing = NodeServerSpec(cluster_id=cluster_id, hostname=r.host, status="active")
+            db.add(existing)
+            db.flush()
+            inserted += 1
+        if not existing:
+            skipped += 1
+            items.append(NodeSpecHostFactsItem(host=r.host, status="skipped", message="hostname 미등록(upsert=false)"))
+            continue
+        for k in ("bond0_ip", "bond0_mac", "bond1_ip", "bond1_mac", "disk_count", "disk_total_gb", "non_os_disk_gb", "disk_type", "is_ssd", "is_vm"):
+            setattr(existing, k, facts.get(k))
+        updated += 1
+        items.append(NodeSpecHostFactsItem(host=r.host, status="updated", spec_id=existing.id, hostname=existing.hostname, **facts))
+    if inserted or updated:
+        db.commit()
+    return NodeSpecHostFactsCollectResponse(cluster_id=cluster_id, updated=updated, inserted=inserted, skipped=skipped, errors=errors, items=items)
 
 
 # ── CSV 업로드 (dry-run diff + apply) ──────────────────────────────────────

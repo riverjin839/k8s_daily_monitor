@@ -37,9 +37,9 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
   '/packet-flow':        { defaultLabel: '패킷 흐름 분석', icon: Route },
   '/ontology':           { defaultLabel: '온톨로지 그래프', icon: Share2 },
   '/trends':             { defaultLabel: '기술 동향',      icon: Rss },
-  '/services':           { defaultLabel: '서비스 지식관리', icon: BookOpen },
-  '/work-guides':        { defaultLabel: '작업 가이드',    icon: BookMarked },
-  '/ops-notes':          { defaultLabel: '업무 게시판',    icon: Layers },
+  '/services':           { defaultLabel: '통합 지식/SOP',  icon: BookOpen },
+  '/work-guides':        { defaultLabel: '표준 작업 가이드', icon: BookMarked },
+  '/ops-notes':          { defaultLabel: '운영 노트보드',   icon: Layers },
   '/wbs':                { defaultLabel: 'WBS 작업흐름',   icon: BarChart3 },
   '/mindmap':            { defaultLabel: '마인드맵',       icon: Map },
   '/workflow':           { defaultLabel: '워크플로우',     icon: GitFork },
@@ -51,8 +51,16 @@ const NAV_GROUPS: Array<{ id: string; label: string; paths: string[] }> = [
   { id: 'work',       label: '작업관리',   paths: ['/issues', '/tasks', '/todo-today', '/members'] },
   { id: 'cluster',    label: '클러스터',   paths: ['/cluster-manage', '/node-specs', '/versions', '/bulk-exec', '/etcdctl', '/batch-jobs', '/mc', '/kernel-params', '/infra-topology', '/links', '/node-labels', '/cidr'] },
   { id: 'analysis',   label: 'AI 분석',    paths: ['/incident-analysis', '/packet-flow', '/ontology', '/trends'] },
-  { id: 'docs',       label: '운영/문서',  paths: ['/services', '/work-guides', '/ops-notes', '/wbs', '/mindmap', '/workflow'] },
+  { id: 'docs',       label: '지식 허브',   paths: ['/services', '/work-guides', '/ops-notes', '/issues', '/tasks', '/incident-analysis', '/wbs', '/mindmap', '/workflow'] },
   { id: 'system',     label: '시스템',     paths: ['/settings'] },
+];
+
+
+const DOCS_TASK_SECTIONS: Array<{ id: string; label: string; icon: ComponentType<{ className?: string }>; paths: string[] }> = [
+  { id: 'ops', label: '운영 기준', icon: Layers, paths: ['/services', '/ops-notes'] },
+  { id: 'work', label: '작업 기준', icon: BookMarked, paths: ['/work-guides', '/tasks'] },
+  { id: 'issue', label: '이슈/장애', icon: Zap, paths: ['/issues', '/incident-analysis'] },
+  { id: 'flow', label: '흐름/설계', icon: GitFork, paths: ['/workflow', '/wbs', '/mindmap'] },
 ];
 
 const DEFAULT_TITLE = 'K8s Daily Monitor';
@@ -205,8 +213,6 @@ export function Sidebar() {
           {NAV_GROUPS.map(({ id, label, paths }, groupIdx) => {
             const validPaths = paths.filter((p) => NAV_MAP[p]);
             if (validPaths.length === 0) return null;
-            // icon-only 모드는 그룹 접힘 무시 (라벨이 안 보이므로 의미 없음).
-            // 현재 페이지가 속한 그룹은 자동 펼침 — 사용자가 어디 있는지 보이게.
             const containsActive = validPaths.includes(location.pathname);
             const isCollapsed = !iconOnly && !containsActive && (collapsedGroups[id] ?? true);
             return (
@@ -220,30 +226,39 @@ export function Sidebar() {
                       className={`${groupIdx > 0 ? 'mt-3' : ''} w-full flex items-center gap-1 px-3 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors`}
                       aria-expanded={!isCollapsed}
                     >
-                      <ChevronRight
-                        className={`w-3 h-3 flex-shrink-0 transition-transform ${isCollapsed ? '' : 'rotate-90'}`}
-                      />
+                      <ChevronRight className={`w-3 h-3 flex-shrink-0 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
                       <span className="flex-1 text-left">{label}</span>
-                      <span className="text-[10px] text-muted-foreground/60 font-medium normal-case tracking-normal">
-                        {validPaths.length}
-                      </span>
+                      <span className="text-[10px] text-muted-foreground/60 font-medium normal-case tracking-normal">{validPaths.length}</span>
                     </button>
-                  )
-                }
-                {!isCollapsed && (
+                  )}
+                {!isCollapsed && id !== 'docs' && (
                   <div className={`flex flex-col gap-0.5 ${iconOnly ? 'px-1.5' : 'px-2'}`}>
                     {validPaths.map((path) => (
-                      <NavItem
-                        key={path}
-                        path={path}
-                        label={getLabel(path)}
-                        Icon={NAV_MAP[path].icon}
-                        isActive={location.pathname === path}
-                        showLabel={!iconOnly}
-                        onHover={onNavHover}
-                        onLeave={onNavLeave}
-                      />
+                      <NavItem key={path} path={path} label={getLabel(path)} Icon={NAV_MAP[path].icon} isActive={location.pathname === path} showLabel={!iconOnly} onHover={onNavHover} onLeave={onNavLeave} />
                     ))}
+                  </div>
+                )}
+                {!isCollapsed && id === 'docs' && (
+                  <div className={`flex flex-col gap-2 ${iconOnly ? 'px-1.5' : 'px-2'}`}>
+                    {DOCS_TASK_SECTIONS.map((section) => {
+                      const sectionActive = section.paths.includes(location.pathname);
+                      const SIcon = section.icon;
+                      return (
+                        <div key={section.id} className={`rounded-xl border ${sectionActive ? 'border-primary/35 bg-primary/8' : 'border-border/50 bg-background/40'} p-2`}>
+                          {!iconOnly && (
+                            <div className="flex items-center gap-2 px-1 pb-1.5">
+                              <SIcon className={`w-3.5 h-3.5 ${sectionActive ? 'text-primary' : 'text-muted-foreground'}`} />
+                              <span className="text-[11px] font-semibold tracking-wide text-muted-foreground">{section.label}</span>
+                            </div>
+                          )}
+                          <div className="flex flex-col gap-0.5">
+                            {section.paths.map((path) => (
+                              <NavItem key={path} path={path} label={getLabel(path)} Icon={NAV_MAP[path].icon} isActive={location.pathname === path} showLabel={!iconOnly} onHover={onNavHover} onLeave={onNavLeave} />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

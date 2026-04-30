@@ -129,7 +129,10 @@ export function IncidentAnalysisPage() {
   const [clusterId, setClusterId] = useState('');
   const [namespace, setNamespace] = useState('');
   const [podName, setPodName] = useState('');
-  const [onlyIssues, setOnlyIssues] = useState(true);
+  // 거대 클러스터(수천 namespace) 에서도 첫 응답이 즉시 오도록 기본은 false (빠른 경로).
+  // 백엔드의 list_namespaces 가 with_counts/only_with_issues 둘 다 false 면 pod 조회를 생략한다.
+  // 사용자가 토글 켜면 느린 경로 (전체 pod fetch) 가 발동되며 axios 타임아웃도 2분 30초로 확장됨.
+  const [onlyIssues, setOnlyIssues] = useState(false);
 
   useEffect(() => {
     if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
@@ -319,14 +322,15 @@ export function IncidentAnalysisPage() {
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               대상 선택
             </p>
-            <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
+            <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer"
+              title="OFF: namespace 이름만 빠르게 조회 (큰 클러스터 권장). ON: 클러스터 전체 pod 를 스캔해 비정상 ns/pod 만 추림 (느림 — 큰 클러스터에서 1분 이상 소요 가능)">
               <input
                 type="checkbox"
                 checked={onlyIssues}
                 onChange={(e) => setOnlyIssues(e.target.checked)}
                 className="w-3.5 h-3.5 accent-primary"
               />
-              이슈 있는 항목만 보기
+              이슈 있는 항목만 보기 (느림)
             </label>
           </div>
 

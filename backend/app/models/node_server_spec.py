@@ -58,7 +58,7 @@ class NodeServerSpec(Base):
     memory_gb = Column(Integer, nullable=True)
     memory_modules = Column(String(255), nullable=True)         # "16x64GB DDR4-3200"
     disk_total_gb = Column(Integer, nullable=True)
-    disk_type = Column(String(32), nullable=True)               # NVMe / SSD / HDD / Hybrid
+    disk_type = Column(String(255), nullable=True)              # "NVMe (nvme0n1)" 등 자동수집 결과 포함
     disk_count = Column(Integer, nullable=True)
     raid_config = Column(String(64), nullable=True)             # RAID10, JBOD
     gpu_model = Column(String(128), nullable=True)

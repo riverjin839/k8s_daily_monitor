@@ -115,7 +115,7 @@ export function NodeSpecPage() {
   const tableRef = useRef<HTMLDivElement>(null);
   const GRID_COLS = useMemo(() => [
     'hostname', 'status', 'cluster', 'ip', 'vendor', 'cpu', 'disk',
-    'os', 'ssdvm', 'usage', 'location', 'asset',
+    'os', 'ssd', 'vm', 'currentUsage', 'purchasePurpose', 'location', 'asset',
   ], []);
   const rowIds = useMemo(() => rows.map((r) => r.id), [rows]);
 
@@ -123,12 +123,14 @@ export function NodeSpecPage() {
   const COL_LABELS: Record<string, string> = {
     hostname: '호스트명', status: '상태', cluster: '클러스터/역할', ip: 'IP / BMC',
     vendor: 'Vendor / Model', cpu: 'CPU / RAM', disk: 'Disk / GPU', os: 'OS',
-    ssdvm: 'SSD / VM', usage: '현재 용도 / 구입 목적', location: '위치', asset: '자산',
+    ssd: 'SSD', vm: 'VM', currentUsage: '현재 용도', purchasePurpose: '구입 목적',
+    location: '위치', asset: '자산',
   };
   const colW = useColumnWidths('node-spec-table', {
     defaults: {
       hostname: 140, status: 80, cluster: 120, ip: 160, vendor: 160,
-      cpu: 140, disk: 140, os: 140, ssdvm: 90, usage: 200, location: 140,
+      cpu: 140, disk: 140, os: 140, ssd: 60, vm: 60,
+      currentUsage: 140, purchasePurpose: 140, location: 140,
       asset: 160, actions: 80,
     },
     min: 60, max: 600,
@@ -146,8 +148,10 @@ export function NodeSpecPage() {
       case 'cpu': return `${r.cpuSockets ?? ''}s/${r.cpuCores ?? ''}c/${r.cpuThreads ?? ''}t ${r.memoryGb ?? ''}GB`;
       case 'disk': return `${r.diskTotalGb ?? ''}GB ${r.diskType ?? ''}${r.gpuModel ? ` · GPU ${r.gpuModel}` : ''}`;
       case 'os': return r.osImage ?? '';
-      case 'ssdvm': return `SSD:${r.isSsd === true ? 'O' : r.isSsd === false ? 'X' : '-'} VM:${r.isVm === true ? 'O' : r.isVm === false ? 'X' : '-'}`;
-      case 'usage': return [r.currentUsage, r.purchasePurpose].filter(Boolean).join(' / ');
+      case 'ssd': return r.diskType ?? (r.isSsd === true ? 'O' : r.isSsd === false ? 'X' : '-');
+      case 'vm': return r.isVm === true ? 'O' : r.isVm === false ? 'X' : '-';
+      case 'currentUsage': return r.currentUsage ?? '';
+      case 'purchasePurpose': return r.purchasePurpose ?? '';
       case 'location': return [r.datacenter, r.room, r.rack, r.rackUnit].filter(Boolean).join('/');
       case 'asset': return [r.assetTag, r.warrantyEnd ? `~${r.warrantyEnd}` : '', r.owner].filter(Boolean).join(' · ');
       default: return '';
@@ -357,7 +361,7 @@ export function NodeSpecPage() {
                   <tr className="border-b border-border">
                     {GRID_COLS.map((k) => (
                       <th key={k}
-                        className={`relative px-2 py-2 text-[11px] font-semibold text-muted-foreground ${k === 'ssdvm' ? 'text-center' : ''}`}>
+                        className={`relative px-2 py-2 text-[11px] font-semibold text-muted-foreground ${k === 'ssd' || k === 'vm' ? 'text-center' : ''}`}>
                         <span className="truncate inline-block max-w-full align-middle">{COL_LABELS[k]}</span>
                         <ResizeGrip onMouseDown={(e) => colW.beginResize(k, e)} onDoubleClick={() => colW.autoFit(k)} />
                       </th>
@@ -368,9 +372,9 @@ export function NodeSpecPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {listQ.isLoading && <SkeletonTable rows={6} columns={13} />}
+                  {listQ.isLoading && <SkeletonTable rows={6} columns={15} />}
                   {!listQ.isLoading && rows.length === 0 && (
-                    <tr><td colSpan={13} className="p-0">
+                    <tr><td colSpan={15} className="p-0">
                       <EmptyState
                         icon={ClipboardCheck}
                         title="등록된 서버가 없습니다"
@@ -459,9 +463,9 @@ export function NodeSpecPage() {
                           </p>
                         )}
                       </GridCell>
-                      <GridCell row={r.id} col="ssdvm" selection={selection}
+                      <GridCell row={r.id} col="ssd" selection={selection}
                         className="px-2 py-2 align-top text-center">
-                        <div className="flex items-center justify-center gap-2 text-sm font-mono">
+                        <div className="flex flex-col items-center gap-0.5 text-xs font-mono">
                           <button
                             type="button"
                             title="SSD 여부 (클릭 순환)"
@@ -477,31 +481,41 @@ export function NodeSpecPage() {
                           >
                             {r.isSsd === true ? 'O' : r.isSsd === false ? 'X' : '·'}
                           </button>
-                          <span className="text-muted-foreground/30">/</span>
-                          <button
-                            type="button"
-                            title="VM 여부 (클릭 순환)"
-                            onClick={() => {
-                              const next = r.isVm === true ? false : r.isVm === false ? null : true;
-                              saveField(r.id, { isVm: next });
-                            }}
-                            className={`px-1 rounded hover:bg-primary/10 ${
-                              r.isVm === true ? 'text-sky-500 font-bold'
-                              : r.isVm === false ? 'text-muted-foreground/50'
-                              : 'text-muted-foreground/30'
-                            }`}
-                          >
-                            {r.isVm === true ? 'O' : r.isVm === false ? 'X' : '·'}
-                          </button>
+                          {r.diskType && (
+                            <span className="text-[10px] text-muted-foreground truncate max-w-full" title={r.diskType}>
+                              {r.diskType}
+                            </span>
+                          )}
                         </div>
                       </GridCell>
-                      <GridCell row={r.id} col="usage" selection={selection}
-                        className="px-2 py-2 align-top text-xs max-w-[200px]">
+                      <GridCell row={r.id} col="vm" selection={selection}
+                        className="px-2 py-2 align-top text-center">
+                        <button
+                          type="button"
+                          title="VM 여부 (클릭 순환)"
+                          onClick={() => {
+                            const next = r.isVm === true ? false : r.isVm === false ? null : true;
+                            saveField(r.id, { isVm: next });
+                          }}
+                          className={`px-1 rounded text-xs font-mono hover:bg-primary/10 ${
+                            r.isVm === true ? 'text-sky-500 font-bold'
+                            : r.isVm === false ? 'text-muted-foreground/50'
+                            : 'text-muted-foreground/30'
+                          }`}
+                        >
+                          {r.isVm === true ? 'O' : r.isVm === false ? 'X' : '·'}
+                        </button>
+                      </GridCell>
+                      <GridCell row={r.id} col="currentUsage" selection={selection}
+                        className="px-2 py-2 align-top text-xs max-w-[160px]">
                         <p className="font-medium truncate" title={r.currentUsage ?? ''}>
                           <InlineTextCell value={r.currentUsage ?? ''} placeholder="NEW K8S MASTER"
                             onSave={(v) => saveField(r.id, { currentUsage: v })} />
                         </p>
-                        <p className="text-[10px] text-muted-foreground truncate" title={r.purchasePurpose ?? ''}>
+                      </GridCell>
+                      <GridCell row={r.id} col="purchasePurpose" selection={selection}
+                        className="px-2 py-2 align-top text-xs max-w-[160px]">
+                        <p className="truncate text-muted-foreground" title={r.purchasePurpose ?? ''}>
                           <InlineTextCell value={r.purchasePurpose ?? ''} placeholder="장비 분석용"
                             onSave={(v) => saveField(r.id, { purchasePurpose: v })} />
                         </p>

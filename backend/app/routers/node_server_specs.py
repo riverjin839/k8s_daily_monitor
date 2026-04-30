@@ -143,7 +143,74 @@ _AUTOSYNC_FIELDS = {
     "cpu_cores", "cpu_threads", "memory_gb",
     "os_image", "kernel_version", "kubelet_version", "container_runtime",
     "role",
+    "disk_type", "is_ssd",
 }
+
+
+# NFD (Node Feature Discovery) 가 노드에 붙이는 storage 라벨 prefix.
+# 예: feature.node.kubernetes.io/storage-nonrotationaldisk-nvme0n1=true
+_NFD_NONROTATIONAL_PREFIX = "feature.node.kubernetes.io/storage-nonrotationaldisk-"
+
+# 관리자가 자주 쓰는 일반 디스크 종류 라벨 키.
+_DISK_TYPE_LABEL_KEYS = (
+    "disktype",
+    "disk-type",
+    "node.kubernetes.io/disk-type",
+    "topology.kubernetes.io/disk-type",
+)
+
+
+def _detect_disk_info(labels: dict) -> tuple[Optional[str], Optional[bool]]:
+    """노드 라벨에서 디스크 종류와 SSD 여부를 추정.
+
+    1) NFD 라벨 (`feature.node.kubernetes.io/storage-nonrotationaldisk-<dev>=true`)
+       을 우선 활용해 어떤 볼륨이 SSD/NVMe 인지 식별.
+    2) 없으면 관리자 일반 라벨 (`disktype=ssd|nvme|hdd` 등) fallback.
+    3) 둘 다 없으면 (None, None) — 자동수집 실패, 수기 입력 필요.
+
+    반환: (disk_type 문자열, is_ssd 불리언)
+      - disk_type 예: "NVMe (nvme0n1)" / "SSD (sda)" / "Mixed: NVMe (nvme0n1) + SSD (sda)" / "HDD"
+    """
+    nvme_devs: list[str] = []
+    ssd_devs: list[str] = []
+
+    for k, v in labels.items():
+        if not isinstance(k, str):
+            continue
+        if k.startswith(_NFD_NONROTATIONAL_PREFIX) and str(v).lower() in ("true", "1"):
+            dev = k[len(_NFD_NONROTATIONAL_PREFIX):].strip()
+            if not dev:
+                continue
+            # nvme* 는 NVMe, 그 외(sda, sdb, vda …)는 SSD 로 분류.
+            if dev.lower().startswith("nvme"):
+                nvme_devs.append(dev)
+            else:
+                ssd_devs.append(dev)
+
+    if nvme_devs or ssd_devs:
+        parts: list[str] = []
+        if nvme_devs:
+            parts.append(f"NVMe ({', '.join(sorted(set(nvme_devs)))})")
+        if ssd_devs:
+            parts.append(f"SSD ({', '.join(sorted(set(ssd_devs)))})")
+        return (" + ".join(parts), True)
+
+    # Fallback: 관리자 라벨
+    for key in _DISK_TYPE_LABEL_KEYS:
+        raw = labels.get(key)
+        if not raw:
+            continue
+        val = str(raw).strip().lower()
+        if val in ("nvme", "nvmessd", "ssd-nvme"):
+            return ("NVMe", True)
+        if val in ("ssd", "sata-ssd", "sas-ssd"):
+            return ("SSD", True)
+        if val in ("hdd", "sas", "sata", "spinning"):
+            return ("HDD", False)
+        if val in ("hybrid", "mixed"):
+            return ("Hybrid", None)
+
+    return (None, None)
 
 
 def _gi_to_gb(qty: str) -> Optional[int]:
@@ -235,6 +302,8 @@ def import_from_cluster(
                 cpu_threads = None
             memory_gb = _gi_to_gb(cap.get("memory") or alloc.get("memory") or "")
 
+            disk_type, is_ssd_detected = _detect_disk_info(labels)
+
             collected = {
                 "node_name": host,
                 "internal_ip": internal_ip,
@@ -247,6 +316,8 @@ def import_from_cluster(
                 "kernel_version": getattr(ni, "kernel_version", None),
                 "kubelet_version": getattr(ni, "kubelet_version", None),
                 "container_runtime": getattr(ni, "container_runtime_version", None),
+                "disk_type": disk_type,
+                "is_ssd": is_ssd_detected,
             }
             collected = {k: v for k, v in collected.items() if v is not None and v != ""}
 

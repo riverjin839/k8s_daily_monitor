@@ -6,6 +6,8 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type D
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { TaskDetailModal, TaskCalendar, TaskKanban } from '@/components/tasks';
+import { ResizeGrip } from '@/components/common';
+import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { MODULE_CONFIG } from '@/components/tasks/taskKanbanUtils';
 import { useTasks, useDeleteTask } from '@/hooks/useTasks';
 import { useClusters } from '@/hooks/useCluster';
@@ -57,6 +59,8 @@ function SortTh({
   sortDir,
   onSort,
   className,
+  onResizeMouseDown,
+  onResizeDoubleClick,
 }: {
   label: string;
   col: TaskSortKey;
@@ -64,12 +68,14 @@ function SortTh({
   sortDir: 'asc' | 'desc';
   onSort: (col: TaskSortKey) => void;
   className?: string;
+  onResizeMouseDown?: (e: React.MouseEvent) => void;
+  onResizeDoubleClick?: () => void;
 }) {
   const isActive = sortKey === col;
   return (
     <th
       onClick={() => onSort(col)}
-      className={`px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap cursor-pointer select-none group hover:text-foreground transition-colors ${className ?? ''}`}
+      className={`relative px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap cursor-pointer select-none group hover:text-foreground transition-colors ${className ?? ''}`}
     >
       <span className="inline-flex items-center gap-1">
         {label}
@@ -83,6 +89,7 @@ function SortTh({
           <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-40 transition-opacity" />
         )}
       </span>
+      {onResizeMouseDown && <ResizeGrip onMouseDown={onResizeMouseDown} onDoubleClick={onResizeDoubleClick} />}
     </th>
   );
 }
@@ -120,6 +127,15 @@ export function TaskBoardPage() {
   const [sortKey, setSortKey] = useState<TaskSortKey | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [showDatetime, setShowDatetime] = useState(false);
+
+  const colW = useColumnWidths('task-board-table', {
+    defaults: {
+      drag: 28, status: 100, priority: 90, assignee: 200, cluster: 140, category: 120,
+      content: 280, result: 280,
+      scheduledAt: 130, completedAt: 130, remarks: 160, actions: 110,
+    },
+    min: 60, max: 800,
+  });
 
   const { clusters } = useClusterStore();
   useClusters();
@@ -459,21 +475,41 @@ export function TaskBoardPage() {
         ) : (
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
+                <colgroup>
+                  {(['drag', 'status', 'priority', 'assignee', 'cluster', 'category', 'content', 'result', 'scheduledAt', 'completedAt', 'remarks', 'actions'] as const).map((k) => (
+                    <col key={k} style={{ width: `${colW.getWidth(k)}px` }} />
+                  ))}
+                </colgroup>
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
-                    <th className="w-7" />
-                    <SortTh label="상태" col="kanbanStatus" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh label="우선순위" col="priority" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh label="담당자(정/부)" col="assignee" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh label="대상 클러스터" col="clusterName" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh label="작업 분류" col="taskCategory" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">작업 내용</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">작업 결과</th>
-                    <SortTh label="예정일" col="scheduledAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh label="완료일" col="completedAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">비고</th>
-                    <th className="px-4 py-3 text-center font-medium text-muted-foreground whitespace-nowrap">작업</th>
+                    <th />
+                    <SortTh label="상태" col="kanbanStatus" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
+                      onResizeMouseDown={(e) => colW.beginResize('status', e)} onResizeDoubleClick={() => colW.autoFit('status')} />
+                    <SortTh label="우선순위" col="priority" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
+                      onResizeMouseDown={(e) => colW.beginResize('priority', e)} onResizeDoubleClick={() => colW.autoFit('priority')} />
+                    <SortTh label="담당자(정/부)" col="assignee" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
+                      onResizeMouseDown={(e) => colW.beginResize('assignee', e)} onResizeDoubleClick={() => colW.autoFit('assignee')} />
+                    <SortTh label="대상 클러스터" col="clusterName" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
+                      onResizeMouseDown={(e) => colW.beginResize('cluster', e)} onResizeDoubleClick={() => colW.autoFit('cluster')} />
+                    <SortTh label="작업 분류" col="taskCategory" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
+                      onResizeMouseDown={(e) => colW.beginResize('category', e)} onResizeDoubleClick={() => colW.autoFit('category')} />
+                    <th className="relative px-4 py-3 text-left font-medium text-muted-foreground">작업 내용
+                      <ResizeGrip onMouseDown={(e) => colW.beginResize('content', e)} onDoubleClick={() => colW.autoFit('content')} />
+                    </th>
+                    <th className="relative px-4 py-3 text-left font-medium text-muted-foreground">작업 결과
+                      <ResizeGrip onMouseDown={(e) => colW.beginResize('result', e)} onDoubleClick={() => colW.autoFit('result')} />
+                    </th>
+                    <SortTh label="예정일" col="scheduledAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
+                      onResizeMouseDown={(e) => colW.beginResize('scheduledAt', e)} onResizeDoubleClick={() => colW.autoFit('scheduledAt')} />
+                    <SortTh label="완료일" col="completedAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}
+                      onResizeMouseDown={(e) => colW.beginResize('completedAt', e)} onResizeDoubleClick={() => colW.autoFit('completedAt')} />
+                    <th className="relative px-4 py-3 text-left font-medium text-muted-foreground">비고
+                      <ResizeGrip onMouseDown={(e) => colW.beginResize('remarks', e)} onDoubleClick={() => colW.autoFit('remarks')} />
+                    </th>
+                    <th className="relative px-4 py-3 text-center font-medium text-muted-foreground whitespace-nowrap">작업
+                      <ResizeGrip onMouseDown={(e) => colW.beginResize('actions', e)} onDoubleClick={() => colW.autoFit('actions')} />
+                    </th>
                   </tr>
                 </thead>
                 <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={(e: DragEndEvent) => { if (e.over) dndHandleDragEnd(String(e.active.id), String(e.over.id)); }}>

@@ -32,7 +32,7 @@ class NodeServerSpecBase(BaseModel):
     memory_gb: Optional[int] = Field(default=None, ge=0, le=65536)
     memory_modules: Optional[str] = Field(default=None, max_length=255)
     disk_total_gb: Optional[int] = Field(default=None, ge=0)
-    disk_type: Optional[str] = Field(default=None, max_length=32)
+    disk_type: Optional[str] = Field(default=None, max_length=255)
     disk_count: Optional[int] = Field(default=None, ge=0, le=1024)
     raid_config: Optional[str] = Field(default=None, max_length=64)
     gpu_model: Optional[str] = Field(default=None, max_length=128)

@@ -8,6 +8,7 @@ import { RichTextEditor } from '@/components/editor';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
+import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useTasks, useCreateTask, useUpdateTask } from '@/hooks/useTasks';
 import { useIssues } from '@/hooks/useIssues';
 
@@ -78,6 +79,7 @@ export function TaskFormPage() {
   useClusters();
   const { clusters } = useClusterStore();
   const { data: registeredAssignees = [] } = useAssignees();
+  const serviceCatalog = useServiceCatalog();
   const { data: listData } = useTasks();
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
@@ -92,6 +94,7 @@ export function TaskFormPage() {
   const [clusterId, setClusterId] = useState('');
   const [taskCategory, setTaskCategory] = useState('');
   const [taskCategoryCustom, setTaskCategoryCustom] = useState('');
+  const [service, setService] = useState('');
   const [taskContent, setTaskContent] = useState('');
   const [resultContent, setResultContent] = useState('');
   const [scheduledAt, setScheduledAt] = useState(todayDatetimeLocal());
@@ -137,6 +140,7 @@ export function TaskFormPage() {
       setEffortHours(editTask.effortHours ? String(editTask.effortHours) : '');
       setDoneCondition(editTask.doneCondition ?? '');
       setIssueId(editTask.issueId ?? '');
+      setService(editTask.service ?? '');
       setHydrated(true);
     } else if (parentId) {
       if (!parentTask) return;
@@ -197,6 +201,7 @@ export function TaskFormPage() {
       doneCondition: doneCondition.trim() || undefined,
       parentId: parentTask?.id,
       issueId: issueId || undefined,
+      service: service.trim() || undefined,
     };
 
     if (isEdit && editTask) {
@@ -331,6 +336,22 @@ export function TaskFormPage() {
                 {clusters.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
+              </select>
+              <label className={`${labelClass} mt-3`}
+                title="통합지식 서비스 카탈로그(Settings → 서비스)와 연결되는 tag. 작업·이슈·할일 모두 동일 카탈로그를 공유.">
+                서비스 (통합지식 tag)
+              </label>
+              <select
+                value={service}
+                onChange={(e) => setService(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">— 선택 안 함 —</option>
+                {serviceCatalog
+                  .filter((s) => s.key !== 'other')
+                  .map((s) => (
+                    <option key={s.key} value={s.key}>{s.label}</option>
+                  ))}
               </select>
               <label className={`${labelClass} mt-3`}>우선순위 *</label>
               <select

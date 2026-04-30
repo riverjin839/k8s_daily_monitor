@@ -19,6 +19,7 @@ import { todayTasksApi, tasksApi, TodayTaskGroup } from '@/services/api';
 import { stripHtml } from '@/lib/utils';
 import { Task, KanbanStatus } from '@/types';
 import { useClusters } from '@/hooks/useCluster';
+import { ServiceChip } from '@/components/services/ServiceChip';
 
 const PRIORITY_STYLES: Record<string, { dot: string; label: string; text: string }> = {
   high:   { dot: 'bg-red-500',   label: '높음', text: 'text-red-400' },
@@ -95,6 +96,7 @@ function TaskCard({ task, onStatusChange, onEdit, isUpdating, highlight }: TaskC
               {task.module}
             </span>
           )}
+          {task.service && <ServiceChip service={task.service} small />}
           {task.clusterName && (
             <span className="text-xs text-muted-foreground/60 truncate">{task.clusterName}</span>
           )}

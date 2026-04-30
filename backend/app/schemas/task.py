@@ -25,6 +25,8 @@ class TaskBase(BaseModel):
     done_condition: Optional[str] = None
     parent_id: Optional[UUID] = None
     issue_id: Optional[UUID] = None
+    # 통합지식 service tag — ui_settings.serviceCatalog 의 slug. 자유 입력 (카탈로그에 없는 값도 허용).
+    service: Optional[str] = Field(None, max_length=64)
 
 
 class TaskCreate(TaskBase):
@@ -50,6 +52,7 @@ class TaskUpdate(BaseModel):
     effort_hours: Optional[int] = Field(None, ge=1, le=999)
     done_condition: Optional[str] = None
     issue_id: Optional[UUID] = None
+    service: Optional[str] = Field(None, max_length=64)
 
 
 class TaskStatusPatch(BaseModel):

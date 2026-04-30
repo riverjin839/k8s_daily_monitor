@@ -276,6 +276,8 @@ export interface Issue {
   clusterId?: string;
   clusterName?: string;
   issueArea: string;
+  /** 통합지식 service tag — ui_settings.serviceCatalog 의 slug 와 매칭. */
+  service?: string;
   issueContent: string;
   actionContent?: string;
   detailContent?: string;
@@ -298,6 +300,7 @@ export interface IssueCreate {
   clusterId?: string;
   clusterName?: string;
   issueArea: string;
+  service?: string;
   issueContent: string;
   actionContent?: string;
   detailContent?: string;
@@ -335,6 +338,8 @@ export interface Task {
   doneCondition?: string;
   parentId?: string;
   issueId?: string;       // 연결된 이슈 (optional)
+  /** 통합지식 service tag — ui_settings.serviceCatalog 의 slug 와 매칭. */
+  service?: string;
   subtasks?: Task[];
   createdAt: string;
   updatedAt: string;
@@ -370,6 +375,7 @@ export interface TaskCreate {
   doneCondition?: string;
   parentId?: string;
   issueId?: string;
+  service?: string;
 }
 
 export interface TaskUpdate extends Partial<TaskCreate> {}

@@ -8,6 +8,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { IssueDetailModal, IssueKanban } from '@/components/issues';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
+import { ServiceChip } from '@/components/services/ServiceChip';
 import { useIssues, useDeleteIssue } from '@/hooks/useIssues';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
 import { useClusters } from '@/hooks/useCluster';
@@ -476,9 +477,12 @@ export function IssueBoardPage() {
                           {issue.clusterName || '-'}
                         </td>
                         <td className="px-4 py-3 cursor-pointer" onClick={() => setSelectedIssue(issue)}>
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
-                            {issue.issueArea}
-                          </span>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
+                              {issue.issueArea}
+                            </span>
+                            {issue.service && <ServiceChip service={issue.service} />}
+                          </div>
                         </td>
                         <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => setSelectedIssue(issue)}>
                           <div className="flex items-start gap-1.5">

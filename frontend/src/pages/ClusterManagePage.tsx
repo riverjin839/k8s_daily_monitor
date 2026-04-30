@@ -111,22 +111,34 @@ export function ClusterManagePage() {
   const { data: opsLevels = [] } = useOperationLevels();
 
   // 컬럼 너비 — drag 로 사용자 정의, localStorage 영속화
-  const COLUMNS: { key: string; label: string; w: number; center?: boolean }[] = [
-    { key: 'name',     label: '클러스터명',  w: 160 },
-    { key: 'status',   label: '상태',         w: 90 },
-    { key: 'region',   label: '지역',         w: 100 },
-    { key: 'level',    label: '운영레벨',     w: 130 },
-    { key: 'bgp',      label: 'BGP / AS',    w: 110 },
-    { key: 'cidr',     label: 'Node CIDR',   w: 150 },
-    { key: 'pod',      label: 'Pod CIDR',    w: 150 },
-    { key: 'svc',      label: 'Svc CIDR',    w: 150 },
-    { key: 'maxpod',   label: 'Max Pods',    w: 80, center: true },
-    { key: 'k8s',      label: 'K8s / Cilium', w: 130 },
-    { key: 'nodeip',   label: '노드 IP',     w: 320 },
+  // tip: 헤더 마우스오버 시 보여줄 의미 + 데이터 출처. (사용자 요청: 모든 항목 마우스 오버 설명)
+  const COLUMNS: { key: string; label: string; w: number; center?: boolean; tip: string }[] = [
+    { key: 'name',     label: '클러스터명',  w: 160,
+      tip: '사용자가 등록 시 입력한 이름. 마스터 노드 hostname 은 자동수집 시 그 아래 작게 표시됨.' },
+    { key: 'status',   label: '상태',         w: 90,
+      tip: '주기적 헬스체크 결과 (healthy/warning/critical/pending). 점검 → /api/v1/health 가 종합 판정.' },
+    { key: 'region',   label: '지역',         w: 100,
+      tip: '운영 지역 라벨. 사용자가 직접 입력하며 그룹/필터 키로 사용됩니다 (예: 서울, IDC1).' },
+    { key: 'level',    label: '운영레벨',     w: 130,
+      tip: 'Settings → 운영레벨 탭에서 정의한 레벨 (예: 운영/검증/개발). 클러스터 그룹/필터 키로도 사용.' },
+    { key: 'bgp',      label: 'BGP / AS',    w: 110,
+      tip: 'Cilium 의 cilium-config ConfigMap 에서 enable-bgp-control-plane 과 cluster-pool 의 AS 번호를 자동 추출. ConfigMap 이 없으면 비어 있음.' },
+    { key: 'cidr',     label: 'Node CIDR',   w: 200,
+      tip: 'kubectl get nodes -o wide 의 InternalIP 들을 모아 _최소 공통 supernet_ 으로 자동 추정 (/16 보다 넓으면 추정 실패). bond0/bond1 IP 도 포함되어 평탄화됨.' },
+    { key: 'pod',      label: 'Pod CIDR',    w: 150,
+      tip: 'kube-controller-manager 정적 Pod 의 --cluster-cidr 플래그에서 추출. 관리형 K8s 라 플래그를 못 읽으면 비어 있음.' },
+    { key: 'svc',      label: 'Svc CIDR',    w: 150,
+      tip: 'kube-apiserver 정적 Pod 의 --service-cluster-ip-range 플래그에서 추출.' },
+    { key: 'maxpod',   label: 'Max Pods',    w: 80, center: true,
+      tip: '마스터 노드의 status.allocatable.pods 값 — 한 노드에 띄울 수 있는 최대 Pod 수.' },
+    { key: 'k8s',      label: 'K8s / Cilium', w: 160,
+      tip: 'k8s 버전: VersionApi.get_code() 의 git_version. Cilium 버전: cilium-config ConfigMap 의 cilium-version 또는 cilium-agent 이미지 태그. 셀 클릭 시 Cilium 설정 보기.' },
+    { key: 'nodeip',   label: '노드 IP',     w: 320,
+      tip: '주: kubectl get nodes 의 InternalIP. NIC 상세(bond0/bond1, public/private)는 [버전·설정] 페이지의 NIC 수집(SSH 기반) 이후에 채워짐.' },
   ];
   const columnDefaults: Record<string, number> = Object.fromEntries(COLUMNS.map((c) => [c.key, c.w]));
   customFields.forEach((f) => { columnDefaults[`custom_${f.id}`] = f.width ?? 140; });
-  columnDefaults['actions'] = 120;
+  columnDefaults['actions'] = 100;
   const colW = useColumnWidths('cluster-table', { defaults: columnDefaults, min: 60, max: 800 });
 
   const filteredClusters = useMemo(() => {
@@ -295,12 +307,14 @@ export function ClusterManagePage() {
   // 노드 IP 만 즉시 수집 — diff 다이얼로그 없이 auto-update 결과를 바로 반영.
   // 백엔드 auto-update 가 nodeIps + nodeCount + hostname + cidr 등을 같이 갱신하므로
   // 추가 엔드포인트 없이 dryRun=false 호출 한 번이면 충분.
+  // ※ invalidate 만 하면 Zustand 스토어가 다음 폴링 틱(30s) 까지 stale 일 수 있어
+  //   refetchQueries 로 즉시 갱신을 보장.
   const collectNodeIps = async (cluster: Cluster) => {
     setCollectingNodeIpsId(cluster.id);
     try {
       await clustersApi.autoUpdate(cluster.id);
-      queryClient.invalidateQueries({ queryKey: ['clusters'] });
-      toast.success('노드 IP 수집 완료', cluster.name);
+      await queryClient.refetchQueries({ queryKey: ['clusters'] });
+      toast.success('수집 완료', `${cluster.name} 의 노드 IP / k8s 버전 등이 갱신됐습니다.`);
     } catch (e: unknown) {
       toast.error('노드 IP 수집 실패', formatApiError(e));
     } finally {
@@ -325,7 +339,7 @@ export function ClusterManagePage() {
         fail += 1;
       }
     }
-    queryClient.invalidateQueries({ queryKey: ['clusters'] });
+    await queryClient.refetchQueries({ queryKey: ['clusters'] });
     setBulkCollecting(false);
     toast.success('일괄 수집 종료', `성공 ${ok} · 실패 ${fail} · 대상 ${targets.length}`);
   };
@@ -492,8 +506,12 @@ export function ClusterManagePage() {
                   <tr className="border-b border-border">
                     {COLUMNS.map((c) => (
                       <th key={c.key}
+                        title={c.tip}
                         className={`relative px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground ${c.center ? 'text-center' : ''}`}>
-                        <span className="truncate inline-block max-w-full align-middle">{c.label}</span>
+                        <span className="truncate inline-flex items-center gap-1 max-w-full align-middle cursor-help">
+                          {c.label}
+                          <span className="text-[9px] text-muted-foreground/50">ⓘ</span>
+                        </span>
                         <ResizeGrip onMouseDown={(e) => colW.beginResize(c.key, e)} onDoubleClick={() => colW.autoFit(c.key)} />
                       </th>
                     ))}
@@ -505,8 +523,12 @@ export function ClusterManagePage() {
                         <ResizeGrip onMouseDown={(e) => colW.beginResize(`custom_${f.id}`, e)} onDoubleClick={() => colW.autoFit(`custom_${f.id}`)} />
                       </th>
                     ))}
-                    <th className="relative px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground">
-                      <span>액션</span>
+                    <th className="relative px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground"
+                      title="행 단위 동작 — 새로고침(자동수집 → diff 미리보기), 수정, 삭제. (Cilium 설정은 K8s/Cilium 셀 클릭으로 이동)">
+                      <span className="inline-flex items-center gap-1 cursor-help">
+                        편집
+                        <span className="text-[9px] text-muted-foreground/50">ⓘ</span>
+                      </span>
                       <ResizeGrip onMouseDown={(e) => colW.beginResize('actions', e)} onDoubleClick={() => colW.autoFit('actions')} />
                     </th>
                   </tr>

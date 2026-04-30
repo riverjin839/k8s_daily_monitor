@@ -1,14 +1,32 @@
 from pydantic import BaseModel, Field
 
 
+class ServiceCatalogItem(BaseModel):
+    """통합지식 메뉴와 task/issue 의 service tag 가 사용하는 서비스 카탈로그 한 항목.
+
+    - slug: URL 경로(``/services/<slug>``) 와 service_entries.service 매칭 키 (영문 권장).
+    - label: 사이드바·태그 드롭다운에 표시될 라벨 (한글 가능).
+    - icon: lucide-react 아이콘 이름 (Server / Lock / Box …) — 비어있으면 BookOpen.
+    - color: 카드/뱃지 색상 토큰 (sky/amber/blue/...) — 비어있으면 slate.
+    """
+    slug: str = Field(..., min_length=1, max_length=64)
+    label: str = Field(..., min_length=1, max_length=64)
+    icon: str | None = Field(default=None, max_length=64)
+    color: str | None = Field(default=None, max_length=32)
+    description: str | None = Field(default=None, max_length=255)
+    sort_order: int = 0
+
+
 class UiSettingsResponse(BaseModel):
     app_title: str = "K8s Daily Monitor"
     nav_labels: dict[str, str] = Field(default_factory=dict)
+    service_catalog: list[ServiceCatalogItem] | None = None
 
 
 class UiSettingsUpdate(BaseModel):
     app_title: str | None = None
     nav_labels: dict[str, str] | None = None
+    service_catalog: list[ServiceCatalogItem] | None = None
 
 
 class ClusterLinkItem(BaseModel):

@@ -516,19 +516,19 @@ export function BatchJobsPage() {
         </div>
       </div>
 
-      <MacCard title="등록된 잡">
+      <MacCard title="등록된 잡 (가로 스크롤 · 개별 로그)">
         {jobsQ.isLoading ? (
           <p className="text-xs text-muted-foreground">로딩 중…</p>
         ) : (jobsQ.data ?? []).length === 0 ? (
           <p className="text-xs text-muted-foreground">등록된 잡이 없습니다. 우측 상단 "새 잡" 버튼으로 추가하세요.</p>
         ) : (
-          <div className="space-y-3">
+          <div className="flex gap-3 overflow-x-auto pb-2">
             {(jobsQ.data ?? []).map((j) => (
-              <div key={j.id} className="border border-border rounded-xl p-3">
+              <div key={j.id} className="border border-border rounded-xl p-3 min-w-[420px] max-w-[900px] resize-x overflow-auto">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-sm font-semibold truncate">{j.name}</h3>
+                      <h3 className="text-sm font-semibold whitespace-nowrap">{j.name}</h3>
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">
                         {j.jobType}
                       </span>
@@ -542,9 +542,7 @@ export function BatchJobsPage() {
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">disabled</span>
                       )}
                     </div>
-                    {j.description && (
-                      <p className="text-[11px] text-muted-foreground mt-1">{j.description}</p>
-                    )}
+                    {j.description && <p className="text-[11px] text-muted-foreground mt-1 whitespace-pre-wrap break-words">{j.description}</p>}
                     <p className="text-[11px] text-muted-foreground mt-1 font-mono">
                       target: {j.defaultUsername}@{j.defaultHost ?? '(per-run)'}:{j.defaultPort}
                       {j.lastRunAt && <> · last run: {j.lastRunAt.replace('T', ' ').slice(0, 19)}</>}
@@ -566,7 +564,7 @@ export function BatchJobsPage() {
                   </div>
                 </div>
                 <div className="mt-2 pt-2 border-t border-border">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">최근 실행</p>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{j.name} 실행 로그</p>
                   <RunsList jobId={j.id} />
                 </div>
               </div>

@@ -17,6 +17,9 @@ interface ClusterTableRowProps {
   onAutoUpdate: (c: Cluster) => void;
   autoUpdatingId: string | null;
   customFields?: ClusterCustomField[];
+  /** 노드 IP 만 수집 (diff 다이얼로그 없이 즉시 적용) */
+  onCollectNodeIps?: (c: Cluster) => void;
+  collectingNodeIpsId?: string | null;
 }
 
 type EditField = null | 'region' | 'operationLevel' | 'cidr' | 'podCidr' | 'svcCidr';
@@ -59,7 +62,7 @@ function EditableCell({
   );
 }
 
-export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onCilium, onAutoUpdate, autoUpdatingId, customFields = [] }: ClusterTableRowProps) {
+export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onCilium, onAutoUpdate, autoUpdatingId, customFields = [], onCollectNodeIps, collectingNodeIpsId }: ClusterTableRowProps) {
   const updateCluster = useUpdateCluster();
   const [editingField, setEditingField] = useState<EditField>(null);
 
@@ -230,12 +233,30 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       </td>
 
       {/* 노드 IP 목록 — 노드당 여러 IP (bond0/bond1) + public/private 스코프 표시 */}
-      <td className="px-3 py-2.5 max-w-[280px]">
+      <td className="px-3 py-2.5">
         {(() => {
           if (!cluster.nodeIps) {
-            return cluster.nodeCount
-              ? <p className="text-[11px] text-muted-foreground">노드 {cluster.nodeCount}개 (미수집)</p>
-              : <span className="text-muted-foreground/60 text-xs">-</span>;
+            const isCollecting = collectingNodeIpsId === cluster.id;
+            return (
+              <div className="flex items-center gap-2 text-[11px]">
+                {cluster.nodeCount
+                  ? <span className="text-muted-foreground">노드 {cluster.nodeCount}개</span>
+                  : <span className="text-muted-foreground/60">-</span>}
+                {onCollectNodeIps && (
+                  <button
+                    type="button"
+                    onClick={() => onCollectNodeIps(cluster)}
+                    disabled={isCollecting}
+                    className="px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 disabled:opacity-50 flex items-center gap-1"
+                    title="kubeconfig 로 노드 IP 즉시 수집 (diff 다이얼로그 없이 적용)"
+                  >
+                    {isCollecting
+                      ? <><Loader2 className="w-3 h-3 animate-spin" /> 수집중</>
+                      : <>IP 수집</>}
+                  </button>
+                )}
+              </div>
+            );
           }
           try {
             const arr = JSON.parse(cluster.nodeIps) as {
@@ -338,20 +359,6 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         })()}
       </td>
 
-      {/* API / 기타 */}
-      <td className="px-3 py-2.5 max-w-[180px]">
-        <p className="text-[11px] font-mono text-muted-foreground truncate" title={cluster.apiEndpoint}>
-          {cluster.apiEndpoint}
-        </p>
-        {cluster.hostname && (
-          <p className="text-[10px] text-muted-foreground/60 truncate" title={cluster.hostname}>
-            master: {cluster.hostname}
-          </p>
-        )}
-        {cluster.nodeCount != null && (
-          <p className="text-[10px] text-muted-foreground/60">노드 {cluster.nodeCount}개</p>
-        )}
-      </td>
       {customFields.map((f) => (
         <td key={f.id} className="px-3 py-2.5 border-l border-primary/10 align-top" style={f.width ? { width: f.width } : undefined}>
           <ClusterCustomCell cluster={cluster} field={f} />

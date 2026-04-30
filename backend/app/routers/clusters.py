@@ -327,9 +327,15 @@ def create_cluster(cluster_data: ClusterCreate, db: Session = Depends(get_db)):
 
     db.commit()
 
-    # pending 상태가 아닌 경우에만 초기 점검 수행
+    # pending 상태가 아닌 경우에만 초기 점검 + 노드 IP 자동 수집 수행
     if not connectivity_failed:
         HealthChecker(db).run_check(cluster.id)
+        # kubeconfig 가 등록돼 있으면 노드 IP/노드 수/마스터 hostname 을 best-effort 로 채움.
+        # 실패해도 클러스터 등록 자체는 성공시킴 — 사용자가 이후 "IP 수집" 버튼으로 재시도 가능.
+        try:
+            _collect_node_basics(cluster, db)
+        except Exception:
+            pass
 
     db.refresh(cluster)
     return cluster
@@ -591,6 +597,60 @@ def _infer_node_cidr(ips: list[str]) -> tuple[str | None, str | None, str | None
     if not hosts:
         return cidr_str, None, None
     return cidr_str, str(hosts[0]), str(hosts[-1])
+
+
+def _collect_node_basics(cluster: Cluster, db: Session) -> bool:
+    """클러스터 등록 직후 호출되는 노드 IP/Count/master hostname best-effort 수집기.
+
+    auto_update_cluster 의 풀 로직 중 "k8s API 만 호출해서 안전하게 채울 수 있는" 부분만 추려
+    초기 등록 시 nodeIps 가 비어있는 상태(미수집)가 발생하지 않도록 한다.
+
+    실패 시 False 반환하고 호출부에서 swallow — 등록 자체를 막지 않는다.
+    """
+    import json as _json
+    kc_path = _ensure_kubeconfig_file(cluster)
+    if not kc_path or not os.path.exists(kc_path):
+        return False
+    try:
+        api_client = k8s_config.new_client_from_config(config_file=kc_path)
+        v1 = k8s_client.CoreV1Api(api_client)
+        nodes = v1.list_node(_request_timeout=_K8S_AUTH_TIMEOUT * 4)
+    except Exception:
+        return False
+
+    items = nodes.items
+    cluster.node_count = len(items)
+
+    ip_list: list[dict] = []
+    for n in items:
+        internal_ips: list[str] = []
+        external_ip: str | None = None
+        for addr in (n.status.addresses or []) if n.status else []:
+            if addr.type == "InternalIP" and addr.address and addr.address not in internal_ips:
+                internal_ips.append(addr.address)
+            elif addr.type == "ExternalIP" and addr.address and not external_ip:
+                external_ip = addr.address
+        labels = n.metadata.labels or {}
+        is_master = any(l in labels for l in (
+            "node-role.kubernetes.io/control-plane", "node-role.kubernetes.io/master",
+        ))
+        ip_list.append({
+            "name": n.metadata.name,
+            "ip": internal_ips[0] if internal_ips else None,
+            "ips": internal_ips,
+            "external_ip": external_ip,
+            "master": is_master,
+        })
+    ip_list.sort(key=lambda x: (not x["master"], x["name"]))
+    cluster.node_ips = _json.dumps(ip_list, ensure_ascii=False)
+
+    master_nodes = [r for r in ip_list if r["master"]]
+    pick = (master_nodes or ip_list)[0] if ip_list else None
+    if pick:
+        cluster.hostname = pick["name"]
+
+    db.commit()
+    return True
 
 
 @router.post("/{cluster_id}/auto-update")

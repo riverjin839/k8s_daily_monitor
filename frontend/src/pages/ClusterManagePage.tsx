@@ -4,7 +4,7 @@ import { ViewModeBar, DebugLogPanel, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import {
   Server, AlertTriangle, Search, ChevronDown,
-  LayoutList, LayoutGrid,
+  LayoutList, LayoutGrid, Network, Loader2,
 } from 'lucide-react';
 import type { Cluster } from '@/types';
 import { useClusters } from '@/hooks/useCluster';
@@ -58,6 +58,8 @@ export function ClusterManagePage() {
   const [deletingId, setDeletingId]       = useState<string | null>(null);
   const [autoUpdatingId, setAutoUpdatingId] = useState<string | null>(null);
   const [applyingId, setApplyingId]       = useState<string | null>(null);
+  const [collectingNodeIpsId, setCollectingNodeIpsId] = useState<string | null>(null);
+  const [bulkCollecting, setBulkCollecting] = useState(false);
   const [search, setSearch]               = useState('');
   const [filterLevel, setFilterLevel]     = useState('');
   const [sortBy, setSortBy]               = useState<'name' | 'status' | 'level'>('name');
@@ -89,8 +91,7 @@ export function ClusterManagePage() {
     { key: 'svc',      label: 'Svc CIDR',    w: 150 },
     { key: 'maxpod',   label: 'Max Pods',    w: 80, center: true },
     { key: 'k8s',      label: 'K8s / Cilium', w: 130 },
-    { key: 'nodeip',   label: '노드 IP',     w: 200 },
-    { key: 'api',      label: 'API / 기타',  w: 200 },
+    { key: 'nodeip',   label: '노드 IP',     w: 320 },
   ];
   const columnDefaults: Record<string, number> = Object.fromEntries(COLUMNS.map((c) => [c.key, c.w]));
   customFields.forEach((f) => { columnDefaults[`custom_${f.id}`] = f.width ?? 140; });
@@ -198,6 +199,44 @@ export function ClusterManagePage() {
     }
   };
 
+  // 노드 IP 만 즉시 수집 — diff 다이얼로그 없이 auto-update 결과를 바로 반영.
+  // 백엔드 auto-update 가 nodeIps + nodeCount + hostname + cidr 등을 같이 갱신하므로
+  // 추가 엔드포인트 없이 dryRun=false 호출 한 번이면 충분.
+  const collectNodeIps = async (cluster: Cluster) => {
+    setCollectingNodeIpsId(cluster.id);
+    try {
+      await clustersApi.autoUpdate(cluster.id);
+      queryClient.invalidateQueries({ queryKey: ['clusters'] });
+      toast.success('노드 IP 수집 완료', cluster.name);
+    } catch (e: unknown) {
+      toast.error('노드 IP 수집 실패', formatApiError(e));
+    } finally {
+      setCollectingNodeIpsId(null);
+    }
+  };
+
+  const handleBulkCollectNodeIps = async () => {
+    const targets = clusters.filter((c) => !c.nodeIps);
+    if (targets.length === 0) {
+      toast.success('수집 대상 없음', '모든 클러스터에 노드 IP 가 이미 채워져 있습니다.');
+      return;
+    }
+    setBulkCollecting(true);
+    let ok = 0;
+    let fail = 0;
+    for (const c of targets) {
+      try {
+        await clustersApi.autoUpdate(c.id);
+        ok += 1;
+      } catch {
+        fail += 1;
+      }
+    }
+    queryClient.invalidateQueries({ queryKey: ['clusters'] });
+    setBulkCollecting(false);
+    toast.success('일괄 수집 종료', `성공 ${ok} · 실패 ${fail} · 대상 ${targets.length}`);
+  };
+
   const handleApplyDiff = async () => {
     if (!diffCluster) return;
     setApplyingId(diffCluster.id);
@@ -217,7 +256,7 @@ export function ClusterManagePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1600px] mx-auto px-6 py-8">
+      <main className="max-w-[2400px] mx-auto px-4 py-6">
         <DebugLogPanel pageKey="cluster-manage" extra={{ clusters: clusters.length, filtered: filteredClusters.length, autoUpdatingId, diffRowsCount: diffRows.length }} />
 
         {/* 페이지 헤더 */}
@@ -254,6 +293,17 @@ export function ClusterManagePage() {
             >
               <Settings2 className="w-3.5 h-3.5" />
               컬럼 관리 {customFields.length > 0 && <span className="text-primary">({customFields.length})</span>}
+            </button>
+            <button
+              onClick={handleBulkCollectNodeIps}
+              disabled={bulkCollecting || clusters.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded-lg text-primary transition-colors disabled:opacity-50"
+              title="nodeIps 가 비어있는 모든 클러스터에 대해 auto-update 호출 (diff 다이얼로그 없이 즉시 반영)"
+            >
+              {bulkCollecting
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <Network className="w-3.5 h-3.5" />}
+              {bulkCollecting ? '수집중…' : '노드 IP 일괄 수집'}
             </button>
             <button
               onClick={colW.reset}
@@ -371,6 +421,8 @@ export function ClusterManagePage() {
                       onAutoUpdate={handleAutoUpdate}
                       autoUpdatingId={autoUpdatingId}
                       customFields={customFields}
+                      onCollectNodeIps={collectNodeIps}
+                      collectingNodeIpsId={collectingNodeIpsId}
                     />
                   ))}
                 </tbody>

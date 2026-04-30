@@ -469,7 +469,7 @@ export function SettingsPage() {
     cicd: 'CI/CD',
   };
 
-  type TabId = 'cluster' | 'server' | 'assignee' | 'debug' | 'backup';
+  type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'debug' | 'backup';
   const [activeTab, setActiveTab] = useState<TabId>('cluster');
 
   // Debug 설정
@@ -482,6 +482,7 @@ export function SettingsPage() {
     { id: 'cluster', label: '클러스터', icon: <Server className="w-4 h-4" />, count: clusters.length },
     { id: 'server', label: '관리서버', icon: <MonitorDot className="w-4 h-4" />, count: servers.length },
     { id: 'assignee', label: '담당자', icon: <UserCheck className="w-4 h-4" />, count: assignees.length },
+    { id: 'operations', label: '운영레벨', icon: <ShieldCheck className="w-4 h-4" />, count: 0 },
     { id: 'debug', label: 'Debug', icon: <Bug className="w-4 h-4" />, count: debugActiveCount },
     { id: 'backup', label: '백업 / 복구', icon: <HardDrive className="w-4 h-4" />, count: 0 },
   ];
@@ -552,8 +553,8 @@ export function SettingsPage() {
           </div>
         </div>}
 
-        {/* 운영레벨 관리 */}
-        {activeTab === 'cluster' && (
+        {/* 운영레벨 관리 — 별도 탭 */}
+        {activeTab === 'operations' && (
           <div className="mb-8">
             <OperationLevelsManager />
           </div>

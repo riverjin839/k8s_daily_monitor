@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ClipboardList } from 'lucide-react';
+import { ArrowLeft, ClipboardList, Plus, Settings2 } from 'lucide-react';
 import { Issue, IssueCreate, IssueUpdate } from '@/types';
 import { loadIssueImages, saveIssueImages } from '@/lib/issueImages';
 import { RichTextEditor } from '@/components/editor';
@@ -9,7 +9,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useIssues, useCreateIssue, useUpdateIssue } from '@/hooks/useIssues';
 
-const ISSUE_AREAS = [
+const DEFAULT_ISSUE_AREAS = [
   'API Server',
   'etcd',
   'Node',
@@ -21,8 +21,22 @@ const ISSUE_AREAS = [
   'Keycloak',
   'Nexus',
   'Monitoring',
-  '기타',
 ];
+const ISSUE_AREAS = [...DEFAULT_ISSUE_AREAS, '기타'];
+const AREA_STORAGE_KEY = 'k8s:issue:areas';
+
+function loadCustomAreas(): string[] {
+  try {
+    const raw = localStorage.getItem(AREA_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomAreas(areas: string[]) {
+  localStorage.setItem(AREA_STORAGE_KEY, JSON.stringify(areas));
+}
 
 function todayDatetimeLocal(): string {
   const d = new Date();
@@ -58,6 +72,9 @@ export function IssueFormPage() {
   const [clusterId, setClusterId] = useState('');
   const [issueArea, setIssueArea] = useState('');
   const [issueAreaCustom, setIssueAreaCustom] = useState('');
+  const [customAreas, setCustomAreas] = useState<string[]>(loadCustomAreas);
+  const [showAreaManage, setShowAreaManage] = useState(false);
+  const [newAreaInput, setNewAreaInput] = useState('');
   const [issueContent, setIssueContent] = useState('');
   const [actionContent, setActionContent] = useState('');
   const [detailContent, setDetailContent] = useState('');
@@ -67,6 +84,25 @@ export function IssueFormPage() {
   const [images, setImages] = useState<string[]>([]);
   const [hydrated, setHydrated] = useState(!isEdit);
 
+  const allAreas = [...DEFAULT_ISSUE_AREAS, ...customAreas, '기타'];
+
+  const addCustomArea = () => {
+    const a = newAreaInput.trim();
+    if (!a || allAreas.includes(a)) return;
+    const updated = [...customAreas, a];
+    setCustomAreas(updated);
+    saveCustomAreas(updated);
+    setNewAreaInput('');
+    setIssueArea(a);
+  };
+
+  const deleteCustomArea = (a: string) => {
+    const updated = customAreas.filter((x) => x !== a);
+    setCustomAreas(updated);
+    saveCustomAreas(updated);
+    if (issueArea === a) setIssueArea('');
+  };
+
   // Hydrate form when editing and data is available
   useEffect(() => {
     if (!isEdit || hydrated) return;
@@ -74,7 +110,8 @@ export function IssueFormPage() {
     setPrimaryAssignee(editIssue.primaryAssignee ?? editIssue.assignee);
     setSecondaryAssignee(editIssue.secondaryAssignee ?? '');
     setClusterId(editIssue.clusterId ?? '');
-    const predefined = ISSUE_AREAS.includes(editIssue.issueArea);
+    const allKnown = [...ISSUE_AREAS, ...loadCustomAreas()];
+    const predefined = allKnown.includes(editIssue.issueArea);
     setIssueArea(predefined ? editIssue.issueArea : '기타');
     setIssueAreaCustom(predefined ? '' : editIssue.issueArea);
     setIssueContent(editIssue.issueContent);
@@ -219,7 +256,18 @@ export function IssueFormPage() {
                 ))}
               </select>
 
-              <label className={`${labelClass} mt-3`}>이슈 부분 *</label>
+              <div className="flex items-center justify-between mt-3 mb-1">
+                <label className="text-sm font-medium">이슈 부분 *</label>
+                <button
+                  type="button"
+                  onClick={() => setShowAreaManage((v) => !v)}
+                  className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  title="이슈 부분 관리"
+                >
+                  <Settings2 className="w-3 h-3" />
+                  관리
+                </button>
+              </div>
               <div className="flex gap-2">
                 <select
                   value={issueArea}
@@ -228,7 +276,7 @@ export function IssueFormPage() {
                   required={issueArea !== '기타'}
                 >
                   <option value="">— 선택 —</option>
-                  {ISSUE_AREAS.map((area) => (
+                  {allAreas.map((area) => (
                     <option key={area} value={area}>
                       {area}
                     </option>
@@ -245,6 +293,48 @@ export function IssueFormPage() {
                   />
                 )}
               </div>
+              {showAreaManage && (
+                <div className="mt-2 p-3 bg-muted/20 border border-border rounded-lg space-y-2">
+                  {customAreas.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground font-medium">사용자 분류</p>
+                      {customAreas.map((a) => (
+                        <div key={a} className="flex items-center justify-between py-0.5">
+                          <span className="text-xs text-foreground/80">{a}</span>
+                          <button
+                            type="button"
+                            onClick={() => deleteCustomArea(a)}
+                            className="text-xs text-muted-foreground hover:text-red-400 transition-colors px-1"
+                            title="삭제"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={newAreaInput}
+                      onChange={(e) => setNewAreaInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); addCustomArea(); }
+                      }}
+                      placeholder="새 이슈 부분 입력 (예: Backup, IDM)"
+                      className="flex-1 px-2 py-1 text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={addCustomArea}
+                      className="flex items-center gap-0.5 px-2 py-1 text-xs bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                      추가
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

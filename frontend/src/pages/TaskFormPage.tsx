@@ -23,6 +23,10 @@ const DEFAULT_TASK_CATEGORIES = [
   '업그레이드',
   '장애 대응',
   '문서 작업',
+  '회의참석',
+  '교육 / 학습',
+  '코드 리뷰',
+  '기획 / 검토',
 ];
 const TASK_CATEGORIES = [...DEFAULT_TASK_CATEGORIES, '기타'];
 const CATEGORY_STORAGE_KEY = 'k8s:task:categories';

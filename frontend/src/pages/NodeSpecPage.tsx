@@ -133,6 +133,7 @@ export function NodeSpecPage() {
   const [sshPrivateKey, setSshPrivateKey] = useState('');
   const [hostList, setHostList] = useState('');
   const [useSudo, setUseSudo] = useState(false);
+  const [selectedHosts, setSelectedHosts] = useState<string[]>([]);
 
   const listQ = useQuery({
     queryKey: ['node-specs', clusterId, statusFilter, roleFilter, search],
@@ -284,7 +285,8 @@ export function NodeSpecPage() {
 
   const handleCollectHostFacts = async () => {
     if (!clusterId) return;
-    const hosts = hostList.split(/[\n,\s]+/).map((h) => h.trim()).filter(Boolean);
+    const manualHosts = hostList.split(/[\n,\s]+/).map((h) => h.trim()).filter(Boolean);
+    const hosts = Array.from(new Set([...selectedHosts, ...manualHosts]));
     if (hosts.length === 0) {
       toast.warning('호스트 목록 필요', 'IP/hostname 을 1개 이상 입력하세요.');
       return;
@@ -313,6 +315,18 @@ export function NodeSpecPage() {
       setCollectingFacts(false);
     }
   };
+
+  const clusterNodeCandidates = useMemo(() => {
+    const c = clusters.find((x) => x.id === clusterId);
+    if (!c?.nodeIps) return [];
+    try {
+      const parsed = JSON.parse(c.nodeIps) as Array<{ name?: string; ip?: string; ips?: string[] }>;
+      const vals = parsed.flatMap((n) => [n.name, n.ip, ...(n.ips ?? [])]).filter(Boolean) as string[];
+      return Array.from(new Set(vals));
+    } catch {
+      return [];
+    }
+  }, [clusters, clusterId]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -355,7 +369,7 @@ export function NodeSpecPage() {
                 <ClipboardPaste className="w-3 h-3" /> 엑셀 붙여넣기
               </button>
               {clusterId && (
-                <button onClick={() => setHostFactsOpen(true)}
+                <button onClick={() => { setSelectedHosts(clusterNodeCandidates); setHostFactsOpen(true); }}
                   className="px-2.5 py-1 text-xs font-medium bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-500 border border-indigo-500/30 rounded-lg flex items-center gap-1">
                   <Terminal className="w-3 h-3" /> Host Facts 수집
                 </button>
@@ -725,6 +739,25 @@ export function NodeSpecPage() {
               <input type="password" value={sshPassword} onChange={(e) => setSshPassword(e.target.value)} placeholder="SSH password (선택)" className="px-3 py-2 text-sm bg-background border border-border rounded-lg" />
             </div>
             <textarea value={sshPrivateKey} onChange={(e) => setSshPrivateKey(e.target.value)} placeholder="Private Key (선택, PEM)" className="mt-3 w-full h-24 px-3 py-2 text-xs font-mono bg-background border border-border rounded-lg" />
+            <div className="mt-3 border border-border rounded-lg p-2 bg-background/60">
+              <p className="text-xs text-muted-foreground mb-2">노드 일괄 실행 기준 노드 선택 (자동 로딩)</p>
+              {clusterNodeCandidates.length === 0 ? (
+                <p className="text-xs text-muted-foreground">선택한 클러스터의 노드 정보가 없습니다.</p>
+              ) : (
+                <div className="max-h-28 overflow-auto grid grid-cols-2 gap-1.5">
+                  {clusterNodeCandidates.map((h) => (
+                    <label key={h} className="text-xs flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={selectedHosts.includes(h)}
+                        onChange={(e) => setSelectedHosts((prev) => e.target.checked ? [...prev, h] : prev.filter((x) => x !== h))}
+                      />
+                      <span className="font-mono">{h}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
             <textarea value={hostList} onChange={(e) => setHostList(e.target.value)} placeholder={'호스트 목록 (공백/콤마/줄바꿈 구분)\n10.0.0.11\n10.0.0.12'} className="mt-3 w-full h-28 px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg" />
             <label className="mt-2 flex items-center gap-2 text-sm">
               <input type="checkbox" checked={useSudo} onChange={(e) => setUseSudo(e.target.checked)} />

@@ -8,6 +8,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { TaskDetailModal, TaskCalendar, TaskKanban } from '@/components/tasks';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
+import { ServiceChip } from '@/components/services/ServiceChip';
 import { MODULE_CONFIG } from '@/components/tasks/taskKanbanUtils';
 import { useTasks, useDeleteTask } from '@/hooks/useTasks';
 import { useClusters } from '@/hooks/useCluster';
@@ -563,9 +564,12 @@ export function TaskBoardPage() {
                           {task.clusterName || '-'}
                         </td>
                         <td className="px-4 py-3 cursor-pointer" onClick={() => setSelectedTask(task)}>
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
-                            {task.taskCategory}
-                          </span>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
+                              {task.taskCategory}
+                            </span>
+                            {task.service && <ServiceChip service={task.service} />}
+                          </div>
                         </td>
                         <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => setSelectedTask(task)}>
                           <div className="flex items-start gap-1.5">

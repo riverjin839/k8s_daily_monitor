@@ -25,6 +25,7 @@ class Task(Base):
     # 칸반 보드 필드
     kanban_status = Column(String(20), nullable=False, default="todo")  # backlog/todo/in_progress/review_test/done
     module = Column(String(50), nullable=True)    # k8s/keycloak/nexus/cilium/argocd/jenkins/backend/frontend/monitoring/infra
+    service = Column(String(64), nullable=True, index=True)  # ui_settings.serviceCatalog 의 slug — 통합지식 tag 연계
     type_label = Column(String(20), nullable=True)  # feature/bug/chore/docs/security
     effort_hours = Column(Integer, nullable=True)   # 예상 소요 시간 (h)
     done_condition = Column(Text, nullable=True)    # 완료 조건

@@ -11,6 +11,8 @@ class IssueBase(BaseModel):
     cluster_id: Optional[UUID] = None
     cluster_name: Optional[str] = Field(None, max_length=100)
     issue_area: str = Field(..., min_length=1, max_length=100)
+    # 통합지식 service tag — ui_settings.serviceCatalog 의 slug. 자유 입력 허용.
+    service: Optional[str] = Field(None, max_length=64)
     issue_content: str = Field(..., min_length=1)
     action_content: Optional[str] = None
     detail_content: Optional[str] = None
@@ -30,6 +32,7 @@ class IssueUpdate(BaseModel):
     cluster_id: Optional[UUID] = None
     cluster_name: Optional[str] = Field(None, max_length=100)
     issue_area: Optional[str] = Field(None, min_length=1, max_length=100)
+    service: Optional[str] = Field(None, max_length=64)
     issue_content: Optional[str] = Field(None, min_length=1)
     action_content: Optional[str] = None
     detail_content: Optional[str] = None

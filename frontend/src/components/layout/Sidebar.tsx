@@ -9,6 +9,7 @@ import {
   PanelLeftOpen, X, ClipboardCheck, ListTree, ChevronRight,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
+import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
 import { useSidebarStore, NAV_COLLAPSE_AT } from '@/stores/sidebarStore';
 import { InlineEdit, ResizeHandle } from '@/components/common';
@@ -52,6 +53,8 @@ const NAV_GROUPS: Array<{ id: string; label: string; paths: string[] }> = [
   { id: 'work',       label: '작업관리',   paths: ['/issues', '/tasks', '/todo-today', '/members'] },
   { id: 'cluster',    label: '클러스터',   paths: ['/cluster-manage', '/node-specs', '/versions', '/bulk-exec', '/etcdctl', '/batch-jobs', '/mc', '/kernel-params', '/infra-topology', '/links', '/node-labels', '/cidr'] },
   { id: 'analysis',   label: 'AI 분석',    paths: ['/incident-analysis', '/packet-flow', '/ontology', '/trends'] },
+  // 지식 허브 — 그룹 클릭 시 펼치면 ① 서비스 카탈로그(ui_settings 의 서비스들이 동적으로 추가됨)
+  // ② 작업가이드/이슈/업무게시판/WBS/마인드맵/워크플로우 가 모두 sub-item 으로 노출.
   { id: 'docs',       label: '지식 허브',   paths: ['/services', '/work-guides', '/ops-notes', '/issues', '/tasks', '/incident-analysis', '/wbs', '/mindmap', '/workflow'] },
   { id: 'system',     label: '시스템',     paths: ['/settings'] },
 ];
@@ -163,29 +166,38 @@ export function Sidebar() {
 
   const title = settings?.appTitle || DEFAULT_TITLE;
   const navLabels = useMemo(() => settings?.navLabels || {}, [settings?.navLabels]);
+  const services = useServiceCatalog();
 
-  // 정적 NAV_MAP 위에 서비스 카탈로그(/services/<key>)를 덧씌운 동적 navMap.
+  // 동적 NAV_MAP — 정적 NAV_MAP 위에 ui_settings 의 서비스 항목을 덧씌움.
+  // 서비스마다 /services/<slug> 라우트가 있다고 가정 (App.tsx 의 ServiceHubPage).
   const navMap = useMemo(() => {
     const m: typeof NAV_MAP = { ...NAV_MAP };
-    for (const s of SERVICE_NAV_ENTRIES) {
+    for (const s of services) {
+      if (s.key === 'other') continue; // '기타' 폴백은 사이드바 항목으로 노출 안 함
       m[`/services/${s.key}`] = { defaultLabel: s.label, icon: s.icon };
     }
     return m;
-  }, []);
+  }, [services]);
 
-  // 통합지식 그룹의 paths 앞쪽에 서비스 sub-item 들을 끼워넣은 동적 navGroups.
+  // 서비스 카탈로그 → /services/<slug> 경로 목록 (sub-item 으로 사용).
+  const servicePaths = useMemo(
+    () => services.filter((s) => s.key !== 'other').map((s) => `/services/${s.key}`),
+    [services],
+  );
+
+  // 동적 NAV_GROUPS — '지식 허브' 그룹의 paths 앞쪽에 서비스 sub-item 들을 붙임.
   const navGroups = useMemo(
-    () => NAV_GROUPS.map((g) => (g.id === 'docs' ? { ...g, paths: [...SERVICE_NAV_PATHS, ...g.paths] } : g)),
-    [],
+    () => NAV_GROUPS.map((g) => (g.id === 'docs' ? { ...g, paths: [...servicePaths, ...g.paths] } : g)),
+    [servicePaths],
   );
 
   // DOCS 내부 섹션에 동적 서비스 섹션을 추가 — 펼치면 서비스 카탈로그가 먼저 보인다.
   const docsSections = useMemo(
     () => [
-      { id: 'services', label: '서비스 카탈로그', icon: Server, paths: SERVICE_NAV_PATHS },
+      { id: 'services', label: '서비스 카탈로그', icon: Server, paths: servicePaths },
       ...DOCS_TASK_SECTIONS,
     ],
-    [],
+    [servicePaths],
   );
 
   const getLabel = (path: string) => navLabels[path] || navMap[path]?.defaultLabel || path;
@@ -244,7 +256,7 @@ export function Sidebar() {
           {navGroups.map(({ id, label, paths }, groupIdx) => {
             const validPaths = paths.filter((p) => navMap[p]);
             if (validPaths.length === 0) return null;
-            // 통합지식 그룹은 /services/:slug 도 active 로 인식 → 해당 페이지에서 그룹이 자동 펼쳐짐.
+            // 지식 허브 그룹은 /services/:slug 도 active 로 인식 → 해당 페이지에서 그룹이 자동 펼쳐짐.
             const containsActive = validPaths.includes(location.pathname)
               || (id === 'docs' && location.pathname.startsWith('/services/'));
             const isCollapsed = !iconOnly && !containsActive && (collapsedGroups[id] ?? true);

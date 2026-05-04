@@ -62,6 +62,7 @@ def get_ui_settings(db: Session = Depends(get_db)):
     return UiSettingsResponse(
         app_title=value.get("app_title", DEFAULT_UI_SETTINGS["app_title"]),
         nav_labels=value.get("nav_labels", {}),
+        service_catalog=value.get("service_catalog"),
     )
 
 
@@ -70,16 +71,33 @@ def update_ui_settings(payload: UiSettingsUpdate, db: Session = Depends(get_db))
     setting = _get_or_create(db, UI_SETTINGS_KEY, DEFAULT_UI_SETTINGS)
     current = setting.value or DEFAULT_UI_SETTINGS.copy()
 
-    next_value = {
+    next_value: dict = {
         "app_title": payload.app_title if payload.app_title is not None else current.get("app_title", DEFAULT_UI_SETTINGS["app_title"]),
         "nav_labels": payload.nav_labels if payload.nav_labels is not None else current.get("nav_labels", {}),
     }
+    if payload.service_catalog is not None:
+        # 빈 슬러그 배제 + slug 기준 dedupe (먼저 들어온 항목 우선)
+        seen: set[str] = set()
+        cleaned: list[dict] = []
+        for it in payload.service_catalog:
+            slug = it.slug.strip()
+            if not slug or slug in seen:
+                continue
+            seen.add(slug)
+            cleaned.append(it.model_dump(exclude_none=False))
+        next_value["service_catalog"] = cleaned
+    elif "service_catalog" in current:
+        next_value["service_catalog"] = current["service_catalog"]
 
     setting.value = next_value
     db.commit()
     db.refresh(setting)
 
-    return UiSettingsResponse(**next_value)
+    return UiSettingsResponse(
+        app_title=next_value["app_title"],
+        nav_labels=next_value["nav_labels"],
+        service_catalog=next_value.get("service_catalog"),
+    )
 
 
 @router.get("/cluster-links", response_model=ClusterLinksResponse)

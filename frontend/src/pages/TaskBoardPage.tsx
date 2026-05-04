@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ViewModeBar } from '@/components/common';
-import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, GripVertical, Clock, Kanban, GitBranch } from 'lucide-react';
+import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, GripVertical, Kanban, GitBranch } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -17,11 +17,6 @@ import { tasksApi } from '@/services/api';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
 import { stripHtml } from '@/lib/utils';
 import { Task, TaskModule } from '@/types';
-
-function formatDate(dateStr?: string | null): string {
-  if (!dateStr) return '-';
-  return dateStr.slice(0, 10);
-}
 
 function formatDateTime(dateStr?: string | null): string {
   if (!dateStr) return '-';
@@ -127,7 +122,6 @@ export function TaskBoardPage() {
   const [filterModule, setFilterModule] = useState<TaskModule | ''>('');
   const [sortKey, setSortKey] = useState<TaskSortKey | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const [showDatetime, setShowDatetime] = useState(false);
 
   const colW = useColumnWidths('task-board-table', {
     defaults: {
@@ -276,21 +270,6 @@ export function TaskBoardPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {viewMode === 'table' && (
-              <button
-                onClick={() => setShowDatetime((v) => !v)}
-                className={`px-3 py-2 text-sm font-medium border rounded-lg transition-colors flex items-center gap-1.5 ${
-                  showDatetime
-                    ? 'bg-primary/10 text-primary border-primary/30'
-                    : 'bg-secondary hover:bg-secondary/80 border-border text-muted-foreground hover:text-foreground'
-                }`}
-                title="예정일/완료일 시간 표시 on/off"
-              >
-                <Clock className="w-4 h-4" />
-                시간 표시
-              </button>
-            )}
-
             {/* View mode toggle */}
             <ViewModeBar
               modes={[
@@ -585,10 +564,10 @@ export function TaskBoardPage() {
                           </p>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedTask(task)}>
-                          {showDatetime ? formatDateTime(task.scheduledAt) : formatDate(task.scheduledAt)}
+                          {formatDateTime(task.scheduledAt)}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedTask(task)}>
-                          {showDatetime ? formatDateTime(task.completedAt) : formatDate(task.completedAt)}
+                          {formatDateTime(task.completedAt)}
                         </td>
                         <td className="px-4 py-3 max-w-[120px] cursor-pointer" onClick={() => setSelectedTask(task)}>
                           <p className="line-clamp-2 text-muted-foreground text-xs">

@@ -5,6 +5,7 @@ import { Task, TaskCreate, TaskUpdate, KanbanStatus, TaskModule, TaskTypeLabel }
 import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from '@/components/tasks/taskKanbanUtils';
 import { loadTaskImages, saveTaskImages } from '@/lib/taskImages';
 import { RichTextEditor } from '@/components/editor';
+import { DateTimePicker } from '@/components/ui/DateTimePicker';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
@@ -487,23 +488,22 @@ export function TaskFormPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
               <label htmlFor={f('scheduledAt')} className={labelClass}>작업 예정일시 *</label>
-              <input
+              <DateTimePicker
                 id={f('scheduledAt')}
-                type="datetime-local"
                 value={scheduledAt}
-                onChange={(e) => setScheduledAt(e.target.value)}
-                className={inputClass}
+                onChange={setScheduledAt}
+                placeholder="예정일과 시간 선택"
                 required
+                clearable={false}
               />
             </div>
             <div>
               <label htmlFor={f('completedAt')} className={labelClass}>작업 완료일시</label>
-              <input
+              <DateTimePicker
                 id={f('completedAt')}
-                type="datetime-local"
                 value={completedAt}
-                onChange={(e) => setCompletedAt(e.target.value)}
-                className={inputClass}
+                onChange={setCompletedAt}
+                placeholder="완료 시 입력"
               />
             </div>
             <div>

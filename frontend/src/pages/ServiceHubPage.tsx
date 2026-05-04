@@ -1,18 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Search, Plus, Pin, Pencil, Trash2, Share2, Copy, Tag, Loader2,
   Filter,
 } from 'lucide-react';
-import { useClusters } from '@/hooks/useCluster';
 import {
-  ClusterSidebar, DebugLogPanel, ConfirmDialog, useToast,
+  DebugLogPanel, ConfirmDialog, useToast,
   EmptyState, SkeletonCard,
 } from '@/components/common';
 import { RichContent } from '@/components/editor';
 import { serviceEntriesApi } from '@/services/api';
-import { getServiceDef, KIND_CATALOG, KIND_BY_KEY, colorBadgeClass } from '@/components/services/serviceCatalog';
+import { KIND_CATALOG, KIND_BY_KEY, colorBadgeClass } from '@/components/services/serviceCatalog';
+import { useGetServiceDef } from '@/hooks/useServiceCatalog';
 import type { ServiceEntry, ServiceEntryKind } from '@/types';
 import { formatApiError } from '@/lib/utils';
 import { ServiceEntryEditModal } from '@/components/services/ServiceEntryEditModal';
@@ -21,31 +21,20 @@ type KindFilter = 'all' | ServiceEntryKind;
 
 export function ServiceHubPage() {
   const { service = '' } = useParams<{ service: string }>();
-  const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
   const qc = useQueryClient();
 
+  const getServiceDef = useGetServiceDef();
   const def = getServiceDef(service);
 
-  const { data: clusters = [] } = useClusters();
-  const initialCluster = searchParams.get('cluster');
-  const [clusterId, setClusterId] = useState<string | null>(initialCluster);
-  useEffect(() => {
-    // URL 동기화 — 사이드바 변경 시
-    if (clusterId) searchParams.set('cluster', clusterId);
-    else searchParams.delete('cluster');
-    setSearchParams(searchParams, { replace: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clusterId]);
-
+  // 클러스터 picker 제거 — 서비스 hub 는 서비스 기준으로 모든 클러스터 항목을 통합 표시.
   const [kindFilter, setKindFilter] = useState<KindFilter>('all');
   const [search, setSearch] = useState('');
   const [tagFilter, setTagFilter] = useState('');
 
   const listQ = useQuery({
-    queryKey: ['service-entries', service, clusterId, kindFilter, search, tagFilter],
+    queryKey: ['service-entries', service, kindFilter, search, tagFilter],
     queryFn: () => serviceEntriesApi.list(service, {
-      clusterId: clusterId || undefined,
       kind: kindFilter === 'all' ? undefined : kindFilter,
       search: search.trim() || undefined,
       tag: tagFilter || undefined,
@@ -135,17 +124,9 @@ export function ServiceHubPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1600px] mx-auto px-4 py-3 flex gap-3">
-        <ClusterSidebar
-          clusters={clusters}
-          selectedId={clusterId}
-          onSelect={setClusterId}
-          allowAll
-          allLabel="전체 (전역 + 클러스터별)"
-        />
-
+      <main className="max-w-[1600px] mx-auto px-6 py-6">
         <div className="flex-1 min-w-0">
-          <DebugLogPanel pageKey="services" extra={{ service, clusterId, kindFilter, search, count: entries.length }} />
+          <DebugLogPanel pageKey="services" extra={{ service, kindFilter, search, count: entries.length }} />
 
           {/* 헤더 */}
           <div className="flex items-center gap-3 mb-4">
@@ -329,8 +310,8 @@ export function ServiceHubPage() {
           mode={editEntry ? 'edit' : 'create'}
           service={service}
           defaultKind={creating ?? undefined}
-          defaultClusterId={clusterId}
-          clusters={clusters}
+          defaultClusterId={null}
+          clusters={[]}
           entry={editEntry}
           onClose={() => { setEditEntry(null); setCreating(null); }}
           onSaved={() => {

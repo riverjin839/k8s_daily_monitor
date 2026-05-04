@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { BookOpen, ChevronRight, Search } from 'lucide-react';
-import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, DebugLogPanel } from '@/components/common';
+import { DebugLogPanel } from '@/components/common';
 import { serviceEntriesApi } from '@/services/api';
-import { SERVICE_CATALOG, getServiceDef, colorBadgeClass } from '@/components/services/serviceCatalog';
+import { colorBadgeClass } from '@/components/services/serviceCatalog';
+import { useServiceCatalog, useGetServiceDef } from '@/hooks/useServiceCatalog';
 
 function relTime(iso?: string | null): string {
   if (!iso) return '-';
@@ -23,79 +23,70 @@ function relTime(iso?: string | null): string {
 }
 
 export function ServicesCatalogPage() {
-  const { data: clusters = [] } = useClusters();
-  const [clusterId, setClusterId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const catalog = useServiceCatalog();
+  const getServiceDef = useGetServiceDef();
 
+  // 클러스터 선택 제거 — 서비스 카탈로그는 서비스 기준으로 통합 표시.
   const catalogQ = useQuery({
-    queryKey: ['service-catalog', clusterId],
-    queryFn: () => serviceEntriesApi.catalog(clusterId || undefined).then((r) => r.data.services),
+    queryKey: ['service-catalog', 'all'],
+    queryFn: () => serviceEntriesApi.catalog().then((r) => r.data.services),
     staleTime: 30_000,
   });
 
-  // 카탈로그(고정) + DB 의 stats 병합. DB 에만 있는 키는 'other' 로 fallback.
+  // 카탈로그(사용자 정의) + DB 의 stats 병합. DB 에만 있는 키는 'other' fallback.
   const merged = useMemo(() => {
     const stats = new Map((catalogQ.data ?? []).map((s) => [s.service, s]));
-    const known = SERVICE_CATALOG.map((def) => {
+    const known = catalog.map((def) => {
       const s = stats.get(def.key);
       return { def, total: s?.total ?? 0, byKind: s?.byKind ?? {}, lastUpdated: s?.lastUpdated ?? null };
     });
-    // DB 에만 있는 (custom) 서비스
     const customs = (catalogQ.data ?? [])
-      .filter((s) => !SERVICE_CATALOG.find((d) => d.key === s.service))
+      .filter((s) => !catalog.find((d) => d.key === s.service))
       .map((s) => ({ def: getServiceDef(s.service), total: s.total, byKind: s.byKind, lastUpdated: s.lastUpdated }));
     const all = [...known, ...customs];
     if (!search.trim()) return all;
     const q = search.toLowerCase();
     return all.filter(({ def }) => def.label.toLowerCase().includes(q) || def.key.toLowerCase().includes(q));
-  }, [catalogQ.data, search]);
+  }, [catalogQ.data, catalog, getServiceDef, search]);
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1600px] mx-auto px-4 py-3 flex gap-3">
-        <ClusterSidebar
-          clusters={clusters}
-          selectedId={clusterId}
-          onSelect={setClusterId}
-          allowAll
-          allLabel="전체 (전역 + 클러스터별)"
-        />
+      <main className="max-w-[1600px] mx-auto px-6 py-6">
+        <DebugLogPanel pageKey="services" extra={{ search, services: merged.length }} />
 
-        <div className="flex-1 min-w-0">
-          <DebugLogPanel pageKey="services" extra={{ clusterId, search, services: merged.length }} />
-
-          <div className="flex items-center gap-3 mb-4">
-            <BookOpen className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">서비스 지식관리</h1>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
-              {merged.length} 서비스
-            </span>
-            <div className="ml-auto relative w-64">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <input value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="서비스 검색..."
-                className="w-full pl-8 pr-3 py-1.5 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
-            </div>
+        <div className="flex items-center gap-3 mb-4">
+          <BookOpen className="w-6 h-6 text-primary" />
+          <h1 className="text-xl font-bold">통합지식</h1>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
+            {merged.length} 서비스
+          </span>
+          <div className="ml-auto relative w-64">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)}
+              placeholder="서비스 검색..."
+              className="w-full pl-8 pr-3 py-1.5 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
           </div>
+        </div>
 
-          <p className="text-xs text-muted-foreground mb-4">
-            주요 관리 서비스별로 운영 가이드 · 트러블슈팅 · 변경 이력 · 메모 · 리소스 링크를 한 곳에서 관리합니다.
-            전역 항목 + {clusterId ? '선택한 클러스터' : '모든 클러스터'} 항목 통합 표시.
-          </p>
+        <p className="text-xs text-muted-foreground mb-4">
+          서비스 기준으로 운영 가이드·트러블슈팅·변경 이력·메모·리소스 링크를 통합 관리합니다.
+          서비스 카탈로그는 <strong>Settings → 서비스</strong> 탭에서 추가/수정 가능합니다.
+        </p>
 
-          <div
-            className="grid gap-3"
-            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
-          >
-            {merged.map(({ def, total, byKind, lastUpdated }) => {
-              const Icon = def.icon;
-              const cls = colorBadgeClass(def.color);
-              return (
-                <Link
-                  key={def.key}
-                  to={`/services/${def.key}${clusterId ? `?cluster=${clusterId}` : ''}`}
-                  className="bg-card border border-border rounded-xl p-4 hover:border-primary/40 hover:shadow-md transition-all group"
-                >
+        <div
+          className="grid gap-3"
+          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
+        >
+          {merged.map(({ def, total, byKind, lastUpdated }) => {
+            const Icon = def.icon;
+            const cls = colorBadgeClass(def.color);
+            return (
+              <Link
+                key={def.key}
+                to={`/services/${def.key}`}
+                className="bg-card border border-border rounded-xl p-4 hover:border-primary/40 hover:shadow-md transition-all group"
+              >
                   <div className="flex items-start gap-3 mb-3">
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${cls}`}>
                       <Icon className="w-5 h-5" />
@@ -135,7 +126,6 @@ export function ServicesCatalogPage() {
                 </Link>
               );
             })}
-          </div>
         </div>
       </main>
     </div>

@@ -7,6 +7,7 @@ import { RichTextEditor } from '@/components/editor';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
+import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useIssues, useCreateIssue, useUpdateIssue } from '@/hooks/useIssues';
 
 const DEFAULT_ISSUE_AREAS = [
@@ -72,6 +73,8 @@ export function IssueFormPage() {
   const [clusterId, setClusterId] = useState('');
   const [issueArea, setIssueArea] = useState('');
   const [issueAreaCustom, setIssueAreaCustom] = useState('');
+  const [service, setService] = useState('');
+  const serviceCatalog = useServiceCatalog();
   const [customAreas, setCustomAreas] = useState<string[]>(loadCustomAreas);
   const [showAreaManage, setShowAreaManage] = useState(false);
   const [newAreaInput, setNewAreaInput] = useState('');
@@ -114,6 +117,7 @@ export function IssueFormPage() {
     const predefined = allKnown.includes(editIssue.issueArea);
     setIssueArea(predefined ? editIssue.issueArea : '기타');
     setIssueAreaCustom(predefined ? '' : editIssue.issueArea);
+    setService(editIssue.service ?? '');
     setIssueContent(editIssue.issueContent);
     setActionContent(editIssue.actionContent ?? '');
     setDetailContent(editIssue.detailContent ?? '');
@@ -143,6 +147,7 @@ export function IssueFormPage() {
       clusterId: clusterId || undefined,
       clusterName: selectedCluster?.name,
       issueArea: resolvedIssueArea,
+      service: service.trim() || undefined,
       issueContent,
       actionContent: actionContent || undefined,
       detailContent: detailContent || undefined,
@@ -275,6 +280,23 @@ export function IssueFormPage() {
                     {c.name}
                   </option>
                 ))}
+              </select>
+
+              <label className={`${labelClass} mt-3`}
+                title="통합지식 서비스 카탈로그(Settings → 서비스)와 연결되는 tag.">
+                서비스 (통합지식 tag)
+              </label>
+              <select
+                value={service}
+                onChange={(e) => setService(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">— 선택 안 함 —</option>
+                {serviceCatalog
+                  .filter((s) => s.key !== 'other')
+                  .map((s) => (
+                    <option key={s.key} value={s.key}>{s.label}</option>
+                  ))}
               </select>
 
               <div className="flex items-center justify-between mt-3 mb-1">

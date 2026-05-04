@@ -16,6 +16,7 @@ class Issue(Base):
     cluster_id = Column(UUID(as_uuid=True), ForeignKey("clusters.id"), nullable=True)  # 대상 클러스터 (optional)
     cluster_name = Column(String(100), nullable=True)            # 클러스터 이름 (비정규화 — 삭제된 클러스터도 보관)
     issue_area = Column(String(100), nullable=False)             # 이슈 부분
+    service = Column(String(64), nullable=True, index=True)      # ui_settings.serviceCatalog 의 slug — 통합지식 tag 연계
     issue_content = Column(Text, nullable=False)                 # 이슈 내용
     action_content = Column(Text, nullable=True)                 # 조치 내용
     detail_content = Column(Text, nullable=True)                 # 상세 내용

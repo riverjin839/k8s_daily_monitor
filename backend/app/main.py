@@ -185,6 +185,11 @@ def _run_migrations():
         if "detail_content" not in issue_cols:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE issues ADD COLUMN detail_content TEXT"))
+        # 통합지식 service tag — ui_settings.serviceCatalog 의 slug 와 연결
+        if "service" not in issue_cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE issues ADD COLUMN service VARCHAR(64)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_issues_service ON issues (service)"))
     if "workflow_steps" in inspector.get_table_names():
         wf_step_cols = [col["name"] for col in inspector.get_columns("workflow_steps")]
         for col_name, col_type, default in [
@@ -220,6 +225,8 @@ def _run_migrations():
             ("type_label", "VARCHAR(20)"),
             ("effort_hours", "INTEGER"),
             ("done_condition", "TEXT"),
+            # 통합지식 service tag — ui_settings.serviceCatalog 의 slug 와 연결
+            ("service", "VARCHAR(64)"),
         ]
         for col_name, col_type in new_task_kanban_cols:
             if col_name not in task_cols:

@@ -293,21 +293,22 @@ export function PlaybooksPage() {
       ) : (
         <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={(e: DragEndEvent) => { if (e.over) dndHandleDragEnd(String(e.active.id), String(e.over.id)); }}>
           <SortableContext items={filteredPlaybooks.map((p) => p.id)} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="flex gap-4 overflow-x-auto pb-2">
               {filteredPlaybooks.map((playbook) => (
-                <SortablePlaybookCard
-                  key={playbook.id}
-                  playbook={playbook}
-                  isRunning={runningIds.has(playbook.id)}
-                  onRun={() => handleRunOne(playbook)}
-                  onEdit={() => handleOpenEdit(playbook)}
-                  onDelete={() => {
-                    if (confirm(`Delete playbook "${playbook.name}"?`)) {
-                      deletePlaybook.mutate(playbook.id);
-                    }
-                  }}
-                  onToggleDashboard={() => toggleDashboard.mutate(playbook.id)}
-                />
+                <div key={playbook.id} className="min-w-[360px] max-w-[760px] resize-x overflow-auto">
+                  <SortablePlaybookCard
+                    playbook={playbook}
+                    isRunning={runningIds.has(playbook.id)}
+                    onRun={() => handleRunOne(playbook)}
+                    onEdit={() => handleOpenEdit(playbook)}
+                    onDelete={() => {
+                      if (confirm(`Delete playbook "${playbook.name}"?`)) {
+                        deletePlaybook.mutate(playbook.id);
+                      }
+                    }}
+                    onToggleDashboard={() => toggleDashboard.mutate(playbook.id)}
+                  />
+                </div>
               ))}
             </div>
           </SortableContext>

@@ -30,17 +30,19 @@
     --mac-green:  #28C840;
     --card-shadow: 0 16px 34px rgba(17, 24, 39, 0.08), 0 2px 8px rgba(17, 24, 39, 0.06);
 
-    /* ── Semantic status tokens — 모든 StatusBadge/StatusDot 에서 참조 ─ */
-    --status-healthy:     152 60% 40%;   /* emerald */
-    --status-healthy-bg:  152 70% 93%;
-    --status-warning:     32 90% 48%;    /* amber */
-    --status-warning-bg:  32 85% 93%;
-    --status-critical:    0 72% 51%;     /* red */
-    --status-critical-bg: 0 80% 95%;
-    --status-pending:     215 18% 50%;   /* slate (미연결) */
-    --status-pending-bg:  215 18% 93%;
-    --status-info:        199 85% 45%;   /* sky */
-    --status-info-bg:     199 85% 94%;
+    /* ── Semantic status tokens (DESIGN_SYSTEM §2.4) — 운영 도구 표준값 ─ */
+    --status-healthy:     142 71% 45%;   /* #22C55E green-500 */
+    --status-healthy-bg:  142 71% 92%;
+    --status-warning:     38 92% 50%;    /* #F59E0B amber-500 */
+    --status-warning-bg:  38 92% 92%;
+    --status-critical:    0 84% 50%;     /* #DC2626 red-600 */
+    --status-critical-bg: 0 84% 94%;
+    --status-unknown:     220 9% 46%;    /* #6B7280 gray-500 */
+    --status-unknown-bg:  220 9% 92%;
+    --status-pending:     220 9% 46%;    /* alias of --status-unknown (legacy) */
+    --status-pending-bg:  220 9% 92%;
+    --status-info:        199 89% 48%;   /* #0EA5E9 sky-500 */
+    --status-info-bg:     199 89% 92%;
     --status-neutral:     215 12% 55%;
     --status-neutral-bg:  215 12% 93%;
 
@@ -78,17 +80,19 @@
     --mac-green:  #28C840;
     --card-shadow: 0 16px 40px rgba(0,0,0,0.45), 0 2px 10px rgba(0,0,0,0.35);
 
-    /* Dark mode status — 배경 채도 낮추고 전경 채도 유지 */
-    --status-healthy:     152 55% 55%;
-    --status-healthy-bg:  152 40% 15%;
-    --status-warning:     32 85% 58%;
-    --status-warning-bg:  32 40% 15%;
-    --status-critical:    0 72% 60%;
-    --status-critical-bg: 0 45% 15%;
-    --status-pending:     215 12% 65%;
-    --status-pending-bg:  215 12% 18%;
-    --status-info:        199 80% 55%;
-    --status-info-bg:     199 40% 15%;
+    /* Dark mode status (DESIGN_SYSTEM §2.4) — 전경 채도 유지, 배경 채도 ↓ */
+    --status-healthy:     142 71% 45%;
+    --status-healthy-bg:  142 50% 14%;
+    --status-warning:     38 92% 50%;
+    --status-warning-bg:  38 60% 14%;
+    --status-critical:    0 84% 60%;
+    --status-critical-bg: 0 60% 16%;
+    --status-unknown:     220 9% 55%;
+    --status-unknown-bg:  220 12% 18%;
+    --status-pending:     220 9% 55%;
+    --status-pending-bg:  220 12% 18%;
+    --status-info:        199 89% 55%;
+    --status-info-bg:     199 50% 16%;
     --status-neutral:     215 8% 60%;
     --status-neutral-bg:  215 8% 18%;
 
@@ -187,6 +191,15 @@ code .text-\[11px\], code .text-\[10px\], code .text-\[9px\] {
 .mac-shadow {
   box-shadow: var(--card-shadow);
 }
+
+/* ── Status utilities (DESIGN_SYSTEM §2.4) ──────────────────────────────────
+   컴포넌트에서 raw `text-green-400` `text-red-500` 등 사용 금지.
+   • text-status-* / bg-status-* (solid)  → Tailwind config 가 생성 (token-driven)
+   • bg-status-*-soft                     → 옅은 배경 (badge/alert), --status-*-bg 변수 참조 */
+.bg-status-healthy-soft  { background-color: hsl(var(--status-healthy-bg)); }
+.bg-status-warning-soft  { background-color: hsl(var(--status-warning-bg)); }
+.bg-status-critical-soft { background-color: hsl(var(--status-critical-bg)); }
+.bg-status-unknown-soft  { background-color: hsl(var(--status-unknown-bg)); }
 
 /* ── Focus ring — 키보드 접근성 (마우스 클릭 시는 안 보이게) ────────────── */
 *:focus { outline: none; }

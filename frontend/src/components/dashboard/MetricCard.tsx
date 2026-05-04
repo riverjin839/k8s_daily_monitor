@@ -27,18 +27,18 @@ function getThresholdColor(value: number | null | undefined, thresholds?: string
   if (value == null) return 'text-muted-foreground';
   const t = parseThresholds(thresholds);
   if (!t) return 'text-foreground';
-  if (value >= t.critical) return 'text-red-400';
-  if (value >= t.warning) return 'text-yellow-400';
-  return 'text-green-400';
+  if (value >= t.critical) return 'text-status-critical';
+  if (value >= t.warning) return 'text-status-warning';
+  return 'text-status-healthy';
 }
 
 function getThresholdBgColor(value: number | null | undefined, thresholds?: string): string {
   if (value == null) return 'bg-secondary';
   const t = parseThresholds(thresholds);
-  if (!t) return 'bg-blue-500';
-  if (value >= t.critical) return 'bg-red-500';
-  if (value >= t.warning) return 'bg-yellow-500';
-  return 'bg-green-500';
+  if (!t) return 'bg-primary';
+  if (value >= t.critical) return 'bg-status-critical';
+  if (value >= t.warning) return 'bg-status-warning';
+  return 'bg-status-healthy';
 }
 
 // ── Format value ─────────────────────────────────────────
@@ -96,7 +96,7 @@ function ValueDisplay({ value, thresholds, unit }: { value: number | null | unde
 // ── List display ─────────────────────────────────────────
 function ListDisplay({ results }: { results?: Array<Record<string, unknown>> | null }) {
   if (!results || results.length === 0) {
-    return <span className="text-sm text-green-400 font-mono">None detected</span>;
+    return <span className="text-sm text-status-healthy font-mono">None detected</span>;
   }
 
   return (
@@ -108,7 +108,7 @@ function ListDisplay({ results }: { results?: Array<Record<string, unknown>> | n
         return (
           <div key={i} className="flex items-center justify-between text-xs font-mono">
             <span className="text-muted-foreground truncate max-w-[160px]">{name}</span>
-            <span className="text-yellow-400">{typeof val === 'number' ? `${val.toFixed(1)}%` : String(val)}</span>
+            <span className="text-status-warning">{typeof val === 'number' ? `${val.toFixed(1)}%` : String(val)}</span>
           </div>
         );
       })}
@@ -159,15 +159,15 @@ function StatusOverlay({
   }
   if (result.status === 'offline') {
     return (
-      <div className="flex items-start gap-1.5 text-xs text-yellow-500">
+      <div className="flex items-start gap-1.5 text-xs text-status-warning">
         <WifiOff className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
         <div className="space-y-0.5">
           <p className="font-medium">Prometheus offline</p>
-          {result.error && <p className="text-[11px] text-yellow-500/80">{result.error}</p>}
+          {result.error && <p className="text-[11px] text-status-warning/80">{result.error}</p>}
           {onRefresh && (
             <button
               onClick={(e) => { e.stopPropagation(); onRefresh(); }}
-              className="text-[11px] text-yellow-600 hover:underline inline-flex items-center gap-0.5"
+              className="text-[11px] text-status-warning hover:underline inline-flex items-center gap-0.5"
             >
               <RefreshCw className="w-2.5 h-2.5" /> 다시 시도
             </button>
@@ -179,11 +179,11 @@ function StatusOverlay({
   if (result.status === 'error') {
     const hint = errorHint(result.error);
     return (
-      <div className="flex items-start gap-1.5 text-xs text-red-400">
+      <div className="flex items-start gap-1.5 text-xs text-status-critical">
         <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
         <div className="space-y-0.5 min-w-0 flex-1">
           <p className="font-medium break-words">{result.error || 'Query error'}</p>
-          {hint && <p className="text-[11px] text-red-300/80">{hint}</p>}
+          {hint && <p className="text-[11px] text-status-critical/80">{hint}</p>}
           {promql && (
             <code className="block text-[10px] font-mono text-muted-foreground/80 break-all max-h-12 overflow-hidden">
               {promql}
@@ -193,7 +193,7 @@ function StatusOverlay({
             {onRefresh && (
               <button
                 onClick={(e) => { e.stopPropagation(); onRefresh(); }}
-                className="text-[11px] text-red-300 hover:text-red-200 inline-flex items-center gap-0.5"
+                className="text-[11px] text-status-critical/80 hover:text-status-critical inline-flex items-center gap-0.5"
               >
                 <RefreshCw className="w-2.5 h-2.5" /> 재시도
               </button>
@@ -201,7 +201,7 @@ function StatusOverlay({
             {onEdit && (
               <button
                 onClick={(e) => { e.stopPropagation(); onEdit(); }}
-                className="text-[11px] text-blue-300 hover:text-blue-200 inline-flex items-center gap-0.5"
+                className="text-[11px] text-primary/80 hover:text-primary inline-flex items-center gap-0.5"
               >
                 <Pencil className="w-2.5 h-2.5" /> 카드 편집
               </button>
@@ -243,19 +243,21 @@ export function MetricCard({ card, result, onDelete, onEdit }: MetricCardProps) 
           {onDelete && (
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="p-1.5 hover:bg-red-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+              className="p-1.5 hover:bg-status-critical/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
               title="Delete card"
+              aria-label="Delete card"
             >
-              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+              <Trash2 className="w-3.5 h-3.5 text-status-critical" />
             </button>
           )}
           {onEdit && (
             <button
               onClick={(e) => { e.stopPropagation(); onEdit(); }}
-              className="p-1.5 hover:bg-blue-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+              className="p-1.5 hover:bg-primary/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
               title="Edit card"
+              aria-label="Edit card"
             >
-              <Pencil className="w-3.5 h-3.5 text-blue-400" />
+              <Pencil className="w-3.5 h-3.5 text-primary" />
             </button>
           )}
           <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-secondary text-muted-foreground uppercase tracking-wider">

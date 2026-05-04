@@ -586,7 +586,7 @@ export function BatchJobsPage() {
   }, [types, jobs]);
 
   return (
-    <main className="max-w-[1800px] mx-auto p-5 space-y-4">
+    <main className="mx-auto p-5 space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold flex items-center gap-2">

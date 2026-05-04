@@ -330,7 +330,7 @@ export function NodeSpecPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1800px] mx-auto px-4 py-3 flex gap-3">
+      <main className="mx-auto px-4 py-3 flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId}

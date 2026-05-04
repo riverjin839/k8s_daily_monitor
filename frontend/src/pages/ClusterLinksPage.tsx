@@ -530,7 +530,7 @@ export function ClusterLinksPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-primary/5">
-      <main className="max-w-[1600px] mx-auto px-5 md:px-8 py-6 md:py-8">
+      <main className="mx-auto px-5 md:px-8 py-6 md:py-8">
         {/* Header */}
         <div className="mb-6 rounded-2xl border border-primary/15 bg-card/70 backdrop-blur px-4 md:px-6 py-4 md:py-5 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

@@ -174,7 +174,7 @@ export function EtcdCtlPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1800px] mx-auto px-6 py-6 flex gap-5">
+      <main className="mx-auto px-6 py-6 flex gap-5">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId || null}

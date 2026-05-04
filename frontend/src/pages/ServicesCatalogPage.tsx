@@ -52,7 +52,7 @@ export function ServicesCatalogPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1600px] mx-auto px-6 py-6">
+      <main className="mx-auto px-6 py-6">
         <DebugLogPanel pageKey="services" extra={{ search, services: merged.length }} />
 
         <div className="flex items-center gap-3 mb-4">

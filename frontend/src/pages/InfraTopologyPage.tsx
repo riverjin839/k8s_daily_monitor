@@ -543,7 +543,7 @@ export function InfraTopologyPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1600px] mx-auto px-8 py-8">
+      <main className="mx-auto px-8 py-8">
 
         {/* 헤더 */}
         <div className="flex items-center justify-between gap-4 mb-6">

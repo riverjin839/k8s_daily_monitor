@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useId, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Cpu, Network, Server } from 'lucide-react';
 import type { Cluster, ClusterManageUpdate } from '@/types';
@@ -52,6 +52,9 @@ export function ClusterMetaFormPage() {
   const [error, setError]               = useState('');
   const [tab, setTab]                   = useState<TabId>('node');
   const [hydrated, setHydrated]         = useState(false);
+
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
 
   useEffect(() => {
     if (hydrated || !cluster) return;
@@ -165,20 +168,20 @@ export function ClusterMetaFormPage() {
           {/* 공통 상단 필드 */}
           <div className="px-6 pt-5 pb-5 grid grid-cols-1 md:grid-cols-3 gap-4 border-b border-border">
             <div>
-              <label className={lc}>지역</label>
-              <input type="text" value={region} onChange={(e) => setRegion(e.target.value)}
+              <label htmlFor={f('region')} className={lc}>지역</label>
+              <input id={f('region')} type="text" value={region} onChange={(e) => setRegion(e.target.value)}
                 placeholder="예: 서울, ap-northeast-2" className={ic} />
             </div>
             <div>
-              <label className={lc}>운영레벨</label>
-              <select value={operationLevel} onChange={(e) => setLevel(e.target.value)} className={ic}>
+              <label htmlFor={f('opsLevel')} className={lc}>운영레벨</label>
+              <select id={f('opsLevel')} value={operationLevel} onChange={(e) => setLevel(e.target.value)} className={ic}>
                 <option value="">— 선택 —</option>
                 {opsLevels.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
               </select>
             </div>
             <div>
-              <label className={lc}>호스트명</label>
-              <input type="text" value={hostname} onChange={(e) => setHostname(e.target.value)}
+              <label htmlFor={f('hostname')} className={lc}>호스트명</label>
+              <input id={f('hostname')} type="text" value={hostname} onChange={(e) => setHostname(e.target.value)}
                 placeholder="k8s-prod-master.example.com" className={ic} />
             </div>
           </div>
@@ -218,13 +221,13 @@ export function ClusterMetaFormPage() {
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">노드 스펙</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className={lc}>노드 수</label>
-                      <input type="number" min="0" value={nodeCount} onChange={(e) => setNodeCount(e.target.value)}
+                      <label htmlFor={f('nodeCount')} className={lc}>노드 수</label>
+                      <input id={f('nodeCount')} type="number" min="0" value={nodeCount} onChange={(e) => setNodeCount(e.target.value)}
                         placeholder="예: 5" className={ic} />
                     </div>
                     <div>
-                      <label className={lc}>Max Pod (노드당)</label>
-                      <input type="number" min="0" value={maxPod} onChange={(e) => setMaxPod(e.target.value)}
+                      <label htmlFor={f('maxPod')} className={lc}>Max Pod (노드당)</label>
+                      <input id={f('maxPod')} type="number" min="0" value={maxPod} onChange={(e) => setMaxPod(e.target.value)}
                         placeholder="예: 110" className={ic} />
                     </div>
                   </div>
@@ -236,26 +239,26 @@ export function ClusterMetaFormPage() {
                     <div className="space-y-3 border border-border rounded-lg p-4 bg-muted/10">
                       <p className="text-xs font-semibold text-primary">bond0</p>
                       <div>
-                        <label className={lc}>IP 주소</label>
-                        <input type="text" value={bond0Ip} onChange={(e) => setBond0Ip(e.target.value)}
+                        <label htmlFor={f('bond0Ip')} className={lc}>IP 주소</label>
+                        <input id={f('bond0Ip')} type="text" value={bond0Ip} onChange={(e) => setBond0Ip(e.target.value)}
                           placeholder="192.168.0.10/24" className={ic} />
                       </div>
                       <div>
-                        <label className={lc}>MAC 주소</label>
-                        <input type="text" value={bond0Mac} onChange={(e) => setBond0Mac(e.target.value)}
+                        <label htmlFor={f('bond0Mac')} className={lc}>MAC 주소</label>
+                        <input id={f('bond0Mac')} type="text" value={bond0Mac} onChange={(e) => setBond0Mac(e.target.value)}
                           placeholder="aa:bb:cc:dd:ee:ff" className={ic} />
                       </div>
                     </div>
                     <div className="space-y-3 border border-border rounded-lg p-4 bg-muted/10">
                       <p className="text-xs font-semibold text-primary">bond1</p>
                       <div>
-                        <label className={lc}>IP 주소</label>
-                        <input type="text" value={bond1Ip} onChange={(e) => setBond1Ip(e.target.value)}
+                        <label htmlFor={f('bond1Ip')} className={lc}>IP 주소</label>
+                        <input id={f('bond1Ip')} type="text" value={bond1Ip} onChange={(e) => setBond1Ip(e.target.value)}
                           placeholder="172.16.0.10/24" className={ic} />
                       </div>
                       <div>
-                        <label className={lc}>MAC 주소</label>
-                        <input type="text" value={bond1Mac} onChange={(e) => setBond1Mac(e.target.value)}
+                        <label htmlFor={f('bond1Mac')} className={lc}>MAC 주소</label>
+                        <input id={f('bond1Mac')} type="text" value={bond1Mac} onChange={(e) => setBond1Mac(e.target.value)}
                           placeholder="aa:bb:cc:dd:ee:f0" className={ic} />
                       </div>
                     </div>
@@ -277,8 +280,9 @@ export function ClusterMetaFormPage() {
                       </label>
                     </div>
                     <div>
-                      <label className={lc}>AS Number</label>
+                      <label htmlFor={f('asNumber')} className={lc}>AS Number</label>
                       <input
+                        id={f('asNumber')}
                         type="text"
                         value={asNumber}
                         onChange={(e) => setAsNumber(e.target.value)}
@@ -297,36 +301,36 @@ export function ClusterMetaFormPage() {
                 <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
                   <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-3">Node CIDR 대역</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div><label className={lc}>Node CIDR</label>
-                      <input type="text" value={cidr} onChange={(e) => setCidr(e.target.value)} placeholder="192.168.0.0/24" className={ic} /></div>
-                    <div><label className={lc}>First Host</label>
-                      <input type="text" value={firstHost} onChange={(e) => setFirstHost(e.target.value)} placeholder="192.168.0.1" className={ic} /></div>
-                    <div><label className={lc}>Last Host</label>
-                      <input type="text" value={lastHost} onChange={(e) => setLastHost(e.target.value)} placeholder="192.168.0.254" className={ic} /></div>
+                    <div><label htmlFor={f('cidr')} className={lc}>Node CIDR</label>
+                      <input id={f('cidr')} type="text" value={cidr} onChange={(e) => setCidr(e.target.value)} placeholder="192.168.0.0/24" className={ic} /></div>
+                    <div><label htmlFor={f('firstHost')} className={lc}>First Host</label>
+                      <input id={f('firstHost')} type="text" value={firstHost} onChange={(e) => setFirstHost(e.target.value)} placeholder="192.168.0.1" className={ic} /></div>
+                    <div><label htmlFor={f('lastHost')} className={lc}>Last Host</label>
+                      <input id={f('lastHost')} type="text" value={lastHost} onChange={(e) => setLastHost(e.target.value)} placeholder="192.168.0.254" className={ic} /></div>
                   </div>
                 </div>
 
                 <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
                   <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-3">Pod CIDR 대역</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div><label className={lc}>Pod CIDR</label>
-                      <input type="text" value={podCidr} onChange={(e) => setPodCidr(e.target.value)} placeholder="10.244.0.0/16" className={ic} /></div>
-                    <div><label className={lc}>First Host</label>
-                      <input type="text" value={podFirstHost} onChange={(e) => setPodFirstHost(e.target.value)} placeholder="10.244.0.1" className={ic} /></div>
-                    <div><label className={lc}>Last Host</label>
-                      <input type="text" value={podLastHost} onChange={(e) => setPodLastHost(e.target.value)} placeholder="10.244.255.254" className={ic} /></div>
+                    <div><label htmlFor={f('podCidr')} className={lc}>Pod CIDR</label>
+                      <input id={f('podCidr')} type="text" value={podCidr} onChange={(e) => setPodCidr(e.target.value)} placeholder="10.244.0.0/16" className={ic} /></div>
+                    <div><label htmlFor={f('podFirstHost')} className={lc}>First Host</label>
+                      <input id={f('podFirstHost')} type="text" value={podFirstHost} onChange={(e) => setPodFirstHost(e.target.value)} placeholder="10.244.0.1" className={ic} /></div>
+                    <div><label htmlFor={f('podLastHost')} className={lc}>Last Host</label>
+                      <input id={f('podLastHost')} type="text" value={podLastHost} onChange={(e) => setPodLastHost(e.target.value)} placeholder="10.244.255.254" className={ic} /></div>
                   </div>
                 </div>
 
                 <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-4">
                   <p className="text-xs font-semibold text-violet-400 uppercase tracking-wider mb-3">Service CIDR 대역</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div><label className={lc}>Service CIDR</label>
-                      <input type="text" value={svcCidr} onChange={(e) => setSvcCidr(e.target.value)} placeholder="10.96.0.0/12" className={ic} /></div>
-                    <div><label className={lc}>First Host</label>
-                      <input type="text" value={svcFirstHost} onChange={(e) => setSvcFirst(e.target.value)} placeholder="10.96.0.1" className={ic} /></div>
-                    <div><label className={lc}>Last Host</label>
-                      <input type="text" value={svcLastHost} onChange={(e) => setSvcLast(e.target.value)} placeholder="10.111.255.254" className={ic} /></div>
+                    <div><label htmlFor={f('svcCidr')} className={lc}>Service CIDR</label>
+                      <input id={f('svcCidr')} type="text" value={svcCidr} onChange={(e) => setSvcCidr(e.target.value)} placeholder="10.96.0.0/12" className={ic} /></div>
+                    <div><label htmlFor={f('svcFirstHost')} className={lc}>First Host</label>
+                      <input id={f('svcFirstHost')} type="text" value={svcFirstHost} onChange={(e) => setSvcFirst(e.target.value)} placeholder="10.96.0.1" className={ic} /></div>
+                    <div><label htmlFor={f('svcLastHost')} className={lc}>Last Host</label>
+                      <input id={f('svcLastHost')} type="text" value={svcLastHost} onChange={(e) => setSvcLast(e.target.value)} placeholder="10.111.255.254" className={ic} /></div>
                   </div>
                 </div>
               </div>
@@ -335,14 +339,14 @@ export function ClusterMetaFormPage() {
             {tab === 'extra' && (
               <div className="space-y-4">
                 <div>
-                  <label className={lc}>주요 Cilium 설정</label>
-                  <textarea value={ciliumConfig} onChange={(e) => setCilium(e.target.value)}
+                  <label htmlFor={f('cilium')} className={lc}>주요 Cilium 설정</label>
+                  <textarea id={f('cilium')} value={ciliumConfig} onChange={(e) => setCilium(e.target.value)}
                     placeholder={`tunnel: vxlan\nkubeProxyReplacement: strict\nipv4NativeRoutingCIDR: 10.0.0.0/8`}
                     rows={6} className={`${ic} resize-none font-mono text-xs`} />
                 </div>
                 <div>
-                  <label className={lc}>정보 / 설명</label>
-                  <textarea value={description} onChange={(e) => setDescription(e.target.value)}
+                  <label htmlFor={f('desc')} className={lc}>정보 / 설명</label>
+                  <textarea id={f('desc')} value={description} onChange={(e) => setDescription(e.target.value)}
                     placeholder="클러스터에 대한 추가 정보나 메모"
                     rows={5} className={`${ic} resize-none`} />
                 </div>

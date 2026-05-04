@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { X, Server, Play, Loader2, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 import { bulkExecApi, versionsApi } from '@/services/api';
 import type { NodeSummary } from '@/services/api';
@@ -28,6 +28,12 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
   const [envFilesText, setEnvFilesText] = useState('/etcd/etcd.env, /etc/etcd.env, /etc/default/etcd');
   const [parallelism, setParallelism] = useState(10);
   const [result, setResult] = useState<EtcdSystemdCollectResponse | null>(null);
+
+  const usernameId = useId();
+  const portId = useId();
+  const unitId = useId();
+  const envFilesId = useId();
+  const parallelismId = useId();
 
   const nodeQ = useQuery({
     queryKey: ['etcd-systemd-nodes', clusterId],
@@ -93,19 +99,19 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
           {/* 자격증명 */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="text-[11px] text-muted-foreground mb-1 block">SSH User</label>
-              <input value={username} onChange={(e) => setUsername(e.target.value)}
+              <label htmlFor={usernameId} className="text-[11px] text-muted-foreground mb-1 block">SSH User</label>
+              <input id={usernameId} value={username} onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
             </div>
             <div>
-              <label className="text-[11px] text-muted-foreground mb-1 block">SSH Port</label>
-              <input type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
+              <label htmlFor={portId} className="text-[11px] text-muted-foreground mb-1 block">SSH Port</label>
+              <input id={portId} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
                 min={1} max={65535}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
             </div>
             <div>
-              <label className="text-[11px] text-muted-foreground mb-1 block">systemd unit</label>
-              <input value={unit} onChange={(e) => setUnit(e.target.value)}
+              <label htmlFor={unitId} className="text-[11px] text-muted-foreground mb-1 block">systemd unit</label>
+              <input id={unitId} value={unit} onChange={(e) => setUnit(e.target.value)}
                 placeholder="etcd"
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
             </div>
@@ -113,10 +119,10 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
 
           {/* etcd env file 경로 — 사내 표준 /etcd/etcd.env 가 기본, 다른 배포판은 수정 */}
           <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">
+            <label htmlFor={envFilesId} className="text-[11px] text-muted-foreground mb-1 block">
               etcd env 파일 후보 (쉼표 구분, 첫 존재 파일만 저장)
             </label>
-            <input value={envFilesText} onChange={(e) => setEnvFilesText(e.target.value)}
+            <input id={envFilesId} value={envFilesText} onChange={(e) => setEnvFilesText(e.target.value)}
               placeholder="/etcd/etcd.env, /etc/etcd.env"
               className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
             <p className="mt-1 text-[10px] text-muted-foreground">
@@ -128,11 +134,11 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
           {/* 병렬/청크 옵션 */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="text-[11px] text-muted-foreground mb-1 block"
+              <label htmlFor={parallelismId} className="text-[11px] text-muted-foreground mb-1 block"
                 title="동시에 SSH 세션 몇 개 열지 상한">
                 Parallelism (동시 SSH 수)
               </label>
-              <input type="number" value={parallelism}
+              <input id={parallelismId} type="number" value={parallelism}
                 onChange={(e) => setParallelism(Number(e.target.value) || 10)}
                 min={1} max={50}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />

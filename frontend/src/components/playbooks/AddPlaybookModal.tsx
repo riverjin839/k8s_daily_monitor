@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { X, Plus, Pencil, Trash2, FileCode2, ListTree, Save, Loader2 } from 'lucide-react';
 import { Playbook } from '@/types';
 import {
@@ -306,6 +306,15 @@ export function AddPlaybookModal({
   const [editFileId, setEditFileId] = useState<string | null>(null);
   const [editInvId, setEditInvId] = useState<string | null>(null);
 
+  const clusterSelectId = useId();
+  const nameId = useId();
+  const descId = useId();
+  const playbookFileSelectId = useId();
+  const inventorySelectId = useId();
+  const playbookPathId = useId();
+  const inventoryPathId = useId();
+  const tagsId = useId();
+
   const filesQ = usePlaybookFiles();
   const invQ = useInventories(clusterId || undefined);
 
@@ -370,8 +379,9 @@ export function AddPlaybookModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Cluster */}
           <div>
-            <label className="block text-sm font-medium mb-1">Cluster</label>
+            <label htmlFor={clusterSelectId} className="block text-sm font-medium mb-1">Cluster</label>
             <select
+              id={clusterSelectId}
               value={clusterId}
               onChange={(e) => setClusterId(e.target.value)}
               className={inputCls}
@@ -384,8 +394,9 @@ export function AddPlaybookModal({
 
           {/* Name */}
           <div>
-            <label className="block text-sm font-medium mb-1">Name</label>
+            <label htmlFor={nameId} className="block text-sm font-medium mb-1">Name</label>
             <input
+              id={nameId}
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -397,8 +408,9 @@ export function AddPlaybookModal({
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium mb-1">Description</label>
+            <label htmlFor={descId} className="block text-sm font-medium mb-1">Description</label>
             <input
+              id={descId}
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -427,11 +439,12 @@ export function AddPlaybookModal({
             <>
               {/* Playbook 파일 (공용) */}
               <div>
-                <label className="block text-sm font-medium mb-1 flex items-center gap-1">
+                <label htmlFor={playbookFileSelectId} className="block text-sm font-medium mb-1 flex items-center gap-1">
                   <FileCode2 className="w-3.5 h-3.5" /> Playbook 파일 (공용 라이브러리)
                 </label>
                 <div className="flex items-center gap-2">
                   <select
+                    id={playbookFileSelectId}
                     value={playbookFileId}
                     onChange={(e) => setPlaybookFileId(e.target.value)}
                     disabled={filesQ.isLoading}
@@ -475,11 +488,12 @@ export function AddPlaybookModal({
 
               {/* Inventory (per-cluster) */}
               <div>
-                <label className="block text-sm font-medium mb-1 flex items-center gap-1">
+                <label htmlFor={inventorySelectId} className="block text-sm font-medium mb-1 flex items-center gap-1">
                   <ListTree className="w-3.5 h-3.5" /> Inventory (이 클러스터)
                 </label>
                 <div className="flex items-center gap-2">
                   <select
+                    id={inventorySelectId}
                     value={inventoryId}
                     onChange={(e) => setInventoryId(e.target.value)}
                     disabled={!clusterId || invQ.isLoading}
@@ -533,8 +547,9 @@ export function AddPlaybookModal({
             <>
               {/* Path 기반 (구 호환) */}
               <div>
-                <label className="block text-sm font-medium mb-1">Playbook Path</label>
+                <label htmlFor={playbookPathId} className="block text-sm font-medium mb-1">Playbook Path</label>
                 <input
+                  id={playbookPathId}
                   type="text"
                   value={playbookPath}
                   onChange={(e) => setPlaybookPath(e.target.value)}
@@ -545,8 +560,9 @@ export function AddPlaybookModal({
                 <p className="text-xs text-muted-foreground mt-1">실행 호스트(master#1) 상의 절대 경로</p>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Inventory Path (optional)</label>
+                <label htmlFor={inventoryPathId} className="block text-sm font-medium mb-1">Inventory Path (optional)</label>
                 <input
+                  id={inventoryPathId}
                   type="text"
                   value={inventoryPath}
                   onChange={(e) => setInventoryPath(e.target.value)}
@@ -559,8 +575,9 @@ export function AddPlaybookModal({
 
           {/* Tags */}
           <div>
-            <label className="block text-sm font-medium mb-1">Tags (optional)</label>
+            <label htmlFor={tagsId} className="block text-sm font-medium mb-1">Tags (optional)</label>
             <input
+              id={tagsId}
               type="text"
               value={tags}
               onChange={(e) => setTags(e.target.value)}

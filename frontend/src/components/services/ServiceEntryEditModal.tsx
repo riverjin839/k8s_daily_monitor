@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { X, Save, Loader2 } from 'lucide-react';
 import type { Cluster, ServiceEntry, ServiceEntryCreate, ServiceEntryKind } from '@/types';
 import { serviceEntriesApi } from '@/services/api';
@@ -44,6 +44,16 @@ export function ServiceEntryEditModal({
   });
   const [tagsText, setTagsText] = useState((entry?.tags ?? []).join(', '));
   const [saving, setSaving] = useState(false);
+
+  const kindId = useId();
+  const clusterScopeId = useId();
+  const titleId = useId();
+  const severityId = useId();
+  const occurredAtId = useId();
+  const urlId = useId();
+  const tagsId = useId();
+  const contentId = useId();
+  const authorId = useId();
 
   useEffect(() => {
     if (entry) {
@@ -113,16 +123,16 @@ export function ServiceEntryEditModal({
         <div className="flex-1 overflow-y-auto p-5 space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="text-[11px] text-muted-foreground mb-1 block">종류</label>
-              <select value={form.kind ?? 'note'}
+              <label htmlFor={kindId} className="text-[11px] text-muted-foreground mb-1 block">종류</label>
+              <select id={kindId} value={form.kind ?? 'note'}
                 onChange={(e) => update('kind', e.target.value as ServiceEntryKind)}
                 className={inputCls}>
                 {KIND_CATALOG.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-[11px] text-muted-foreground mb-1 block">클러스터 범위</label>
-              <select value={form.clusterId ?? ''}
+              <label htmlFor={clusterScopeId} className="text-[11px] text-muted-foreground mb-1 block">클러스터 범위</label>
+              <select id={clusterScopeId} value={form.clusterId ?? ''}
                 onChange={(e) => update('clusterId', e.target.value || null)}
                 className={inputCls}>
                 <option value="">전역 (모든 클러스터 공통)</option>
@@ -139,8 +149,8 @@ export function ServiceEntryEditModal({
           </div>
 
           <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">제목 *</label>
-            <input value={form.title ?? ''} onChange={(e) => update('title', e.target.value)}
+            <label htmlFor={titleId} className="text-[11px] text-muted-foreground mb-1 block">제목 *</label>
+            <input id={titleId} value={form.title ?? ''} onChange={(e) => update('title', e.target.value)}
               placeholder="예: Keycloak realm migration 절차"
               className={inputCls} />
           </div>
@@ -149,17 +159,17 @@ export function ServiceEntryEditModal({
           {(form.kind === 'troubleshoot' || form.kind === 'history') && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="text-[11px] text-muted-foreground mb-1 block">심각도</label>
-                <select value={form.severity ?? ''} onChange={(e) => update('severity', e.target.value)}
+                <label htmlFor={severityId} className="text-[11px] text-muted-foreground mb-1 block">심각도</label>
+                <select id={severityId} value={form.severity ?? ''} onChange={(e) => update('severity', e.target.value)}
                   className={inputCls}>
                   {SEVERITIES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
               </div>
               <div>
-                <label className="text-[11px] text-muted-foreground mb-1 block">
+                <label htmlFor={occurredAtId} className="text-[11px] text-muted-foreground mb-1 block">
                   {form.kind === 'history' ? '발생/적용 일시' : '관찰 일시'}
                 </label>
-                <input type="datetime-local"
+                <input id={occurredAtId} type="datetime-local"
                   value={form.occurredAt ? form.occurredAt.slice(0, 16) : ''}
                   onChange={(e) => update('occurredAt', e.target.value ? new Date(e.target.value).toISOString() : null)}
                   className={inputCls} />
@@ -169,40 +179,42 @@ export function ServiceEntryEditModal({
 
           {form.kind === 'link' && (
             <div>
-              <label className="text-[11px] text-muted-foreground mb-1 block">URL *</label>
-              <input value={form.url ?? ''} onChange={(e) => update('url', e.target.value)}
+              <label htmlFor={urlId} className="text-[11px] text-muted-foreground mb-1 block">URL *</label>
+              <input id={urlId} value={form.url ?? ''} onChange={(e) => update('url', e.target.value)}
                 placeholder="https://..."
                 className={`${inputCls} font-mono`} />
             </div>
           )}
 
           <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">태그 (쉼표 구분)</label>
-            <input value={tagsText} onChange={(e) => setTagsText(e.target.value)}
+            <label htmlFor={tagsId} className="text-[11px] text-muted-foreground mb-1 block">태그 (쉼표 구분)</label>
+            <input id={tagsId} value={tagsText} onChange={(e) => setTagsText(e.target.value)}
               placeholder="upgrade, 1.30, hotfix"
               className={`${inputCls} font-mono`} />
           </div>
 
           <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">
+            <label htmlFor={contentId} className="text-[11px] text-muted-foreground mb-1 block">
               {form.kind === 'link' ? '메모/설명 (선택)' : '내용'}
             </label>
-            <RichTextEditor
-              value={form.content ?? ''}
-              onChange={(html) => update('content', html)}
-              placeholder={
-                form.kind === 'guide' ? '운영 절차를 단계별로 정리하세요.'
-                : form.kind === 'troubleshoot' ? '증상 / 원인 / 해결 과정 / 재발 방지...'
-                : form.kind === 'history' ? '무엇을 변경/조치했는지 — 영향 범위, 결과, 후속...'
-                : form.kind === 'link' ? '이 리소스에 대한 짧은 설명...'
-                : '메모 내용...'
-              }
-            />
+            <div id={contentId}>
+              <RichTextEditor
+                value={form.content ?? ''}
+                onChange={(html) => update('content', html)}
+                placeholder={
+                  form.kind === 'guide' ? '운영 절차를 단계별로 정리하세요.'
+                  : form.kind === 'troubleshoot' ? '증상 / 원인 / 해결 과정 / 재발 방지...'
+                  : form.kind === 'history' ? '무엇을 변경/조치했는지 — 영향 범위, 결과, 후속...'
+                  : form.kind === 'link' ? '이 리소스에 대한 짧은 설명...'
+                  : '메모 내용...'
+                }
+              />
+            </div>
           </div>
 
           <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">작성자</label>
-            <input value={form.author ?? ''} onChange={(e) => update('author', e.target.value)}
+            <label htmlFor={authorId} className="text-[11px] text-muted-foreground mb-1 block">작성자</label>
+            <input id={authorId} value={form.author ?? ''} onChange={(e) => update('author', e.target.value)}
               placeholder="이름 또는 팀"
               className={inputCls} />
           </div>

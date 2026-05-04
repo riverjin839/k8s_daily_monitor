@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { X, Cpu, Play, Loader2, CheckCircle2, AlertTriangle, FileText } from 'lucide-react';
 import { bulkExecApi, versionsApi } from '@/services/api';
 import type { NodeSummary } from '@/services/api';
@@ -38,6 +38,11 @@ export function KubeletConfigCollectModal({ open, clusterId, onClose }: Props) {
   const [useSudo, setUseSudo] = useState(true);
 
   const [fallbacksText, setFallbacksText] = useState(DEFAULT_FALLBACKS.join('\n'));
+
+  const usernameId = useId();
+  const portId = useId();
+  const parallelismId = useId();
+  const fallbacksId = useId();
   const [parallelism, setParallelism] = useState(10);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -125,19 +130,19 @@ export function KubeletConfigCollectModal({ open, clusterId, onClose }: Props) {
         <div className="px-5 py-4 max-h-[520px] overflow-y-auto space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div>
-              <label className="text-[11px] text-muted-foreground mb-1 block">SSH User</label>
-              <input value={username} onChange={(e) => setUsername(e.target.value)}
+              <label htmlFor={usernameId} className="text-[11px] text-muted-foreground mb-1 block">SSH User</label>
+              <input id={usernameId} value={username} onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
             </div>
             <div>
-              <label className="text-[11px] text-muted-foreground mb-1 block">SSH Port</label>
-              <input type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
+              <label htmlFor={portId} className="text-[11px] text-muted-foreground mb-1 block">SSH Port</label>
+              <input id={portId} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
                 min={1} max={65535}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
             </div>
             <div>
-              <label className="text-[11px] text-muted-foreground mb-1 block">Parallelism</label>
-              <input type="number" value={parallelism}
+              <label htmlFor={parallelismId} className="text-[11px] text-muted-foreground mb-1 block">Parallelism</label>
+              <input id={parallelismId} type="number" value={parallelism}
                 onChange={(e) => setParallelism(Number(e.target.value) || 10)}
                 min={1} max={50}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
@@ -178,11 +183,11 @@ export function KubeletConfigCollectModal({ open, clusterId, onClose }: Props) {
           </div>
 
           <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block flex items-center gap-1">
+            <label htmlFor={fallbacksId} className="text-[11px] text-muted-foreground mb-1 block flex items-center gap-1">
               <FileText className="w-3 h-3" />
               fallback 경로 (한 줄에 하나, ps 추출 실패시 차례로 시도)
             </label>
-            <textarea value={fallbacksText} onChange={(e) => setFallbacksText(e.target.value)}
+            <textarea id={fallbacksId} value={fallbacksText} onChange={(e) => setFallbacksText(e.target.value)}
               rows={4}
               className="w-full px-2 py-1 text-[11px] font-mono bg-background border border-border rounded-lg" />
           </div>

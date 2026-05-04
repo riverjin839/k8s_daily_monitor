@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Route, Play, ArrowRight, Globe, Network, Share2, Server, Box,
   AlertTriangle, Info, Square,
@@ -74,6 +74,9 @@ export function PacketFlowPage() {
   }, [clusters, clusterId]);
 
   // Target 구성 — 방향 + source + destination
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
+
   const [direction, setDirection] = useState<PacketDirection>('north-south');
   const [source, setSource] = useState('internet');
   const [destination, setDestination] = useState('');
@@ -239,8 +242,8 @@ export function PacketFlowPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className="text-[11px] text-muted-foreground mb-1 block">Protocol</label>
-                <select value={protocol} onChange={(e) => setProtocol(e.target.value as typeof protocol)}
+                <label htmlFor={f('protocol')} className="text-[11px] text-muted-foreground mb-1 block">Protocol</label>
+                <select id={f('protocol')} value={protocol} onChange={(e) => setProtocol(e.target.value as typeof protocol)}
                   className="w-full px-3 py-1.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
                   <option value="http">http</option>
                   <option value="https">https</option>
@@ -249,8 +252,9 @@ export function PacketFlowPage() {
                 </select>
               </div>
               <div>
-                <label className="text-[11px] text-muted-foreground mb-1 block">Port (선택)</label>
+                <label htmlFor={f('port')} className="text-[11px] text-muted-foreground mb-1 block">Port (선택)</label>
                 <input
+                  id={f('port')}
                   type="number" value={port} onChange={(e) => setPort(e.target.value)}
                   placeholder="443"
                   className="w-full px-3 py-1.5 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
@@ -258,8 +262,9 @@ export function PacketFlowPage() {
               </div>
               {direction === 'north-south' && (
                 <div>
-                  <label className="text-[11px] text-muted-foreground mb-1 block">Path</label>
+                  <label htmlFor={f('path')} className="text-[11px] text-muted-foreground mb-1 block">Path</label>
                   <input
+                    id={f('path')}
                     type="text" value={path} onChange={(e) => setPath(e.target.value)}
                     placeholder="/"
                     className="w-full px-3 py-1.5 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"

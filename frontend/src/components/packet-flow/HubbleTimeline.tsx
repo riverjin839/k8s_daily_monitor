@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Play, Square, CheckCircle2, XCircle, Info, AlertTriangle, RefreshCw } from 'lucide-react';
 import { topologyTraceApi } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
@@ -73,6 +73,9 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
   const [sinceSeconds, setSinceSeconds] = useState(60);
   const [limit, setLimit] = useState(200);
 
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
+
   const [resp, setResp] = useState<HubbleFlowsResponse | null>(null);
 
   const runMut = useAbortableMutation({
@@ -97,26 +100,26 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
     <div className="space-y-3">
       <div className="bg-card border border-border rounded-xl p-3 flex items-end gap-2 flex-wrap">
         <div className="flex-1 min-w-[180px]">
-          <label className="block text-[11px] text-muted-foreground mb-0.5">From Pod (ns/name)</label>
-          <input value={fromPod} onChange={(e) => setFromPod(e.target.value)}
+          <label htmlFor={f('fromPod')} className="block text-[11px] text-muted-foreground mb-0.5">From Pod (ns/name)</label>
+          <input id={f('fromPod')} value={fromPod} onChange={(e) => setFromPod(e.target.value)}
             placeholder="default/client-pod"
             className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded" />
         </div>
         <div className="flex-1 min-w-[180px]">
-          <label className="block text-[11px] text-muted-foreground mb-0.5">To Pod (ns/name)</label>
-          <input value={toPod} onChange={(e) => setToPod(e.target.value)}
+          <label htmlFor={f('toPod')} className="block text-[11px] text-muted-foreground mb-0.5">To Pod (ns/name)</label>
+          <input id={f('toPod')} value={toPod} onChange={(e) => setToPod(e.target.value)}
             placeholder="default/backend"
             className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded" />
         </div>
         <div className="flex-1 min-w-[180px]">
-          <label className="block text-[11px] text-muted-foreground mb-0.5">To Service (ns/name)</label>
-          <input value={toService} onChange={(e) => setToService(e.target.value)}
+          <label htmlFor={f('toSvc')} className="block text-[11px] text-muted-foreground mb-0.5">To Service (ns/name)</label>
+          <input id={f('toSvc')} value={toService} onChange={(e) => setToService(e.target.value)}
             placeholder="default/api"
             className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded" />
         </div>
         <div>
-          <label className="block text-[11px] text-muted-foreground mb-0.5">Verdict</label>
-          <select value={verdict} onChange={(e) => setVerdict(e.target.value)}
+          <label htmlFor={f('verdict')} className="block text-[11px] text-muted-foreground mb-0.5">Verdict</label>
+          <select id={f('verdict')} value={verdict} onChange={(e) => setVerdict(e.target.value)}
             className="px-2 py-1 text-sm bg-background border border-border rounded">
             <option value="">All</option>
             <option value="FORWARDED">FORWARDED</option>
@@ -125,14 +128,14 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
           </select>
         </div>
         <div>
-          <label className="block text-[11px] text-muted-foreground mb-0.5">Since (s)</label>
-          <input type="number" value={sinceSeconds} onChange={(e) => setSinceSeconds(Number(e.target.value) || 60)}
+          <label htmlFor={f('since')} className="block text-[11px] text-muted-foreground mb-0.5">Since (s)</label>
+          <input id={f('since')} type="number" value={sinceSeconds} onChange={(e) => setSinceSeconds(Number(e.target.value) || 60)}
             min={1} max={3600}
             className="w-20 px-2 py-1 text-sm bg-background border border-border rounded" />
         </div>
         <div>
-          <label className="block text-[11px] text-muted-foreground mb-0.5">Limit</label>
-          <input type="number" value={limit} onChange={(e) => setLimit(Number(e.target.value) || 200)}
+          <label htmlFor={f('limit')} className="block text-[11px] text-muted-foreground mb-0.5">Limit</label>
+          <input id={f('limit')} type="number" value={limit} onChange={(e) => setLimit(Number(e.target.value) || 200)}
             min={1} max={5000}
             className="w-20 px-2 py-1 text-sm bg-background border border-border rounded" />
         </div>

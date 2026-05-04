@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
@@ -237,6 +237,9 @@ export function KernelParamsPage() {
     setSelected((prev) => prev.size === all.length ? new Set() : new Set(all));
   };
 
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
+
   // 실행 구성
   const [presetKey, setPresetKey] = useState<string>('os-info');
   const [customCmd, setCustomCmd] = useState('');
@@ -384,8 +387,9 @@ export function KernelParamsPage() {
 
               {useCustom && (
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">명령 (읽기 전용 권장)</label>
+                  <label htmlFor={f('cmd')} className="text-xs text-muted-foreground mb-1 block">명령 (읽기 전용 권장)</label>
                   <textarea
+                    id={f('cmd')}
                     value={customCmd}
                     onChange={(e) => setCustomCmd(e.target.value)}
                     placeholder="예: sysctl net.ipv4.ip_forward"
@@ -404,17 +408,17 @@ export function KernelParamsPage() {
               {/* 인증 */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">사용자</label>
-                  <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
+                  <label htmlFor={f('user')} className="block text-xs text-muted-foreground mb-1">사용자</label>
+                  <input id={f('user')} type="text" value={username} onChange={(e) => setUsername(e.target.value)}
                     className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">포트</label>
-                  <input type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
+                  <label htmlFor={f('port')} className="block text-xs text-muted-foreground mb-1">포트</label>
+                  <input id={f('port')} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
                     className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">인증</label>
+                  <p className="block text-xs text-muted-foreground mb-1">인증</p>
                   <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
                     {(['password', 'key'] as const).map((m) => (
                       <button key={m} onClick={() => setAuthMode(m)}

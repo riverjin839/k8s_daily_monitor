@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ViewModeBar, DebugLogPanel, useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
@@ -90,6 +90,10 @@ export function ClusterManagePage() {
   const [applyingId, setApplyingId]       = useState<string | null>(null);
   const [collectingNodeIpsId, setCollectingNodeIpsId] = useState<string | null>(null);
   const [bulkCollecting, setBulkCollecting] = useState(false);
+
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
+
   const [search, setSearch]               = useState('');
   const [filterLevel, setFilterLevel]     = useState('');
   const [sortBy, setSortBy]               = useState<'name' | 'status' | 'level' | 'manual'>('manual');
@@ -433,10 +437,11 @@ export function ClusterManagePage() {
         {showFilter && (
           <div className="mb-5 p-4 bg-card border border-border rounded-xl flex flex-wrap items-end gap-3">
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-xs text-muted-foreground mb-1">검색</label>
+              <label htmlFor={f('search')} className="block text-xs text-muted-foreground mb-1">검색</label>
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                 <input
+                  id={f('search')}
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -446,16 +451,16 @@ export function ClusterManagePage() {
               </div>
             </div>
             <div className="min-w-[160px]">
-              <label className="block text-xs text-muted-foreground mb-1">운영레벨</label>
-              <select value={filterLevel} onChange={(e) => setFilterLevel(e.target.value)}
+              <label htmlFor={f('level')} className="block text-xs text-muted-foreground mb-1">운영레벨</label>
+              <select id={f('level')} value={filterLevel} onChange={(e) => setFilterLevel(e.target.value)}
                 className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
                 <option value="">전체</option>
                 {opsLevels.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
               </select>
             </div>
             <div className="min-w-[140px]">
-              <label className="block text-xs text-muted-foreground mb-1">정렬</label>
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'name' | 'status' | 'level' | 'manual')}
+              <label htmlFor={f('sort')} className="block text-xs text-muted-foreground mb-1">정렬</label>
+              <select id={f('sort')} value={sortBy} onChange={(e) => setSortBy(e.target.value as 'name' | 'status' | 'level' | 'manual')}
                 className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
                 <option value="manual">수동(드래그)</option>
                 <option value="name">이름순</option>
@@ -464,8 +469,8 @@ export function ClusterManagePage() {
               </select>
             </div>
             <div className="min-w-[140px]">
-              <label className="block text-xs text-muted-foreground mb-1">그룹</label>
-              <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupByMode)}
+              <label htmlFor={f('group')} className="block text-xs text-muted-foreground mb-1">그룹</label>
+              <select id={f('group')} value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupByMode)}
                 className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary">
                 <option value="none">그룹 없음</option>
                 <option value="region">지역별</option>

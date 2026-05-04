@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useId, useMemo, useState } from 'react';
 import {
   Network, Plus, RefreshCw, Server, Cpu, Database, HardDrive,
   Trash2, Pencil, X, ChevronDown, AlertTriangle, Loader2, Tag, GitBranch, Activity,
@@ -153,6 +153,9 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
   const createNode = useCreateInfraNode();
   const updateNode = useUpdateInfraNode();
 
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
+
   const [form, setForm] = useState<InfraNodeCreate>(() => {
     if (initial) {
       return {
@@ -224,8 +227,9 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
           )}
           {/* 호스트명 */}
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">호스트명 *</label>
+            <label htmlFor={f('hostname')} className="block text-xs font-medium text-muted-foreground mb-1">호스트명 *</label>
             <input
+              id={f('hostname')}
               value={form.hostname}
               onChange={e => set('hostname', e.target.value)}
               placeholder="node-01"
@@ -235,9 +239,10 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
 
           {/* Role */}
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">역할</label>
+            <label htmlFor={f('role')} className="block text-xs font-medium text-muted-foreground mb-1">역할</label>
             <div className="relative">
               <select
+                id={f('role')}
                 value={form.role}
                 onChange={e => set('role', e.target.value as InfraNodeRole)}
                 className="w-full appearance-none bg-background border border-border rounded-lg px-3 py-2 text-sm pr-8 focus:outline-none focus:ring-2 focus:ring-primary/40"
@@ -253,8 +258,9 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
           {/* 랙 / IP */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">랙 이름</label>
+              <label htmlFor={f('rack')} className="block text-xs font-medium text-muted-foreground mb-1">랙 이름</label>
               <input
+                id={f('rack')}
                 value={form.rackName ?? ''}
                 onChange={e => set('rackName', e.target.value)}
                 placeholder="Rack-A1"
@@ -262,8 +268,9 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">관리 IP</label>
+              <label htmlFor={f('ip')} className="block text-xs font-medium text-muted-foreground mb-1">관리 IP</label>
               <input
+                id={f('ip')}
                 value={form.ipAddress ?? ''}
                 onChange={e => set('ipAddress', e.target.value)}
                 placeholder="192.168.1.10"
@@ -275,8 +282,9 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
           {/* CPU / RAM / Disk */}
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">CPU (코어)</label>
+              <label htmlFor={f('cpu')} className="block text-xs font-medium text-muted-foreground mb-1">CPU (코어)</label>
               <input
+                id={f('cpu')}
                 type="number" min={1}
                 value={form.cpuCores ?? ''}
                 onChange={e => set('cpuCores', e.target.value ? Number(e.target.value) : undefined)}
@@ -285,8 +293,9 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">RAM (GB)</label>
+              <label htmlFor={f('ram')} className="block text-xs font-medium text-muted-foreground mb-1">RAM (GB)</label>
               <input
+                id={f('ram')}
                 type="number" min={1}
                 value={form.ramGb ?? ''}
                 onChange={e => set('ramGb', e.target.value ? Number(e.target.value) : undefined)}
@@ -295,8 +304,9 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Disk (GB)</label>
+              <label htmlFor={f('disk')} className="block text-xs font-medium text-muted-foreground mb-1">Disk (GB)</label>
               <input
+                id={f('disk')}
                 type="number" min={1}
                 value={form.diskGb ?? ''}
                 onChange={e => set('diskGb', e.target.value ? Number(e.target.value) : undefined)}
@@ -309,8 +319,9 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
           {/* 스위치 / OS */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">연결 스위치</label>
+              <label htmlFor={f('switch')} className="block text-xs font-medium text-muted-foreground mb-1">연결 스위치</label>
               <input
+                id={f('switch')}
                 value={form.switchName ?? ''}
                 onChange={e => set('switchName', e.target.value)}
                 placeholder="SW-Core-01"
@@ -318,8 +329,9 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">OS 정보</label>
+              <label htmlFor={f('os')} className="block text-xs font-medium text-muted-foreground mb-1">OS 정보</label>
               <input
+                id={f('os')}
                 value={form.osInfo ?? ''}
                 onChange={e => set('osInfo', e.target.value)}
                 placeholder="Ubuntu 22.04"
@@ -330,8 +342,9 @@ function NodeModal({ clusterId, clusterMeta, initial, onClose }: NodeModalProps)
 
           {/* 메모 */}
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">메모</label>
+            <label htmlFor={f('notes')} className="block text-xs font-medium text-muted-foreground mb-1">메모</label>
             <textarea
+              id={f('notes')}
               value={form.notes ?? ''}
               onChange={e => set('notes', e.target.value)}
               rows={2}

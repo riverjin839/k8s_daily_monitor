@@ -62,3 +62,9 @@ ansible/inventory/*.yml
 tmp/
 temp/
 .tmp/
+
+# Claude Code local settings
+.claude/
+
+# Claude Code local settings
+.claude/

@@ -12,6 +12,7 @@ import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
 import { useSidebarStore, NAV_COLLAPSE_AT } from '@/stores/sidebarStore';
 import { InlineEdit, ResizeHandle } from '@/components/common';
+import { SERVICE_CATALOG } from '@/components/services/serviceCatalog';
 
 // ── Nav registry ──────────────────────────────────────────────────────────────
 const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ className?: string }> }> = {
@@ -62,6 +63,11 @@ const DOCS_TASK_SECTIONS: Array<{ id: string; label: string; icon: ComponentType
   { id: 'issue', label: '이슈/장애', icon: Zap, paths: ['/issues', '/incident-analysis'] },
   { id: 'flow', label: '흐름/설계', icon: GitFork, paths: ['/workflow', '/wbs', '/mindmap'] },
 ];
+
+// 동적 서비스 카탈로그 — 각 서비스마다 /services/<key> 라우트를 nav 에 등록.
+// 'other' 폴백은 사이드바 항목으로 노출하지 않는다.
+const SERVICE_NAV_ENTRIES = SERVICE_CATALOG.filter((s) => s.key !== 'other');
+const SERVICE_NAV_PATHS = SERVICE_NAV_ENTRIES.map((s) => `/services/${s.key}`);
 
 const DEFAULT_TITLE = 'K8s Daily Monitor';
 const THEME_CYCLE: Record<Theme, Theme> = { light: 'dark', dark: 'system', system: 'light' };
@@ -157,7 +163,32 @@ export function Sidebar() {
 
   const title = settings?.appTitle || DEFAULT_TITLE;
   const navLabels = useMemo(() => settings?.navLabels || {}, [settings?.navLabels]);
-  const getLabel = (path: string) => navLabels[path] || NAV_MAP[path]?.defaultLabel || path;
+
+  // 정적 NAV_MAP 위에 서비스 카탈로그(/services/<key>)를 덧씌운 동적 navMap.
+  const navMap = useMemo(() => {
+    const m: typeof NAV_MAP = { ...NAV_MAP };
+    for (const s of SERVICE_NAV_ENTRIES) {
+      m[`/services/${s.key}`] = { defaultLabel: s.label, icon: s.icon };
+    }
+    return m;
+  }, []);
+
+  // 통합지식 그룹의 paths 앞쪽에 서비스 sub-item 들을 끼워넣은 동적 navGroups.
+  const navGroups = useMemo(
+    () => NAV_GROUPS.map((g) => (g.id === 'docs' ? { ...g, paths: [...SERVICE_NAV_PATHS, ...g.paths] } : g)),
+    [],
+  );
+
+  // DOCS 내부 섹션에 동적 서비스 섹션을 추가 — 펼치면 서비스 카탈로그가 먼저 보인다.
+  const docsSections = useMemo(
+    () => [
+      { id: 'services', label: '서비스 카탈로그', icon: Server, paths: SERVICE_NAV_PATHS },
+      ...DOCS_TASK_SECTIONS,
+    ],
+    [],
+  );
+
+  const getLabel = (path: string) => navLabels[path] || navMap[path]?.defaultLabel || path;
 
   const handleTitleSave = (val: string) => {
     updateSettings.mutate({ appTitle: val || DEFAULT_TITLE, navLabels });
@@ -210,10 +241,12 @@ export function Sidebar() {
 
         {/* 네비 */}
         <nav className="flex-1 py-2 overflow-y-auto overflow-x-visible" aria-label="메인 네비게이션">
-          {NAV_GROUPS.map(({ id, label, paths }, groupIdx) => {
-            const validPaths = paths.filter((p) => NAV_MAP[p]);
+          {navGroups.map(({ id, label, paths }, groupIdx) => {
+            const validPaths = paths.filter((p) => navMap[p]);
             if (validPaths.length === 0) return null;
-            const containsActive = validPaths.includes(location.pathname);
+            // 통합지식 그룹은 /services/:slug 도 active 로 인식 → 해당 페이지에서 그룹이 자동 펼쳐짐.
+            const containsActive = validPaths.includes(location.pathname)
+              || (id === 'docs' && location.pathname.startsWith('/services/'));
             const isCollapsed = !iconOnly && !containsActive && (collapsedGroups[id] ?? true);
             return (
               <div key={id}>
@@ -234,13 +267,13 @@ export function Sidebar() {
                 {!isCollapsed && id !== 'docs' && (
                   <div className={`flex flex-col gap-0.5 ${iconOnly ? 'px-1.5' : 'px-2'}`}>
                     {validPaths.map((path) => (
-                      <NavItem key={path} path={path} label={getLabel(path)} Icon={NAV_MAP[path].icon} isActive={location.pathname === path} showLabel={!iconOnly} onHover={onNavHover} onLeave={onNavLeave} />
+                      <NavItem key={path} path={path} label={getLabel(path)} Icon={navMap[path].icon} isActive={location.pathname === path} showLabel={!iconOnly} onHover={onNavHover} onLeave={onNavLeave} />
                     ))}
                   </div>
                 )}
                 {!isCollapsed && id === 'docs' && (
                   <div className={`flex flex-col gap-2 ${iconOnly ? 'px-1.5' : 'px-2'}`}>
-                    {DOCS_TASK_SECTIONS.map((section) => {
+                    {docsSections.map((section) => {
                       const sectionActive = section.paths.includes(location.pathname);
                       const SIcon = section.icon;
                       return (
@@ -252,9 +285,13 @@ export function Sidebar() {
                             </div>
                           )}
                           <div className="flex flex-col gap-0.5">
-                            {section.paths.map((path) => (
-                              <NavItem key={path} path={path} label={getLabel(path)} Icon={NAV_MAP[path].icon} isActive={location.pathname === path} showLabel={!iconOnly} onHover={onNavHover} onLeave={onNavLeave} />
-                            ))}
+                            {section.paths.map((path) => {
+                              const entry = navMap[path];
+                              if (!entry) return null;
+                              return (
+                                <NavItem key={path} path={path} label={getLabel(path)} Icon={entry.icon} isActive={location.pathname === path} showLabel={!iconOnly} onHover={onNavHover} onLeave={onNavLeave} />
+                              );
+                            })}
                           </div>
                         </div>
                       );
@@ -334,12 +371,12 @@ export function Sidebar() {
               )}
             </div>
             <nav className="flex-1 py-2 px-2 overflow-y-auto">
-              {NAV_GROUPS.map(({ id, label, paths }) => (
+              {navGroups.map(({ id, label, paths }) => (
                 <div key={id} className="mb-3">
                   <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">{label}</p>
                   <div className="space-y-0.5">
                     {paths.map((path) => {
-                      const navItem = NAV_MAP[path];
+                      const navItem = navMap[path];
                       if (!navItem) return null;
                       const { icon: Icon } = navItem;
                       const itemLabel = getLabel(path);

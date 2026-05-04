@@ -37,10 +37,17 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // ── Surface tokens (DESIGN_SYSTEM §2.1) ──
+        surface: "hsl(var(--card))",
+        "surface-elevated": "hsl(var(--popover))",
+        // ── Semantic status tokens (DESIGN_SYSTEM §2.4) ──
+        // raw HEX 사용 금지. 모든 status 색은 이 토큰 경유.
         status: {
-          healthy: "#22c55e",
-          warning: "#f97316",
-          critical: "#ef4444",
+          healthy:  "hsl(var(--status-healthy)  / <alpha-value>)",
+          warning:  "hsl(var(--status-warning)  / <alpha-value>)",
+          critical: "hsl(var(--status-critical) / <alpha-value>)",
+          unknown:  "hsl(var(--status-pending)  / <alpha-value>)",
+          info:     "hsl(var(--status-info)     / <alpha-value>)",
         },
       },
       borderRadius: {

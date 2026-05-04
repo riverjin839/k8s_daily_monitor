@@ -476,7 +476,7 @@ function RunsList({ jobId }: { jobId: string }) {
 
 export function BatchJobsPage() {
   const { data: clusters = [] } = useClusters();
-  const allJobsQ = useBatchJobs();
+  const allJobsQ = useBatchJobs(); // 전체 클러스터 잡 로드
   const typesQ = useBatchJobTypes();
   const del = useDeleteBatchJob();
 

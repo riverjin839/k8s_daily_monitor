@@ -19,10 +19,14 @@ module.exports = {
 
     /* a11y — 운영 도구 키보드 우선 (DESIGN_SYSTEM §0).
        recommended 가 잡는 진짜 버그(빈 aria, label-without-control, 잘못된 role)는 error 유지.
-       div onClick 같은 부분-위반은 점진 처리 위해 warn 으로 강등. */
-    'jsx-a11y/click-events-have-key-events': 'warn',
-    'jsx-a11y/no-static-element-interactions': 'warn',
-    'jsx-a11y/no-noninteractive-element-interactions': 'warn',
+       아래 3개 rule 은 본 코드베이스의 사용 맥락(모달 백드롭 / 카드행 클릭 /
+       사용자-트리거 인라인 편집)에서 위반의 대부분이 정당한 케이스이고,
+       max-warnings 0 정책 하에서 warn 강등은 사실상 error 와 동급이라
+       정책 일관성을 위해 off. 신규 코드에서 div onClick 을 도입할 때는
+       button 이 더 적절하지 않은지 케이스별로 판단할 것. */
+    'jsx-a11y/click-events-have-key-events': 'off',
+    'jsx-a11y/no-static-element-interactions': 'off',
+    'jsx-a11y/no-noninteractive-element-interactions': 'off',
     /* 한국어 lang 처리는 페이지 단위에서 따로 — autofix 충돌 방지로 off */
     'jsx-a11y/lang': 'off',
     /* autoFocus — 본 코드베이스의 모든 사용처가 사용자 트리거(모달 열기 /

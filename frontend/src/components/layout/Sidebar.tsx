@@ -13,7 +13,6 @@ import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
 import { useSidebarStore, NAV_COLLAPSE_AT } from '@/stores/sidebarStore';
 import { InlineEdit, ResizeHandle } from '@/components/common';
-import { SERVICE_CATALOG } from '@/components/services/serviceCatalog';
 
 // ── Nav registry ──────────────────────────────────────────────────────────────
 const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ className?: string }> }> = {
@@ -66,11 +65,6 @@ const DOCS_TASK_SECTIONS: Array<{ id: string; label: string; icon: ComponentType
   { id: 'issue', label: '이슈/장애', icon: Zap, paths: ['/issues', '/incident-analysis'] },
   { id: 'flow', label: '흐름/설계', icon: GitFork, paths: ['/workflow', '/wbs', '/mindmap'] },
 ];
-
-// 동적 서비스 카탈로그 — 각 서비스마다 /services/<key> 라우트를 nav 에 등록.
-// 'other' 폴백은 사이드바 항목으로 노출하지 않는다.
-const SERVICE_NAV_ENTRIES = SERVICE_CATALOG.filter((s) => s.key !== 'other');
-const SERVICE_NAV_PATHS = SERVICE_NAV_ENTRIES.map((s) => `/services/${s.key}`);
 
 const DEFAULT_TITLE = 'K8s Daily Monitor';
 const THEME_CYCLE: Record<Theme, Theme> = { light: 'dark', dark: 'system', system: 'light' };

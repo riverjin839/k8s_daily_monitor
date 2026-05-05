@@ -255,7 +255,7 @@ export function Dashboard() {
     <div className="min-h-screen bg-background">
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 px-4 lg:px-6 py-2 bg-background/95 backdrop-blur border-b border-border flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <h1 className="font-bold text-sm tracking-tight whitespace-nowrap">K8s Daily Monitor</h1>
+        <h1 className="font-bold text-sm tracking-tight whitespace-nowrap">DEVOPS MANAGEMENT</h1>
         {lastCheckTime && (
           <p className="text-[11px] text-muted-foreground font-mono hidden sm:block">
             Last: {formatDateTime(lastCheckTime)}

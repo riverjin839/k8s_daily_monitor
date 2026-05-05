@@ -1,4 +1,4 @@
-# K8s Daily Monitor — Design System
+# DEVOPS MANAGEMENT — Design System
 
 > **Stack**: React 18 + TypeScript + Tailwind CSS + Recharts + shadcn/ui (Radix)
 > **Mode**: Dark mode primary (light mode 보조)

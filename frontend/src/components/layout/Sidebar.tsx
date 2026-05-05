@@ -62,7 +62,7 @@ const DOCS_TASK_SECTIONS: Array<{ id: string; label: string; icon: ComponentType
   { id: 'flow', label: '흐름/설계', icon: GitFork, paths: ['/workflow', '/wbs', '/mindmap'] },
 ];
 
-const DEFAULT_TITLE = 'K8s Daily Monitor';
+const DEFAULT_TITLE = 'DEVOPS MANAGEMENT';
 const THEME_CYCLE: Record<Theme, Theme> = { light: 'dark', dark: 'system', system: 'light' };
 const THEME_LABEL: Record<Theme, string> = { dark: '다크', light: '라이트', system: '시스템' };
 

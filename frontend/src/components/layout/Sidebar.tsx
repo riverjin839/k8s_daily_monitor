@@ -70,7 +70,9 @@ const THEME_LABEL: Record<Theme, string> = { dark: '다크', light: '라이트',
 
 // Shared visual shell so Link-based NavItems and button-based action items
 // render identically — no font / padding drift between them.
-const NAV_ITEM_BASE = 'relative flex items-center gap-2 px-2.5 py-1.5 rounded-md text-[13px] transition-colors';
+// `whitespace-normal break-keep leading-tight` lets long Korean labels wrap
+// onto a second line instead of being truncated when the sidebar is narrow.
+const NAV_ITEM_BASE = 'relative flex items-start gap-1.5 px-2 py-1.5 rounded-md text-[13px] leading-tight transition-colors';
 const NAV_ITEM_INACTIVE = 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground';
 const NAV_ITEM_ACTIVE = 'bg-secondary text-foreground font-semibold';
 
@@ -92,11 +94,11 @@ function NavItem({
       {isActive && (
         <span
           aria-hidden="true"
-          className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-[3px] w-1 h-5 bg-primary rounded-r"
+          className="absolute left-0 top-1.5 -translate-x-[3px] w-1 h-4 bg-primary rounded-r"
         />
       )}
-      <Icon className="w-4 h-4 flex-shrink-0" />
-      <span className="flex-1 min-w-0 break-keep">{label}</span>
+      <Icon className="w-4 h-4 flex-shrink-0 mt-px" />
+      <span className="flex-1 min-w-0 break-keep whitespace-normal">{label}</span>
     </Link>
   );
 }
@@ -115,8 +117,8 @@ function NavActionItem({
       onClick={onClick}
       className={`${NAV_ITEM_BASE} w-full text-left ${active ? NAV_ITEM_ACTIVE : NAV_ITEM_INACTIVE}`}
     >
-      <Icon className="w-4 h-4 flex-shrink-0" />
-      <span className="flex-1 min-w-0 break-keep">{label}</span>
+      <Icon className="w-4 h-4 flex-shrink-0 mt-px" />
+      <span className="flex-1 min-w-0 break-keep whitespace-normal">{label}</span>
     </button>
   );
 }
@@ -226,17 +228,17 @@ export function Sidebar() {
                 <button
                   type="button"
                   onClick={() => toggleGroup(id)}
-                  className={`${groupIdx > 0 ? 'mt-0.5' : ''} w-full flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold transition-colors ${
+                  className={`${groupIdx > 0 ? 'mt-0.5' : ''} w-full flex items-center gap-1 px-2 py-1 text-xs font-semibold transition-colors ${
                     containsActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                   }`}
                   aria-expanded={!isCollapsed}
                 >
                   <ChevronRight className={`w-3 h-3 flex-shrink-0 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
-                  <span className="flex-1 text-left">{label}</span>
+                  <span className="flex-1 text-left truncate">{label}</span>
                   {containsActive && (
-                    <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-primary" />
+                    <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
                   )}
-                  <span className="text-[11px] text-muted-foreground/60 font-medium">{validPaths.length}</span>
+                  <span className="text-[11px] text-muted-foreground/60 font-medium flex-shrink-0">{validPaths.length}</span>
                 </button>
                 {!isCollapsed && id !== 'docs' && (
                   <div className="flex flex-col px-1.5 pb-0.5">

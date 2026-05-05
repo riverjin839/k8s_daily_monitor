@@ -5,7 +5,7 @@ import { create } from 'zustand';
 const CLUSTER_KEY = 'k8s:cluster-sidebar-width';
 const NAV_GROUPS_KEY = 'k8s:sidebar-collapsed-groups-v1';
 
-export const NAV_WIDTH = 240;         // fixed sidebar width
+export const NAV_WIDTH = 168;         // fixed sidebar width (≈70% of original 240)
 
 export const CLUSTER_DEFAULT = 240;
 export const CLUSTER_MIN = 180;

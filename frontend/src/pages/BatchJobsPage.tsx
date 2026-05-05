@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import {
   CheckCircle, Clock, Play, Plus, ShieldAlert, Trash2, Wifi, XCircle, ListTree,
 } from 'lucide-react';
@@ -61,6 +61,9 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
   const [cron, setCron] = useState('');
   const [paramsJson, setParamsJson] = useState('{}');
   const [error, setError] = useState<string | null>(null);
+
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
 
   const selectedType = useMemo(
     () => typesQ.data?.find((t) => t.jobType === jobType),
@@ -135,8 +138,9 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
 
         <div className="p-5 space-y-4">
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">Job Type</label>
+            <label htmlFor={f('jobType')} className="block text-xs text-muted-foreground mb-1">Job Type</label>
             <select
+              id={f('jobType')}
               value={jobType}
               onChange={(e) => setJobType(e.target.value)}
               className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl"
@@ -155,16 +159,18 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-muted-foreground mb-1">이름</label>
+              <label htmlFor={f('name')} className="block text-xs text-muted-foreground mb-1">이름</label>
               <input
+                id={f('name')}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl"
               />
             </div>
             <div>
-              <label className="block text-xs text-muted-foreground mb-1">cron (선택)</label>
+              <label htmlFor={f('cron')} className="block text-xs text-muted-foreground mb-1">cron (선택)</label>
               <input
+                id={f('cron')}
                 value={cron}
                 onChange={(e) => setCron(e.target.value)}
                 placeholder="0 3 * * *"
@@ -174,8 +180,9 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
           </div>
 
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">설명</label>
+            <label htmlFor={f('desc')} className="block text-xs text-muted-foreground mb-1">설명</label>
             <input
+              id={f('desc')}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl"
@@ -197,8 +204,9 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
               />
             </div>
             <div>
-              <label className="block text-xs text-muted-foreground mb-1">포트</label>
+              <label htmlFor={f('port')} className="block text-xs text-muted-foreground mb-1">포트</label>
               <input
+                id={f('port')}
                 type="number"
                 value={defaultPort}
                 onChange={(e) => setDefaultPort(Number(e.target.value) || 22)}
@@ -208,8 +216,9 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
           </div>
 
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">기본 사용자</label>
+            <label htmlFor={f('user')} className="block text-xs text-muted-foreground mb-1">기본 사용자</label>
             <input
+              id={f('user')}
               value={defaultUsername}
               onChange={(e) => setDefaultUsername(e.target.value)}
               className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl font-mono"
@@ -217,8 +226,9 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
           </div>
 
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">params (JSON)</label>
+            <label htmlFor={f('params')} className="block text-xs text-muted-foreground mb-1">params (JSON)</label>
             <textarea
+              id={f('params')}
               value={paramsJson}
               onChange={(e) => setParamsJson(e.target.value)}
               rows={6}
@@ -279,6 +289,9 @@ function RunModal({ job, onClose }: RunModalProps) {
   const [timeout, setTimeoutSec] = useState(120);
   const [result, setResult] = useState<BatchJobRun | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
 
   const submit = async () => {
     setError(null);
@@ -343,8 +356,9 @@ function RunModal({ job, onClose }: RunModalProps) {
               />
             </div>
             <div>
-              <label className="block text-xs text-muted-foreground mb-1">포트</label>
+              <label htmlFor={f('port')} className="block text-xs text-muted-foreground mb-1">포트</label>
               <input
+                id={f('port')}
                 type="number"
                 value={port}
                 onChange={(e) => setPort(Number(e.target.value) || 22)}
@@ -355,16 +369,18 @@ function RunModal({ job, onClose }: RunModalProps) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-muted-foreground mb-1">사용자</label>
+              <label htmlFor={f('user')} className="block text-xs text-muted-foreground mb-1">사용자</label>
               <input
+                id={f('user')}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl font-mono"
               />
             </div>
             <div>
-              <label className="block text-xs text-muted-foreground mb-1">타임아웃 (초)</label>
+              <label htmlFor={f('timeout')} className="block text-xs text-muted-foreground mb-1">타임아웃 (초)</label>
               <input
+                id={f('timeout')}
                 type="number"
                 value={timeout}
                 onChange={(e) => setTimeoutSec(Number(e.target.value) || 60)}
@@ -374,8 +390,9 @@ function RunModal({ job, onClose }: RunModalProps) {
           </div>
 
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">비밀번호 (또는 개인키)</label>
+            <label htmlFor={f('pw')} className="block text-xs text-muted-foreground mb-1">비밀번호 (또는 개인키)</label>
             <input
+              id={f('pw')}
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -383,8 +400,9 @@ function RunModal({ job, onClose }: RunModalProps) {
             />
           </div>
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">개인키 (PEM, 선택)</label>
+            <label htmlFor={f('pem')} className="block text-xs text-muted-foreground mb-1">개인키 (PEM, 선택)</label>
             <textarea
+              id={f('pem')}
               value={privateKey}
               onChange={(e) => setPrivateKey(e.target.value)}
               rows={3}
@@ -394,8 +412,9 @@ function RunModal({ job, onClose }: RunModalProps) {
           </div>
 
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">paramOverride (JSON, 선택)</label>
+            <label htmlFor={f('override')} className="block text-xs text-muted-foreground mb-1">paramOverride (JSON, 선택)</label>
             <textarea
+              id={f('override')}
               value={paramOverrideJson}
               onChange={(e) => setParamOverrideJson(e.target.value)}
               rows={3}
@@ -567,7 +586,7 @@ export function BatchJobsPage() {
   }, [types, jobs]);
 
   return (
-    <main className="max-w-[1800px] mx-auto p-5 space-y-4">
+    <main className="mx-auto p-5 space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold flex items-center gap-2">

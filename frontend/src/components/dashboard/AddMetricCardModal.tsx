@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { X, FlaskConical, CheckCircle2, AlertTriangle, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
 import { useCreateMetricCard, useTestPromql, useUpdateMetricCard } from '@/hooks/useMetricCards';
 import { MetricCard } from '@/types';
@@ -152,6 +152,16 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
   const [thresholds, setThresholds] = useState('');
   const [grafanaPanelUrl, setGrafanaPanelUrl] = useState('');
 
+  const titleId = useId();
+  const iconId = useId();
+  const descId = useId();
+  const promqlId = useId();
+  const categoryId = useId();
+  const displayTypeId = useId();
+  const unitId = useId();
+  const thresholdsId = useId();
+  const grafanaUrlId = useId();
+
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [testResult, setTestResult] = useState<string>('');
 
@@ -275,7 +285,7 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
-        className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
+        className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-card rounded-t-2xl z-10">
@@ -342,9 +352,9 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            <p className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
               Quick Templates
-            </label>
+            </p>
             <div className="space-y-3">
               {groupedTemplates.map(({ group, items }) => (
                 <div key={group}>
@@ -376,10 +386,11 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
 
           <div className="grid grid-cols-[1fr_80px] gap-3">
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label htmlFor={titleId} className="block text-sm font-medium mb-1">
                 Title <span className="text-red-400">*</span>
               </label>
               <input
+                id={titleId}
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -388,8 +399,9 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Icon</label>
+              <label htmlFor={iconId} className="block text-sm font-medium mb-1">Icon</label>
               <input
+                id={iconId}
                 type="text"
                 value={icon}
                 onChange={(e) => setIcon(e.target.value)}
@@ -399,8 +411,9 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Description</label>
+            <label htmlFor={descId} className="block text-sm font-medium mb-1">Description</label>
             <input
+              id={descId}
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -410,10 +423,11 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label htmlFor={promqlId} className="block text-sm font-medium mb-1">
               PromQL Query <span className="text-red-400">*</span>
             </label>
             <textarea
+              id={promqlId}
               value={promql}
               onChange={(e) => { setPromql(e.target.value); setTestStatus('idle'); }}
               placeholder='e.g. sum(kube_pod_status_phase{phase="Failed"}) OR on() vector(0)'
@@ -444,8 +458,9 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium mb-1">Category</label>
+              <label htmlFor={categoryId} className="block text-sm font-medium mb-1">Category</label>
               <select
+                id={categoryId}
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -458,8 +473,9 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Display Type</label>
+              <label htmlFor={displayTypeId} className="block text-sm font-medium mb-1">Display Type</label>
               <select
+                id={displayTypeId}
                 value={displayType}
                 onChange={(e) => setDisplayType(e.target.value)}
                 className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -470,8 +486,9 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Unit</label>
+              <label htmlFor={unitId} className="block text-sm font-medium mb-1">Unit</label>
               <select
+                id={unitId}
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
                 className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -484,10 +501,11 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label htmlFor={thresholdsId} className="block text-sm font-medium mb-1">
               Thresholds <span className="text-xs text-muted-foreground">(optional)</span>
             </label>
             <input
+              id={thresholdsId}
               type="text"
               value={thresholds}
               onChange={(e) => setThresholds(e.target.value)}
@@ -500,10 +518,11 @@ export function AddMetricCardModal({ isOpen, onClose, editingCard }: AddMetricCa
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label htmlFor={grafanaUrlId} className="block text-sm font-medium mb-1">
               Grafana Panel URL <span className="text-xs text-muted-foreground">(optional)</span>
             </label>
             <input
+              id={grafanaUrlId}
               type="text"
               value={grafanaPanelUrl}
               onChange={(e) => setGrafanaPanelUrl(e.target.value)}

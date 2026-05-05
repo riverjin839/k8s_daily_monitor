@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useId, useMemo, useState } from 'react';
 import {
   BookMarked, Plus, Pencil, Trash2, X, GitFork,
   ChevronRight, ChevronDown, FolderOpen, Folder,
@@ -149,6 +149,9 @@ function GuideFormModal({ initial, allGuides, defaultParentId, onClose, onSaved 
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
 
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
+
   const getDescendantIds = (id: string): string[] => {
     const kids = allGuides.filter((g) => g.parentId === id);
     return [id, ...kids.flatMap((k) => getDescendantIds(k.id))];
@@ -211,8 +214,9 @@ function GuideFormModal({ initial, allGuides, defaultParentId, onClose, onSaved 
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className={labelCls}>제목 *</label>
+            <label htmlFor={f('title')} className={labelCls}>제목 *</label>
             <input
+              id={f('title')}
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -223,8 +227,8 @@ function GuideFormModal({ initial, allGuides, defaultParentId, onClose, onSaved 
           </div>
 
           <div>
-            <label className={labelCls}>상위 페이지</label>
-            <select value={parentId} onChange={(e) => setParentId(e.target.value)} className={inputCls}>
+            <label htmlFor={f('parent')} className={labelCls}>상위 페이지</label>
+            <select id={f('parent')} value={parentId} onChange={(e) => setParentId(e.target.value)} className={inputCls}>
               <option value="">— 최상위 페이지 —</option>
               {parentOptions.map((g) => (
                 <option key={g.id} value={g.id}>{g.title}</option>
@@ -234,23 +238,23 @@ function GuideFormModal({ initial, allGuides, defaultParentId, onClose, onSaved 
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className={labelCls}>카테고리</label>
-              <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputCls}>
+              <label htmlFor={f('category')} className={labelCls}>카테고리</label>
+              <select id={f('category')} value={category} onChange={(e) => setCategory(e.target.value)} className={inputCls}>
                 <option value="">— 선택 —</option>
                 {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div>
-              <label className={labelCls}>우선순위</label>
-              <select value={priority} onChange={(e) => setPriority(e.target.value)} className={inputCls}>
+              <label htmlFor={f('priority')} className={labelCls}>우선순위</label>
+              <select id={f('priority')} value={priority} onChange={(e) => setPriority(e.target.value)} className={inputCls}>
                 <option value="high">높음</option>
                 <option value="medium">보통</option>
                 <option value="low">낮음</option>
               </select>
             </div>
             <div>
-              <label className={labelCls}>상태</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)} className={inputCls}>
+              <label htmlFor={f('status')} className={labelCls}>상태</label>
+              <select id={f('status')} value={status} onChange={(e) => setStatus(e.target.value)} className={inputCls}>
                 <option value="draft">초안</option>
                 <option value="active">활성</option>
                 <option value="archived">보관</option>
@@ -260,25 +264,27 @@ function GuideFormModal({ initial, allGuides, defaultParentId, onClose, onSaved 
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelCls}>작성자</label>
-              <input type="text" value={author} onChange={(e) => setAuthor(e.target.value)}
+              <label htmlFor={f('author')} className={labelCls}>작성자</label>
+              <input id={f('author')} type="text" value={author} onChange={(e) => setAuthor(e.target.value)}
                 placeholder="이름 또는 팀명" className={inputCls} />
             </div>
             <div>
-              <label className={labelCls}>태그 (쉼표 구분)</label>
-              <input type="text" value={tags} onChange={(e) => setTags(e.target.value)}
+              <label htmlFor={f('tags')} className={labelCls}>태그 (쉼표 구분)</label>
+              <input id={f('tags')} type="text" value={tags} onChange={(e) => setTags(e.target.value)}
                 placeholder="예: k8s, nginx, 긴급" className={inputCls} />
             </div>
           </div>
 
           <div>
-            <label className="text-sm font-medium block mb-2">내용</label>
-            <RichTextEditor
-              value={content}
-              onChange={setContent}
-              placeholder="페이지 내용을 작성하세요. 서식 도구모음을 사용하여 Confluence처럼 편집할 수 있습니다."
-              minHeight="260px"
-            />
+            <label htmlFor={f('content')} className="text-sm font-medium block mb-2">내용</label>
+            <div id={f('content')}>
+              <RichTextEditor
+                value={content}
+                onChange={setContent}
+                placeholder="페이지 내용을 작성하세요. 서식 도구모음을 사용하여 Confluence처럼 편집할 수 있습니다."
+                minHeight="260px"
+              />
+            </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-1">
@@ -308,6 +314,7 @@ function AddToWorkflowModal({ guide, onClose }: AddToWorkflowModalProps) {
   const [adding, setAdding]             = useState(false);
   const [done, setDone]                 = useState(false);
   const [error, setError]               = useState('');
+  const wfId = useId();
 
   const { data: wfData } = useQuery({
     queryKey: ['workflows'],
@@ -362,11 +369,12 @@ function AddToWorkflowModal({ guide, onClose }: AddToWorkflowModalProps) {
           <>
             {error && <p className="text-xs text-destructive mb-3">{error}</p>}
             <div className="mb-4">
-              <label className="block text-sm font-medium mb-1.5">워크플로 선택</label>
+              <label htmlFor={wfId} className="block text-sm font-medium mb-1.5">워크플로 선택</label>
               {workflows.length === 0 ? (
                 <p className="text-xs text-muted-foreground">등록된 워크플로가 없습니다.</p>
               ) : (
                 <select
+                  id={wfId}
                   value={selectedWfId}
                   onChange={(e) => setSelectedWfId(e.target.value)}
                   className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"

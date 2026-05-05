@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ClipboardList, Plus, Settings2 } from 'lucide-react';
 import { Issue, IssueCreate, IssueUpdate } from '@/types';
@@ -64,6 +64,9 @@ export function IssueFormPage() {
   const { data: listData } = useIssues();
   const createIssue = useCreateIssue();
   const updateIssue = useUpdateIssue();
+
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
 
   const editIssue: Issue | null =
     isEdit ? listData?.data.find((x) => x.id === id) ?? null : null;
@@ -240,8 +243,9 @@ export function IssueFormPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* 담당자(정/부) */}
             <div>
-              <label className={labelClass}>담당자(정) *</label>
+              <label htmlFor={f('primary')} className={labelClass}>담당자(정) *</label>
               <input
+                id={f('primary')}
                 type="text"
                 value={primaryAssignee}
                 onChange={(e) => setPrimaryAssignee(e.target.value)}
@@ -255,8 +259,9 @@ export function IssueFormPage() {
                   <option key={a.name} value={a.name} />
                 ))}
               </datalist>
-              <label className={`${labelClass} mt-3`}>담당자(부)</label>
+              <label htmlFor={f('secondary')} className={`${labelClass} mt-3`}>담당자(부)</label>
               <input
+                id={f('secondary')}
                 type="text"
                 value={secondaryAssignee}
                 onChange={(e) => setSecondaryAssignee(e.target.value)}
@@ -268,8 +273,9 @@ export function IssueFormPage() {
 
             {/* 대상 클러스터 */}
             <div>
-              <label className={labelClass}>대상 클러스터</label>
+              <label htmlFor={f('cluster')} className={labelClass}>대상 클러스터</label>
               <select
+                id={f('cluster')}
                 value={clusterId}
                 onChange={(e) => setClusterId(e.target.value)}
                 className={inputClass}
@@ -282,11 +288,12 @@ export function IssueFormPage() {
                 ))}
               </select>
 
-              <label className={`${labelClass} mt-3`}
+              <label htmlFor={f('service')} className={`${labelClass} mt-3`}
                 title="통합지식 서비스 카탈로그(Settings → 서비스)와 연결되는 tag.">
                 서비스 (통합지식 tag)
               </label>
               <select
+                id={f('service')}
                 value={service}
                 onChange={(e) => setService(e.target.value)}
                 className={inputClass}
@@ -300,7 +307,7 @@ export function IssueFormPage() {
               </select>
 
               <div className="flex items-center justify-between mt-3 mb-1">
-                <label className="text-sm font-medium">이슈 부분 *</label>
+                <label htmlFor={f('issueArea')} className="text-sm font-medium">이슈 부분 *</label>
                 <button
                   type="button"
                   onClick={() => setShowAreaManage((v) => !v)}
@@ -313,6 +320,7 @@ export function IssueFormPage() {
               </div>
               <div className="flex gap-2">
                 <select
+                  id={f('issueArea')}
                   value={issueArea}
                   onChange={(e) => setIssueArea(e.target.value)}
                   className={`${inputClass} flex-1`}
@@ -383,45 +391,52 @@ export function IssueFormPage() {
 
           {/* 이슈 내용 */}
           <div>
-            <label className={labelClass}>이슈 내용 *</label>
-            <RichTextEditor
-              value={issueContent}
-              onChange={setIssueContent}
-              placeholder="발생한 이슈를 상세히 기술하세요"
-              minHeight="180px"
-              onImagePaste={handleImagePaste}
-            />
+            <label htmlFor={f('issueContent')} className={labelClass}>이슈 내용 *</label>
+            <div id={f('issueContent')}>
+              <RichTextEditor
+                value={issueContent}
+                onChange={setIssueContent}
+                placeholder="발생한 이슈를 상세히 기술하세요"
+                minHeight="180px"
+                onImagePaste={handleImagePaste}
+              />
+            </div>
           </div>
 
           {/* 조치 내용 */}
           <div>
-            <label className={labelClass}>조치 내용</label>
-            <RichTextEditor
-              value={actionContent}
-              onChange={setActionContent}
-              placeholder="취한 조치를 기술하세요 (선택 사항)"
-              minHeight="140px"
-              onImagePaste={handleImagePaste}
-            />
+            <label htmlFor={f('actionContent')} className={labelClass}>조치 내용</label>
+            <div id={f('actionContent')}>
+              <RichTextEditor
+                value={actionContent}
+                onChange={setActionContent}
+                placeholder="취한 조치를 기술하세요 (선택 사항)"
+                minHeight="140px"
+                onImagePaste={handleImagePaste}
+              />
+            </div>
           </div>
 
           {/* 상세 내용 */}
           <div>
-            <label className={labelClass}>상세 내용</label>
-            <RichTextEditor
-              value={detailContent}
-              onChange={setDetailContent}
-              placeholder="추가적인 상세 내용, 로그, 재현 방법 등을 기술하세요 (선택 사항)"
-              minHeight="180px"
-              onImagePaste={handleImagePaste}
-            />
+            <label htmlFor={f('detailContent')} className={labelClass}>상세 내용</label>
+            <div id={f('detailContent')}>
+              <RichTextEditor
+                value={detailContent}
+                onChange={setDetailContent}
+                placeholder="추가적인 상세 내용, 로그, 재현 방법 등을 기술하세요 (선택 사항)"
+                minHeight="180px"
+                onImagePaste={handleImagePaste}
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* 이슈 발생일시 */}
             <div>
-              <label className={labelClass}>이슈 발생일시 *</label>
+              <label htmlFor={f('occurredAt')} className={labelClass}>이슈 발생일시 *</label>
               <input
+                id={f('occurredAt')}
                 type="datetime-local"
                 value={occurredAt}
                 onChange={(e) => setOccurredAt(e.target.value)}
@@ -432,8 +447,9 @@ export function IssueFormPage() {
 
             {/* 이슈 조치일시 */}
             <div>
-              <label className={labelClass}>이슈 조치일시</label>
+              <label htmlFor={f('resolvedAt')} className={labelClass}>이슈 조치일시</label>
               <input
+                id={f('resolvedAt')}
                 type="datetime-local"
                 value={resolvedAt}
                 onChange={(e) => setResolvedAt(e.target.value)}
@@ -443,8 +459,9 @@ export function IssueFormPage() {
 
             {/* 비고 */}
             <div>
-              <label className={labelClass}>비고</label>
+              <label htmlFor={f('remarks')} className={labelClass}>비고</label>
               <input
+                id={f('remarks')}
                 type="text"
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}

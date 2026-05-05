@@ -318,7 +318,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="max-w-[1680px] mx-auto px-3 lg:px-4 py-3 flex gap-3">
+      <div className="mx-auto px-3 lg:px-4 xl:px-6 py-3 flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={selectedClusterId}

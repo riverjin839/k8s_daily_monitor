@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ListTodo, Plus, Settings2 } from 'lucide-react';
 import { Task, TaskCreate, TaskUpdate, KanbanStatus, TaskModule, TaskTypeLabel } from '@/types';
 import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from '@/components/tasks/taskKanbanUtils';
 import { loadTaskImages, saveTaskImages } from '@/lib/taskImages';
 import { RichTextEditor } from '@/components/editor';
+import { DateTimePicker } from '@/components/ui/DateTimePicker';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
@@ -83,6 +84,9 @@ export function TaskFormPage() {
   const { data: listData } = useTasks();
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
+
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
 
   const editTask: Task | null =
     isEdit ? listData?.data.find((x) => x.id === id) ?? null : null;
@@ -300,8 +304,9 @@ export function TaskFormPage() {
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className={labelClass}>담당자(정) *</label>
+              <label htmlFor={f('primary')} className={labelClass}>담당자(정) *</label>
               <input
+                id={f('primary')}
                 type="text"
                 value={primaryAssignee}
                 onChange={(e) => setPrimaryAssignee(e.target.value)}
@@ -315,8 +320,9 @@ export function TaskFormPage() {
                   <option key={a.name} value={a.name} />
                 ))}
               </datalist>
-              <label className={`${labelClass} mt-3`}>담당자(부)</label>
+              <label htmlFor={f('secondary')} className={`${labelClass} mt-3`}>담당자(부)</label>
               <input
+                id={f('secondary')}
                 type="text"
                 value={secondaryAssignee}
                 onChange={(e) => setSecondaryAssignee(e.target.value)}
@@ -326,8 +332,9 @@ export function TaskFormPage() {
               />
             </div>
             <div>
-              <label className={labelClass}>대상 클러스터</label>
+              <label htmlFor={f('cluster')} className={labelClass}>대상 클러스터</label>
               <select
+                id={f('cluster')}
                 value={clusterId}
                 onChange={(e) => setClusterId(e.target.value)}
                 className={inputClass}
@@ -337,11 +344,12 @@ export function TaskFormPage() {
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
-              <label className={`${labelClass} mt-3`}
+              <label htmlFor={f('service')} className={`${labelClass} mt-3`}
                 title="통합지식 서비스 카탈로그(Settings → 서비스)와 연결되는 tag. 작업·이슈·할일 모두 동일 카탈로그를 공유.">
                 서비스 (통합지식 tag)
               </label>
               <select
+                id={f('service')}
                 value={service}
                 onChange={(e) => setService(e.target.value)}
                 className={inputClass}
@@ -353,8 +361,9 @@ export function TaskFormPage() {
                     <option key={s.key} value={s.key}>{s.label}</option>
                   ))}
               </select>
-              <label className={`${labelClass} mt-3`}>우선순위 *</label>
+              <label htmlFor={f('priority')} className={`${labelClass} mt-3`}>우선순위 *</label>
               <select
+                id={f('priority')}
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
                 className={inputClass}
@@ -368,7 +377,7 @@ export function TaskFormPage() {
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-sm font-medium">작업 분류 *</label>
+              <label htmlFor={f('taskCategory')} className="text-sm font-medium">작업 분류 *</label>
               <button
                 type="button"
                 onClick={() => setShowCatManage((v) => !v)}
@@ -381,6 +390,7 @@ export function TaskFormPage() {
             </div>
             <div className="flex gap-2">
               <select
+                id={f('taskCategory')}
                 value={taskCategory}
                 onChange={(e) => setTaskCategory(e.target.value)}
                 className={`${inputClass} flex-1`}
@@ -450,50 +460,56 @@ export function TaskFormPage() {
           </div>
 
           <div>
-            <label className={labelClass}>작업 내용 *</label>
-            <RichTextEditor
-              value={taskContent}
-              onChange={setTaskContent}
-              placeholder="수행할 작업을 상세히 기술하세요"
-              minHeight="180px"
-              onImagePaste={handleImagePaste}
-            />
+            <label htmlFor={f('taskContent')} className={labelClass}>작업 내용 *</label>
+            <div id={f('taskContent')}>
+              <RichTextEditor
+                value={taskContent}
+                onChange={setTaskContent}
+                placeholder="수행할 작업을 상세히 기술하세요"
+                minHeight="180px"
+                onImagePaste={handleImagePaste}
+              />
+            </div>
           </div>
 
           <div>
-            <label className={labelClass}>작업 결과</label>
-            <RichTextEditor
-              value={resultContent}
-              onChange={setResultContent}
-              placeholder="작업 결과를 기술하세요 (선택 사항)"
-              minHeight="140px"
-              onImagePaste={handleImagePaste}
-            />
+            <label htmlFor={f('resultContent')} className={labelClass}>작업 결과</label>
+            <div id={f('resultContent')}>
+              <RichTextEditor
+                value={resultContent}
+                onChange={setResultContent}
+                placeholder="작업 결과를 기술하세요 (선택 사항)"
+                minHeight="140px"
+                onImagePaste={handleImagePaste}
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div>
-              <label className={labelClass}>작업 예정일시 *</label>
-              <input
-                type="datetime-local"
+              <label htmlFor={f('scheduledAt')} className={labelClass}>작업 예정일시 *</label>
+              <DateTimePicker
+                id={f('scheduledAt')}
                 value={scheduledAt}
-                onChange={(e) => setScheduledAt(e.target.value)}
-                className={inputClass}
+                onChange={setScheduledAt}
+                placeholder="예정일과 시간 선택"
                 required
+                clearable={false}
               />
             </div>
             <div>
-              <label className={labelClass}>작업 완료일시</label>
-              <input
-                type="datetime-local"
+              <label htmlFor={f('completedAt')} className={labelClass}>작업 완료일시</label>
+              <DateTimePicker
+                id={f('completedAt')}
                 value={completedAt}
-                onChange={(e) => setCompletedAt(e.target.value)}
-                className={inputClass}
+                onChange={setCompletedAt}
+                placeholder="완료 시 입력"
               />
             </div>
             <div>
-              <label className={labelClass}>비고</label>
+              <label htmlFor={f('remarks')} className={labelClass}>비고</label>
               <input
+                id={f('remarks')}
                 type="text"
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
@@ -505,11 +521,12 @@ export function TaskFormPage() {
 
           {/* 연결된 이슈 */}
           <div>
-            <label className={labelClass}>
+            <label htmlFor={f('issueLink')} className={labelClass}>
               연결된 이슈
               <span className="ml-1.5 text-xs text-muted-foreground font-normal">(optional — 이 작업의 원인/배경이 되는 이슈)</span>
             </label>
             <select
+              id={f('issueLink')}
               value={issueId}
               onChange={(e) => setIssueId(e.target.value)}
               className={inputClass}
@@ -536,8 +553,9 @@ export function TaskFormPage() {
             <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">칸반 보드</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
               <div>
-                <label className={labelClass}>보드 상태</label>
+                <label htmlFor={f('kanban')} className={labelClass}>보드 상태</label>
                 <select
+                  id={f('kanban')}
                   value={kanbanStatus}
                   onChange={(e) => setKanbanStatus(e.target.value as KanbanStatus)}
                   className={inputClass}
@@ -548,8 +566,9 @@ export function TaskFormPage() {
                 </select>
               </div>
               <div>
-                <label className={labelClass}>모듈</label>
+                <label htmlFor={f('module')} className={labelClass}>모듈</label>
                 <select
+                  id={f('module')}
                   value={module}
                   onChange={(e) => setModule(e.target.value as TaskModule | '')}
                   className={inputClass}
@@ -561,8 +580,9 @@ export function TaskFormPage() {
                 </select>
               </div>
               <div>
-                <label className={labelClass}>유형 (type)</label>
+                <label htmlFor={f('type')} className={labelClass}>유형 (type)</label>
                 <select
+                  id={f('type')}
                   value={typeLabel}
                   onChange={(e) => setTypeLabel(e.target.value as TaskTypeLabel | '')}
                   className={inputClass}
@@ -574,8 +594,9 @@ export function TaskFormPage() {
                 </select>
               </div>
               <div>
-                <label className={labelClass}>예상 소요 시간 (h)</label>
+                <label htmlFor={f('effort')} className={labelClass}>예상 소요 시간 (h)</label>
                 <input
+                  id={f('effort')}
                   type="number"
                   min={1}
                   max={999}
@@ -587,11 +608,12 @@ export function TaskFormPage() {
               </div>
             </div>
             <div className="mt-4">
-              <label className={labelClass}>
+              <label htmlFor={f('doneCond')} className={labelClass}>
                 완료 조건
                 <span className="ml-1.5 text-xs text-muted-foreground font-normal">(Done 이동 기준)</span>
               </label>
               <input
+                id={f('doneCond')}
                 type="text"
                 value={doneCondition}
                 onChange={(e) => setDoneCondition(e.target.value)}

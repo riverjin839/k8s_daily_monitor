@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
@@ -82,6 +82,9 @@ export function EtcdCtlPage() {
     queryFn: () => etcdctlApi.presets(clusterId).then((r) => r.data),
     enabled: !!clusterId,
   });
+
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
 
   // 타겟 호스트 선택
   const [selectedMasterName, setSelectedMasterName] = useState('');
@@ -171,7 +174,7 @@ export function EtcdCtlPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1800px] mx-auto px-6 py-6 flex gap-5">
+      <main className="mx-auto px-6 py-6 flex gap-5">
         <ClusterSidebar
           clusters={clusters}
           selectedId={clusterId || null}
@@ -223,8 +226,9 @@ export function EtcdCtlPage() {
             <h2 className="text-sm font-semibold mb-1">타겟</h2>
 
             <div>
-              <label className="block text-xs text-muted-foreground mb-1">master 노드 후보</label>
+              <label htmlFor={f('master')} className="block text-xs text-muted-foreground mb-1">master 노드 후보</label>
               <select
+                id={f('master')}
                 value={selectedMasterName}
                 onChange={(e) => { setSelectedMasterName(e.target.value); setCustomHost(''); }}
                 disabled={!mastersQ.data?.candidates?.length}
@@ -243,10 +247,11 @@ export function EtcdCtlPage() {
             </div>
 
             <div>
-              <label className="block text-xs text-muted-foreground mb-1">
+              <label htmlFor={f('customHost')} className="block text-xs text-muted-foreground mb-1">
                 수동 host override <span className="text-[10px] opacity-60">(비우면 위 드롭다운 사용)</span>
               </label>
               <input
+                id={f('customHost')}
                 type="text"
                 value={customHost}
                 onChange={(e) => setCustomHost(e.target.value)}
@@ -257,15 +262,17 @@ export function EtcdCtlPage() {
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">사용자</label>
+                <label htmlFor={f('user')} className="block text-xs text-muted-foreground mb-1">사용자</label>
                 <input
+                  id={f('user')}
                   type="text" value={username} onChange={(e) => setUsername(e.target.value)}
                   className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">포트</label>
+                <label htmlFor={f('port')} className="block text-xs text-muted-foreground mb-1">포트</label>
                 <input
+                  id={f('port')}
                   type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
                   className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
                 />
@@ -273,7 +280,7 @@ export function EtcdCtlPage() {
             </div>
 
             <div>
-              <label className="block text-xs text-muted-foreground mb-1">인증 방식</label>
+              <p className="block text-xs text-muted-foreground mb-1">인증 방식</p>
               <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
                 {(['password', 'key'] as const).map((m) => (
                   <button
@@ -297,10 +304,11 @@ export function EtcdCtlPage() {
               />
             ) : (
               <div>
-                <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                <label htmlFor={f('pkey')} className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                   <Key className="w-3 h-3" /> Private Key (PEM)
                 </label>
                 <textarea
+                  id={f('pkey')}
                   value={privateKey} onChange={(e) => setPrivateKey(e.target.value)}
                   placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" rows={4}
                   className="w-full px-3 py-2 text-[11px] font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none"
@@ -333,10 +341,11 @@ export function EtcdCtlPage() {
                 {/* env file */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className="md:col-span-2">
-                    <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                    <label htmlFor={f('envFile')} className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                       <FileText className="w-3 h-3" /> env file 경로
                     </label>
                     <input
+                      id={f('envFile')}
                       type="text" value={envFile} onChange={(e) => setEnvFile(e.target.value)}
                       disabled={!useEnv}
                       placeholder="/etc/etcd.env"
@@ -356,12 +365,13 @@ export function EtcdCtlPage() {
 
                 {/* args */}
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                  <label htmlFor={f('args')} className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                     <Terminal className="w-3 h-3" />
                     etcdctl 인자
                     <span className="ml-1 text-[10px] opacity-60">(예: endpoint health --write-out=table)</span>
                   </label>
                   <textarea
+                    id={f('args')}
                     value={args} onChange={(e) => setArgs(e.target.value)}
                     rows={3}
                     className="w-full px-3 py-2 text-[12px] font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none"
@@ -377,15 +387,17 @@ export function EtcdCtlPage() {
                 {/* 기타 */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs text-muted-foreground mb-1">etcdctl 경로</label>
+                    <label htmlFor={f('etcdctlPath')} className="block text-xs text-muted-foreground mb-1">etcdctl 경로</label>
                     <input
+                      id={f('etcdctlPath')}
                       type="text" value={etcdctlPath} onChange={(e) => setEtcdctlPath(e.target.value)}
                       className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-muted-foreground mb-1">timeout (s)</label>
+                    <label htmlFor={f('timeout')} className="block text-xs text-muted-foreground mb-1">timeout (s)</label>
                     <input
+                      id={f('timeout')}
                       type="number" value={timeout} onChange={(e) => setTimeoutSec(Number(e.target.value) || 30)}
                       min={1} max={300}
                       className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
@@ -424,23 +436,26 @@ export function EtcdCtlPage() {
               <>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-xs text-muted-foreground mb-1">systemd unit</label>
+                    <label htmlFor={f('unit')} className="block text-xs text-muted-foreground mb-1">systemd unit</label>
                     <input
+                      id={f('unit')}
                       type="text" value={unit} onChange={(e) => setUnit(e.target.value)}
                       className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-muted-foreground mb-1">tail (N 줄)</label>
+                    <label htmlFor={f('tail')} className="block text-xs text-muted-foreground mb-1">tail (N 줄)</label>
                     <input
+                      id={f('tail')}
                       type="number" value={tail} onChange={(e) => setTail(Number(e.target.value) || 200)}
                       min={1} max={5000}
                       className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-muted-foreground mb-1">since (journalctl)</label>
+                    <label htmlFor={f('since')} className="block text-xs text-muted-foreground mb-1">since (journalctl)</label>
                     <input
+                      id={f('since')}
                       type="text" value={since} onChange={(e) => setSince(e.target.value)}
                       placeholder="예: 10 min ago"
                       className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
@@ -448,10 +463,11 @@ export function EtcdCtlPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">
+                  <label htmlFor={f('grep')} className="block text-xs text-muted-foreground mb-1">
                     grep 필터 <span className="opacity-60">(대소문자 무시)</span>
                   </label>
                   <input
+                    id={f('grep')}
                     type="text" value={grep} onChange={(e) => setGrep(e.target.value)}
                     placeholder="예: error 또는 leader"
                     className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"

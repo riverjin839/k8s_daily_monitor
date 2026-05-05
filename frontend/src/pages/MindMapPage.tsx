@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Map as MapIcon,
   Plus,
@@ -344,6 +344,9 @@ function NodeEditor({ initial, onSave, onClose, title }: NodeEditorProps) {
   const [borderStyle, setBorderStyle] = useState<NodeBorderStyle>(initial?.borderStyle ?? 'solid');
   const [size, setSize] = useState<NodeSize>(initial?.size ?? 'md');
 
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!label.trim()) return;
@@ -371,17 +374,17 @@ function NodeEditor({ initial, onSave, onClose, title }: NodeEditorProps) {
         </div>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">노드 이름 *</label>
-            <input type="text" value={label} onChange={(e) => setLabel(e.target.value)}
+            <label htmlFor={f('label')} className="block text-xs font-medium text-muted-foreground mb-1">노드 이름 *</label>
+            <input id={f('label')} type="text" value={label} onChange={(e) => setLabel(e.target.value)}
               placeholder="노드 이름을 입력하세요" className={inputClass} autoFocus required />
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">메모 (선택)</label>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)}
+            <label htmlFor={f('note')} className="block text-xs font-medium text-muted-foreground mb-1">메모 (선택)</label>
+            <textarea id={f('note')} value={note} onChange={(e) => setNote(e.target.value)}
               placeholder="부연 설명이나 메모" rows={3} className={`${inputClass} resize-none`} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">색상</label>
+            <p className="block text-xs font-medium text-muted-foreground mb-1">색상</p>
             <div className="grid grid-cols-5 gap-2">
               {NODE_COLORS.map((c) => (
                 <button
@@ -404,7 +407,7 @@ function NodeEditor({ initial, onSave, onClose, title }: NodeEditorProps) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">모양</label>
+            <p className="block text-xs font-medium text-muted-foreground mb-1">모양</p>
             <div className="grid grid-cols-4 gap-2">
               {NODE_SHAPES.map((s) => (
                 <button
@@ -426,7 +429,7 @@ function NodeEditor({ initial, onSave, onClose, title }: NodeEditorProps) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">테두리</label>
+              <p className="block text-xs font-medium text-muted-foreground mb-1">테두리</p>
               <div className="flex gap-1">
                 {(['solid', 'dashed', 'dotted'] as NodeBorderStyle[]).map((b) => (
                   <button key={b} type="button" onClick={() => setBorderStyle(b)}
@@ -437,7 +440,7 @@ function NodeEditor({ initial, onSave, onClose, title }: NodeEditorProps) {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">크기</label>
+              <p className="block text-xs font-medium text-muted-foreground mb-1">크기</p>
               <div className="flex gap-1">
                 {(['sm', 'md', 'lg'] as NodeSize[]).map((s) => (
                   <button key={s} type="button" onClick={() => setSize(s)}

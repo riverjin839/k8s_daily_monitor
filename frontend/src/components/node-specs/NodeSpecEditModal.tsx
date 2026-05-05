@@ -100,7 +100,7 @@ export function NodeSpecEditModal({ mode, spec, defaultClusterId, clusters, onCl
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !saving && onClose()} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-muted/30">
           <h2 className="text-sm font-semibold">
             {mode === 'create' ? '서버스펙 신규 등록' : `서버스펙 수정 — ${spec?.hostname}`}

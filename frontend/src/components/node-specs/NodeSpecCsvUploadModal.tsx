@@ -233,7 +233,7 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !applying && onClose()} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center gap-3 px-5 py-3 border-b border-border bg-muted/30">
           <FileSpreadsheet className="w-5 h-5 text-primary" />
           <h2 className="text-sm font-semibold">CSV 업로드 — 노드 서버스펙</h2>
@@ -358,7 +358,7 @@ export function NodeSpecCsvUploadModal({ open, onClose, onApplied }: Props) {
             <div className="px-3 py-6 text-center text-xs text-muted-foreground space-y-2">
               <FileSpreadsheet className="w-8 h-8 mx-auto text-muted-foreground/40" />
               <p>CSV 파일을 업로드하세요. 첫 행은 헤더, <strong>hostname</strong> 컬럼은 필수입니다.</p>
-              <details className="text-left max-w-lg mx-auto">
+              <details className="text-left max-w-xl mx-auto">
                 <summary className="cursor-pointer text-[11px] text-primary hover:underline">
                   지원 헤더 전체 ({NODE_SPEC_COLUMNS.length}개) 보기 — 테이블 컬럼과 동일
                 </summary>

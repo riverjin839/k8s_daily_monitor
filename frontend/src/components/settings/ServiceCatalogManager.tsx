@@ -155,37 +155,37 @@ export function ServiceCatalogManager() {
                   <Icon className="w-4 h-4" />
                 </span>
               </div>
-              <div className="col-span-3">
-                <label className="block text-[10px] text-muted-foreground mb-0.5">라벨</label>
+              <label className="col-span-3 block">
+                <span className="block text-[10px] text-muted-foreground mb-0.5">라벨</span>
                 <input value={s.label} onChange={(e) => {
                   update(idx, { label: e.target.value, slug: slugTouched.has(idx) ? s.slug : deriveSlug(e.target.value) });
                 }}
                   placeholder="Kubernetes" className={inputCls} />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-[10px] text-muted-foreground mb-0.5">slug</label>
+              </label>
+              <label className="col-span-2 block">
+                <span className="block text-[10px] text-muted-foreground mb-0.5">slug</span>
                 <input value={s.slug} onChange={(e) => {
                   setSlugTouched((t) => new Set(t).add(idx));
                   update(idx, { slug: e.target.value });
                 }}
                   placeholder="k8s" className={`${inputCls} font-mono`} />
                 {slugConflict && <p className="text-[10px] text-red-500 mt-0.5">중복</p>}
-              </div>
-              <div className="col-span-2">
-                <label className="block text-[10px] text-muted-foreground mb-0.5">아이콘</label>
+              </label>
+              <label className="col-span-2 block">
+                <span className="block text-[10px] text-muted-foreground mb-0.5">아이콘</span>
                 <select value={s.icon || ''} onChange={(e) => update(idx, { icon: e.target.value })}
                   className={inputCls}>
                   <option value="">기본 (BookOpen)</option>
                   {SERVICE_ICON_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
                 </select>
-              </div>
-              <div className="col-span-2">
-                <label className="block text-[10px] text-muted-foreground mb-0.5">색상</label>
+              </label>
+              <label className="col-span-2 block">
+                <span className="block text-[10px] text-muted-foreground mb-0.5">색상</span>
                 <select value={s.color || 'slate'} onChange={(e) => update(idx, { color: e.target.value })}
                   className={inputCls}>
                   {COLOR_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
-              </div>
+              </label>
               <div className="col-span-2 flex items-end justify-end gap-1 pt-4">
                 <button onClick={() => move(idx, -1)} disabled={idx === 0}
                   className="p-1 rounded hover:bg-secondary text-muted-foreground disabled:opacity-30" title="위로">

@@ -16,6 +16,14 @@ const PRIORITY_STYLES: Record<string, { dot: string; label: string; text: string
   low: { dot: 'bg-slate-400', label: '낮음', text: 'text-slate-400' },
 };
 
+function formatDateTime(v?: string | null): string {
+  if (!v) return '';
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return v;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function Field({ label, value }: { label: string; value?: string | null }) {
   if (!value) return null;
   return (
@@ -37,7 +45,7 @@ export function TaskDetailModal({ task, onClose, onEdit }: TaskDetailModalProps)
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-card border border-border rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div className="flex items-center gap-2 flex-wrap">
@@ -92,8 +100,8 @@ export function TaskDetailModal({ task, onClose, onEdit }: TaskDetailModalProps)
           <div className="grid grid-cols-2 gap-4">
             <Field label="담당자" value={task.assignee} />
             <Field label="대상 클러스터" value={task.clusterName} />
-            <Field label="작업 예정일" value={task.scheduledAt} />
-            <Field label="작업 완료일" value={task.completedAt} />
+            <Field label="작업 예정일" value={formatDateTime(task.scheduledAt)} />
+            <Field label="작업 완료일" value={formatDateTime(task.completedAt)} />
           </div>
 
           <div className="border-t border-border" />

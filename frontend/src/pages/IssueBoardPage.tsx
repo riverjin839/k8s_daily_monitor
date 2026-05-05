@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ViewModeBar } from '@/components/common';
-import { Plus, Download, Pencil, Trash2, ClipboardList, Search, X, ImagePlus, ChevronUp, ChevronDown, ArrowUpDown, GripVertical, Clock, Kanban, List } from 'lucide-react';
+import { Plus, Download, Pencil, Trash2, ClipboardList, Search, X, ImagePlus, ChevronUp, ChevronDown, ArrowUpDown, GripVertical, Kanban, List } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -16,11 +16,6 @@ import { useClusterStore } from '@/stores/clusterStore';
 import { issuesApi } from '@/services/api';
 import { stripHtml } from '@/lib/utils';
 import { Issue } from '@/types';
-
-function formatDate(dateStr?: string | null): string {
-  if (!dateStr) return '-';
-  return dateStr.slice(0, 10);
-}
 
 function formatDateTime(dateStr?: string | null): string {
   if (!dateStr) return '-';
@@ -118,7 +113,6 @@ export function IssueBoardPage() {
   const [filterTo, setFilterTo] = useState('');
   const [sortKey, setSortKey] = useState<IssueSortKey | ''>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const [showDatetime, setShowDatetime] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
 
   const colW = useColumnWidths('issue-board-table', {
@@ -224,7 +218,7 @@ export function IssueBoardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1600px] mx-auto px-8 py-8">
+      <main className="mx-auto px-8 py-8">
         {/* Page Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -261,20 +255,6 @@ export function IssueBoardPage() {
               showStylePanel={false}
             />
 
-            {viewMode === 'table' && (
-              <button
-                onClick={() => setShowDatetime((v) => !v)}
-                className={`px-3 py-2 text-sm font-medium border rounded-lg transition-colors flex items-center gap-1.5 ${
-                  showDatetime
-                    ? 'bg-primary/10 text-primary border-primary/30'
-                    : 'bg-secondary hover:bg-secondary/80 border-border text-muted-foreground hover:text-foreground'
-                }`}
-                title="발생일/조치일 시간 표시 on/off"
-              >
-                <Clock className="w-4 h-4" />
-                시간 표시
-              </button>
-            )}
             {issues.length > 0 && viewMode === 'table' && (
               <button
                 onClick={handleExportCsv}
@@ -498,10 +478,10 @@ export function IssueBoardPage() {
                           </p>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedIssue(issue)}>
-                          {showDatetime ? formatDateTime(issue.occurredAt) : formatDate(issue.occurredAt)}
+                          {formatDateTime(issue.occurredAt)}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedIssue(issue)}>
-                          {showDatetime ? formatDateTime(issue.resolvedAt) : formatDate(issue.resolvedAt)}
+                          {formatDateTime(issue.resolvedAt)}
                         </td>
                         <td className="px-4 py-3 max-w-[120px] cursor-pointer" onClick={() => setSelectedIssue(issue)}>
                           <p className="line-clamp-2 text-muted-foreground text-xs">

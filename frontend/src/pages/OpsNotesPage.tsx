@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useId, useMemo, useState } from 'react';
 import {
   Layers, Plus, Pencil, Trash2, X, Pin, PinOff, Search, RotateCcw,
 } from 'lucide-react';
@@ -61,6 +61,9 @@ function NoteFormModal({ initial, defaultService, onClose, onSaved }: NoteFormMo
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
 
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
+
   const invalidate = () => qc.invalidateQueries({ queryKey: ['ops-notes'] });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -111,7 +114,7 @@ function NoteFormModal({ initial, defaultService, onClose, onSaved }: NoteFormMo
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* 서비스 선택 */}
           <div>
-            <label className={labelCls}>서비스</label>
+            <p className={labelCls}>서비스</p>
             <div className="flex gap-2 flex-wrap">
               {SERVICES.map((s) => (
                 <button
@@ -132,14 +135,14 @@ function NoteFormModal({ initial, defaultService, onClose, onSaved }: NoteFormMo
 
           {/* 제목 */}
           <div>
-            <label className={labelCls}>제목 *</label>
-            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
+            <label htmlFor={f('title')} className={labelCls}>제목 *</label>
+            <input id={f('title')} type="text" value={title} onChange={(e) => setTitle(e.target.value)}
               placeholder="메모 제목" className={inputCls} />
           </div>
 
           {/* 색상 선택 */}
           <div>
-            <label className={labelCls}>색상</label>
+            <p className={labelCls}>색상</p>
             <div className="flex gap-2">
               {COLOR_OPTIONS.map((c) => (
                 <button
@@ -157,31 +160,35 @@ function NoteFormModal({ initial, defaultService, onClose, onSaved }: NoteFormMo
 
           {/* 앞면 내용 */}
           <div>
-            <label className={labelCls}>앞면 내용</label>
-            <RichTextEditor
-              value={content}
-              onChange={setContent}
-              placeholder="포스트잇 앞면에 표시될 내용"
-              minHeight="100px"
-            />
+            <label htmlFor={f('front')} className={labelCls}>앞면 내용</label>
+            <div id={f('front')}>
+              <RichTextEditor
+                value={content}
+                onChange={setContent}
+                placeholder="포스트잇 앞면에 표시될 내용"
+                minHeight="100px"
+              />
+            </div>
           </div>
 
           {/* 뒷면 내용 */}
           <div>
-            <label className={labelCls}>뒷면 내용 <span className="text-muted-foreground font-normal text-xs">(클릭 시 전환)</span></label>
-            <RichTextEditor
-              value={backContent}
-              onChange={setBackContent}
-              placeholder="포스트잇 뒷면 — 상세 내역, 히스토리 등"
-              minHeight="100px"
-            />
+            <label htmlFor={f('back')} className={labelCls}>뒷면 내용 <span className="text-muted-foreground font-normal text-xs">(클릭 시 전환)</span></label>
+            <div id={f('back')}>
+              <RichTextEditor
+                value={backContent}
+                onChange={setBackContent}
+                placeholder="포스트잇 뒷면 — 상세 내역, 히스토리 등"
+                minHeight="100px"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             {/* 작성자 */}
             <div>
-              <label className={labelCls}>작성자</label>
-              <input type="text" value={author} onChange={(e) => setAuthor(e.target.value)}
+              <label htmlFor={f('author')} className={labelCls}>작성자</label>
+              <input id={f('author')} type="text" value={author} onChange={(e) => setAuthor(e.target.value)}
                 placeholder="이름 또는 팀명" className={inputCls} />
             </div>
             {/* 고정 */}
@@ -421,7 +428,7 @@ export function OpsNotesPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1600px] mx-auto px-8 py-8">
+      <main className="mx-auto px-8 py-8">
 
         {/* Page Header */}
         <div className="flex items-center justify-between mb-6">

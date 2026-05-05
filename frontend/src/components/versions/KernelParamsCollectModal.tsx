@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { X, Cpu, Play, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { bulkExecApi, versionsApi } from '@/services/api';
 import type { NodeSummary } from '@/services/api';
@@ -46,6 +46,10 @@ export function KernelParamsCollectModal({ open, clusterId, onClose }: Props) {
   // 대상
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [result, setResult] = useState<KernelParamsCollectResponse | null>(null);
+
+  const usernameId = useId();
+  const portId = useId();
+  const parallelismId = useId();
 
   const nodeQ = useQuery({
     queryKey: ['kernel-params-nodes', clusterId],
@@ -105,7 +109,7 @@ export function KernelParamsCollectModal({ open, clusterId, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !collectMut.isPending && onClose()} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
             <Cpu className="w-4 h-4" />
@@ -127,22 +131,22 @@ export function KernelParamsCollectModal({ open, clusterId, onClose }: Props) {
           {/* SSH 자격증명 */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div>
-              <label className="text-[11px] text-muted-foreground mb-1 block">SSH User</label>
-              <input value={username} onChange={(e) => setUsername(e.target.value)}
+              <label htmlFor={usernameId} className="text-[11px] text-muted-foreground mb-1 block">SSH User</label>
+              <input id={usernameId} value={username} onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
             </div>
             <div>
-              <label className="text-[11px] text-muted-foreground mb-1 block">SSH Port</label>
-              <input type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
+              <label htmlFor={portId} className="text-[11px] text-muted-foreground mb-1 block">SSH Port</label>
+              <input id={portId} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
                 min={1} max={65535}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
             </div>
             <div>
-              <label className="text-[11px] text-muted-foreground mb-1 block"
+              <label htmlFor={parallelismId} className="text-[11px] text-muted-foreground mb-1 block"
                 title="동시에 SSH 세션 몇 개 열지 상한. 300 노드 이상이면 10~20 권장.">
                 Parallelism
               </label>
-              <input type="number" value={parallelism}
+              <input id={parallelismId} type="number" value={parallelism}
                 onChange={(e) => setParallelism(Number(e.target.value) || 10)}
                 min={1} max={50}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />

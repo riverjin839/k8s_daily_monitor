@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   HardDrive, Play, Loader2, CheckCircle, XCircle, Key, ShieldAlert, Wifi, Clock, Terminal,
@@ -76,6 +76,9 @@ export function McClientPage() {
     enabled: !!clusterId,
   });
 
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
+
   const [selectedNodeName, setSelectedNodeName] = useState('');
   const [customHost, setCustomHost] = useState('');
   useEffect(() => { setSelectedNodeName(''); setCustomHost(''); }, [clusterId]);
@@ -130,7 +133,7 @@ export function McClientPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1800px] mx-auto px-6 py-6 flex gap-5">
+      <main className="mx-auto px-6 py-6 flex gap-5">
         <ClusterSidebar clusters={clusters} selectedId={clusterId || null} onSelect={(id) => { setClusterId(id ?? ''); setResult(null); }} />
 
         <div className="flex-1 min-w-0">
@@ -155,8 +158,9 @@ export function McClientPage() {
               <h2 className="text-sm font-semibold mb-1">타겟</h2>
 
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">호스트 (mc 설치된 노드)</label>
+                <label htmlFor={f('node')} className="block text-xs text-muted-foreground mb-1">호스트 (mc 설치된 노드)</label>
                 <select
+                  id={f('node')}
                   value={selectedNodeName}
                   onChange={(e) => { setSelectedNodeName(e.target.value); setCustomHost(''); }}
                   disabled={!nodesQ.data?.nodes?.length}
@@ -171,8 +175,9 @@ export function McClientPage() {
               </div>
 
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">수동 host override</label>
+                <label htmlFor={f('host')} className="block text-xs text-muted-foreground mb-1">수동 host override</label>
                 <input
+                  id={f('host')}
                   type="text"
                   value={customHost}
                   onChange={(e) => setCustomHost(e.target.value)}
@@ -183,19 +188,19 @@ export function McClientPage() {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">사용자</label>
-                  <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
+                  <label htmlFor={f('user')} className="block text-xs text-muted-foreground mb-1">사용자</label>
+                  <input id={f('user')} type="text" value={username} onChange={(e) => setUsername(e.target.value)}
                     className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">포트</label>
-                  <input type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
+                  <label htmlFor={f('port')} className="block text-xs text-muted-foreground mb-1">포트</label>
+                  <input id={f('port')} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
                     className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">인증</label>
+                <p className="block text-xs text-muted-foreground mb-1">인증</p>
                 <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
                   {(['password', 'key'] as const).map((m) => (
                     <button key={m} onClick={() => setAuthMode(m)}
@@ -213,8 +218,8 @@ export function McClientPage() {
                   className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
               ) : (
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Key className="w-3 h-3" /> Private Key (PEM)</label>
-                  <textarea value={privateKey} onChange={(e) => setPrivateKey(e.target.value)} rows={4}
+                  <label htmlFor={f('pkey')} className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Key className="w-3 h-3" /> Private Key (PEM)</label>
+                  <textarea id={f('pkey')} value={privateKey} onChange={(e) => setPrivateKey(e.target.value)} rows={4}
                     placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
                     className="w-full px-3 py-2 text-[11px] font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
                 </div>
@@ -238,25 +243,25 @@ export function McClientPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">alias 이름</label>
-                  <input type="text" value={alias} onChange={(e) => setAlias(e.target.value)}
+                  <label htmlFor={f('alias')} className="block text-xs text-muted-foreground mb-1">alias 이름</label>
+                  <input id={f('alias')} type="text" value={alias} onChange={(e) => setAlias(e.target.value)}
                     placeholder="local"
                     className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-xs text-muted-foreground mb-1">mc 경로</label>
-                  <input type="text" value={mcPath} onChange={(e) => setMcPath(e.target.value)}
+                  <label htmlFor={f('mcPath')} className="block text-xs text-muted-foreground mb-1">mc 경로</label>
+                  <input id={f('mcPath')} type="text" value={mcPath} onChange={(e) => setMcPath(e.target.value)}
                     placeholder="mc"
                     className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                <label htmlFor={f('args')} className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                   <Terminal className="w-3 h-3" /> mc 인자
                   <span className="ml-1 text-[10px] opacity-60">{'{alias}'} 는 위 alias 값으로 치환</span>
                 </label>
-                <textarea value={args} onChange={(e) => setArgs(e.target.value)} rows={3}
+                <textarea id={f('args')} value={args} onChange={(e) => setArgs(e.target.value)} rows={3}
                   className="w-full px-3 py-2 text-[12px] font-mono bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
                 <SavedCommands
                   className="mt-2"
@@ -267,8 +272,8 @@ export function McClientPage() {
               </div>
 
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">timeout (s)</label>
-                <input type="number" value={timeout} onChange={(e) => setTimeoutSec(Number(e.target.value) || 60)}
+                <label htmlFor={f('timeout')} className="block text-xs text-muted-foreground mb-1">timeout (s)</label>
+                <input id={f('timeout')} type="number" value={timeout} onChange={(e) => setTimeoutSec(Number(e.target.value) || 60)}
                   min={1} max={600}
                   className="w-32 px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
               </div>

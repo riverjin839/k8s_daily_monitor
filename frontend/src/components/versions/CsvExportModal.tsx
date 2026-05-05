@@ -79,7 +79,7 @@ export function CsvExportModal({ open, clusterId, clusterName, components, onClo
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !exportMut.isPending && onClose()} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg mx-4">
+      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-xl mx-4">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
             <FileSpreadsheet className="w-4 h-4" />
@@ -98,10 +98,10 @@ export function CsvExportModal({ open, clusterId, clusterName, components, onClo
 
         <div className="px-5 py-4 space-y-4">
           {/* 디테일 레벨 */}
-          <div>
-            <label className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2 block">
+          <fieldset>
+            <legend className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2 block">
               디테일 레벨
-            </label>
+            </legend>
             <div className="space-y-1.5">
               {(['summary', 'full', 'none'] as Detail[]).map((d) => (
                 <label key={d}
@@ -111,7 +111,8 @@ export function CsvExportModal({ open, clusterId, clusterName, components, onClo
                       : 'border-border hover:bg-muted/30'
                   }`}>
                   <input type="radio" name="detail" checked={detail === d}
-                    onChange={() => setDetail(d)} className="mt-0.5" />
+                    onChange={() => setDetail(d)} className="mt-0.5"
+                    aria-label={DETAIL_META[d].label} />
                   <div className="flex-1">
                     <p className="text-xs font-semibold">{DETAIL_META[d].label}</p>
                     <p className="text-[11px] text-muted-foreground">{DETAIL_META[d].description}</p>
@@ -119,7 +120,7 @@ export function CsvExportModal({ open, clusterId, clusterName, components, onClo
                 </label>
               ))}
             </div>
-          </div>
+          </fieldset>
 
           {/* 카테고리 필터 */}
           <div>

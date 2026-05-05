@@ -24,14 +24,17 @@ export function Header({ onRunCheck, onSettings }: HeaderProps) {
     <header className="bg-card/86 backdrop-blur-xl border-b border-border px-8 h-16 flex items-center justify-between sticky top-0 z-50">
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-primary to-sky-700 rounded-[10px] flex items-center justify-center text-white text-sm shadow-[0_8px_18px_rgba(0,122,255,0.28)]">
+          <div
+            className="w-8 h-8 bg-gradient-to-br from-primary to-sky-700 rounded-[10px] flex items-center justify-center text-white text-sm shadow-[0_8px_18px_rgba(0,122,255,0.28)]"
+            aria-hidden="true"
+          >
             ☸
           </div>
           <span className="font-semibold text-lg">K8s Daily Monitor</span>
         </div>
 
         {/* Navigation */}
-        <nav className="flex items-center gap-1 ml-4">
+        <nav aria-label="Primary" className="flex items-center gap-1 ml-4">
           {navItems.map(({ to, label, icon: Icon }) => {
             const isActive = location.pathname === to;
             return (
@@ -73,9 +76,10 @@ export function Header({ onRunCheck, onSettings }: HeaderProps) {
           <button
             onClick={onRunCheck}
             disabled={isChecking}
+            aria-busy={isChecking}
             className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50 shadow-[0_10px_20px_rgba(0,122,255,0.3)]"
           >
-            <RefreshCw className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />
+            <RefreshCw aria-hidden="true" className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />
             {isChecking ? 'Checking...' : 'Run Check'}
           </button>
         )}

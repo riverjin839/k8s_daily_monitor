@@ -250,10 +250,8 @@ export function Sidebar() {
           {navGroups.map(({ id, label, paths }, groupIdx) => {
             const validPaths = paths.filter((p) => navMap[p]);
             if (validPaths.length === 0) return null;
-            // 지식 허브 그룹은 /services/:slug 도 active 로 인식 → 해당 페이지에서 그룹이 자동 펼쳐짐.
-            const containsActive = validPaths.includes(location.pathname)
-              || (id === 'docs' && location.pathname.startsWith('/services/'));
-            const isCollapsed = !iconOnly && !containsActive && (collapsedGroups[id] ?? true);
+            // 사용자 토글 의지 우선 — active 그룹 자동-펼침은 active NavItem 의 좌측 표식으로 식별.
+            const isCollapsed = !iconOnly && (collapsedGroups[id] ?? true);
             return (
               <div key={id}>
                 {iconOnly

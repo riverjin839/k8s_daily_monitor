@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, Clock, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserPlus, UserCheck, Check, X as XIcon, Bug, HardDrive, BookOpen } from 'lucide-react';
 import { BackupRestorePanel } from '@/components/settings/BackupRestorePanel';
 import { OperationLevelsManager } from '@/components/settings/OperationLevelsManager';
@@ -30,6 +30,9 @@ function EditClusterModal({
   const [apiEndpoint, setApiEndpoint] = useState('');
   const [kubeconfigPath, setKubeconfigPath] = useState('');
   const [error, setError] = useState('');
+
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
 
   const updateCluster = useUpdateCluster();
 
@@ -77,8 +80,9 @@ function EditClusterModal({
         <p className="text-sm text-muted-foreground mb-6">이름·API Endpoint·kubeconfig 경로만 변경됩니다. 자세한 설정은 클러스터 관리 페이지에서 가능합니다.</p>
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1.5">클러스터 이름 *</label>
+            <label htmlFor={f('name')} className="block text-sm font-medium text-muted-foreground mb-1.5">클러스터 이름 *</label>
             <input
+              id={f('name')}
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -88,8 +92,9 @@ function EditClusterModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1.5">API Endpoint *</label>
+            <label htmlFor={f('endpoint')} className="block text-sm font-medium text-muted-foreground mb-1.5">API Endpoint *</label>
             <input
+              id={f('endpoint')}
               type="text"
               value={apiEndpoint}
               onChange={(e) => setApiEndpoint(e.target.value)}
@@ -99,11 +104,12 @@ function EditClusterModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1.5">
+            <label htmlFor={f('kubeconfig')} className="block text-sm font-medium text-muted-foreground mb-1.5">
               Kubeconfig 파일 경로
               <span className="ml-1 text-xs text-muted-foreground/60">(내용 변경은 Kubeconfig 버튼 이용)</span>
             </label>
             <input
+              id={f('kubeconfig')}
               type="text"
               value={kubeconfigPath}
               onChange={(e) => setKubeconfigPath(e.target.value)}
@@ -177,6 +183,9 @@ function ManagementServerModal({
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
+
   useEffect(() => {
     if (isOpen) {
       if (server) {
@@ -238,42 +247,42 @@ function ManagementServerModal({
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">서버 이름 *</label>
-              <input type="text" value={form.name} onChange={(e) => set('name', e.target.value)} disabled={saving} className={inputClass} placeholder="bastion-prod-01" required />
+              <label htmlFor={f('name')} className="block text-sm font-medium text-muted-foreground mb-1.5">서버 이름 *</label>
+              <input id={f('name')} type="text" value={form.name} onChange={(e) => set('name', e.target.value)} disabled={saving} className={inputClass} placeholder="bastion-prod-01" required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">호스트 / IP *</label>
-              <input type="text" value={form.host} onChange={(e) => set('host', e.target.value)} disabled={saving} className={inputClass} placeholder="10.0.0.1" required />
+              <label htmlFor={f('host')} className="block text-sm font-medium text-muted-foreground mb-1.5">호스트 / IP *</label>
+              <input id={f('host')} type="text" value={form.host} onChange={(e) => set('host', e.target.value)} disabled={saving} className={inputClass} placeholder="10.0.0.1" required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">포트</label>
-              <input type="number" value={form.port} onChange={(e) => set('port', Number(e.target.value))} disabled={saving} className={inputClass} min={1} max={65535} />
+              <label htmlFor={f('port')} className="block text-sm font-medium text-muted-foreground mb-1.5">포트</label>
+              <input id={f('port')} type="number" value={form.port} onChange={(e) => set('port', Number(e.target.value))} disabled={saving} className={inputClass} min={1} max={65535} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">사용자명</label>
-              <input type="text" value={form.username} onChange={(e) => set('username', e.target.value)} disabled={saving} className={inputClass} placeholder="root" />
+              <label htmlFor={f('username')} className="block text-sm font-medium text-muted-foreground mb-1.5">사용자명</label>
+              <input id={f('username')} type="text" value={form.username} onChange={(e) => set('username', e.target.value)} disabled={saving} className={inputClass} placeholder="root" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">서버 유형</label>
-              <select value={form.serverType} onChange={(e) => set('serverType', e.target.value)} disabled={saving} className={inputClass}>
+              <label htmlFor={f('serverType')} className="block text-sm font-medium text-muted-foreground mb-1.5">서버 유형</label>
+              <select id={f('serverType')} value={form.serverType} onChange={(e) => set('serverType', e.target.value)} disabled={saving} className={inputClass}>
                 {SERVER_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">지역</label>
-              <input type="text" value={form.region} onChange={(e) => set('region', e.target.value)} disabled={saving} className={inputClass} placeholder="KR-Seoul" />
+              <label htmlFor={f('region')} className="block text-sm font-medium text-muted-foreground mb-1.5">지역</label>
+              <input id={f('region')} type="text" value={form.region} onChange={(e) => set('region', e.target.value)} disabled={saving} className={inputClass} placeholder="KR-Seoul" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">OS 정보</label>
-              <input type="text" value={form.osInfo} onChange={(e) => set('osInfo', e.target.value)} disabled={saving} className={inputClass} placeholder="Ubuntu 22.04" />
+              <label htmlFor={f('osInfo')} className="block text-sm font-medium text-muted-foreground mb-1.5">OS 정보</label>
+              <input id={f('osInfo')} type="text" value={form.osInfo} onChange={(e) => set('osInfo', e.target.value)} disabled={saving} className={inputClass} placeholder="Ubuntu 22.04" />
             </div>
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">태그 <span className="text-xs opacity-60">(쉼표 구분)</span></label>
-              <input type="text" value={form.tags} onChange={(e) => set('tags', e.target.value)} disabled={saving} className={inputClass} placeholder="prod,infra,network" />
+              <label htmlFor={f('tags')} className="block text-sm font-medium text-muted-foreground mb-1.5">태그 <span className="text-xs opacity-60">(쉼표 구분)</span></label>
+              <input id={f('tags')} type="text" value={form.tags} onChange={(e) => set('tags', e.target.value)} disabled={saving} className={inputClass} placeholder="prod,infra,network" />
             </div>
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">설명</label>
-              <textarea value={form.description} onChange={(e) => set('description', e.target.value)} disabled={saving} rows={2} className={inputClass + ' resize-none'} placeholder="서버 용도 및 설명" />
+              <label htmlFor={f('desc')} className="block text-sm font-medium text-muted-foreground mb-1.5">설명</label>
+              <textarea id={f('desc')} value={form.description} onChange={(e) => set('description', e.target.value)} disabled={saving} rows={2} className={inputClass + ' resize-none'} placeholder="서버 용도 및 설명" />
             </div>
           </div>
 
@@ -1019,6 +1028,7 @@ export function SettingsPage() {
                         type="checkbox"
                         checked={on}
                         onChange={() => debugToggle(p.key)}
+                        aria-label={p.label}
                         className="w-4 h-4 accent-amber-500"
                       />
                     </label>

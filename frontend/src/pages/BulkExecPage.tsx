@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import {
@@ -513,6 +513,9 @@ export function BulkExecPage() {
   // 클러스터별 총 노드 수 / 선택 노드 수
   const totalNodesShown = nodeQueries.reduce((acc, q) => acc + (q.data?.nodes?.length ?? 0), 0);
 
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
+
   // 실행 구성
   const [action, setAction] = useState<'ssh' | 'scp'>('ssh');
   const [username, setUsername] = useState('root');
@@ -613,7 +616,7 @@ export function BulkExecPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1800px] mx-auto px-6 py-6 flex gap-5">
+      <main className="mx-auto px-6 py-6 flex gap-5">
         {/* 좌측: 클러스터 사이드바 — 다중 선택 모드 */}
         <ClusterSidebar
           clusters={clusters}
@@ -741,8 +744,9 @@ export function BulkExecPage() {
             {/* 인증 */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">사용자</label>
+                <label htmlFor={f('user')} className="block text-xs text-muted-foreground mb-1">사용자</label>
                 <input
+                  id={f('user')}
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -750,8 +754,9 @@ export function BulkExecPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">포트</label>
+                <label htmlFor={f('port')} className="block text-xs text-muted-foreground mb-1">포트</label>
                 <input
+                  id={f('port')}
                   type="number"
                   value={port}
                   onChange={(e) => setPort(Number(e.target.value) || 22)}
@@ -759,7 +764,7 @@ export function BulkExecPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">인증 방식</label>
+                <p className="block text-xs text-muted-foreground mb-1">인증 방식</p>
                 <div className="flex items-center bg-secondary/60 rounded-lg p-[3px] gap-px">
                   {(['password', 'key'] as const).map((m) => (
                     <button
@@ -780,8 +785,9 @@ export function BulkExecPage() {
 
             {authMode === 'password' ? (
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">비밀번호</label>
+                <label htmlFor={f('pw')} className="block text-xs text-muted-foreground mb-1">비밀번호</label>
                 <input
+                  id={f('pw')}
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -791,10 +797,11 @@ export function BulkExecPage() {
               </div>
             ) : (
               <div>
-                <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                <label htmlFor={f('pkey')} className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                   <Key className="w-3 h-3" /> Private Key (PEM)
                 </label>
                 <textarea
+                  id={f('pkey')}
                   value={privateKey}
                   onChange={(e) => setPrivateKey(e.target.value)}
                   placeholder="-----BEGIN OPENSSH PRIVATE KEY----- ..."
@@ -808,10 +815,11 @@ export function BulkExecPage() {
             {/* 명령/파일 */}
             {action === 'ssh' ? (
               <div>
-                <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                <label htmlFor={f('cmd')} className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                   <Terminal className="w-3 h-3" /> 실행할 명령
                 </label>
                 <textarea
+                  id={f('cmd')}
                   value={command}
                   onChange={(e) => setCommand(e.target.value)}
                   placeholder="예: uname -a && free -m && uptime"
@@ -828,10 +836,11 @@ export function BulkExecPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="md:col-span-2">
-                  <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                  <label htmlFor={f('scpContent')} className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                     <FileText className="w-3 h-3" /> 업로드할 내용
                   </label>
                   <textarea
+                    id={f('scpContent')}
                     value={scpContent}
                     onChange={(e) => setScpContent(e.target.value)}
                     placeholder="업로드할 파일 내용"
@@ -858,8 +867,9 @@ export function BulkExecPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">원격 경로</label>
+                  <label htmlFor={f('scpPath')} className="block text-xs text-muted-foreground mb-1">원격 경로</label>
                   <input
+                    id={f('scpPath')}
                     type="text"
                     value={scpRemotePath}
                     onChange={(e) => setScpRemotePath(e.target.value)}

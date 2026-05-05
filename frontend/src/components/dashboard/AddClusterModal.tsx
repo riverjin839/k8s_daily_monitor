@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import {
   X, AlertTriangle, Loader2, Upload, WifiOff,
   ChevronRight, ChevronLeft, Check, Server,
@@ -102,6 +102,10 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
   const [kubeconfigContent, setKubeconfigContent] = useState('');
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const nameId = useId();
+  const apiEndpointId = useId();
+  const regionId = useId();
+  const kubeconfigId = useId();
 
   const createCluster = useCreateCluster();
   const isSubmitting = createCluster.isPending;
@@ -182,7 +186,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleClose} />
 
-      <div className="relative bg-[hsl(var(--card))] border border-border rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden"
+      <div className="relative bg-[hsl(var(--card))] border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 overflow-hidden"
            style={{ maxHeight: '90vh' }}>
 
         {/* ── Top bar ── */}
@@ -268,10 +272,11 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  <label htmlFor={nameId} className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                     Cluster Name *
                   </label>
                   <input
+                    id={nameId}
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -283,7 +288,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
 
                 <div className="col-span-2">
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <label htmlFor={apiEndpointId} className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       API Endpoint {skipConnectivity ? '' : '*'}
                     </label>
                     {skipConnectivity && (
@@ -293,6 +298,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                     )}
                   </div>
                   <input
+                    id={apiEndpointId}
                     type="text"
                     value={apiEndpoint}
                     onChange={(e) => setApiEndpoint(e.target.value)}
@@ -307,10 +313,11 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  <label htmlFor={regionId} className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
                     Region
                   </label>
                   <input
+                    id={regionId}
                     type="text"
                     value={region}
                     onChange={(e) => setRegion(e.target.value)}
@@ -390,7 +397,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
               {/* Manual paste */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  <label htmlFor={kubeconfigId} className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     또는 직접 붙여넣기
                   </label>
                   <button
@@ -403,6 +410,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
                   </button>
                 </div>
                 <textarea
+                  id={kubeconfigId}
                   value={kubeconfigContent}
                   onChange={(e) => setKubeconfigContent(e.target.value)}
                   placeholder="여기에 kubeconfig YAML 내용을 붙여넣으세요 (비워두면 kubeconfig 없이 등록)"

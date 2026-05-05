@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   Play, Square, Server, Terminal, RefreshCw, Download, AlertTriangle, Info,
@@ -110,6 +110,9 @@ export function TcpdumpPanel({ clusterId }: Props) {
   const [password, setPassword] = useState('');
   const [privateKey, setPrivateKey] = useState('');
 
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
+
   // ── 대상 ────────────────────────────────────────────────────────────────
   const [selectedNode, setSelectedNode] = useState<string>('');
   const selectedNodeInfo = nodes.find((n) => n.name === selectedNode);
@@ -191,11 +194,11 @@ export function TcpdumpPanel({ clusterId }: Props) {
         {/* SSH 자격증명 + 노드 선택 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block flex items-center gap-1">
+            <label htmlFor={f('node')} className="text-[11px] text-muted-foreground mb-1 block flex items-center gap-1">
               <Server className="w-3 h-3" /> 대상 노드
             </label>
             <div className="flex gap-2">
-              <select value={selectedNode}
+              <select id={f('node')} value={selectedNode}
                 onChange={(e) => { setSelectedNode(e.target.value); setIfaceOptions([]); }}
                 className="flex-1 px-2 py-1 text-sm bg-background border border-border rounded-lg">
                 <option value="">{nodeQ.isLoading ? '노드 로딩 중...' : '노드를 선택하세요'}</option>
@@ -217,13 +220,13 @@ export function TcpdumpPanel({ clusterId }: Props) {
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[11px] text-muted-foreground mb-1 block">SSH User</label>
-              <input value={username} onChange={(e) => setUsername(e.target.value)}
+              <label htmlFor={f('user')} className="text-[11px] text-muted-foreground mb-1 block">SSH User</label>
+              <input id={f('user')} value={username} onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
             </div>
             <div>
-              <label className="text-[11px] text-muted-foreground mb-1 block">SSH Port</label>
-              <input type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
+              <label htmlFor={f('port')} className="text-[11px] text-muted-foreground mb-1 block">SSH Port</label>
+              <input id={f('port')} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
                 min={1} max={65535}
                 className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
             </div>
@@ -259,15 +262,15 @@ export function TcpdumpPanel({ clusterId }: Props) {
         {/* 인터페이스 + 캡처 옵션 */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">Interface</label>
+            <label htmlFor={f('iface')} className="text-[11px] text-muted-foreground mb-1 block">Interface</label>
             <div className="flex gap-1">
               {ifaceOptions.length > 0 ? (
-                <select value={iface} onChange={(e) => setIface(e.target.value)}
+                <select id={f('iface')} value={iface} onChange={(e) => setIface(e.target.value)}
                   className="flex-1 px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg">
                   {ifaceOptions.map((x) => <option key={x} value={x}>{x}</option>)}
                 </select>
               ) : (
-                <input value={iface} onChange={(e) => setIface(e.target.value)}
+                <input id={f('iface')} value={iface} onChange={(e) => setIface(e.target.value)}
                   placeholder="bond0"
                   className="flex-1 px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
               )}
@@ -280,14 +283,14 @@ export function TcpdumpPanel({ clusterId }: Props) {
             </div>
           </div>
           <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">Duration (s)</label>
-            <input type="number" value={duration} min={1} max={120}
+            <label htmlFor={f('duration')} className="text-[11px] text-muted-foreground mb-1 block">Duration (s)</label>
+            <input id={f('duration')} type="number" value={duration} min={1} max={120}
               onChange={(e) => setDuration(Number(e.target.value) || 10)}
               className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
           </div>
           <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">Packet count</label>
-            <input type="number" value={count} min={1} max={5000}
+            <label htmlFor={f('count')} className="text-[11px] text-muted-foreground mb-1 block">Packet count</label>
+            <input id={f('count')} type="number" value={count} min={1} max={5000}
               onChange={(e) => setCount(Number(e.target.value) || 200)}
               className="w-full px-2 py-1 text-sm font-mono bg-background border border-border rounded-lg" />
           </div>
@@ -301,7 +304,7 @@ export function TcpdumpPanel({ clusterId }: Props) {
 
         {/* BPF */}
         <div>
-          <label className="text-[11px] text-muted-foreground mb-1 block">BPF 필터 프리셋</label>
+          <p className="text-[11px] text-muted-foreground mb-1 block">BPF 필터 프리셋</p>
           <div className="flex flex-wrap gap-1 mb-1">
             {BPF_PRESETS.map((p) => (
               <button key={p.id} onClick={() => setPreset(p.id)}

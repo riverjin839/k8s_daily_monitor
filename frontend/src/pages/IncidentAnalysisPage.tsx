@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle, CheckCircle, Info, Loader2, Search, Zap,
   Server, Layers, Package, RefreshCw, Download, Play, Square, Filter, X,
@@ -123,6 +123,9 @@ export function IncidentAnalysisPage() {
   const { data: health } = useAnalyzerHealth();
   const { mutate: analyze, isPending: analyzing, data: response } = useAnalyzeIncident();
   const fetchCtx = useFetchIncidentContext();
+
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
 
   // ── 클러스터 / namespace / pod 선택 상태 ──
   const { data: clusters = [] } = useClusters();
@@ -337,11 +340,12 @@ export function IncidentAnalysisPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             {/* Cluster */}
             <div>
-              <label className={lc}>
+              <label htmlFor={f('cluster')} className={lc}>
                 <Server className="w-3 h-3 inline mr-1" />
                 Kubernetes 클러스터
               </label>
               <select
+                id={f('cluster')}
                 value={clusterId}
                 onChange={(e) => setClusterId(e.target.value)}
                 className={ic}
@@ -486,8 +490,9 @@ export function IncidentAnalysisPage() {
               </p>
             )}
             <div>
-              <label className={lc}>kubectl get events 출력 (선택, 직접 입력 시)</label>
+              <label htmlFor={f('rawEvents')} className={lc}>kubectl get events 출력 (선택, 직접 입력 시)</label>
               <textarea
+                id={f('rawEvents')}
                 value={rawEvents}
                 onChange={(e) => { setRawEvents(e.target.value); setStructuredEvents([]); }}
                 placeholder={'Warning  BackOff  3  Back-off restarting failed container'}
@@ -618,8 +623,8 @@ export function IncidentAnalysisPage() {
               )}
             </div>
             <div>
-              <label className={lc}>kubectl describe pod 출력</label>
-              <textarea value={describeOut} onChange={(e) => setDescribe(e.target.value)}
+              <label htmlFor={f('describeOut')} className={lc}>kubectl describe pod 출력</label>
+              <textarea id={f('describeOut')} value={describeOut} onChange={(e) => setDescribe(e.target.value)}
                 onFocus={() => { editingRef.current = true; }}
                 onBlur={() => { editingRef.current = false; }}
                 placeholder="kubectl describe pod 출력을 붙여넣으세요..."

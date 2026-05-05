@@ -124,7 +124,7 @@ export function ServiceHubPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1600px] mx-auto px-6 py-6">
+      <main className="mx-auto px-6 py-6">
         <div className="flex-1 min-w-0">
           <DebugLogPanel pageKey="services" extra={{ service, kindFilter, search, count: entries.length }} />
 

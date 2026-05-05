@@ -72,7 +72,8 @@ const THEME_LABEL: Record<Theme, string> = { dark: '다크', light: '라이트',
 // render identically — no font / padding drift between them.
 // `whitespace-normal break-keep leading-tight` lets long Korean labels wrap
 // onto a second line instead of being truncated when the sidebar is narrow.
-const NAV_ITEM_BASE = 'relative flex items-start gap-1.5 px-2 py-1.5 rounded-md text-[13px] leading-tight transition-colors';
+// Font size matches main-content text-sm (14px) for cross-region consistency.
+const NAV_ITEM_BASE = 'relative flex items-start gap-1.5 px-2 py-1.5 rounded-md text-sm leading-tight transition-colors';
 const NAV_ITEM_INACTIVE = 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground';
 const NAV_ITEM_ACTIVE = 'bg-secondary text-foreground font-semibold';
 
@@ -205,11 +206,11 @@ export function Sidebar() {
         className="fixed top-0 left-0 h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex flex-col z-40"
       >
         {/* 타이틀 */}
-        <div className="flex items-center gap-2.5 px-3 py-3.5 border-b border-border flex-shrink-0">
-          <div className="w-9 h-9 bg-gradient-to-br from-primary to-sky-700 rounded-lg flex items-center justify-center text-white text-base shadow-sm flex-shrink-0">
+        <div className="flex items-center gap-2 px-2.5 py-3 border-b border-border flex-shrink-0">
+          <div className="w-8 h-8 bg-gradient-to-br from-primary to-sky-700 rounded-md flex items-center justify-center text-white text-sm shadow-sm flex-shrink-0">
             ☸
           </div>
-          <span className="font-bold text-sm truncate text-foreground flex-1" title={title}>
+          <span className="font-bold text-sm leading-tight text-foreground flex-1 min-w-0 break-keep" title={title}>
             {title}
           </span>
         </div>
@@ -228,17 +229,17 @@ export function Sidebar() {
                 <button
                   type="button"
                   onClick={() => toggleGroup(id)}
-                  className={`${groupIdx > 0 ? 'mt-0.5' : ''} w-full flex items-center gap-1 px-2 py-1 text-xs font-semibold transition-colors ${
+                  className={`${groupIdx > 0 ? 'mt-0.5' : ''} w-full flex items-center gap-1 px-2 py-1.5 text-[13px] font-semibold transition-colors ${
                     containsActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                   }`}
                   aria-expanded={!isCollapsed}
                 >
-                  <ChevronRight className={`w-3 h-3 flex-shrink-0 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
+                  <ChevronRight className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
                   <span className="flex-1 text-left truncate">{label}</span>
                   {containsActive && (
                     <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
                   )}
-                  <span className="text-[11px] text-muted-foreground/60 font-medium flex-shrink-0">{validPaths.length}</span>
+                  <span className="text-xs text-muted-foreground/60 font-medium flex-shrink-0">{validPaths.length}</span>
                 </button>
                 {!isCollapsed && id !== 'docs' && (
                   <div className="flex flex-col px-1.5 pb-0.5">

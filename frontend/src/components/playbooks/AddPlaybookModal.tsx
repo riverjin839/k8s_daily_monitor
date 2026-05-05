@@ -368,7 +368,7 @@ export function AddPlaybookModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+      <div className="relative bg-card border border-border rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">{initialData ? 'Edit Playbook' : 'Register Playbook'}</h2>
           <button onClick={onClose} className="p-1 hover:bg-secondary rounded-md">

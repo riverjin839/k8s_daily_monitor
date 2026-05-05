@@ -19,6 +19,14 @@ function Field({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
+function formatDateTime(v?: string | null): string {
+  if (!v) return '';
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return v;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function IssueDetailModal({ issue, onClose, onEdit }: IssueDetailModalProps) {
   const images = loadIssueImages(issue.id);
   const isResolved = !!issue.resolvedAt;
@@ -26,7 +34,7 @@ export function IssueDetailModal({ issue, onClose, onEdit }: IssueDetailModalPro
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-card border border-border rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div className="flex items-center gap-3">
@@ -57,8 +65,8 @@ export function IssueDetailModal({ issue, onClose, onEdit }: IssueDetailModalPro
           <div className="grid grid-cols-2 gap-4">
             <Field label="담당자" value={issue.assignee} />
             <Field label="대상 클러스터" value={issue.clusterName} />
-            <Field label="이슈 발생일" value={issue.occurredAt} />
-            <Field label="이슈 조치일" value={issue.resolvedAt} />
+            <Field label="이슈 발생일" value={formatDateTime(issue.occurredAt)} />
+            <Field label="이슈 조치일" value={formatDateTime(issue.resolvedAt)} />
           </div>
 
           <div className="border-t border-border" />

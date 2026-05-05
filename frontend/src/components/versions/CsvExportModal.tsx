@@ -79,7 +79,7 @@ export function CsvExportModal({ open, clusterId, clusterName, components, onClo
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !exportMut.isPending && onClose()} />
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg mx-4">
+      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-xl mx-4">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-muted/30">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/10 text-primary">
             <FileSpreadsheet className="w-4 h-4" />

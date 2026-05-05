@@ -186,7 +186,7 @@ export function AddClusterModal({ isOpen, onClose }: AddClusterModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleClose} />
 
-      <div className="relative bg-[hsl(var(--card))] border border-border rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden"
+      <div className="relative bg-[hsl(var(--card))] border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 overflow-hidden"
            style={{ maxHeight: '90vh' }}>
 
         {/* ── Top bar ── */}

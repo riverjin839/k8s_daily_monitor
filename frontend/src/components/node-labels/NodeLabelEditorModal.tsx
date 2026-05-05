@@ -42,7 +42,7 @@ export function NodeLabelEditorModal({ node, isOpen, onClose, onApply }: Props) 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="bg-card border border-border rounded-xl w-full max-w-2xl p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-card border border-border rounded-xl w-full max-w-3xl p-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-lg">Edit Node Labels: {node.name}</h3>
           <button onClick={onClose} className="p-1 rounded hover:bg-secondary"><X className="w-4 h-4" /></button>

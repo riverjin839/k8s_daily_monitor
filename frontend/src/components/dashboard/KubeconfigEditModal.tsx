@@ -89,7 +89,7 @@ export function KubeconfigEditModal({
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-6">
+      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl mx-4 p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div>

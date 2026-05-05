@@ -68,6 +68,12 @@ const THEME_LABEL: Record<Theme, string> = { dark: '다크', light: '라이트',
 
 // ── 개별 nav item ───────────────────────────────────────────────────────────
 
+// Shared visual shell so Link-based NavItems and button-based action items
+// render identically — no font / padding drift between them.
+const NAV_ITEM_BASE = 'relative flex items-center gap-2 px-2.5 py-1.5 rounded-md text-[13px] transition-colors';
+const NAV_ITEM_INACTIVE = 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground';
+const NAV_ITEM_ACTIVE = 'bg-secondary text-foreground font-semibold';
+
 function NavItem({
   path, label, Icon, isActive,
 }: {
@@ -81,11 +87,7 @@ function NavItem({
       to={path}
       aria-label={label}
       aria-current={isActive ? 'page' : undefined}
-      className={`relative flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
-        isActive
-          ? 'bg-secondary text-foreground font-semibold'
-          : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
-      }`}
+      className={`${NAV_ITEM_BASE} ${isActive ? NAV_ITEM_ACTIVE : NAV_ITEM_INACTIVE}`}
     >
       {isActive && (
         <span
@@ -96,6 +98,26 @@ function NavItem({
       <Icon className="w-4 h-4 flex-shrink-0" />
       <span className="flex-1 min-w-0 break-keep">{label}</span>
     </Link>
+  );
+}
+
+function NavActionItem({
+  label, Icon, active, onClick,
+}: {
+  label: string;
+  Icon: ComponentType<{ className?: string }>;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`${NAV_ITEM_BASE} w-full text-left ${active ? NAV_ITEM_ACTIVE : NAV_ITEM_INACTIVE}`}
+    >
+      <Icon className="w-4 h-4 flex-shrink-0" />
+      <span className="flex-1 min-w-0 break-keep">{label}</span>
+    </button>
   );
 }
 
@@ -191,20 +213,20 @@ export function Sidebar() {
         </div>
 
         {/* 네비 */}
-        <nav className="flex-1 py-2 overflow-y-auto" aria-label="메인 네비게이션">
+        <nav className="flex-1 py-1.5 overflow-y-auto" aria-label="메인 네비게이션">
           {navGroups.map(({ id, label, paths }, groupIdx) => {
             const validPaths = paths.filter((p) => navMap[p]);
             if (validPaths.length === 0) return null;
-            // 시각 표식 — 사용자 토글 의지는 존중하되 active 그룹 헤더에 점만 표시.
             const containsActive = validPaths.includes(location.pathname)
               || (id === 'docs' && location.pathname.startsWith('/services/'));
             const isCollapsed = collapsedGroups[id] ?? true;
+            const isSystem = id === 'system';
             return (
               <div key={id}>
                 <button
                   type="button"
                   onClick={() => toggleGroup(id)}
-                  className={`${groupIdx > 0 ? 'mt-2' : ''} w-full flex items-center gap-1.5 px-3 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors ${
+                  className={`${groupIdx > 0 ? 'mt-0.5' : ''} w-full flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold transition-colors ${
                     containsActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                   }`}
                   aria-expanded={!isCollapsed}
@@ -214,27 +236,35 @@ export function Sidebar() {
                   {containsActive && (
                     <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-primary" />
                   )}
-                  <span className="text-[11px] text-muted-foreground/60 font-medium normal-case tracking-normal">{validPaths.length}</span>
+                  <span className="text-[11px] text-muted-foreground/60 font-medium">{validPaths.length}</span>
                 </button>
                 {!isCollapsed && id !== 'docs' && (
-                  <div className="flex flex-col gap-0.5 px-2">
+                  <div className="flex flex-col px-1.5 pb-0.5">
                     {validPaths.map((path) => (
                       <NavItem key={path} path={path} label={getLabel(path)} Icon={navMap[path].icon} isActive={location.pathname === path} />
                     ))}
+                    {isSystem && (
+                      <NavActionItem
+                        label="메뉴 이름 편집"
+                        Icon={PanelLeftOpen}
+                        active={editMode}
+                        onClick={() => setEditMode((v) => !v)}
+                      />
+                    )}
                   </div>
                 )}
                 {!isCollapsed && id === 'docs' && (
-                  <div className="flex flex-col gap-2 px-2">
+                  <div className="flex flex-col gap-1.5 px-1.5 pb-0.5">
                     {docsSections.map((section) => {
                       const sectionActive = section.paths.includes(location.pathname);
                       const SIcon = section.icon;
                       return (
-                        <div key={section.id} className={`rounded-md border ${sectionActive ? 'border-primary/35 bg-primary/8' : 'border-border/50 bg-background/40'} p-2`}>
-                          <div className="flex items-center gap-2 px-1 pb-1.5">
+                        <div key={section.id} className={`rounded-md border ${sectionActive ? 'border-primary/35 bg-primary/8' : 'border-border/50 bg-background/40'} p-1.5`}>
+                          <div className="flex items-center gap-1.5 px-1 pb-1">
                             <SIcon className={`w-3.5 h-3.5 ${sectionActive ? 'text-primary' : 'text-muted-foreground'}`} />
-                            <span className="text-[11px] font-semibold tracking-wide text-muted-foreground">{section.label}</span>
+                            <span className="text-[11px] font-semibold text-muted-foreground">{section.label}</span>
                           </div>
-                          <div className="flex flex-col gap-0.5">
+                          <div className="flex flex-col">
                             {section.paths.map((path) => {
                               const entry = navMap[path];
                               if (!entry) return null;
@@ -253,27 +283,13 @@ export function Sidebar() {
           })}
         </nav>
 
-        {/* 푸터 */}
-        <div className="flex-shrink-0 border-t border-border py-2 px-2 space-y-1">
-          <button
-            onClick={() => setEditMode((v) => !v)}
-            className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
-              editMode ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
-            }`}
-          >
-            <PanelLeftOpen className="w-4 h-4 flex-shrink-0" />
-            <span>메뉴 이름 편집</span>
-          </button>
-          <button
+        {/* 푸터 — 테마 토글만 */}
+        <div className="flex-shrink-0 border-t border-border py-1.5 px-1.5">
+          <NavActionItem
+            label={`테마: ${THEME_LABEL[theme]}`}
+            Icon={theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor}
             onClick={() => setTheme(THEME_CYCLE[theme])}
-            className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:bg-secondary/60 hover:text-foreground transition-colors"
-            aria-label="테마 변경"
-          >
-            {theme === 'dark' && <Moon className="w-4 h-4 flex-shrink-0" />}
-            {theme === 'light' && <Sun className="w-4 h-4 flex-shrink-0" />}
-            {theme === 'system' && <Monitor className="w-4 h-4 flex-shrink-0" />}
-            <span>테마: {THEME_LABEL[theme]}</span>
-          </button>
+          />
         </div>
       </aside>
 

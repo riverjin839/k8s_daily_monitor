@@ -186,31 +186,22 @@
   strong, b { font-weight: 700; }
 }
 
-/* ── 가독성 개선 — 너무 작은 임의 크기를 floor + weight 보정 ─────────────── */
-/* 9~11px 로 쓰인 텍스트가 많아 읽기 어려움 → 12.5~13.5px 로 올리고 medium 가중치 */
-.text-\[9px\]  { font-size: 12.5px !important; line-height: 1.45; font-weight: 500; }
-.text-\[10px\] { font-size: 12.5px !important; line-height: 1.45; font-weight: 500; }
-.text-\[11px\] { font-size: 13.5px !important; line-height: 1.5;  font-weight: 500; }
+/* ── Phase B density pass ──────────────────────────────────────────────────
+   Restore Tailwind type scale so dense layouts (tables, cards, sidebar)
+   actually read as Databricks-tight. Only floor the smallest arbitrary
+   sizes (9–10px) up to 11px for legibility — 11px stays as-is. */
+.text-\[9px\]  { font-size: 11px !important; line-height: 1.4; }
+.text-\[10px\] { font-size: 11px !important; line-height: 1.4; }
 
-/* 단, 코드 블록(pre/code)은 pre 자체 규칙을 따르게 상속 */
-pre .text-\[11px\], pre .text-\[10px\], pre .text-\[9px\],
-code .text-\[11px\], code .text-\[10px\], code .text-\[9px\] {
+pre .text-\[9px\], pre .text-\[10px\], code .text-\[9px\], code .text-\[10px\] {
   font-size: inherit !important;
-  font-weight: inherit;
 }
 
-/* text-xs / text-sm / text-base 전반 + medium 가중치 */
-.text-xs   { font-size: 13.5px; line-height: 1.5;  font-weight: 500; }
-.text-sm   { font-size: 15px;   line-height: 1.55; font-weight: 500; }
-.text-base { font-size: 17px;   line-height: 1.6;  font-weight: 500; }
-.text-lg   { font-size: 19px;   line-height: 1.55; font-weight: 600; }
-.text-xl   { font-size: 22px;   line-height: 1.4;  font-weight: 700; }
-.text-2xl  { font-size: 26px;   line-height: 1.35; font-weight: 700; }
-
-/* font-medium 기본값 보강 (Tailwind 500) */
-.font-medium   { font-weight: 600; }
-.font-semibold { font-weight: 700; }
-.font-bold     { font-weight: 800; }
+/* Tailwind defaults restored (no overrides) — relying on tailwind.css's
+   built-in text-xs (12px) / text-sm (14px) / text-base (16px) etc. */
+/* font-weight: also restored — let Tailwind's font-medium=500,
+   font-semibold=600, font-bold=700 do their job. Headings carry weight via
+   the @layer base h1/h2/h3 rules above. */
 
 /* ── macOS-style Card shadow utility ──────────────────────────────────────── */
 .mac-shadow {

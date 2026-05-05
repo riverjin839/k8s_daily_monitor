@@ -4,7 +4,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # App
-    app_name: str = "K8s Daily Monitor"
+    app_name: str = "DEVOPS MANAGEMENT"
     debug: bool = False
     
     # Database

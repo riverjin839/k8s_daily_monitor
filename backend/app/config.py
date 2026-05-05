@@ -21,10 +21,13 @@ class Settings(BaseSettings):
     ansible_playbook_dir: str = "/app/ansible/playbooks"
     ansible_inventory_dir: str = "/app/ansible/inventory"
     
-    # Security
+    # Security / Auth
     secret_key: str = "your-secret-key-change-in-production"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
+    access_token_expire_minutes: int = 60 * 24  # 24 hours
+    # Bootstrap: created on startup if no users exist. Skip if already present.
+    initial_admin_username: str = "admin"
+    initial_admin_password: str = "admin"
     
     # Health Check
     check_interval_minutes: int = 5

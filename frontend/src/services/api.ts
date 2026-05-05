@@ -1,6 +1,7 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate, TaskStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
+import { getAuthToken, clearAuthSession, type AuthUser } from '@/stores/authStore';
 
 // snake_case → camelCase 변환 (Backend는 snake_case, Frontend는 camelCase)
 function toCamelCase(str: string): string {
@@ -50,6 +51,12 @@ const api = axios.create({
 type DebugConfig = InternalAxiosRequestConfig & { __debugStart?: number };
 api.interceptors.request.use(
   (config) => {
+    // Attach JWT if present. Skip the snake_case conversion for the login
+    // payload (it goes to /auth/login, body is already snake_case keys).
+    const token = getAuthToken();
+    if (token) {
+      config.headers.set('Authorization', `Bearer ${token}`);
+    }
     if (config.data && typeof config.data === 'object') {
       config.data = convertKeysToSnake(config.data);
     }
@@ -88,11 +95,16 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
+    // 401 from any endpoint other than the login itself means the token is
+    // missing/expired/invalid — drop the session so AuthGate routes back to
+    // the login screen. Login's own 401 (bad credentials) is left for the
+    // form to display.
+    const url: string | undefined = error?.config?.url;
+    if (error?.response?.status === 401 && !url?.endsWith('/auth/login')) {
+      clearAuthSession();
+    }
     if (isDebugEnabled('global')) {
       const start = (error?.config as DebugConfig | undefined)?.__debugStart;
-      // FastAPI 422 등은 detail 이 배열/객체로 올 수 있음 — 객체를 그대로 React child 로
-      // 넣으면 minified error #31 ("Objects are not valid as a React child").
-      // DebugLogPanel 의 안전을 위해 문자열로 정규화한다.
       const rawDetail = error?.response?.data?.detail;
       const detailStr = typeof rawDetail === 'string'
         ? rawDetail
@@ -112,6 +124,23 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// ── Auth API ──────────────────────────────────────────────────────────────
+// Response keys are camelCase post-interceptor; request keys are camelCase
+// here and auto-converted to snake_case by the request interceptor.
+export interface LoginResponse { accessToken: string; tokenType: string; user: AuthUser }
+
+export const authApi = {
+  login: (username: string, password: string) =>
+    api.post<LoginResponse>('/auth/login', { username, password }),
+  me: () => api.get<AuthUser>('/auth/me'),
+  listUsers: () => api.get<AuthUser[]>('/auth/users'),
+  createUser: (payload: { username: string; password: string; role: 'admin' | 'user'; displayName?: string }) =>
+    api.post<AuthUser>('/auth/users', payload),
+  deleteUser: (id: string) => api.delete(`/auth/users/${id}`),
+  resetPassword: (id: string, newPassword: string) =>
+    api.post<AuthUser>(`/auth/users/${id}/password`, { newPassword }),
+};
 
 // Clusters API
 export const clustersApi = {

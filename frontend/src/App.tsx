@@ -38,6 +38,7 @@ import { AgentChat } from '@/components/agent';
 import { Sidebar } from '@/components/layout';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { ToastProvider } from '@/components/common';
+import { AuthGate } from '@/components/auth/AuthGate';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -105,8 +106,10 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <BrowserRouter>
-          <AppShell />
-          <AgentChat />
+          <AuthGate>
+            <AppShell />
+            <AgentChat />
+          </AuthGate>
         </BrowserRouter>
       </ToastProvider>
     </QueryClientProvider>

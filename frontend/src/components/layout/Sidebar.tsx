@@ -5,12 +5,13 @@ import {
   Settings, Link2, Tags, Calculator, Server, GitFork, BookMarked, Layers,
   Pencil, Moon, Sun, Monitor, Map, BarChart3, Network,
   Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
-  PanelLeftOpen, X, ClipboardCheck, ListTree, ChevronRight,
+  PanelLeftOpen, X, ClipboardCheck, ListTree, ChevronRight, LogOut,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
 import { useSidebarStore, NAV_WIDTH } from '@/stores/sidebarStore';
+import { useAuthStore } from '@/stores/authStore';
 import { InlineEdit } from '@/components/common';
 
 // ── Nav registry ──────────────────────────────────────────────────────────────
@@ -134,6 +135,9 @@ export function Sidebar() {
 
   const collapsedGroups = useSidebarStore((s) => s.collapsedGroups);
   const toggleGroup = useSidebarStore((s) => s.toggleGroup);
+
+  const currentUser = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.clear);
 
   const [editMode, setEditMode] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -286,13 +290,30 @@ export function Sidebar() {
           })}
         </nav>
 
-        {/* 푸터 — 테마 토글만 */}
-        <div className="flex-shrink-0 border-t border-border py-1.5 px-1.5">
+        {/* 푸터 — 사용자 / 테마 / 로그아웃 */}
+        <div className="flex-shrink-0 border-t border-border py-1.5 px-1.5 space-y-0.5">
+          {currentUser && (
+            <div className="px-2 py-1 text-[11px] text-muted-foreground/80 leading-tight break-keep">
+              <div className="font-semibold text-foreground/90 truncate" title={currentUser.username}>
+                {currentUser.displayName || currentUser.username}
+              </div>
+              <div className="opacity-70">
+                {currentUser.role === 'admin' ? 'Administrator' : currentUser.username}
+              </div>
+            </div>
+          )}
           <NavActionItem
             label={`테마: ${THEME_LABEL[theme]}`}
             Icon={theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor}
             onClick={() => setTheme(THEME_CYCLE[theme])}
           />
+          {currentUser && (
+            <NavActionItem
+              label="로그아웃"
+              Icon={LogOut}
+              onClick={logout}
+            />
+          )}
         </div>
       </aside>
 

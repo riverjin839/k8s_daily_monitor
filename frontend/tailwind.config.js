@@ -37,6 +37,16 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // ── Sidebar tokens (Databricks dark-navy sidebar in light theme) ──
+        sidebar: {
+          DEFAULT: "hsl(var(--sidebar))",
+          foreground: "hsl(var(--sidebar-foreground))",
+          muted: "hsl(var(--sidebar-muted-foreground))",
+          accent: "hsl(var(--sidebar-accent))",
+          "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
+          border: "hsl(var(--sidebar-border))",
+          primary: "hsl(var(--sidebar-primary))",
+        },
         // ── Surface tokens (DESIGN_SYSTEM §2.1) ──
         surface: "hsl(var(--card))",
         "surface-elevated": "hsl(var(--popover))",

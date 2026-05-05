@@ -232,8 +232,22 @@ export function Sidebar() {
   return (
     <>
       <aside
-        style={{ width: navWidth }}
-        className="fixed top-0 left-0 h-full bg-card/90 backdrop-blur-2xl border-r border-border flex flex-col z-40"
+        style={{
+          width: navWidth,
+          // Sidebar overrides global tokens within this aside only — child
+          // components keep using bg-card / text-muted-foreground / etc.
+          // and automatically pick up the dark-navy palette.
+          ['--card' as string]: 'var(--sidebar)',
+          ['--card-foreground' as string]: 'var(--sidebar-foreground)',
+          ['--foreground' as string]: 'var(--sidebar-foreground)',
+          ['--muted-foreground' as string]: 'var(--sidebar-muted-foreground)',
+          ['--secondary' as string]: 'var(--sidebar-accent)',
+          ['--secondary-foreground' as string]: 'var(--sidebar-accent-foreground)',
+          ['--border' as string]: 'var(--sidebar-border)',
+          ['--background' as string]: 'var(--sidebar)',
+          ['--primary' as string]: 'var(--sidebar-primary)',
+        } as React.CSSProperties}
+        className="fixed top-0 left-0 h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex flex-col z-40"
       >
         {/* 타이틀 */}
         <div className={`flex items-center ${iconOnly ? 'justify-center py-4' : 'gap-2 px-3 py-4'} border-b border-border flex-shrink-0`}>

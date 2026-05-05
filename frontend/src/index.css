@@ -3,32 +3,43 @@
 @tailwind utilities;
 
 @layer base {
-  /* ── Apple-inspired Light theme (default) ────────────────────────────────── */
+  /* ── Databricks-leaning Light theme (default) ─────────────────────────────
+     Phase A redesign — flat surfaces, slate palette, sky accent, dark sidebar.
+     See PR description for full token rationale. */
   :root {
-    --background: 220 20% 98%;
-    --foreground: 220 18% 12%;
-    --card: 0 0% 100%;
-    --card-foreground: 220 18% 12%;
+    --background: 210 40% 98%;        /* #F8FAFC slate-50 — body bg */
+    --foreground: 222 47% 11%;        /* #0F172A slate-900 — body text */
+    --card: 0 0% 100%;                /* pure white card */
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 18% 12%;
-    --primary: 211 100% 50%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 200 98% 32%;           /* #0369A1 sky-700 — calmer than macOS blue */
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 18% 94%;
-    --secondary-foreground: 220 18% 12%;
-    --muted: 220 14% 95%;
-    --muted-foreground: 220 10% 35%;
-    --accent: 213 100% 95%;
-    --accent-foreground: 220 18% 12%;
-    --destructive: 4 86% 58%;
+    --secondary: 210 33% 95%;         /* #E8ECF1 — secondary surface */
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 33% 96%;
+    --muted-foreground: 215 16% 47%;  /* #64748B slate-500 */
+    --accent: 200 80% 95%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 73% 50%;         /* #DC2626 red-600 */
     --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 87%;
-    --input: 220 13% 90%;
-    --ring: 211 100% 50%;
-    --radius: 1rem;
+    --border: 214 32% 91%;            /* #E2E8F0 slate-200 — subtle 1px borders */
+    --input: 214 32% 91%;
+    --ring: 222 47% 11%;              /* slate-900 focus ring */
+    --radius: 0.5rem;                 /* 8px — flatter than macOS 14px */
     --mac-red:    #FF5F57;
     --mac-yellow: #FEBC2E;
     --mac-green:  #28C840;
-    --card-shadow: 0 16px 34px rgba(17, 24, 39, 0.08), 0 2px 8px rgba(17, 24, 39, 0.06);
+    --card-shadow: none;              /* flat — border replaces shadow */
+
+    /* ── Sidebar tokens (Databricks dark navy, light theme only) ──────── */
+    --sidebar:                  214 30% 14%;   /* #1B2530 */
+    --sidebar-foreground:       210 40% 96%;   /* #F1F5F9 */
+    --sidebar-muted-foreground: 215 20% 65%;   /* #94A3B8 */
+    --sidebar-accent:           217 33% 22%;   /* active item bg */
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border:           217 30% 24%;
+    --sidebar-primary:          200 98% 60%;   /* brighter sky for dark bg */
 
     /* ── Semantic status tokens (DESIGN_SYSTEM §2.4) — 운영 도구 표준값 ─ */
     --status-healthy:     142 71% 45%;   /* #22C55E green-500 */
@@ -74,11 +85,20 @@
     --border: 220 14% 20%;
     --input: 220 14% 20%;
     --ring: 212 100% 63%;
-    --radius: 1rem;
+    --radius: 0.5rem;
     --mac-red:    #FF5F57;
     --mac-yellow: #FEBC2E;
     --mac-green:  #28C840;
-    --card-shadow: 0 16px 40px rgba(0,0,0,0.45), 0 2px 10px rgba(0,0,0,0.35);
+    --card-shadow: none;
+
+    /* Dark theme: sidebar matches body so the dark navy doesn't double-up */
+    --sidebar:                  220 18% 5%;
+    --sidebar-foreground:       220 10% 96%;
+    --sidebar-muted-foreground: 220 8% 68%;
+    --sidebar-accent:           220 14% 18%;
+    --sidebar-accent-foreground: 220 10% 96%;
+    --sidebar-border:           220 14% 14%;
+    --sidebar-primary:          212 100% 63%;
 
     /* Dark mode status (DESIGN_SYSTEM §2.4) — 전경 채도 유지, 배경 채도 ↓ */
     --status-healthy:     142 71% 45%;
@@ -102,32 +122,40 @@
     --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
-  /* ── Legacy light class (keep for transition) ─────────────────────────────── */
+  /* ── Light class — keeps :root tokens (kept explicit for class-based switch) ── */
   html.light {
-    --background: 220 20% 98%;
-    --foreground: 220 18% 12%;
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 220 18% 12%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 18% 12%;
-    --primary: 211 100% 50%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 200 98% 32%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 18% 94%;
-    --secondary-foreground: 220 18% 12%;
-    --muted: 220 14% 95%;
-    --muted-foreground: 220 10% 35%;
-    --accent: 213 100% 95%;
-    --accent-foreground: 220 18% 12%;
-    --destructive: 4 86% 58%;
+    --secondary: 210 33% 95%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 33% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 200 80% 95%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 73% 50%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 87%;
-    --input: 220 13% 90%;
-    --ring: 211 100% 50%;
-    --radius: 1rem;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 222 47% 11%;
+    --radius: 0.5rem;
     --mac-red:    #FF5F57;
     --mac-yellow: #FEBC2E;
     --mac-green:  #28C840;
-    --card-shadow: 0 16px 34px rgba(17, 24, 39, 0.08), 0 2px 8px rgba(17, 24, 39, 0.06);
+    --card-shadow: none;
+
+    --sidebar:                  214 30% 14%;
+    --sidebar-foreground:       210 40% 96%;
+    --sidebar-muted-foreground: 215 20% 65%;
+    --sidebar-accent:           217 33% 22%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border:           217 30% 24%;
+    --sidebar-primary:          200 98% 60%;
   }
 }
 
@@ -137,26 +165,23 @@
   }
   body {
     @apply bg-background text-foreground;
-    background-image: radial-gradient(circle at 15% 0%, hsl(0 0% 100% / 0.85), transparent 36%),
-      radial-gradient(circle at 85% 10%, hsl(210 85% 88% / 0.24), transparent 34%);
+    /* Databricks tone — flat background, no decorative gradient */
     font-feature-settings: "rlig" 1, "calt" 1;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    /* 기본 본문 — 17px + medium 가중치로 전반 가독성/명도 ↑ */
-    font-size: 17px;
-    line-height: 1.6;
+    font-size: 16px;
+    line-height: 1.55;
     font-weight: 500;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    letter-spacing: -0.005em;
+    letter-spacing: -0.003em;
   }
 
-  /* 기본 heading 은 extrabold 까지 올려 대비 강조 */
-  h1 { font-weight: 800; letter-spacing: -0.015em; }
-  h2 { font-weight: 700; letter-spacing: -0.01em; }
-  h3 { font-weight: 700; }
+  /* Headings — toned down from extrabold to match Databricks restraint */
+  h1 { font-weight: 700; letter-spacing: -0.015em; }
+  h2 { font-weight: 600; letter-spacing: -0.01em; }
+  h3 { font-weight: 600; }
   h4, h5, h6 { font-weight: 600; }
 
-  /* label / strong 도 또렷하게 */
   label { font-weight: 600; }
   strong, b { font-weight: 700; }
 }

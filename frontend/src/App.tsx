@@ -11,6 +11,7 @@ import { MemberBoardPage } from '@/pages/MemberBoardPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { ClusterLinksPage } from '@/pages/ClusterLinksPage';
 import { NodeLabelsPage } from '@/pages/NodeLabelsPage';
+import { NodeImagesPage } from '@/pages/NodeImagesPage';
 import { CidrCalculatorPage } from '@/pages/CidrCalculatorPage';
 import { ClusterManagePage } from '@/pages/ClusterManagePage';
 import { ClusterMetaFormPage } from '@/pages/ClusterMetaFormPage';
@@ -70,6 +71,7 @@ function AppShell() {
               <Route path="/members" element={<MemberBoardPage />} />
               <Route path="/links" element={<ClusterLinksPage />} />
               <Route path="/node-labels" element={<NodeLabelsPage />} />
+              <Route path="/node-images" element={<NodeImagesPage />} />
               <Route path="/cidr" element={<CidrCalculatorPage />} />
               <Route path="/cluster-manage" element={<ClusterManagePage />} />
               <Route path="/cluster-manage/:id/edit" element={<ClusterMetaFormPage />} />

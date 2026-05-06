@@ -1,0 +1,219 @@
+import { useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight, Layers } from 'lucide-react';
+import type { NodeImagesInfo } from '@/hooks/useNodeImages';
+
+interface Props {
+  nodes: NodeImagesInfo[];
+  searchQuery: string;
+}
+
+function formatBytes(n: number): string {
+  if (!n || n <= 0) return '-';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let i = 0;
+  let v = n;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function pickPrimaryName(names: string[]): string {
+  if (names.length === 0) return '(unknown)';
+  // Prefer the tagged name (`repo:tag`) over the digest (`repo@sha256:...`).
+  const tagged = names.find((n) => !n.includes('@sha256:'));
+  return tagged || names[0];
+}
+
+function nodeMatches(node: NodeImagesInfo, q: string): boolean {
+  if (!q.trim()) return true;
+  const lower = q.toLowerCase();
+  if (node.node.toLowerCase().includes(lower)) return true;
+  return node.images.some((img) => img.names.some((n) => n.toLowerCase().includes(lower)));
+}
+
+function filterImages(node: NodeImagesInfo, q: string): NodeImagesInfo['images'] {
+  if (!q.trim()) return node.images;
+  const lower = q.toLowerCase();
+  if (node.node.toLowerCase().includes(lower)) return node.images;
+  return node.images.filter((img) => img.names.some((n) => n.toLowerCase().includes(lower)));
+}
+
+export function NodeImagesTable({ nodes, searchQuery }: Props) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const filtered = useMemo(
+    () => nodes.filter((n) => nodeMatches(n, searchQuery)),
+    [nodes, searchQuery],
+  );
+
+  if (filtered.length === 0) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground text-sm">
+        {searchQuery ? `"${searchQuery}"에 해당하는 노드/이미지가 없습니다.` : '노드 이미지 정보가 없습니다.'}
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <table className="w-full text-sm">
+        <thead className="bg-muted/20">
+          <tr>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-8" />
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-64">Node</th>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-32">Role</th>
+            <th className="text-left px-4 py-3 font-medium text-muted-foreground w-24">Status</th>
+            <th className="text-right px-4 py-3 font-medium text-muted-foreground w-24">Images</th>
+            <th className="text-right px-4 py-3 font-medium text-muted-foreground w-32">Total Size</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.map((node) => {
+            const isOpen = expanded[node.node] ?? false;
+            const visibleImages = filterImages(node, searchQuery);
+            return (
+              <RowGroup
+                key={node.node}
+                node={node}
+                isOpen={isOpen}
+                visibleImages={visibleImages}
+                onToggle={() =>
+                  setExpanded((prev) => ({ ...prev, [node.node]: !isOpen }))
+                }
+              />
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RowGroup({
+  node,
+  isOpen,
+  visibleImages,
+  onToggle,
+}: {
+  node: NodeImagesInfo;
+  isOpen: boolean;
+  visibleImages: NodeImagesInfo['images'];
+  onToggle: () => void;
+}) {
+  return (
+    <>
+      <tr
+        className="border-t border-border hover:bg-muted/10 cursor-pointer"
+        onClick={onToggle}
+      >
+        <td className="px-4 py-3 align-middle">
+          {isOpen ? (
+            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          )}
+        </td>
+        <td className="px-4 py-3 align-middle font-mono text-xs">{node.node}</td>
+        <td className="px-4 py-3 align-middle">
+          <RoleBadge role={node.role} />
+        </td>
+        <td className="px-4 py-3 align-middle">
+          <StatusBadge status={node.status} />
+        </td>
+        <td className="px-4 py-3 align-middle text-right tabular-nums">{node.image_count}</td>
+        <td className="px-4 py-3 align-middle text-right tabular-nums">
+          {formatBytes(node.total_size_bytes)}
+        </td>
+      </tr>
+      {isOpen && (
+        <tr className="bg-muted/5">
+          <td colSpan={6} className="px-0 py-0">
+            <ImageList images={visibleImages} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function ImageList({ images }: { images: NodeImagesInfo['images'] }) {
+  if (images.length === 0) {
+    return (
+      <div className="px-12 py-4 text-xs text-muted-foreground">검색 조건에 맞는 이미지가 없습니다.</div>
+    );
+  }
+  return (
+    <div className="px-12 py-3">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-muted-foreground">
+            <th className="text-left py-1.5 font-medium">Image</th>
+            <th className="text-right py-1.5 font-medium w-32">Size</th>
+          </tr>
+        </thead>
+        <tbody>
+          {images.map((img, idx) => (
+            <tr key={idx} className="border-t border-border/50">
+              <td className="py-1.5 pr-4 font-mono break-all">
+                <div className="flex items-start gap-2">
+                  <Layers className="w-3 h-3 mt-0.5 text-muted-foreground flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-foreground">{pickPrimaryName(img.names)}</div>
+                    {img.names.length > 1 && (
+                      <details className="mt-0.5">
+                        <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-foreground">
+                          +{img.names.length - 1} alias
+                        </summary>
+                        <ul className="mt-1 ml-1 space-y-0.5 text-[11px] text-muted-foreground">
+                          {img.names
+                            .filter((n) => n !== pickPrimaryName(img.names))
+                            .map((n) => (
+                              <li key={n} className="break-all">
+                                {n}
+                              </li>
+                            ))}
+                        </ul>
+                      </details>
+                    )}
+                  </div>
+                </div>
+              </td>
+              <td className="py-1.5 text-right tabular-nums">{formatBytes(img.size_bytes)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RoleBadge({ role }: { role: string }) {
+  const isControl = role === 'control-plane';
+  return (
+    <span
+      className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${
+        isControl
+          ? 'bg-primary/10 text-primary'
+          : 'bg-secondary text-foreground'
+      }`}
+    >
+      {role}
+    </span>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const cls =
+    status === 'ready'
+      ? 'bg-green-500/15 text-green-600 dark:text-green-400'
+      : status === 'not-ready'
+      ? 'bg-red-500/15 text-red-600 dark:text-red-400'
+      : 'bg-muted text-muted-foreground';
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${cls}`}>
+      {status}
+    </span>
+  );
+}

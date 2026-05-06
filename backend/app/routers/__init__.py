@@ -10,6 +10,7 @@ from app.routers.issues import router as issues_router
 from app.routers.tasks import router as tasks_router
 from app.routers.ui_settings import router as ui_settings_router
 from app.routers.node_labels import router as node_labels_router
+from app.routers.node_images import router as node_images_router
 from app.routers.workflows import router as workflows_router
 from app.routers.work_guide import router as work_guide_router
 from app.routers.ops_note import router as ops_note_router
@@ -48,6 +49,7 @@ __all__ = [
     "tasks_router",
     "ui_settings_router",
     "node_labels_router",
+    "node_images_router",
     "workflows_router",
     "work_guide_router",
     "ops_note_router",

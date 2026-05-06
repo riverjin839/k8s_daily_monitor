@@ -32,6 +32,7 @@ export function ClusterMetaFormPage() {
   const [maxPod, setMaxPod]             = useState('');
   const [hostname, setHostname]         = useState('');
   const [cidr, setCidr]                 = useState('');
+  const [internalIps, setInternalIps]   = useState('');
   const [firstHost, setFirstHost]       = useState('');
   const [lastHost, setLastHost]         = useState('');
   const [podCidr, setPodCidr]           = useState('');
@@ -64,6 +65,7 @@ export function ClusterMetaFormPage() {
     setMaxPod(cluster.maxPod?.toString() ?? '');
     setHostname(cluster.hostname ?? '');
     setCidr(cluster.cidr ?? '');
+    setInternalIps(cluster.internalIps ?? '');
     setFirstHost(cluster.firstHost ?? '');
     setLastHost(cluster.lastHost ?? '');
     setPodCidr(cluster.podCidr ?? '');
@@ -118,6 +120,7 @@ export function ClusterMetaFormPage() {
         maxPod: maxPod ? Number(maxPod) : undefined,
         hostname: hostname.trim() || undefined,
         cidr: cidr.trim() || undefined,
+        internalIps: internalIps.trim() || undefined,
         firstHost: firstHost.trim() || undefined,
         lastHost: lastHost.trim() || undefined,
         podCidr: podCidr.trim() || undefined,
@@ -298,20 +301,47 @@ export function ClusterMetaFormPage() {
 
             {tab === 'network' && (
               <div className="space-y-5">
-                <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-4">
-                  <div className="mb-3">
-                    <p className="text-xs font-semibold text-sky-600 uppercase tracking-wider">INTERNAL_IP — 수동 입력 (fallback CIDR)</p>
+                <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-4 space-y-4">
+                  <div>
+                    <p className="text-xs font-semibold text-sky-600 uppercase tracking-wider">INTERNAL_IP — 수동 입력</p>
                     <p className="text-[10.5px] text-muted-foreground mt-0.5">
-                      자동수집(kubectl) 으로 받은 노드 InternalIP 가 우선 표시됩니다. 이 영역은 수집 전 임시로 사용할 supernet 만 입력하세요.
+                      자동수집(kubectl) nodeIps &gt; 수동 IP 리스트(정규식) &gt; fallback CIDR 순으로 표시됩니다.
                     </p>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div><label htmlFor={f('cidr')} className={lc}>Fallback CIDR</label>
-                      <input id={f('cidr')} type="text" value={cidr} onChange={(e) => setCidr(e.target.value)} placeholder="192.168.0.0/24" className={ic} /></div>
-                    <div><label htmlFor={f('firstHost')} className={lc}>First Host</label>
-                      <input id={f('firstHost')} type="text" value={firstHost} onChange={(e) => setFirstHost(e.target.value)} placeholder="192.168.0.1" className={ic} /></div>
-                    <div><label htmlFor={f('lastHost')} className={lc}>Last Host</label>
-                      <input id={f('lastHost')} type="text" value={lastHost} onChange={(e) => setLastHost(e.target.value)} placeholder="192.168.0.254" className={ic} /></div>
+
+                  <div>
+                    <label htmlFor={f('internalIps')} className={lc}>
+                      IP 리스트 (정규식)
+                      <span className="ml-1.5 text-[10px] text-muted-foreground/70 font-normal normal-case">
+                        한 줄에 한 그룹, 마지막 옥텟은 <code className="font-mono">[5-7,10]</code> 형태로 압축
+                      </span>
+                    </label>
+                    <textarea
+                      id={f('internalIps')}
+                      value={internalIps}
+                      onChange={(e) => setInternalIps(e.target.value)}
+                      placeholder={`10.0.1.[5-7,10]\n10.0.2.[1-3]`}
+                      rows={3}
+                      spellCheck={false}
+                      className={`${ic} resize-none font-mono text-xs`}
+                    />
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                      Fallback CIDR
+                      <span className="ml-1.5 text-[10px] text-muted-foreground/70 font-normal normal-case">
+                        — IP 리스트가 비었을 때 표시 + CIDR Calculator 의 겹침 검사에 사용
+                      </span>
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div><label htmlFor={f('cidr')} className={lc}>Fallback CIDR</label>
+                        <input id={f('cidr')} type="text" value={cidr} onChange={(e) => setCidr(e.target.value)} placeholder="192.168.0.0/24" className={ic} /></div>
+                      <div><label htmlFor={f('firstHost')} className={lc}>First Host</label>
+                        <input id={f('firstHost')} type="text" value={firstHost} onChange={(e) => setFirstHost(e.target.value)} placeholder="192.168.0.1" className={ic} /></div>
+                      <div><label htmlFor={f('lastHost')} className={lc}>Last Host</label>
+                        <input id={f('lastHost')} type="text" value={lastHost} onChange={(e) => setLastHost(e.target.value)} placeholder="192.168.0.254" className={ic} /></div>
+                    </div>
                   </div>
                 </div>
 

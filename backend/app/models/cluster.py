@@ -31,7 +31,9 @@ class Cluster(Base):
     operation_level = Column(String(50), nullable=True)   # 운영레벨 (production/staging/dev/test)
     max_pod = Column(Integer, nullable=True)              # Node당 최대 Pod 수
     cilium_config = Column(Text, nullable=True)           # 주요 Cilium 설정
-    cidr = Column(String(255), nullable=True)             # Node CIDR 대역
+    cidr = Column(String(255), nullable=True)             # Node CIDR 대역 (legacy / overlap 검사용 supernet)
+    # INTERNAL_IP — IP 리스트 정규식 (예: "10.0.1.[5-7,10]\n10.0.2.[1-3]"). 자동수집 nodeIps 미수집 시 우선 표시.
+    internal_ips = Column(Text, nullable=True)
     first_host = Column(String(100), nullable=True)       # Node 첫 번째 호스트 IP
     last_host = Column(String(100), nullable=True)        # Node 마지막 호스트 IP
     description = Column(Text, nullable=True)             # 정보/설명

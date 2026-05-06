@@ -116,15 +116,32 @@ function divideSubnets(cidr: string, count: number): string[] {
   return result;
 }
 
-function cidrsOverlap(cidr1: string, cidr2: string): boolean {
+interface OverlapRange {
+  start: string;
+  end: string;
+  size: number;
+}
+
+/**
+ * 두 CIDR 의 실제 겹치는 IP 구간을 반환. 안 겹치면 null.
+ * 가독성 개선용 — "어디까지 겹치는지" 를 사용자에게 명확히 보여주기 위함.
+ */
+function computeOverlap(cidr1: string, cidr2: string): OverlapRange | null {
   const r1 = parseCidr(cidr1);
   const r2 = parseCidr(cidr2);
-  if (!r1 || !r2) return false;
+  if (!r1 || !r2) return null;
   const start1 = ipToNum(r1.network);
   const end1 = ipToNum(r1.broadcast);
   const start2 = ipToNum(r2.network);
   const end2 = ipToNum(r2.broadcast);
-  return start1 <= end2 && start2 <= end1;
+  if (start1 > end2 || start2 > end1) return null;
+  const start = Math.max(start1, start2);
+  const end = Math.min(end1, end2);
+  return { start: numToIp(start), end: numToIp(end), size: end - start + 1 };
+}
+
+function cidrsOverlap(cidr1: string, cidr2: string): boolean {
+  return computeOverlap(cidr1, cidr2) !== null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -200,6 +217,62 @@ function StatTile({ label, value, accent = 'default' }: StatTileProps) {
   );
 }
 
+/**
+ * 한 쌍의 겹침을 "A ↔ B + 겹치는 IP 구간" 형태로 보여준다.
+ * 가독성 개선의 핵심: 좌/우 어느 쪽이 어느 CIDR 인지, 그리고 *어디까지* 겹치는지를
+ * 한 줄 카드 안에서 즉시 파악할 수 있게 한다.
+ */
+interface OverlapPairProps {
+  leftLabel: string;
+  leftCidr: string;
+  rightLabel: string;
+  rightCidr: string;
+  /** 두 노드의 색상 그룹 (같은 충돌 그룹은 같은 색) */
+  hue?: 'amber' | 'rose' | 'fuchsia' | 'orange' | 'cyan';
+}
+
+const HUE_TOKENS = {
+  amber:   { bg: 'bg-amber-500/10',   border: 'border-amber-500/30',   dot: 'bg-amber-500',   text: 'text-amber-600' },
+  rose:    { bg: 'bg-rose-500/10',    border: 'border-rose-500/30',    dot: 'bg-rose-500',    text: 'text-rose-600' },
+  fuchsia: { bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30', dot: 'bg-fuchsia-500', text: 'text-fuchsia-600' },
+  orange:  { bg: 'bg-orange-500/10',  border: 'border-orange-500/30',  dot: 'bg-orange-500',  text: 'text-orange-600' },
+  cyan:    { bg: 'bg-cyan-500/10',    border: 'border-cyan-500/30',    dot: 'bg-cyan-500',    text: 'text-cyan-600' },
+} as const;
+
+function OverlapPair({ leftLabel, leftCidr, rightLabel, rightCidr, hue = 'amber' }: OverlapPairProps) {
+  const overlap = computeOverlap(leftCidr, rightCidr);
+  const tone = HUE_TOKENS[hue];
+  return (
+    <div className={`px-2.5 py-2 border rounded-md ${tone.bg} ${tone.border}`}>
+      <div className="flex items-center gap-2 text-xs">
+        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${tone.dot}`} />
+        <div className="flex-1 min-w-0 grid grid-cols-[1fr,auto,1fr] items-center gap-1.5">
+          <div className="min-w-0 text-right">
+            <div className="font-medium truncate" title={leftLabel}>{leftLabel}</div>
+            <div className="font-mono tabular-nums text-[10px] text-muted-foreground truncate">{leftCidr}</div>
+          </div>
+          <span className={`text-[11px] font-bold ${tone.text}`}>↔</span>
+          <div className="min-w-0">
+            <div className="font-medium truncate" title={rightLabel}>{rightLabel}</div>
+            <div className="font-mono tabular-nums text-[10px] text-muted-foreground truncate">{rightCidr}</div>
+          </div>
+        </div>
+      </div>
+      {overlap && (
+        <div className="mt-1.5 pt-1.5 border-t border-border/40 flex items-center gap-1.5 text-[10px]">
+          <span className="uppercase tracking-wider text-muted-foreground">겹침 구간</span>
+          <span className="font-mono tabular-nums text-foreground truncate">
+            {overlap.start} – {overlap.end}
+          </span>
+          <span className="font-mono tabular-nums text-muted-foreground ml-auto flex-shrink-0">
+            {formatHosts(overlap.size)} IPs
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 interface SubnetEntry {
@@ -244,7 +317,7 @@ export function CidrCalculatorPage() {
   const [divideError, setDivideError] = useState('');
 
   const compareColW = useColumnWidths('cidr-compare-table', {
-    defaults: { label: 140, network: 180, mask: 160, hosts: 140, overlap: 200 },
+    defaults: { label: 140, network: 180, mask: 160, hosts: 140, overlap: 220 },
     min: 60, max: 600,
   });
 
@@ -325,6 +398,43 @@ export function CidrCalculatorPage() {
     const cur = `${info.network}/${info.prefix}`;
     return clusters.filter((c) => Boolean(c.cidr) && cidrsOverlap(cur, c.cidr as string));
   }, [info, clusters]);
+
+  /**
+   * 비교 테이블의 충돌 그룹별 색상 매핑.
+   * 같은 충돌 그룹(서로 겹치는 entry 들의 집합) 은 같은 hue 를 공유해
+   * "어느 행끼리 겹치는지" 한눈에 파악할 수 있게 한다.
+   */
+  const entryHueMap = useMemo(() => {
+    const palette: Array<keyof typeof HUE_TOKENS> = ['amber', 'rose', 'fuchsia', 'orange', 'cyan'];
+    const groups: string[][] = [];
+    const visited = new Set<string>();
+    for (const e of entries) {
+      if (visited.has(e.id)) continue;
+      const stack = [e.id];
+      const group: string[] = [];
+      while (stack.length > 0) {
+        const cur = stack.pop()!;
+        if (visited.has(cur)) continue;
+        visited.add(cur);
+        group.push(cur);
+        const curEntry = entries.find((x) => x.id === cur);
+        if (!curEntry) continue;
+        for (const other of entries) {
+          if (other.id === cur || visited.has(other.id)) continue;
+          if (cidrsOverlap(curEntry.cidr, other.cidr)) {
+            stack.push(other.id);
+          }
+        }
+      }
+      if (group.length > 1) groups.push(group);
+    }
+    const map: Record<string, keyof typeof HUE_TOKENS> = {};
+    groups.forEach((ids, gi) => {
+      const hue = palette[gi % palette.length];
+      ids.forEach((id) => { map[id] = hue; });
+    });
+    return map;
+  }, [entries]);
 
   const inputBaseCls =
     'px-3 py-2 bg-secondary border border-border rounded-lg text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-colors';
@@ -537,27 +647,30 @@ export function CidrCalculatorPage() {
               </div>
             </div>
 
-            {/* Cluster overlap warning */}
-            {overlappingClusters.length > 0 && (
-              <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                <p className="text-xs font-semibold text-amber-600 inline-flex items-center gap-1.5 mb-2">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  등록 클러스터와 CIDR 겹침 — {overlappingClusters.length}개 충돌
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                  {overlappingClusters.map((c) => (
-                    <div
-                      key={c.id}
-                      className="flex items-center gap-2 text-xs px-2.5 py-1.5 bg-card/80 border border-border rounded-md"
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
-                      <span className="font-medium truncate">{c.name}</span>
-                      <span className="text-muted-foreground font-mono tabular-nums ml-auto">{c.cidr}</span>
-                    </div>
-                  ))}
+            {/* Cluster overlap warning — "현재 입력 ↔ 클러스터" 형태로 양쪽을 함께 보여준다 */}
+            {overlappingClusters.length > 0 && (() => {
+              const cur = `${info.network}/${info.prefix}`;
+              return (
+                <div className="mt-3">
+                  <p className="text-xs font-semibold text-amber-600 inline-flex items-center gap-1.5 mb-2">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    등록 클러스터와 CIDR 겹침 — {overlappingClusters.length}개 충돌
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    {overlappingClusters.map((c) => (
+                      <OverlapPair
+                        key={c.id}
+                        leftLabel="현재 입력"
+                        leftCidr={cur}
+                        rightLabel={c.name}
+                        rightCidr={c.cidr as string}
+                        hue="amber"
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </MacCard>
         )}
 
@@ -641,12 +754,12 @@ export function CidrCalculatorPage() {
               </MacCard>
             )}
 
-            {/* Multi-CIDR comparator */}
+            {/* Multi-CIDR comparator — 같은 충돌 그룹은 같은 색으로 묶어 표시 */}
             <MacCard title="멀티 CIDR 비교 (OVERLAP CHECK)">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-[11px] text-muted-foreground inline-flex items-center gap-1.5">
                   <GitCompare className="w-3.5 h-3.5" />
-                  여러 CIDR 블록의 주소 충돌을 한눈에 확인합니다
+                  여러 CIDR 블록의 주소 충돌을 한눈에 확인합니다 — 같은 색은 서로 겹치는 그룹
                 </p>
                 <button
                   type="button"
@@ -659,33 +772,41 @@ export function CidrCalculatorPage() {
               </div>
 
               <div className="space-y-2 mb-4">
-                {entries.map((entry) => (
-                  <div key={entry.id} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={entry.label}
-                      onChange={(e) => updateEntry(entry.id, 'label', e.target.value)}
-                      placeholder="Label"
-                      className="px-2 py-1.5 bg-secondary border border-border rounded-md text-xs w-32 focus:outline-none focus:ring-1 focus:ring-primary/40"
-                    />
-                    <input
-                      type="text"
-                      value={entry.cidr}
-                      onChange={(e) => updateEntry(entry.id, 'cidr', e.target.value)}
-                      placeholder="10.0.0.0/24"
-                      spellCheck={false}
-                      className={`${inputBaseCls} flex-1 text-xs py-1.5`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeEntry(entry.id)}
-                      className="p-1.5 hover:bg-rose-500/10 rounded-md text-muted-foreground hover:text-rose-500 flex-shrink-0 transition-colors"
-                      aria-label="Remove entry"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+                {entries.map((entry) => {
+                  const hue = entryHueMap[entry.id];
+                  const dot = hue ? HUE_TOKENS[hue].dot : 'bg-muted-foreground/30';
+                  return (
+                    <div key={entry.id} className="flex items-center gap-2">
+                      <span
+                        className={`w-1.5 h-6 rounded-full flex-shrink-0 ${dot}`}
+                        title={hue ? '겹치는 그룹의 색상' : '충돌 없음'}
+                      />
+                      <input
+                        type="text"
+                        value={entry.label}
+                        onChange={(e) => updateEntry(entry.id, 'label', e.target.value)}
+                        placeholder="Label"
+                        className="px-2 py-1.5 bg-secondary border border-border rounded-md text-xs w-32 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                      />
+                      <input
+                        type="text"
+                        value={entry.cidr}
+                        onChange={(e) => updateEntry(entry.id, 'cidr', e.target.value)}
+                        placeholder="10.0.0.0/24"
+                        spellCheck={false}
+                        className={`${inputBaseCls} flex-1 text-xs py-1.5`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeEntry(entry.id)}
+                        className="p-1.5 hover:bg-rose-500/10 rounded-md text-muted-foreground hover:text-rose-500 flex-shrink-0 transition-colors"
+                        aria-label="Remove entry"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Comparison table */}
@@ -718,7 +839,7 @@ export function CidrCalculatorPage() {
                         <ResizeGrip onMouseDown={(e) => compareColW.beginResize('hosts', e)} onDoubleClick={() => compareColW.autoFit('hosts')} />
                       </th>
                       <th className="relative text-left py-2 px-3 text-muted-foreground font-medium uppercase text-[10px] tracking-wider">
-                        Overlap
+                        겹침 상대
                         <ResizeGrip onMouseDown={(e) => compareColW.beginResize('overlap', e)} onDoubleClick={() => compareColW.autoFit('overlap')} />
                       </th>
                     </tr>
@@ -729,15 +850,26 @@ export function CidrCalculatorPage() {
                       const overlappingEntries = entries.filter(
                         (e) => e.id !== entry.id && cidrsOverlap(entry.cidr, e.cidr),
                       );
-                      const hasOverlap = overlappingEntries.length > 0;
+                      const hue = entryHueMap[entry.id];
+                      const hueTone = hue ? HUE_TOKENS[hue] : null;
                       return (
                         <tr
                           key={entry.id}
                           className={`border-b border-border/60 last:border-b-0 transition-colors ${
-                            hasOverlap ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-muted/30'
+                            hueTone ? `${hueTone.bg} hover:brightness-95` : 'hover:bg-muted/30'
                           }`}
                         >
-                          <td className="py-2 px-3 font-medium truncate">{entry.label || '—'}</td>
+                          <td className="py-2 px-3 font-medium truncate">
+                            <span className="inline-flex items-center gap-1.5">
+                              {hueTone && (
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${hueTone.dot}`}
+                                  aria-hidden
+                                />
+                              )}
+                              {entry.label || '—'}
+                            </span>
+                          </td>
                           <td className="py-2 px-3 font-mono tabular-nums text-muted-foreground truncate">
                             {ei ? `${ei.network}/${ei.prefix}` : <span className="text-rose-500">invalid</span>}
                           </td>
@@ -748,17 +880,27 @@ export function CidrCalculatorPage() {
                             {ei ? formatHosts(ei.usableHosts) : '—'}
                           </td>
                           <td className="py-2 px-3">
-                            {hasOverlap ? (
+                            {overlappingEntries.length > 0 ? (
                               <div className="flex flex-wrap gap-1">
-                                {overlappingEntries.map((e) => (
-                                  <span
-                                    key={e.id}
-                                    className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-600 border border-amber-500/30"
-                                  >
-                                    <AlertTriangle className="w-2.5 h-2.5" />
-                                    {e.label || e.cidr}
-                                  </span>
-                                ))}
+                                {overlappingEntries.map((e) => {
+                                  const ov = computeOverlap(entry.cidr, e.cidr);
+                                  const tone = hueTone ?? HUE_TOKENS.amber;
+                                  return (
+                                    <span
+                                      key={e.id}
+                                      className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md border ${tone.bg} ${tone.border} ${tone.text}`}
+                                      title={ov ? `겹침 구간: ${ov.start} – ${ov.end} (${formatHosts(ov.size)} IPs)` : undefined}
+                                    >
+                                      <AlertTriangle className="w-2.5 h-2.5" />
+                                      <span className="font-medium">{e.label || e.cidr}</span>
+                                      {ov && (
+                                        <span className="font-mono tabular-nums text-muted-foreground">
+                                          ({formatHosts(ov.size)})
+                                        </span>
+                                      )}
+                                    </span>
+                                  );
+                                })}
                               </div>
                             ) : ei ? (
                               <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
@@ -776,36 +918,33 @@ export function CidrCalculatorPage() {
                 </table>
               </div>
 
-              {/* Registered cluster overlap check */}
+              {/* Registered cluster overlap check — entry ↔ cluster 페어로 표시 */}
               {clusters.length > 0 && (() => {
-                const conflicts: { entryLabel: string; clusterName: string; clusterCidr: string }[] = [];
+                const conflicts: { entry: SubnetEntry; clusterName: string; clusterCidr: string }[] = [];
                 for (const entry of entries) {
                   for (const cluster of clusters) {
                     if (cluster.cidr && cidrsOverlap(entry.cidr, cluster.cidr)) {
-                      conflicts.push({
-                        entryLabel: entry.label || entry.cidr,
-                        clusterName: cluster.name,
-                        clusterCidr: cluster.cidr,
-                      });
+                      conflicts.push({ entry, clusterName: cluster.name, clusterCidr: cluster.cidr });
                     }
                   }
                 }
                 if (conflicts.length === 0) return null;
                 return (
-                  <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                  <div className="mt-3">
                     <p className="text-xs font-semibold text-amber-600 inline-flex items-center gap-1.5 mb-2">
                       <AlertTriangle className="w-3.5 h-3.5" />
-                      등록 클러스터 CIDR 겹침
+                      등록 클러스터 CIDR 겹침 — {conflicts.length}건
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
                       {conflicts.map((c, i) => (
-                        <div key={i} className="flex items-center gap-2 text-xs px-2.5 py-1.5 bg-card/80 border border-border rounded-md">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
-                          <span className="font-medium truncate">{c.entryLabel}</span>
-                          <span className="text-muted-foreground/60">↔</span>
-                          <span className="font-medium truncate">{c.clusterName}</span>
-                          <span className="text-muted-foreground font-mono tabular-nums ml-auto">{c.clusterCidr}</span>
-                        </div>
+                        <OverlapPair
+                          key={i}
+                          leftLabel={c.entry.label || c.entry.cidr}
+                          leftCidr={c.entry.cidr}
+                          rightLabel={c.clusterName}
+                          rightCidr={c.clusterCidr}
+                          hue={entryHueMap[c.entry.id] ?? 'amber'}
+                        />
                       ))}
                     </div>
                   </div>
@@ -896,18 +1035,21 @@ export function CidrCalculatorPage() {
                   );
                   if (conflicting.length === 0) return null;
                   return (
-                    <div className="mt-3 p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                    <div className="mt-3">
                       <p className="text-[11px] font-semibold text-amber-600 inline-flex items-center gap-1.5 mb-1.5">
                         <AlertTriangle className="w-3 h-3" />
                         다른 클러스터와 CIDR 겹침
                       </p>
-                      <div className="space-y-1">
+                      <div className="space-y-1.5">
                         {conflicting.map((c) => (
-                          <div key={c.id} className="flex items-center gap-1.5 text-[11px]">
-                            <span className="w-1 h-1 rounded-full bg-amber-500 flex-shrink-0" />
-                            <span className="font-medium truncate">{c.name}</span>
-                            <span className="font-mono tabular-nums text-muted-foreground ml-auto">{c.cidr}</span>
-                          </div>
+                          <OverlapPair
+                            key={c.id}
+                            leftLabel="저장 예정"
+                            leftCidr={currentCidr}
+                            rightLabel={c.name}
+                            rightCidr={c.cidr as string}
+                            hue="amber"
+                          />
                         ))}
                       </div>
                     </div>

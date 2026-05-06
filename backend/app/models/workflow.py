@@ -36,7 +36,9 @@ class WorkflowStep(Base):
     description = Column(Text, nullable=True)
     completed = Column(Boolean, default=False)
     step_type = Column(String(50), default='action', nullable=False)
-    status = Column(String(20), default='idle', nullable=False)
+    # 기획 게시판용 상태 — todo / in-progress / blocked / done / skipped.
+    # (이전 실행엔진 어휘 idle/running/success/failed 는 _run_migrations 에서 자동 매핑됨.)
+    status = Column(String(20), default='todo', nullable=False)
     pos_x = Column(Float, default=100.0)
     pos_y = Column(Float, default=100.0)
     order_index = Column(Integer, default=0)

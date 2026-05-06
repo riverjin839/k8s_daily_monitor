@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2, ArrowUpRight } from 'lucide-react';
+import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2, ArrowUpRight, Cable } from 'lucide-react';
 import type { Cluster, ClusterCustomField } from '@/types';
 import { useUpdateCluster } from '@/hooks/useCluster';
 import { InlineEdit } from '@/components/common';
@@ -22,6 +22,8 @@ interface ClusterTableRowProps {
   /** 노드 IP 만 수집 (diff 다이얼로그 없이 즉시 적용) */
   onCollectNodeIps?: (c: Cluster) => void;
   collectingNodeIpsId?: string | null;
+  /** SSH 기반 NIC 수집(bond0/bond1 채움) 모달 열기 */
+  onCollectNics?: (c: Cluster) => void;
 }
 
 type EditField = null | 'region' | 'operationLevel' | 'cidr' | 'podCidr' | 'svcCidr';
@@ -64,7 +66,7 @@ function EditableCell({
   );
 }
 
-export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onCilium, onAutoUpdate, autoUpdatingId, customFields = [], onCollectNodeIps, collectingNodeIpsId }: ClusterTableRowProps) {
+export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onCilium, onAutoUpdate, autoUpdatingId, customFields = [], onCollectNodeIps, collectingNodeIpsId, onCollectNics }: ClusterTableRowProps) {
   const updateCluster = useUpdateCluster();
   const [editingField, setEditingField] = useState<EditField>(null);
 
@@ -163,9 +165,18 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             placeholder="192.168.0.0/24 (fallback)"
             inputClassName="text-xs font-mono"
           />
-        ) : ipBuckets.internal.groups.length > 0 || cluster.cidr ? (
+        ) : (() => {
+          const manualGroups = (cluster.internalIps ?? '')
+            .split(/[\n,]/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+          const hasAuto = ipBuckets.internal.groups.length > 0;
+          const hasManual = manualGroups.length > 0;
+          const hasContent = hasAuto || hasManual || Boolean(cluster.cidr);
+          if (!hasContent) return <span className="text-muted-foreground/60 text-xs">-</span>;
+          return (
           <div>
-            {ipBuckets.internal.groups.length > 0 ? (
+            {hasAuto ? (
               <div title="kubectl get nodes -o wide 의 InternalIP 들을 /24 단위로 묶은 표기 (마지막 옥텟 연속 구간 압축)">
                 {ipBuckets.internal.groups.slice(0, 3).map((g, i) => (
                   <p key={i} className="text-xs font-mono text-foreground tabular-nums">{g}</p>
@@ -177,8 +188,18 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
                   {ipBuckets.internal.ips.length}개 노드
                 </p>
               </div>
+            ) : hasManual ? (
+              <div title="수동 입력된 IP 리스트 (정규식)">
+                {manualGroups.slice(0, 3).map((g, i) => (
+                  <p key={i} className="text-xs font-mono text-foreground tabular-nums">{g}</p>
+                ))}
+                {manualGroups.length > 3 && (
+                  <p className="text-[10px] font-mono text-muted-foreground">+{manualGroups.length - 3}개 그룹</p>
+                )}
+                <p className="text-[10px] text-muted-foreground/80 mt-0.5">수동 입력 (정규식)</p>
+              </div>
             ) : (
-              <p className="text-xs font-mono text-muted-foreground" title="nodeIps 미수집 — 수동 입력된 fallback CIDR">
+              <p className="text-xs font-mono text-muted-foreground" title="nodeIps / internalIps 미입력 — fallback CIDR">
                 <span className="text-muted-foreground/60 text-[10px] mr-1">fallback</span>
                 <span className="text-foreground">{cluster.cidr}</span>
               </p>
@@ -201,7 +222,8 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
               )}
             </div>
           </div>
-        ) : <span className="text-muted-foreground/60 text-xs">-</span>}
+          );
+        })()}
       </EditableCell>
 
       {/* bond0 — 모든 노드 bond0 IP 들 정규식/Glob 그룹화 */}
@@ -460,6 +482,13 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
               : <RefreshCw className="w-3.5 h-3.5" />}
           </button>
+          {onCollectNics && (
+            <button onClick={() => onCollectNics(cluster)}
+              className="p-1.5 hover:bg-primary/10 rounded text-muted-foreground hover:text-primary transition-colors"
+              title="NIC 수집 (SSH 기반) — bond0/bond1 IP/MAC 채움. kubectl 만으로는 인터페이스 이름을 알 수 없어 별도 SSH 수집 필요">
+              <Cable className="w-3.5 h-3.5" />
+            </button>
+          )}
           <button onClick={() => onEdit(cluster)}
             className="p-1.5 hover:bg-secondary rounded text-muted-foreground hover:text-foreground transition-colors"
             title="전체 수정 — 이름/지역/운영레벨/메타데이터 등 폼 페이지로 이동">

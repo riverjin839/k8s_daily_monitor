@@ -93,6 +93,7 @@ def _run_migrations():
             ("max_pod", "INTEGER"),
             ("cilium_config", "TEXT"),
             ("cidr", "VARCHAR(255)"),
+            ("internal_ips", "TEXT"),
             ("first_host", "VARCHAR(100)"),
             ("last_host", "VARCHAR(100)"),
             ("description", "TEXT"),
@@ -213,6 +214,18 @@ def _run_migrations():
             if col_name not in wf_step_cols:
                 with engine.begin() as conn:
                     conn.execute(text(f"ALTER TABLE workflow_steps ADD COLUMN {col_name} {col_type}"))
+        # 상태 어휘 변경 — 실행엔진(idle/running/success/failed) → 기획 게시판(todo/in-progress/blocked/done).
+        # 기존 데이터를 새 값으로 한 번만 매핑. 이미 매핑됐으면 no-op.
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE workflow_steps SET status = CASE status "
+                "  WHEN 'idle' THEN 'todo' "
+                "  WHEN 'running' THEN 'in-progress' "
+                "  WHEN 'success' THEN 'done' "
+                "  WHEN 'failed' THEN 'blocked' "
+                "  ELSE status END "
+                "WHERE status IN ('idle','running','success','failed')"
+            ))
     # tasks: Date → DateTime 마이그레이션 + 칸반 보드 필드 추가
     if "tasks" in inspector.get_table_names():
         task_col_map = {col["name"]: col["type"].__class__.__name__ for col in inspector.get_columns("tasks")}

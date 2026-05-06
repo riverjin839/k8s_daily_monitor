@@ -77,6 +77,7 @@ class NodeImageService:
                     "status": self._status_from_node(node),
                     "image_count": len(images),
                     "total_size_bytes": total,
+                    "labels": dict(labels),
                     "images": images,
                 }
             )

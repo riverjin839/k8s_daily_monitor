@@ -40,6 +40,8 @@ function filterImages(node: NodeImagesInfo, q: string): NodeImagesInfo['images']
   return node.images.filter((img) => img.names.some((n) => n.toLowerCase().includes(lower)));
 }
 
+export { formatBytes, pickPrimaryName };
+
 export function NodeImagesTable({ nodes, searchQuery }: Props) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -122,9 +124,11 @@ function RowGroup({
         <td className="px-4 py-3 align-middle">
           <StatusBadge status={node.status} />
         </td>
-        <td className="px-4 py-3 align-middle text-right tabular-nums">{node.image_count}</td>
         <td className="px-4 py-3 align-middle text-right tabular-nums">
-          {formatBytes(node.total_size_bytes)}
+          <span className="font-semibold text-foreground">{node.imageCount.toLocaleString()}</span>
+        </td>
+        <td className="px-4 py-3 align-middle text-right tabular-nums">
+          {formatBytes(node.totalSizeBytes)}
         </td>
       </tr>
       {isOpen && (
@@ -180,7 +184,7 @@ function ImageList({ images }: { images: NodeImagesInfo['images'] }) {
                   </div>
                 </div>
               </td>
-              <td className="py-1.5 text-right tabular-nums">{formatBytes(img.size_bytes)}</td>
+              <td className="py-1.5 text-right tabular-nums">{formatBytes(img.sizeBytes)}</td>
             </tr>
           ))}
         </tbody>

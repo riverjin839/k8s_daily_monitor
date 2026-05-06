@@ -19,6 +19,7 @@ import {
   ClusterCustomFieldsManager,
   type DiffRow,
 } from '@/components/cluster-manage';
+import { NodeNicsCollectModal } from '@/components/versions';
 import { useOperationLevels, levelLabel } from '@/hooks/useOperationLevels';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { ResizeGrip } from '@/components/common';
@@ -90,6 +91,9 @@ export function ClusterManagePage() {
   const [applyingId, setApplyingId]       = useState<string | null>(null);
   const [collectingNodeIpsId, setCollectingNodeIpsId] = useState<string | null>(null);
   const [bulkCollecting, setBulkCollecting] = useState(false);
+  // SSH 기반 NIC 수집 모달 — bond0/bond1 IP/MAC 채우기 위한 진입점.
+  // kubectl 자동수집(auto-update)은 인터페이스 이름을 알 수 없어 별도 SSH 수집이 필요하다.
+  const [nicsClusterId, setNicsClusterId] = useState<string | null>(null);
 
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
@@ -573,6 +577,7 @@ export function ClusterManagePage() {
                           customFields={customFields}
                           onCollectNodeIps={collectNodeIps}
                           collectingNodeIpsId={collectingNodeIpsId}
+                          onCollectNics={(c) => setNicsClusterId(c.id)}
                         />,
                       );
                     }
@@ -609,6 +614,7 @@ export function ClusterManagePage() {
                           overlapGroupIdx={cidrOverlapGroups.get(cluster.id)}
                           onAutoUpdate={handleAutoUpdate}
                           autoUpdatingId={autoUpdatingId}
+                          onCollectNics={(c) => setNicsClusterId(c.id)}
                         />
                       ))}
                     </div>
@@ -645,6 +651,19 @@ export function ClusterManagePage() {
         open={customFieldsOpen}
         onClose={() => setCustomFieldsOpen(false)}
       />
+
+      {nicsClusterId && (
+        <NodeNicsCollectModal
+          open
+          clusterId={nicsClusterId}
+          onClose={() => {
+            setNicsClusterId(null);
+            // SSH 수집이 cluster.node_ips 의 interfaces[] 를 갱신했을 수 있으므로
+            // 즉시 캐시 무효화 — bond0/bond1 컬럼이 곧바로 채워지게 한다.
+            queryClient.invalidateQueries({ queryKey: ['clusters'] });
+          }}
+        />
+      )}
     </div>
   );
 }

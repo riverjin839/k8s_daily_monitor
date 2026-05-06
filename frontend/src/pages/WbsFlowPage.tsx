@@ -4,9 +4,11 @@ import { tasksApi, issuesApi } from '@/services/api';
 import type { Task, Issue } from '@/types';
 import {
   ChevronLeft, ChevronRight, Calendar, Users, Filter,
-  CheckCircle2, Clock, AlertCircle, Circle, BarChart3,
+  CheckCircle2, Clock, AlertCircle, Circle, BarChart3, X,
+  ListChecks, Activity,
 } from 'lucide-react';
 import { ViewModeBar } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { stripHtml } from '@/lib/utils';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -35,21 +37,21 @@ const KANBAN_LABEL: Record<string, string> = {
   review_test: '검토', done: '완료',
 };
 const PRIORITY_COLOR: Record<string, string> = {
-  high: 'bg-red-500/20 text-red-400 border-red-500/30',
-  medium: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  low: 'bg-green-500/20 text-green-400 border-green-500/30',
+  high:   'bg-red-500/15 text-red-600 dark:text-red-300 border-red-500/25',
+  medium: 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/25',
+  low:    'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/25',
 };
 const MODULE_COLOR: Record<string, string> = {
-  k8s: 'bg-blue-500/20 text-blue-400',
-  keycloak: 'bg-purple-500/20 text-purple-400',
-  nexus: 'bg-orange-500/20 text-orange-400',
-  cilium: 'bg-cyan-500/20 text-cyan-400',
-  argocd: 'bg-green-500/20 text-green-400',
-  jenkins: 'bg-red-500/20 text-red-400',
-  backend: 'bg-indigo-500/20 text-indigo-400',
-  frontend: 'bg-pink-500/20 text-pink-400',
-  monitoring: 'bg-teal-500/20 text-teal-400',
-  infra: 'bg-slate-500/20 text-slate-400',
+  k8s:        'bg-sky-500/15 text-sky-600 dark:text-sky-300',
+  keycloak:   'bg-purple-500/15 text-purple-600 dark:text-purple-300',
+  nexus:      'bg-orange-500/15 text-orange-600 dark:text-orange-300',
+  cilium:     'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300',
+  argocd:     'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300',
+  jenkins:    'bg-red-500/15 text-red-600 dark:text-red-300',
+  backend:    'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300',
+  frontend:   'bg-pink-500/15 text-pink-600 dark:text-pink-300',
+  monitoring: 'bg-teal-500/15 text-teal-600 dark:text-teal-300',
+  infra:      'bg-slate-500/15 text-slate-600 dark:text-slate-300',
 };
 
 // ── types ─────────────────────────────────────────────────────────────────────
@@ -82,30 +84,33 @@ interface AssigneeRow {
 function StatusIcon({ status, type }: { status: string; type: 'task' | 'issue' }) {
   if (type === 'issue') {
     return status === 'resolved'
-      ? <CheckCircle2 className="w-3 h-3 text-green-400 flex-shrink-0" />
-      : <AlertCircle className="w-3 h-3 text-red-400 flex-shrink-0" />;
+      ? <CheckCircle2 className="w-3 h-3 text-emerald-500 flex-shrink-0" />
+      : <AlertCircle className="w-3 h-3 text-red-500 flex-shrink-0" />;
   }
   const icons: Record<string, JSX.Element> = {
-    done: <CheckCircle2 className="w-3 h-3 text-green-400 flex-shrink-0" />,
-    in_progress: <Clock className="w-3 h-3 text-blue-400 flex-shrink-0" />,
-    review_test: <Clock className="w-3 h-3 text-yellow-400 flex-shrink-0" />,
-    todo: <Circle className="w-3 h-3 text-gray-400 flex-shrink-0" />,
-    backlog: <Circle className="w-3 h-3 text-gray-500 flex-shrink-0" />,
+    done:        <CheckCircle2 className="w-3 h-3 text-emerald-500 flex-shrink-0" />,
+    in_progress: <Clock className="w-3 h-3 text-sky-500 flex-shrink-0" />,
+    review_test: <Clock className="w-3 h-3 text-amber-500 flex-shrink-0" />,
+    todo:        <Circle className="w-3 h-3 text-muted-foreground flex-shrink-0" />,
+    backlog:     <Circle className="w-3 h-3 text-muted-foreground/60 flex-shrink-0" />,
   };
-  return icons[status] ?? <Circle className="w-3 h-3 text-gray-400 flex-shrink-0" />;
+  return icons[status] ?? <Circle className="w-3 h-3 text-muted-foreground flex-shrink-0" />;
 }
 
 function ItemCard({ item, onClick }: { item: DayItem; onClick: () => void }) {
   const isIssue = item.type === 'issue';
   const base = isIssue
-    ? (item.resolved ? 'border-l-green-500 bg-green-500/5' : 'border-l-orange-500 bg-orange-500/5')
-    : item.isSubTask ? 'border-l-indigo-400 bg-indigo-500/5 opacity-90'
-    : 'border-l-blue-500 bg-blue-500/5';
+    ? (item.resolved
+        ? 'border-l-emerald-500 bg-emerald-500/5'
+        : 'border-l-orange-500 bg-orange-500/5')
+    : item.isSubTask
+      ? 'border-l-indigo-400 bg-indigo-500/5 opacity-90'
+      : 'border-l-sky-500 bg-sky-500/5';
 
   return (
-    <div
+    <button
       onClick={onClick}
-      className={`border-l-2 ${base} rounded-r px-2 py-1 cursor-pointer hover:opacity-80 transition-opacity text-left ${item.isSubTask ? 'ml-2' : ''}`}
+      className={`w-full border-l-[3px] ${base} rounded-r-md px-2 py-1 cursor-pointer hover:bg-secondary/40 hover:shadow-sm transition-all text-left ${item.isSubTask ? 'ml-2' : ''}`}
     >
       <div className="flex items-center gap-1 min-w-0">
         <StatusIcon status={isIssue ? (item.resolved ? 'resolved' : 'open') : item.status} type={item.type} />
@@ -116,22 +121,22 @@ function ItemCard({ item, onClick }: { item: DayItem; onClick: () => void }) {
       )}
       <div className="flex items-center gap-1 mt-0.5 pl-4 flex-wrap">
         {item.module && (
-          <span className={`text-[9px] px-1 rounded ${MODULE_COLOR[item.module] ?? 'bg-secondary text-muted-foreground'}`}>
+          <span className={`text-[9px] px-1 rounded-md ${MODULE_COLOR[item.module] ?? 'bg-secondary text-muted-foreground'}`}>
             {item.module}
           </span>
         )}
         {item.priority && (
-          <span className={`text-[9px] px-1 rounded border ${PRIORITY_COLOR[item.priority] ?? ''}`}>
+          <span className={`text-[9px] px-1 rounded-md border ${PRIORITY_COLOR[item.priority] ?? ''}`}>
             {item.priority}
           </span>
         )}
         {isIssue && (
-          <span className={`text-[9px] px-1 rounded ${item.resolved ? 'bg-green-500/20 text-green-400' : 'bg-orange-500/20 text-orange-400'}`}>
+          <span className={`text-[9px] px-1 rounded-md ${item.resolved ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300' : 'bg-orange-500/15 text-orange-600 dark:text-orange-300'}`}>
             {item.resolved ? '해결' : '미해결'}
           </span>
         )}
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -141,32 +146,52 @@ function DetailModal({ item, onClose }: { item: DayItem; onClose: () => void }) 
   const isIssue = item.type === 'issue';
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-xl p-5 w-full max-w-md shadow-xl">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-card border border-border rounded-2xl p-5 w-full max-w-md mac-shadow">
         <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isIssue ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'}`}>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${isIssue ? 'bg-orange-500/15 text-orange-600 dark:text-orange-300' : 'bg-sky-500/15 text-sky-600 dark:text-sky-300'}`}>
               {isIssue ? '이슈' : '작업'}
             </span>
             {item.module && (
-              <span className={`text-xs px-2 py-0.5 rounded-full ${MODULE_COLOR[item.module] ?? 'bg-secondary text-muted-foreground'}`}>
+              <span className={`text-[11px] px-2 py-0.5 rounded-full ${MODULE_COLOR[item.module] ?? 'bg-secondary text-muted-foreground'}`}>
                 {item.module}
               </span>
             )}
+            {item.priority && (
+              <span className={`text-[11px] px-2 py-0.5 rounded-full border ${PRIORITY_COLOR[item.priority] ?? ''}`}>
+                {item.priority}
+              </span>
+            )}
           </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-lg leading-none">×</button>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="닫기"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
-        <h3 className="text-sm font-semibold mb-1">{item.label}</h3>
-        {item.sub && <p className="text-sm text-muted-foreground mb-3">{item.sub}</p>}
-        <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-          <div><span className="font-medium">시작일:</span> {item.startDate}</div>
-          {item.endDate && <div><span className="font-medium">완료일:</span> {item.endDate}</div>}
-          {item.priority && <div><span className="font-medium">우선순위:</span> {item.priority}</div>}
-          <div>
-            <span className="font-medium">상태:</span>{' '}
-            {isIssue ? (item.resolved ? '해결' : '미해결') : (KANBAN_LABEL[item.status] ?? item.status)}
+        <h3 className="text-base font-semibold leading-snug mb-1">{stripHtml(item.label)}</h3>
+        {item.sub && <p className="text-sm text-muted-foreground mb-4">{item.sub}</p>}
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+          <div className="rounded-lg bg-secondary/40 px-3 py-2">
+            <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">시작일</dt>
+            <dd className="font-medium tabular-nums">{item.startDate || '-'}</dd>
           </div>
-        </div>
+          {item.endDate && (
+            <div className="rounded-lg bg-secondary/40 px-3 py-2">
+              <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">완료일</dt>
+              <dd className="font-medium tabular-nums">{item.endDate}</dd>
+            </div>
+          )}
+          <div className="rounded-lg bg-secondary/40 px-3 py-2">
+            <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">상태</dt>
+            <dd className="font-medium">
+              {isIssue ? (item.resolved ? '해결' : '미해결') : (KANBAN_LABEL[item.status] ?? item.status)}
+            </dd>
+          </div>
+        </dl>
       </div>
     </div>
   );
@@ -192,35 +217,104 @@ function SummaryBar({ tasks, issues }: { tasks: Task[]; issues: Issue[] }) {
     open: issues.filter(i => !i.resolvedAt).length,
   }), [issues]);
 
+  const taskProgress = taskCounts.total > 0 ? Math.round((taskCounts.done / taskCounts.total) * 100) : 0;
+
   return (
-    <div className="flex items-center gap-4 px-4 py-2 border-b border-border bg-card text-xs">
-      <div className="flex items-center gap-1.5 text-muted-foreground">
-        <BarChart3 className="w-3.5 h-3.5" />
-        <span className="font-medium">요약</span>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className="text-muted-foreground">작업 {taskCounts.total}건</span>
-        <span className="text-green-400">완료 {taskCounts.done}</span>
-        <span className="text-blue-400">진행중 {taskCounts.in_progress}</span>
-        <span className="text-gray-400">대기 {taskCounts.todo + taskCounts.backlog}</span>
-      </div>
-      <div className="w-px h-4 bg-border" />
-      <div className="flex items-center gap-3">
-        <span className="text-muted-foreground">이슈 {issueCounts.total}건</span>
-        <span className="text-green-400">해결 {issueCounts.resolved}</span>
-        <span className="text-red-400">미해결 {issueCounts.open}</span>
-      </div>
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <SummaryStat
+        icon={<ListChecks className="w-4 h-4" />}
+        label="작업"
+        value={taskCounts.total}
+        breakdown={
+          <>
+            <Chip color="emerald">완료 {taskCounts.done}</Chip>
+            <Chip color="sky">진행 {taskCounts.in_progress}</Chip>
+            <Chip color="slate">대기 {taskCounts.todo + taskCounts.backlog}</Chip>
+          </>
+        }
+      />
+      <SummaryStat
+        icon={<BarChart3 className="w-4 h-4" />}
+        label="작업 진행률"
+        value={`${taskProgress}%`}
+        accent="text-primary"
+        progress={taskProgress}
+      />
+      <SummaryStat
+        icon={<Activity className="w-4 h-4" />}
+        label="이슈"
+        value={issueCounts.total}
+        breakdown={
+          <>
+            <Chip color="emerald">해결 {issueCounts.resolved}</Chip>
+            <Chip color="red">미해결 {issueCounts.open}</Chip>
+          </>
+        }
+      />
+      <SummaryStat
+        icon={<CheckCircle2 className="w-4 h-4" />}
+        label="이슈 해결률"
+        value={`${issueCounts.total > 0 ? Math.round((issueCounts.resolved / issueCounts.total) * 100) : 0}%`}
+        accent="text-emerald-500"
+        progress={issueCounts.total > 0 ? Math.round((issueCounts.resolved / issueCounts.total) * 100) : 0}
+      />
     </div>
+  );
+}
+
+interface SummaryStatProps {
+  icon: React.ReactNode;
+  label: string;
+  value: number | string;
+  accent?: string;
+  breakdown?: React.ReactNode;
+  progress?: number;
+}
+
+function SummaryStat({ icon, label, value, accent = 'text-foreground', breakdown, progress }: SummaryStatProps) {
+  return (
+    <div className="rounded-2xl border border-border bg-card px-4 py-3">
+      <div className="flex items-center gap-3">
+        <div className={`w-9 h-9 rounded-xl bg-secondary flex items-center justify-center ${accent}`}>
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] text-muted-foreground">{label}</p>
+          <p className={`text-lg font-bold leading-tight ${accent}`}>{value}</p>
+        </div>
+      </div>
+      {breakdown && <div className="flex items-center gap-1.5 mt-2 flex-wrap">{breakdown}</div>}
+      {progress != null && (
+        <div className="h-1.5 mt-2 rounded-full bg-secondary overflow-hidden">
+          <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress}%` }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+const CHIP_COLOR: Record<string, string> = {
+  emerald: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300',
+  sky:     'bg-sky-500/15 text-sky-600 dark:text-sky-300',
+  slate:   'bg-slate-500/15 text-slate-600 dark:text-slate-300',
+  red:     'bg-red-500/15 text-red-600 dark:text-red-300',
+};
+
+function Chip({ color, children }: { color: keyof typeof CHIP_COLOR | string; children: React.ReactNode }) {
+  return (
+    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md ${CHIP_COLOR[color] ?? CHIP_COLOR.slate}`}>
+      {children}
+    </span>
   );
 }
 
 // ── 개인별 Gantt 보기 ──────────────────────────────────────────────────────────
 const STATUS_CELL: Record<string, string> = {
-  done: 'bg-green-500/40 border-green-500/50',
-  in_progress: 'bg-blue-500/50 border-blue-500/60',
-  review_test: 'bg-yellow-500/40 border-yellow-500/50',
-  todo: 'bg-primary/25 border-primary/30',
-  backlog: 'bg-secondary border-border',
+  done:        'bg-emerald-500/30 border-emerald-500/50',
+  in_progress: 'bg-sky-500/40 border-sky-500/55',
+  review_test: 'bg-amber-500/30 border-amber-500/50',
+  todo:        'bg-primary/20 border-primary/30',
+  backlog:     'bg-secondary border-border',
 };
 
 function PersonalGanttView({
@@ -576,135 +670,160 @@ export function WbsFlowPage() {
   const COL_W = viewMode === 'month' ? 80 : 110;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-border bg-card">
-        <div className="flex items-center gap-3 mb-3">
-          <BarChart3 className="w-5 h-5 text-primary" />
-          <h1 className="text-lg font-semibold">WBS 작업 흐름</h1>
-          <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
-            담당자별 역할 · 날짜별 업무 현황
-          </span>
+    <div className="min-h-screen bg-background">
+      <main className="mx-auto px-4 lg:px-6 py-5 space-y-4 max-w-[1800px]">
+        {/* ── Page header ─────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <BarChart3 className="w-5 h-5 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold leading-tight">WBS 작업 흐름</h1>
+              <p className="text-xs text-muted-foreground">담당자별 역할 · 날짜별 업무 현황</p>
+            </div>
+          </div>
           {/* 보기 모드 토글 */}
-          <div className="flex items-center gap-0.5 bg-secondary rounded-lg p-0.5 text-xs ml-2">
+          <div className="flex items-center gap-0.5 bg-secondary rounded-xl p-0.5 text-xs">
             <button
               onClick={() => setPageView('grid')}
-              className={`px-3 py-1.5 rounded-md font-medium transition-colors ${pageView === 'grid' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`px-3.5 py-1.5 rounded-lg font-medium transition-colors ${pageView === 'grid' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
             >
-              전체
+              전체 그리드
             </button>
             <button
               onClick={() => setPageView('personal')}
-              className={`px-3 py-1.5 rounded-md font-medium transition-colors ${pageView === 'personal' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`px-3.5 py-1.5 rounded-lg font-medium transition-colors ${pageView === 'personal' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
             >
-              개인별
+              개인별 간트
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Date navigation */}
-          <div className="flex items-center gap-1 bg-secondary rounded-lg p-0.5">
-            <button onClick={movePrev}
-              className="p-1.5 hover:bg-card rounded-md text-muted-foreground hover:text-foreground transition-colors">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button onClick={moveToday}
-              className="px-3 py-1 text-xs font-medium hover:bg-card rounded-md text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5" />
-              {startStr} ~ {endStr}
-            </button>
-            <button onClick={moveNext}
-              className="p-1.5 hover:bg-card rounded-md text-muted-foreground hover:text-foreground transition-colors">
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+        {/* ── Summary cards ───────────────────────────────────────────── */}
+        <SummaryBar tasks={tasks} issues={issues} />
 
-          {/* View mode */}
-          <ViewModeBar
-            modes={[
-              { id: 'week',    label: '1주' },
-              { id: 'twoWeek', label: '2주' },
-              { id: 'month',   label: '1달' },
-            ]}
-            active={viewMode}
-            onChange={(v) => setViewMode(v as ViewMode)}
-            showStylePanel={false}
-          />
-
-          {/* 개인별 보기: 담당자 선택 */}
-          {pageView === 'personal' && (
-            <div className="flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5 text-primary" />
-              <select
-                value={personalAssignee}
-                onChange={e => setPersonalAssignee(e.target.value)}
-                className="text-xs bg-secondary border border-primary/30 rounded-lg px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+        {/* ── Toolbar ─────────────────────────────────────────────────── */}
+        <MacCard bodyPadding="p-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Date nav */}
+            <div className="flex items-center gap-0.5 bg-secondary rounded-xl p-0.5">
+              <button
+                onClick={movePrev}
+                className="p-1.5 hover:bg-card rounded-lg text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="이전 기간"
               >
-                <option value="">담당자 선택...</option>
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={moveToday}
+                className="px-3 py-1 text-xs font-medium hover:bg-card rounded-lg text-foreground transition-colors flex items-center gap-1.5 tabular-nums"
+              >
+                <Calendar className="w-3.5 h-3.5 text-primary" />
+                {startStr} <span className="text-muted-foreground">~</span> {endStr}
+              </button>
+              <button
+                onClick={moveNext}
+                className="p-1.5 hover:bg-card rounded-lg text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="다음 기간"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            <ViewModeBar
+              modes={[
+                { id: 'week',    label: '1주' },
+                { id: 'twoWeek', label: '2주' },
+                { id: 'month',   label: '1달' },
+              ]}
+              active={viewMode}
+              onChange={(v) => setViewMode(v as ViewMode)}
+              showStylePanel={false}
+            />
+
+            {pageView === 'personal' && (
+              <div className="flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-primary" />
+                <select
+                  value={personalAssignee}
+                  onChange={e => setPersonalAssignee(e.target.value)}
+                  className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  <option value="">담당자 선택…</option>
+                  {allAssignees.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+            )}
+
+            <div className="flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+              <select
+                value={filterAssignee}
+                onChange={e => setFilterAssignee(e.target.value)}
+                className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                <option value="">전체 담당자</option>
                 {allAssignees.map(a => <option key={a} value={a}>{a}</option>)}
               </select>
             </div>
-          )}
 
-          {/* Assignee filter */}
-          <div className="flex items-center gap-1.5">
-            <Filter className="w-3.5 h-3.5 text-muted-foreground" />
-            <select
-              value={filterAssignee}
-              onChange={e => setFilterAssignee(e.target.value)}
-              className="text-xs bg-secondary border border-border rounded-lg px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="">전체 담당자</option>
-              {allAssignees.map(a => <option key={a} value={a}>{a}</option>)}
-            </select>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none px-2.5 py-1.5 rounded-xl border border-border hover:bg-secondary/40 transition-colors">
+              <input
+                type="checkbox"
+                checked={showOnlyActive}
+                onChange={e => setShowOnlyActive(e.target.checked)}
+                className="accent-primary"
+              />
+              진행중만
+            </label>
+
+            <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+              <Users className="w-3.5 h-3.5" />
+              <span className="tabular-nums">{filteredRows.length}명</span>
+              <span>·</span>
+              <span className="tabular-nums">{totalItems}건</span>
+            </div>
           </div>
+        </MacCard>
 
-          {/* Active only toggle */}
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
-            <input type="checkbox" checked={showOnlyActive} onChange={e => setShowOnlyActive(e.target.checked)}
-              className="accent-primary" />
-            진행중만 보기
-          </label>
-
-          <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-            <Users className="w-3.5 h-3.5" />
-            <span>{filteredRows.length}명</span>
-            <span>·</span>
-            <span>{totalItems}건</span>
-          </div>
-        </div>
-      </div>
-
-      <SummaryBar tasks={tasks} issues={issues} />
-
-      {/* 개인별 보기 */}
-      {pageView === 'personal' ? (
-        personalAssignee ? (
-          <PersonalGanttView
-            assignee={personalAssignee}
-            tasks={tasks}
-            issues={issues}
-            dates={dates}
-            todayStr={todayStr}
-            onItemClick={setSelectedItem}
-          />
+        {/* ── Body ────────────────────────────────────────────────────── */}
+        <MacCard
+          bodyPadding="p-0"
+          className="overflow-hidden"
+          title={pageView === 'personal'
+            ? (personalAssignee ? `${personalAssignee} 의 간트` : '개인별 간트')
+            : `담당자 그리드 · ${dayCount}일`}
+        >
+        {pageView === 'personal' ? (
+          personalAssignee ? (
+            <PersonalGanttView
+              assignee={personalAssignee}
+              tasks={tasks}
+              issues={issues}
+              dates={dates}
+              todayStr={todayStr}
+              onItemClick={setSelectedItem}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+              <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center mb-3">
+                <Users className="w-7 h-7 opacity-50" />
+              </div>
+              <p className="text-sm">상단에서 담당자를 선택하세요.</p>
+            </div>
+          )
         ) : (
-          <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
-            <Users className="w-12 h-12 mb-3 opacity-30" />
-            <p className="text-sm">왼쪽에서 담당자를 선택하세요.</p>
-          </div>
-        )
-      ) : (
-      /* Grid */
-      <div className="flex-1 overflow-auto">
-        {filteredRows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
-            <Users className="w-12 h-12 mb-3 opacity-30" />
-            <p className="text-sm">이 기간에 해당하는 작업/이슈가 없습니다.</p>
-          </div>
-        ) : (
-          <table className="border-collapse min-w-full text-xs">
+          <div className="overflow-auto">
+            {filteredRows.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+                <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center mb-3">
+                  <Users className="w-7 h-7 opacity-50" />
+                </div>
+                <p className="text-sm">이 기간에 해당하는 작업/이슈가 없습니다.</p>
+              </div>
+            ) : (
+              <table className="border-collapse min-w-full text-xs">
             <thead className="sticky top-0 z-20 bg-card">
               <tr>
                 {/* Assignee header */}
@@ -784,22 +903,24 @@ export function WbsFlowPage() {
                   </tr>
                 );
               })}
-            </tbody>
-          </table>
+                </tbody>
+              </table>
+            )}
+          </div>
         )}
-      </div>
-      )}
+        </MacCard>
 
-      {/* Legend */}
-      <div className="px-4 py-2 border-t border-border bg-card flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
-        <span className="font-medium">범례:</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-blue-500/30 inline-block" /> 작업 (Tasks)</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-orange-500/30 inline-block" /> 이슈 (Issues)</span>
-        <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-400" /> 완료/해결</span>
-        <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-blue-400" /> 진행중</span>
-        <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-red-400" /> 미해결</span>
-        <span className="ml-auto text-[10px]">클릭 시 상세 정보</span>
-      </div>
+        {/* ── Legend ──────────────────────────────────────────────────── */}
+        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap px-1">
+          <span className="font-medium">범례:</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-sky-500/30 inline-block" /> 작업</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-orange-500/30 inline-block" /> 이슈</span>
+          <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-emerald-500" /> 완료/해결</span>
+          <span className="flex items-center gap-1"><Clock className="w-3 h-3 text-sky-500" /> 진행중</span>
+          <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-red-500" /> 미해결</span>
+          <span className="ml-auto text-[10px]">클릭 시 상세 정보</span>
+        </div>
+      </main>
 
       {selectedItem && (
         <DetailModal item={selectedItem} onClose={() => setSelectedItem(null)} />

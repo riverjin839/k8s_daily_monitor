@@ -30,7 +30,7 @@ export function Header({ onRunCheck, onSettings }: HeaderProps) {
           >
             ☸
           </div>
-          <span className="font-semibold text-lg">K8s Daily Monitor</span>
+          <span className="font-semibold text-lg">DEVOPS MANAGEMENT</span>
         </div>
 
         {/* Navigation */}

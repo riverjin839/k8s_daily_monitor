@@ -1,4 +1,4 @@
-# CLAUDE.md — K8s Daily Monitor
+# CLAUDE.md — DEVOPS MANAGEMENT
 
 This file provides essential context for AI assistants (Claude and others) working on this codebase.
 
@@ -6,7 +6,7 @@ This file provides essential context for AI assistants (Claude and others) worki
 
 ## Project Overview
 
-**K8s Daily Monitor** is a DevOps-focused Kubernetes cluster health monitoring dashboard. It performs automated daily health checks at 09:00, 13:00, and 18:00 KST across multiple clusters and surfaces results in a React dashboard.
+**DEVOPS MANAGEMENT** (originally "K8s Daily Monitor") is a DevOps-focused Kubernetes cluster health monitoring dashboard. It performs automated daily health checks at 09:00, 13:00, and 18:00 KST across multiple clusters and surfaces results in a React dashboard.
 
 Core capabilities:
 - Multi-cluster management (add, remove, check any Kubernetes cluster)

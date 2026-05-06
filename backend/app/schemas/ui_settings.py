@@ -18,7 +18,7 @@ class ServiceCatalogItem(BaseModel):
 
 
 class UiSettingsResponse(BaseModel):
-    app_title: str = "K8s Daily Monitor"
+    app_title: str = "DEVOPS MANAGEMENT"
     nav_labels: dict[str, str] = Field(default_factory=dict)
     service_catalog: list[ServiceCatalogItem] | None = None
 

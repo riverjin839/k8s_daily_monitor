@@ -1,4 +1,4 @@
-# K8s Daily Monitor 관리자(Admin) 매뉴얼
+# DEVOPS MANAGEMENT 관리자(Admin) 매뉴얼
 
 > 대상: Kubernetes 운영 담당자 / 플랫폼 관리자  
 > 목적: 시스템 설치 후 **일상 운영, 점검, 장애 대응, 백업/복구**를 표준화
@@ -7,7 +7,7 @@
 
 ## 1. 관리자 역할과 책임
 
-K8s Daily Monitor 관리자는 아래 업무를 수행합니다.
+DEVOPS MANAGEMENT 관리자는 아래 업무를 수행합니다.
 
 - 클러스터 등록/수정/삭제 및 접속 정보(kubeconfig, API endpoint) 관리
 - 일일 점검 스케줄(아침/점심/저녁) 운영 및 결과 모니터링
@@ -19,7 +19,7 @@ K8s Daily Monitor 관리자는 아래 업무를 수행합니다.
 
 ## 2. 시스템 구성 요약
 
-K8s Daily Monitor는 다음 구성요소로 동작합니다.
+DEVOPS MANAGEMENT는 다음 구성요소로 동작합니다.
 
 - **Frontend**: React 기반 운영 대시보드 (NodePort: `30080` 기본)
 - **Backend**: FastAPI 기반 API 서버 (NodePort: `30800` 기본)

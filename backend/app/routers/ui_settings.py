@@ -33,9 +33,14 @@ DEFAULT_OPERATION_LEVELS = {
 
 
 DEFAULT_UI_SETTINGS = {
-    "app_title": "K8s Daily Monitor",
+    "app_title": "DEVOPS MANAGEMENT",
     "nav_labels": {},
 }
+
+# Old default values that should auto-migrate to the current default. If a row's
+# value matches one of these (i.e., user never customized the title), the GET
+# endpoint substitutes the new default instead of returning the stale brand.
+LEGACY_APP_TITLES = {"K8s Daily Monitor"}
 
 DEFAULT_CLUSTER_LINKS = {
     "common_links": [],
@@ -59,8 +64,16 @@ def _get_or_create(db: Session, key: str, default_value: dict):
 def get_ui_settings(db: Session = Depends(get_db)):
     setting = _get_or_create(db, UI_SETTINGS_KEY, DEFAULT_UI_SETTINGS)
     value = setting.value or {}
+    stored_title = value.get("app_title", DEFAULT_UI_SETTINGS["app_title"])
+    # Auto-rebrand: if the row still holds a legacy default (user never set
+    # a custom title), persist the new default so the UI reflects it
+    # consistently across reloads.
+    if stored_title in LEGACY_APP_TITLES:
+        stored_title = DEFAULT_UI_SETTINGS["app_title"]
+        setting.value = {**(setting.value or {}), "app_title": stored_title}
+        db.commit()
     return UiSettingsResponse(
-        app_title=value.get("app_title", DEFAULT_UI_SETTINGS["app_title"]),
+        app_title=stored_title,
         nav_labels=value.get("nav_labels", {}),
         service_catalog=value.get("service_catalog"),
     )

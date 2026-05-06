@@ -36,8 +36,9 @@ import { OntologyPage } from '@/pages/OntologyPage';
 import { TrendDigestPage } from '@/pages/TrendDigestPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar } from '@/components/layout';
-import { useSidebarStore } from '@/stores/sidebarStore';
+import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { ToastProvider } from '@/components/common';
+import { AuthGate } from '@/components/auth/AuthGate';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -49,13 +50,12 @@ const queryClient = new QueryClient({
 });
 
 function AppShell() {
-  const navWidth = useSidebarStore((s) => s.navWidth);
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
       <div
         className="flex-1 min-w-0"
-        style={{ marginLeft: navWidth }}
+        style={{ marginLeft: NAV_WIDTH }}
       >
             <Routes>
               <Route path="/" element={<Dashboard />} />
@@ -106,8 +106,10 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <BrowserRouter>
-          <AppShell />
-          <AgentChat />
+          <AuthGate>
+            <AppShell />
+            <AgentChat />
+          </AuthGate>
         </BrowserRouter>
       </ToastProvider>
     </QueryClientProvider>

@@ -1,4 +1,4 @@
-## K8s Daily Monitor - DevOps Daily 운영 모니터링 시스템
+## DEVOPS MANAGEMENT - DevOps Daily 운영 모니터링 시스템
 
 ---
 

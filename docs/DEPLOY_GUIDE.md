@@ -1,4 +1,4 @@
-# K8s Daily Monitor - 배포 가이드
+# DEVOPS MANAGEMENT - 배포 가이드
 
 > 로컬 개발 → 폐쇄망 검증 → CI/CD 운영 배포까지 3단계 가이드
 

@@ -33,6 +33,7 @@ from app.routers.ansible_assets import (
     files_router as ansible_files_router,
     inv_router as ansible_inventories_router,
 )
+from app.routers.auth import router as auth_router
 
 __all__ = [
     "clusters_router",
@@ -68,4 +69,5 @@ __all__ = [
     "batch_jobs_router",
     "ansible_files_router",
     "ansible_inventories_router",
+    "auth_router",
 ]

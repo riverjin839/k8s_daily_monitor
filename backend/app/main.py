@@ -7,6 +7,8 @@ from sqlalchemy import text, inspect
 
 from app.config import settings
 from app.database import engine, Base, SessionLocal
+from fastapi import Depends
+
 from app.routers import (
     agent_router,
     clusters_router,
@@ -41,7 +43,11 @@ from app.routers import (
     batch_jobs_router,
     ansible_files_router,
     ansible_inventories_router,
+    auth_router,
 )
+from app.auth.deps import get_current_user
+from app.auth.security import hash_password
+from app.models.user import User
 
 
 def _run_migrations():
@@ -612,6 +618,24 @@ def _seed_default_playbooks():
         db.close()
 
 
+def _seed_initial_admin():
+    """Create the bootstrap admin if no users exist yet. Idempotent."""
+    db = SessionLocal()
+    try:
+        if db.query(User).count() > 0:
+            return
+        admin = User(
+            username=settings.initial_admin_username,
+            hashed_password=hash_password(settings.initial_admin_password),
+            role="admin",
+            display_name="Administrator",
+        )
+        db.add(admin)
+        db.commit()
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: DB 테이블 생성
@@ -620,6 +644,7 @@ async def lifespan(app: FastAPI):
     _seed_default_metric_cards()
     _seed_default_trend_sources()
     _seed_default_playbooks()
+    _seed_initial_admin()
     yield
     # Shutdown: 필요한 정리 작업
 
@@ -655,40 +680,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 라우터 등록
-app.include_router(clusters_router, prefix="/api/v1")
+# Public routers (no auth) — login + liveness/readiness probes.
+app.include_router(auth_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
-app.include_router(history_router, prefix="/api/v1")
-app.include_router(daily_check_router, prefix="/api/v1")
-app.include_router(playbooks_router, prefix="/api/v1")
-app.include_router(agent_router, prefix="/api/v1")
-app.include_router(promql_router, prefix="/api/v1")
-app.include_router(openclaw_router, prefix="/api/v1")
-app.include_router(issues_router, prefix="/api/v1")
-app.include_router(tasks_router, prefix="/api/v1")
-app.include_router(ui_settings_router, prefix="/api/v1")
-app.include_router(node_labels_router, prefix="/api/v1")
-app.include_router(workflows_router, prefix="/api/v1")
-app.include_router(work_guide_router, prefix="/api/v1")
-app.include_router(ops_note_router, prefix="/api/v1")
-app.include_router(mindmap_router, prefix="/api/v1")
-app.include_router(management_server_router, prefix="/api/v1")
-app.include_router(infra_nodes_router, prefix="/api/v1")
-app.include_router(topology_trace_router, prefix="/api/v1")
-app.include_router(ontology_router, prefix="/api/v1")
-app.include_router(analyze_router, prefix="/api/v1")
-app.include_router(trends_router, prefix="/api/v1")
-app.include_router(versions_router, prefix="/api/v1")
-app.include_router(bulk_exec_router, prefix="/api/v1")
-app.include_router(etcdctl_router, prefix="/api/v1")
-app.include_router(mc_client_router, prefix="/api/v1")
-app.include_router(node_server_specs_router, prefix="/api/v1")
-app.include_router(cluster_custom_fields_router, prefix="/api/v1")
-app.include_router(backup_router, prefix="/api/v1")
-app.include_router(service_entries_router, prefix="/api/v1")
-app.include_router(batch_jobs_router, prefix="/api/v1")
-app.include_router(ansible_files_router, prefix="/api/v1")
-app.include_router(ansible_inventories_router, prefix="/api/v1")
+
+# Protected routers — every endpoint below requires a valid JWT.
+_auth = [Depends(get_current_user)]
+app.include_router(clusters_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(history_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(daily_check_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(playbooks_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(agent_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(promql_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(openclaw_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(issues_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(tasks_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(ui_settings_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(node_labels_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(workflows_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(work_guide_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(ops_note_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(mindmap_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(management_server_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(infra_nodes_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(topology_trace_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(ontology_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(analyze_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(trends_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(versions_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(bulk_exec_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(etcdctl_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(mc_client_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(node_server_specs_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(cluster_custom_fields_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(backup_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(service_entries_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(batch_jobs_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(ansible_files_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(ansible_inventories_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/")

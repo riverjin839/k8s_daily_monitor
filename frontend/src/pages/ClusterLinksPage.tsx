@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Link2, Plus, Pencil, Trash2, ExternalLink, X, Check, Globe,
-  GripVertical, Table2, LayoutList, LayoutGrid, Sparkles, Search,
+  GripVertical, Table2, LayoutList, LayoutGrid, Search,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -16,7 +16,8 @@ import { useClusters } from '@/hooks/useCluster';
 import { useClusterLinks, useUpdateClusterLinks } from '@/hooks/useUiSettings';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useTableViewStore, TS } from '@/stores/tableViewStore';
-import { ViewModeBar } from '@/components/common';
+import { ViewModeBar, EmptyState } from '@/components/common';
+import { MacCard } from '@/components/ui/MacCard';
 import { ClusterLink, ClusterLinkGroup } from '@/types';
 
 type LayoutMode = 'table' | 'vertical' | 'horizontal';
@@ -103,21 +104,22 @@ function LinkForm({ initial, onSave, onCancel }: LinkFormProps) {
 // ── Link card (vertical/horizontal modes) ─────────────────────────────────────
 function LinkCard({ link, onEdit, onDelete }: { link: ClusterLink; onEdit: () => void; onDelete: () => void }) {
   return (
-    <div className="group flex items-start gap-3 px-4 py-3 bg-secondary/30 hover:bg-secondary/60 border border-border/40 rounded-lg transition-colors">
-      <div className="w-7 h-7 bg-primary/10 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5">
-        <Link2 className="w-3.5 h-3.5 text-primary" />
+    <div className="group relative flex items-start gap-3 px-3.5 py-3 bg-background/60 hover:bg-secondary/60 border border-border/60 hover:border-primary/30 rounded-xl transition-all hover:shadow-sm">
+      <div className="w-8 h-8 bg-primary/10 ring-1 ring-primary/15 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+        <Link2 className="w-4 h-4 text-primary" />
       </div>
       <div className="flex-1 min-w-0">
         <a href={link.url} target="_blank" rel="noopener noreferrer"
-          className="font-medium text-sm text-foreground hover:text-primary transition-colors flex items-center gap-1 truncate">
-          {link.label}<ExternalLink className="w-3 h-3 flex-shrink-0" />
+          className="font-semibold text-sm text-foreground hover:text-primary transition-colors flex items-center gap-1 truncate">
+          {link.label}
+          <ExternalLink className="w-3 h-3 flex-shrink-0 opacity-60" />
         </a>
         {link.description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{link.description}</p>}
-        <p className="text-xs text-muted-foreground/50 font-mono truncate mt-0.5">{link.url}</p>
+        <p className="text-[11px] text-muted-foreground/60 font-mono truncate mt-1">{link.url}</p>
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-        <button onClick={onEdit}   className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-foreground"><Pencil className="w-3.5 h-3.5" /></button>
-        <button onClick={onDelete} className="p-1.5 hover:bg-red-500/10 rounded-md text-muted-foreground hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
+        <button onClick={onEdit}   className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-foreground" title="편집"><Pencil className="w-3.5 h-3.5" /></button>
+        <button onClick={onDelete} className="p-1.5 hover:bg-red-500/10 rounded-md text-muted-foreground hover:text-red-500" title="삭제"><Trash2 className="w-3.5 h-3.5" /></button>
       </div>
     </div>
   );
@@ -129,13 +131,13 @@ function CompactLinkCell({ link, onEdit, onDelete, fontClass, fsClass }: {
   fontClass: string; fsClass: string;
 }) {
   return (
-    <div className={`group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/[0.04] transition-colors ${fontClass} ${fsClass}`}>
+    <div className={`group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors ${fontClass} ${fsClass}`}>
       <div className="flex-1 min-w-0">
         <a href={link.url} target="_blank" rel="noopener noreferrer"
-          className="font-medium text-foreground/90 hover:text-primary transition-colors flex items-center gap-1 truncate">
+          className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1 truncate">
           {link.label}<ExternalLink className="w-2.5 h-2.5 flex-shrink-0 opacity-50" />
         </a>
-        {link.description && <p className="text-muted-foreground/60 truncate leading-tight mt-0.5">{link.description}</p>}
+        {link.description && <p className="text-muted-foreground truncate leading-tight mt-0.5">{link.description}</p>}
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
         <button onClick={onEdit}   className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground"><Pencil className="w-2.5 h-2.5" /></button>
@@ -318,19 +320,19 @@ export function ClusterLinksPage() {
     ].join(' ');
 
     const cellBase = `border ${borderCls} ${padClass}`;
-    const altRowBg = (i: number) => style.altRow && i % 2 === 1 ? 'bg-white/[0.02]' : '';
+    const altRowBg = (i: number) => style.altRow && i % 2 === 1 ? 'bg-muted/30' : '';
 
     const cells: React.ReactNode[] = [];
 
     // ── Header row ──
     // Common header
     cells.push(
-      <div key="h-common" className={`relative flex items-center gap-1.5 border-b border-r ${borderCls} px-3 py-2 bg-emerald-500/[0.08] sticky top-0 z-10`}>
-        <Globe className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-        <span className="font-semibold text-xs text-emerald-400 truncate">공통 링크</span>
-        <span className="ml-auto text-[10px] text-muted-foreground/60 flex-shrink-0">({filteredCommonLinks.length})</span>
+      <div key="h-common" className={`relative flex items-center gap-1.5 border-b border-r ${borderCls} px-3 py-2 bg-emerald-500/10 sticky top-0 z-10`}>
+        <Globe className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+        <span className="font-semibold text-[11px] uppercase tracking-wider text-emerald-700 dark:text-emerald-300 truncate">공통 링크</span>
+        <span className="ml-auto text-[10px] text-muted-foreground tabular-nums flex-shrink-0">({filteredCommonLinks.length})</span>
         <button onClick={() => { setTableFormTarget('common'); setEditingCommon(null); setEditingLink(null); }}
-          className="ml-1 p-0.5 rounded text-emerald-400/50 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors flex-shrink-0" title="공통 링크 추가">
+          className="ml-1 p-0.5 rounded text-emerald-600/60 dark:text-emerald-400/60 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-500/15 transition-colors flex-shrink-0" title="공통 링크 추가">
           <Plus className="w-3 h-3" />
         </button>
         <ColResizeHandle colId="common" currentWidth={colW('common')} onResize={handleColResize} onResizeDone={handleColResizeDone} />
@@ -340,11 +342,11 @@ export function ClusterLinksPage() {
       cells.push(
         <div key={`h-${g.clusterId}`}
           className={`relative flex items-center gap-1.5 border-b ${borderCls} px-3 py-2 ${hdrBg} sticky top-0 z-10${idx < groups.length - 1 ? ` border-r ${borderCls}` : ''}`}>
-          <span className="text-sm leading-none">☸</span>
-          <span className={`font-semibold text-xs truncate ${hdrText}`}>{g.clusterName}</span>
-          <span className="ml-auto text-[10px] text-muted-foreground/60 flex-shrink-0">({g.links.length})</span>
+          <span className="text-sm leading-none text-primary">☸</span>
+          <span className={`font-semibold text-[11px] uppercase tracking-wider truncate ${hdrText}`}>{g.clusterName}</span>
+          <span className="ml-auto text-[10px] text-muted-foreground tabular-nums flex-shrink-0">({g.links.length})</span>
           <button onClick={() => { setTableFormTarget(g.clusterId); setEditingLink(null); setEditingCommon(null); }}
-            className={`ml-1 p-0.5 rounded transition-colors flex-shrink-0 ${hdrText} opacity-50 hover:opacity-100 hover:bg-white/10`} title="링크 추가">
+            className={`ml-1 p-0.5 rounded transition-colors flex-shrink-0 ${hdrText} opacity-60 hover:opacity-100 hover:bg-muted`} title="링크 추가">
             <Plus className="w-3 h-3" />
           </button>
           <ColResizeHandle colId={g.clusterId} currentWidth={colW(g.clusterId)} onResize={handleColResize} onResizeDone={handleColResizeDone} />
@@ -415,50 +417,46 @@ export function ClusterLinksPage() {
     return (
       <div className="space-y-3">
         {/* Scrollable table */}
-        <div className="border border-border/40 rounded-xl overflow-auto bg-card">
-          <div style={{ display: 'grid', gridTemplateColumns: gridCols, minWidth: 'max-content' }}>
-            {cells}
+        <MacCard title="클러스터별 링크 매트릭스" bodyPadding="p-0">
+          <div className="overflow-auto">
+            <div style={{ display: 'grid', gridTemplateColumns: gridCols, minWidth: 'max-content' }}>
+              {cells}
+            </div>
           </div>
-        </div>
+        </MacCard>
 
         {/* Add-link form panel */}
         {tableFormTarget && (
-          <div className="bg-card border border-border/40 rounded-xl p-4">
+          <MacCard
+            title={tableFormTarget === 'common'
+              ? '공통 링크 추가'
+              : `${orderedGroups.find(x => x.clusterId === tableFormTarget)?.clusterName ?? ''} — 링크 추가`}
+            bodyPadding="p-4"
+          >
             {tableFormTarget === 'common' ? (
-              <>
-                <p className="text-xs font-semibold text-emerald-400 mb-2 flex items-center gap-1">
-                  <Globe className="w-3.5 h-3.5" /> 공통 링크 추가
-                </p>
-                <LinkForm onSave={handleAddCommon} onCancel={() => setTableFormTarget(null)} />
-              </>
+              <LinkForm onSave={handleAddCommon} onCancel={() => setTableFormTarget(null)} />
             ) : (() => {
               const g = orderedGroups.find(x => x.clusterId === tableFormTarget);
               return g ? (
-                <>
-                  <p className="text-xs font-semibold mb-2 flex items-center gap-1">
-                    <span>☸</span> {g.clusterName} — 링크 추가
-                  </p>
-                  <LinkForm
-                    onSave={link => handleAddLink(g.clusterId, g.clusterName, link)}
-                    onCancel={() => setTableFormTarget(null)} />
-                </>
+                <LinkForm
+                  onSave={link => handleAddLink(g.clusterId, g.clusterName, link)}
+                  onCancel={() => setTableFormTarget(null)} />
               ) : null;
             })()}
-          </div>
+          </MacCard>
         )}
 
         {/* Orphan groups */}
         {orphanGroups.length > 0 && (
-          <div className="bg-card border border-border/30 rounded-xl p-4">
-            <p className="text-xs text-muted-foreground/50 mb-2">삭제된 클러스터의 링크</p>
+          <MacCard title="삭제된 클러스터의 링크" bodyPadding="p-4">
             <div className="space-y-1.5">
               {orphanGroups.map(g => (
                 <div key={g.clusterId} className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground/50 w-28 truncate">{g.clusterName}</span>
+                  <span className="text-xs text-muted-foreground/70 w-28 truncate">{g.clusterName}</span>
                   <div className="flex flex-wrap gap-2">
                     {g.links.map(l => (
                       <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer"
-                        className="text-xs text-muted-foreground/60 hover:text-primary flex items-center gap-0.5 transition-colors">
+                        className="text-xs text-muted-foreground hover:text-primary flex items-center gap-0.5 transition-colors">
                         {l.label}<ExternalLink className="w-2.5 h-2.5" />
                       </a>
                     ))}
@@ -466,7 +464,7 @@ export function ClusterLinksPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </MacCard>
         )}
       </div>
     );
@@ -474,188 +472,204 @@ export function ClusterLinksPage() {
 
   // ── Cluster group card (vertical/horizontal modes) ─────────────────────────
   const renderGroupCard = (g: ClusterLinkGroup, isOrphan: boolean, dragHandle: React.HTMLAttributes<HTMLElement>) => (
-    <div className="bg-card border border-border/40 rounded-xl overflow-hidden h-full">
-      <div className="px-5 py-3 border-b border-border/30 flex items-center justify-between bg-white/[0.03]">
-        <div className="flex items-center gap-2">
-          {!isOrphan && (
-            <span {...dragHandle} className="cursor-grab active:cursor-grabbing p-0.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-secondary transition-colors">
-              <GripVertical className="w-4 h-4" />
-            </span>
-          )}
-          <span className="text-base">☸</span>
-          <span className="font-semibold text-sm">{g.clusterName}</span>
-          {isOrphan && <span className="text-xs text-muted-foreground">(삭제된 클러스터)</span>}
-          <span className="text-xs text-muted-foreground">({g.links.length}개)</span>
-        </div>
+    <div className="bg-card rounded-md border border-border overflow-hidden h-full flex flex-col">
+      <div className="flex items-center px-4 py-2.5 border-b border-border bg-muted/40 gap-2">
+        {!isOrphan && (
+          <span {...dragHandle} className="cursor-grab active:cursor-grabbing p-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-secondary transition-colors" title="드래그하여 순서 변경">
+            <GripVertical className="w-3.5 h-3.5" />
+          </span>
+        )}
+        <span className="text-sm leading-none text-primary">☸</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none truncate">
+          {g.clusterName}
+        </span>
+        {isOrphan && (
+          <span className="text-[10px] text-muted-foreground/70 px-1.5 py-0.5 rounded bg-muted">삭제됨</span>
+        )}
+        <span className="ml-auto text-[11px] text-muted-foreground/70 tabular-nums">{g.links.length}</span>
         {!isOrphan && (
           <button onClick={() => { setAddingTo(g.clusterId); setEditingLink(null); }}
-            className="px-3 py-1.5 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors flex items-center gap-1">
-            <Plus className="w-3.5 h-3.5" /> 링크 추가
+            className="ml-2 px-2 py-1 text-[11px] font-medium bg-primary/10 hover:bg-primary/15 text-primary border border-primary/20 rounded-md transition-colors flex items-center gap-1"
+            title="링크 추가">
+            <Plus className="w-3 h-3" /> 추가
           </button>
         )}
       </div>
-      <div className="p-4 space-y-2">
+      <div className="p-4 space-y-2 flex-1">
         {addingTo === g.clusterId && (
           <LinkForm onSave={link => handleAddLink(g.clusterId, g.clusterName, link)} onCancel={() => setAddingTo(null)} />
         )}
-        {g.links.length === 0 && addingTo !== g.clusterId && (
-          <div className="text-center py-8">
-            <Link2 className="w-8 h-8 mx-auto mb-2 text-muted-foreground/20" />
-            <p className="text-sm text-muted-foreground">등록된 링크가 없습니다.</p>
-            {!isOrphan && (
-              <button onClick={() => { setAddingTo(g.clusterId); setEditingLink(null); }} className="mt-2 text-xs text-primary hover:text-primary/80">
-                + 첫 번째 링크 추가
-              </button>
-            )}
+        {g.links.length === 0 && addingTo !== g.clusterId ? (
+          <EmptyState
+            compact
+            icon={Link2}
+            title="등록된 링크가 없습니다"
+            description={isOrphan ? '클러스터가 삭제되어 링크 추가가 비활성화되었습니다.' : undefined}
+            action={isOrphan ? undefined : {
+              label: '+ 첫 번째 링크 추가',
+              variant: 'secondary',
+              onClick: () => { setAddingTo(g.clusterId); setEditingLink(null); },
+            }}
+          />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+            {g.links.map(link => (
+              <div key={link.id}>
+                {editingLink?.clusterId === g.clusterId && editingLink.link.id === link.id ? (
+                  <LinkForm initial={link}
+                    onSave={updated => handleEditLink(g.clusterId, g.clusterName, updated)}
+                    onCancel={() => setEditingLink(null)} />
+                ) : (
+                  <LinkCard link={link}
+                    onEdit={() => { setEditingLink({ clusterId: g.clusterId, link }); setAddingTo(null); }}
+                    onDelete={() => { if (confirm(`"${link.label}" 링크를 삭제하시겠습니까?`)) handleDeleteLink(g.clusterId, link.id); }} />
+                )}
+              </div>
+            ))}
           </div>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-          {g.links.map(link => (
-            <div key={link.id}>
-              {editingLink?.clusterId === g.clusterId && editingLink.link.id === link.id ? (
-                <LinkForm initial={link}
-                  onSave={updated => handleEditLink(g.clusterId, g.clusterName, updated)}
-                  onCancel={() => setEditingLink(null)} />
-              ) : (
-                <LinkCard link={link}
-                  onEdit={() => { setEditingLink({ clusterId: g.clusterId, link }); setAddingTo(null); }}
-                  onDelete={() => { if (confirm(`"${link.label}" 링크를 삭제하시겠습니까?`)) handleDeleteLink(g.clusterId, link.id); }} />
-              )}
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );
 
+  const noClusters = clusters.length === 0 && orphanGroups.length === 0;
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-primary/5">
-      <main className="mx-auto px-5 md:px-8 py-6 md:py-8">
-        {/* Header */}
-        <div className="mb-6 rounded-2xl border border-primary/15 bg-card/70 backdrop-blur px-4 md:px-6 py-4 md:py-5 shadow-sm">
+    <div className="min-h-screen bg-background">
+      <main className="mx-auto max-w-[1600px] px-5 md:px-8 py-6 md:py-8 space-y-3">
+        {/* ── Hero / Header ─────────────────────────────────────────────── */}
+        <MacCard bodyPadding="p-4 md:p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary">
-                  <Link2 className="w-4 h-4" />
-                </span>
-                <h1 className="text-xl font-bold">클러스터 주요 링크</h1>
-                <Sparkles className="w-4 h-4 text-amber-400" />
+            <div className="flex items-center gap-3 min-w-0">
+              <span
+                aria-hidden="true"
+                className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15 flex-shrink-0"
+              >
+                <Link2 className="w-4 h-4" />
+              </span>
+              <div className="min-w-0">
+                <h1 className="text-lg font-semibold leading-tight truncate">클러스터 주요 링크</h1>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  운영 클러스터별 대시보드 · 모니터링 · 관리 콘솔을 한곳에서 빠르게 접근하세요.
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground/70">운영 클러스터별 대시보드 · 모니터링 · 관리 콘솔을 한 곳에서 빠르게 접근하세요.</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <ViewModeBar modes={VIEW_MODES} active={layout} onChange={changeLayout} />
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
-              <p className="text-[11px] text-muted-foreground">전체 링크</p>
-              <p className="text-lg font-semibold">{totalLinks}개</p>
-            </div>
-            <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
-              <p className="text-[11px] text-muted-foreground">클러스터 수</p>
-              <p className="text-lg font-semibold">{orderedGroups.length}개</p>
-            </div>
-            <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
-              <p className="text-[11px] text-muted-foreground">공통 링크</p>
-              <p className="text-lg font-semibold text-emerald-400">{commonLinks.length}개</p>
-            </div>
+          {/* Stats row */}
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <StatTile label="전체 링크"   value={totalLinks} />
+            <StatTile label="클러스터"    value={orderedGroups.length} />
+            <StatTile label="공통 링크"   value={commonLinks.length} accent />
           </div>
 
+          {/* Search */}
           <div className="mt-3 relative">
-            <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search aria-hidden="true" className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               value={keyword}
               onChange={e => setKeyword(e.target.value)}
               placeholder="링크 이름, 설명, URL 검색"
-              className="w-full rounded-xl border border-border/60 bg-background pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              aria-label="링크 검색"
+              className="w-full rounded-lg border border-border bg-background pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
             />
           </div>
-        </div>
+        </MacCard>
 
-        {/* ── Table view ── */}
-        {layout === 'table' ? (
-          clusters.length === 0 && orphanGroups.length === 0 ? (
-            <div className="text-center py-16 bg-card border border-border/30 rounded-xl">
-              <Link2 className="w-12 h-12 mx-auto mb-4 text-muted-foreground/20" />
-              <p className="text-muted-foreground">등록된 클러스터가 없습니다. Settings에서 클러스터를 먼저 등록해주세요.</p>
-            </div>
-          ) : renderTableView()
+        {/* ── Empty: no clusters ────────────────────────────────────────── */}
+        {noClusters ? (
+          <MacCard bodyPadding="p-0">
+            <EmptyState
+              icon={Link2}
+              title="등록된 클러스터가 없습니다"
+              description="Settings에서 클러스터를 먼저 등록한 뒤 링크를 관리할 수 있습니다."
+            />
+          </MacCard>
+        ) : layout === 'table' ? (
+          /* ── Table view ── */
+          renderTableView()
         ) : (
           /* ── Card views (vertical / horizontal) ── */
-          <div className="space-y-6">
+          <>
             {/* Common links section */}
-            <div className="bg-card border border-emerald-500/20 rounded-xl overflow-hidden">
-              <div className="px-5 py-3 border-b border-emerald-500/15 flex items-center justify-between bg-emerald-500/[0.06]">
-                <div className="flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-emerald-400" />
-                  <span className="font-semibold text-sm text-emerald-400">공통 서비스 링크</span>
-                  <span className="text-xs text-muted-foreground">({filteredCommonLinks.length})</span>
-                </div>
+            <MacCard bodyPadding="p-0">
+              <div className="flex items-center px-4 py-2.5 border-b border-border bg-muted/40 gap-2">
+                <Globe aria-hidden="true" className="w-3.5 h-3.5 text-emerald-500" />
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
+                  공통 서비스 링크
+                </span>
+                <span className="text-[11px] text-muted-foreground/70 tabular-nums">({filteredCommonLinks.length})</span>
                 <button onClick={() => { setAddingCommon(true); setEditingCommon(null); }}
-                  className="px-3 py-1.5 text-xs font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-lg transition-colors flex items-center gap-1">
-                  <Plus className="w-3.5 h-3.5" /> 링크 추가
+                  className="ml-auto px-2 py-1 text-[11px] font-medium bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 rounded-md transition-colors flex items-center gap-1">
+                  <Plus className="w-3 h-3" /> 추가
                 </button>
               </div>
               <div className="p-4 space-y-2">
                 {addingCommon && <LinkForm onSave={handleAddCommon} onCancel={() => setAddingCommon(false)} />}
-                {filteredCommonLinks.length === 0 && !addingCommon && (
-                  <div className="text-center py-8">
-                    <Globe className="w-8 h-8 mx-auto mb-2 text-muted-foreground/20" />
-                    <p className="text-sm text-muted-foreground">등록된 공통 링크가 없습니다.</p>
-                    <button onClick={() => setAddingCommon(true)} className="mt-2 text-xs text-emerald-400 hover:text-emerald-300">
-                      + 첫 번째 공통 링크 추가
-                    </button>
+                {filteredCommonLinks.length === 0 && !addingCommon ? (
+                  <EmptyState
+                    compact
+                    icon={Globe}
+                    title="공통 링크가 없습니다"
+                    description="모든 클러스터에서 공통으로 사용하는 링크를 등록하세요."
+                    action={{ label: '+ 첫 번째 공통 링크 추가', variant: 'secondary', onClick: () => setAddingCommon(true) }}
+                  />
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                    {filteredCommonLinks.map(link => (
+                      <div key={link.id}>
+                        {editingCommon?.id === link.id ? (
+                          <LinkForm initial={link} onSave={handleEditCommon} onCancel={() => setEditingCommon(null)} />
+                        ) : (
+                          <LinkCard link={link}
+                            onEdit={() => { setEditingCommon(link); setAddingCommon(false); }}
+                            onDelete={() => handleDeleteCommon(link.id)} />
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-                  {filteredCommonLinks.map(link => (
-                    <div key={link.id}>
-                      {editingCommon?.id === link.id ? (
-                        <LinkForm initial={link} onSave={handleEditCommon} onCancel={() => setEditingCommon(null)} />
-                      ) : (
-                        <LinkCard link={link}
-                          onEdit={() => { setEditingCommon(link); setAddingCommon(false); }}
-                          onDelete={() => handleDeleteCommon(link.id)} />
-                      )}
-                    </div>
-                  ))}
-                </div>
               </div>
-            </div>
+            </MacCard>
 
             {/* Cluster groups */}
-            {clusters.length === 0 && orphanGroups.length === 0 ? (
-              <div className="text-center py-12 bg-card border border-border/30 rounded-xl">
-                <Link2 className="w-12 h-12 mx-auto mb-4 text-muted-foreground/20" />
-                <p className="text-muted-foreground">등록된 클러스터가 없습니다. Settings에서 클러스터를 먼저 등록해주세요.</p>
-              </div>
-            ) : (
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext
-                  items={filteredOrderedGroups.map(g => g.clusterId)}
-                  strategy={layout === 'vertical' ? verticalListSortingStrategy : horizontalListSortingStrategy}
-                >
-                  <div className={layout === 'horizontal' ? 'grid grid-cols-1 md:grid-cols-2 gap-6' : 'flex flex-col gap-6'}>
-                    {filteredOrderedGroups.map(g => (
-                      <SortableItem key={g.clusterId} id={g.clusterId}>
-                        {h => renderGroupCard(g, false, h)}
-                      </SortableItem>
-                    ))}
-                    {orphanGroups.map(g => (
-                      <SortableItem key={g.clusterId} id={g.clusterId} disabled>
-                        {h => renderGroupCard(g, true, h)}
-                      </SortableItem>
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
-            )}
-          </div>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext
+                items={filteredOrderedGroups.map(g => g.clusterId)}
+                strategy={layout === 'vertical' ? verticalListSortingStrategy : horizontalListSortingStrategy}
+              >
+                <div className={layout === 'horizontal' ? 'grid grid-cols-1 md:grid-cols-2 gap-3' : 'flex flex-col gap-3'}>
+                  {filteredOrderedGroups.map(g => (
+                    <SortableItem key={g.clusterId} id={g.clusterId}>
+                      {h => renderGroupCard(g, false, h)}
+                    </SortableItem>
+                  ))}
+                  {orphanGroups.map(g => (
+                    <SortableItem key={g.clusterId} id={g.clusterId} disabled>
+                      {h => renderGroupCard(g, true, h)}
+                    </SortableItem>
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </>
         )}
       </main>
+    </div>
+  );
+}
+
+// ── Small stat tile (header) ──────────────────────────────────────────────────
+function StatTile({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={`text-lg font-semibold tabular-nums leading-tight ${accent ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'}`}>
+        {value}
+      </p>
     </div>
   );
 }

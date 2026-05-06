@@ -2,7 +2,7 @@ import { useMemo, useState, type ComponentType } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, ClipboardList, ListTodo, CalendarCheck2,
-  Settings, Link2, Tags, Calculator, Server, GitFork, BookMarked, Layers,
+  Settings, Link2, Tags, Calculator, Server, GitFork, BookMarked, Layers, Boxes,
   Pencil, Moon, Sun, Monitor, Map, BarChart3, Network,
   Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   PanelLeftOpen, X, ClipboardCheck, ListTree, ChevronRight, LogOut,
@@ -33,6 +33,7 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
   '/node-specs':         { defaultLabel: '노드 서버스펙',  icon: ClipboardCheck },
   '/links':              { defaultLabel: '클러스터 링크',  icon: Link2 },
   '/node-labels':        { defaultLabel: '노드 라벨',      icon: Tags },
+  '/node-images':        { defaultLabel: '노드 이미지',    icon: Boxes },
   '/cidr':               { defaultLabel: 'CIDR 계산기',    icon: Calculator },
   '/incident-analysis':  { defaultLabel: '장애 로그 분석', icon: Zap },
   '/packet-flow':        { defaultLabel: '패킷 흐름 분석', icon: Route },
@@ -50,7 +51,7 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
 const NAV_GROUPS: Array<{ id: string; label: string; paths: string[] }> = [
   { id: 'monitoring', label: '모니터링',   paths: ['/', '/playbooks'] },
   { id: 'work',       label: '작업관리',   paths: ['/issues', '/tasks', '/todo-today', '/members'] },
-  { id: 'cluster',    label: '클러스터',   paths: ['/cluster-manage', '/node-specs', '/versions', '/bulk-exec', '/etcdctl', '/batch-jobs', '/mc', '/kernel-params', '/infra-topology', '/links', '/node-labels', '/cidr'] },
+  { id: 'cluster',    label: '클러스터',   paths: ['/cluster-manage', '/node-specs', '/versions', '/bulk-exec', '/etcdctl', '/batch-jobs', '/mc', '/kernel-params', '/infra-topology', '/links', '/node-labels', '/node-images', '/cidr'] },
   { id: 'analysis',   label: 'AI 분석',    paths: ['/incident-analysis', '/packet-flow', '/ontology', '/trends'] },
   { id: 'docs',       label: '지식 허브',   paths: ['/services', '/work-guides', '/ops-notes', '/issues', '/tasks', '/incident-analysis', '/wbs', '/mindmap', '/workflow'] },
   { id: 'system',     label: '시스템',     paths: ['/settings'] },

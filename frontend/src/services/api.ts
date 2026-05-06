@@ -798,6 +798,11 @@ export const nodeLabelsApi = {
     ),
 };
 
+export const nodeImagesApi = {
+  getNodeImages: (clusterId: string) =>
+    api.get(`/clusters/${clusterId}/node-images`),
+};
+
 
 // Workflows API
 export const workflowsApi = {

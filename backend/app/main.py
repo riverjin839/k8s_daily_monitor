@@ -17,6 +17,7 @@ from app.routers import (
     history_router,
     issues_router,
     node_labels_router,
+    node_images_router,
     openclaw_router,
     playbooks_router,
     promql_router,
@@ -697,6 +698,7 @@ app.include_router(issues_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(tasks_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ui_settings_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(node_labels_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(node_images_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(workflows_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_guide_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ops_note_router, prefix="/api/v1", dependencies=_auth)

@@ -15,7 +15,7 @@ export interface Cluster {
   operationLevel?: string;
   maxPod?: number;
   ciliumConfig?: string;
-  // Node CIDR
+  // INTERNAL_IP — 자동수집된 nodeIps 가 우선 표시. cidr/firstHost/lastHost 는 미수집 시 fallback supernet.
   cidr?: string;
   firstHost?: string;
   lastHost?: string;

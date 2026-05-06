@@ -10,7 +10,6 @@
 
 SSH 가 필요한 NIC/호스트 파라미터는 여기서 수집하지 않음.
 """
-import hashlib
 import json
 import os
 import re
@@ -30,6 +29,11 @@ from app.database import get_db
 from app.models import Cluster, ClusterConfigSnapshot
 from app.services.kubeconfig import ensure_kubeconfig_file as _ensure_kubeconfig_file_for
 from app.services.ssh_runner import SSHTarget, _exec_ssh  # noqa: PLC2701 — 내부 재사용
+from app.services.config_snapshot import (
+    hash_payload as _hash_payload,
+    store_if_changed as _store_if_changed,
+    record_cluster_meta_snapshots,
+)
 
 router = APIRouter(prefix="/clusters", tags=["versions"])
 
@@ -37,14 +41,6 @@ _K8S_TIMEOUT = 10
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
-
-
-def _hash_payload(component: str, version: str | None, data: dict) -> str:
-    blob = json.dumps(
-        {"component": component, "version": version, "data": data},
-        sort_keys=True, default=str,
-    )
-    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
 def _parse_container_args(container) -> dict[str, str]:
@@ -80,39 +76,6 @@ def _image_tag(image: str) -> str:
     if ":" in last:
         return last.rsplit(":", 1)[1]
     return "latest"
-
-
-def _store_if_changed(
-    db: Session,
-    cluster_id: UUID,
-    component: str,
-    category: str,
-    version: str | None,
-    data: dict,
-    now: datetime,
-) -> bool:
-    """마지막 스냅샷과 hash 가 다르면 새로 insert. 반환값은 변경 여부."""
-    h = _hash_payload(component, version, data)
-    last = (
-        db.query(ClusterConfigSnapshot)
-        .filter(ClusterConfigSnapshot.cluster_id == cluster_id,
-                ClusterConfigSnapshot.component == component)
-        .order_by(ClusterConfigSnapshot.collected_at.desc())
-        .first()
-    )
-    if last and last.content_hash == h:
-        return False
-    snap = ClusterConfigSnapshot(
-        cluster_id=cluster_id,
-        component=component,
-        category=category,
-        version=version,
-        data=data,
-        content_hash=h,
-        collected_at=now,
-    )
-    db.add(snap)
-    return True
 
 
 # ── 수집 로직 ────────────────────────────────────────────────────────────────
@@ -1596,7 +1559,33 @@ async def collect_node_nics(
         rich_nodes.sort(key=lambda x: (not x.get("master"), x.get("name") or ""))
         cluster.node_ips = json.dumps(rich_nodes, ensure_ascii=False)
 
-    if changed or rich_nodes:
+        # 클러스터 테이블의 bond0/bond1 컬럼도 master 노드 NIC 으로 즉시 갱신.
+        # (서버 스펙 카드 / 자동수집 후 표기가 비어있던 문제 해결)
+        master_entry = next(
+            (e for e in rich_nodes if e.get("master") and e.get("interfaces")),
+            None,
+        )
+        if master_entry:
+            for ifc in master_entry.get("interfaces") or []:
+                if not isinstance(ifc, dict):
+                    continue
+                nm = (ifc.get("name") or "").lower()
+                ips = [ip for ip in (ifc.get("ips") or []) if ip]
+                mac = ifc.get("mac")
+                if nm == "bond0":
+                    if ips:
+                        cluster.bond0_ip = ips[0]
+                    if mac:
+                        cluster.bond0_mac = mac
+                elif nm == "bond1":
+                    if ips:
+                        cluster.bond1_ip = ips[0]
+                    if mac:
+                        cluster.bond1_mac = mac
+
+    # 클러스터 메타 변경 히스토리 (bonds / node_ips / nodes 그룹) — hash 가 다르면 자동 기록.
+    meta_changed = record_cluster_meta_snapshots(db, cluster, now) if rich_nodes else 0
+    if changed or rich_nodes or meta_changed:
         db.commit()
 
     return {

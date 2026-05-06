@@ -19,6 +19,7 @@ from app.models.daily_check import DailyCheckLog, CheckSchedule
 from app.models.issue import Issue
 from app.models.task import Task
 from app.services.health_checker import HealthChecker
+from app.services.config_snapshot import record_cluster_meta_snapshots
 from app.schemas import (
     ClusterCreate,
     ClusterUpdate,
@@ -670,6 +671,9 @@ def _collect_node_basics(cluster: Cluster, db: Session) -> bool:
     if pick:
         cluster.hostname = pick["name"]
 
+    # 등록 시 첫 메타 스냅샷 — 이후 auto-update 와 비교 가능한 baseline 이 된다.
+    record_cluster_meta_snapshots(db, cluster, datetime.utcnow())
+
     db.commit()
     return True
 
@@ -715,6 +719,10 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
         ("k8sVersion", "k8s_version"),
         ("ciliumVersion", "cilium_version"),
         ("nodeIps", "node_ips"),
+        ("bond0Ip",  "bond0_ip"),
+        ("bond0Mac", "bond0_mac"),
+        ("bond1Ip",  "bond1_ip"),
+        ("bond1Mac", "bond1_mac"),
     ]
     current: dict[str, object] = {
         camel: getattr(cluster, snake) for camel, snake in _DIFF_FIELDS
@@ -754,9 +762,31 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
 
         # 노드별 IP 수집 — 노드당 InternalIP 가 여러 개 (bond0/bond1) 인 경우 모두 수집.
         # k8s API (status.addresses) 가 bonding 설정에 따라 InternalIP 를 복수 반환하는
-        # 경우가 있음. 인터페이스 이름(bond0 등) 은 k8s API 로 알 수 없으므로 빈 값.
-        # OS 레벨 NIC 상세는 추후 SSH 수집 기능 (etcd_systemd 류) 으로 확장 가능.
+        # 경우가 있음. 인터페이스 이름(bond0 등) 은 k8s API 로 알 수 없으므로,
+        # 이전 SSH 수집(`collect-node-nics`)으로 채워둔 `interfaces[]` 를 노드명/IP 매칭으로
+        # 보존해 bond0/bond1 표기가 auto-update 후에도 사라지지 않도록 한다.
         import json as _json
+
+        existing_ifaces_by_name: dict[str, list] = {}
+        existing_ifaces_by_ip: dict[str, list] = {}
+        if cluster.node_ips:
+            try:
+                _prev = _json.loads(cluster.node_ips)
+                if isinstance(_prev, list):
+                    for _p in _prev:
+                        _ifaces = _p.get("interfaces") if isinstance(_p, dict) else None
+                        if not _ifaces:
+                            continue
+                        _nm = _p.get("name")
+                        if _nm:
+                            existing_ifaces_by_name[_nm] = _ifaces
+                        _ips = _p.get("ips") or ([_p.get("ip")] if _p.get("ip") else [])
+                        for _ip in _ips:
+                            if _ip:
+                                existing_ifaces_by_ip[_ip] = _ifaces
+            except Exception:
+                pass
+
         ip_list: list[dict] = []
         for n in items:
             internal_ips: list[str] = []
@@ -771,18 +801,56 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
             is_master = any(l in labels for l in (
                 "node-role.kubernetes.io/control-plane", "node-role.kubernetes.io/master",
             ))
-            ip_list.append({
+            entry: dict = {
                 "name": n.metadata.name,
                 "ip": internal_ips[0] if internal_ips else None,   # 호환성: 1차 IP
                 "ips": internal_ips,                               # 전체 InternalIP 배열
                 "external_ip": external_ip,
                 "master": is_master,
-            })
+            }
+            # 이전 SSH 수집의 interfaces[] 보존 — 이름 우선, IP fallback
+            preserved_ifaces = existing_ifaces_by_name.get(n.metadata.name)
+            if not preserved_ifaces:
+                for _ip in internal_ips:
+                    if _ip in existing_ifaces_by_ip:
+                        preserved_ifaces = existing_ifaces_by_ip[_ip]
+                        break
+            if preserved_ifaces:
+                entry["interfaces"] = preserved_ifaces
+            ip_list.append(entry)
         # 정렬: master 먼저, 그 다음 이름
         ip_list.sort(key=lambda x: (not x["master"], x["name"]))
         node_ips_json = _json.dumps(ip_list, ensure_ascii=False)
         cluster.node_ips = node_ips_json
         updated["nodeIps"] = node_ips_json
+
+        # Master 노드의 interfaces[] 가 살아있으면 클러스터 테이블의 bond0/bond1
+        # IP/MAC 컬럼도 함께 갱신 (서버 스펙 카드/디테일 뷰 용).
+        master_entry = next(
+            (e for e in ip_list if e.get("master") and e.get("interfaces")),
+            None,
+        )
+        if master_entry:
+            for ifc in master_entry.get("interfaces") or []:
+                if not isinstance(ifc, dict):
+                    continue
+                nm = (ifc.get("name") or "").lower()
+                ips = [ip for ip in (ifc.get("ips") or []) if ip]
+                mac = ifc.get("mac")
+                if nm == "bond0":
+                    if ips and cluster.bond0_ip != ips[0]:
+                        cluster.bond0_ip = ips[0]
+                        updated["bond0Ip"] = ips[0]
+                    if mac and cluster.bond0_mac != mac:
+                        cluster.bond0_mac = mac
+                        updated["bond0Mac"] = mac
+                elif nm == "bond1":
+                    if ips and cluster.bond1_ip != ips[0]:
+                        cluster.bond1_ip = ips[0]
+                        updated["bond1Ip"] = ips[0]
+                    if mac and cluster.bond1_mac != mac:
+                        cluster.bond1_mac = mac
+                        updated["bond1Mac"] = mac
 
         # Node CIDR 추정 — 실제 노드 InternalIP 들의 최소 공통 supernet.
         # 노드당 여러 IP 가 있으면 전부 평탄화해서 계산 → bond0/bond1 모두 포함하는 subnet 도출.
@@ -994,7 +1062,13 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
             "warnings": warnings,
         }
 
-    cluster.updated_at = datetime.utcnow()
+    now_ts = datetime.utcnow()
+    cluster.updated_at = now_ts
+
+    # 메타 변경 히스토리 — 논리 그룹별 hash 가 다를 때만 새 스냅샷 추가.
+    # auto-update 가 매번 호출돼도 실제 변경된 그룹 수만 카운트되어 누적된다.
+    snapshot_changed = record_cluster_meta_snapshots(db, cluster, now_ts)
+
     db.commit()
     db.refresh(cluster)
 
@@ -1003,6 +1077,7 @@ def auto_update_cluster(cluster_id: UUID, dry_run: bool = False, db: Session = D
         "cluster_name": cluster.name,
         "dry_run": False,
         "updated": updated,
+        "snapshots_recorded": snapshot_changed,
         "warnings": warnings,
     }
 

@@ -1,78 +1,13 @@
 import { useState, useMemo } from 'react';
-import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2, ArrowUpRight } from 'lucide-react';
 import type { Cluster, ClusterCustomField } from '@/types';
 import { useUpdateCluster } from '@/hooks/useCluster';
 import { InlineEdit } from '@/components/common';
 import { STATUS_STYLE } from './constants';
 import { useOperationLevels, levelBadgeClass, levelLabel, levelColor } from '@/hooks/useOperationLevels';
 import { ClusterCustomCell } from './ClusterCustomCell';
-
-// ── 노드 IP JSON 에서 bond0/bond1 같은 NIC 별 IP 를 모아 supernet 추정 ───────────
-// nodeIps 에 NIC 수집(SSH 기반) 결과의 interfaces[] 가 있을 때만 의미 있음.
-// 백엔드의 _infer_node_cidr 와 같은 로직을 클라이언트에서 재구현 — 별도 엔드포인트 호출 없이
-// 행 단위로 즉시 표시 가능.
-function ipToNum(ip: string): number | null {
-  const m = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (!m) return null;
-  const parts = m.slice(1, 5).map((s) => parseInt(s, 10));
-  if (parts.some((p) => p < 0 || p > 255)) return null;
-  return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
-}
-function numToIp(n: number): string {
-  return [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff].join('.');
-}
-/** 주어진 IPv4 들의 최소 공통 supernet (예: ['10.0.0.5','10.0.0.10'] → '10.0.0.0/29').
- *  prefix < 16 (= 너무 넓음) 이면 null. */
-function inferCidr(ips: string[]): string | null {
-  const nums = ips.map(ipToNum).filter((n): n is number => n !== null);
-  if (nums.length === 0) return null;
-  if (nums.length === 1) return `${numToIp(nums[0] & 0xffffff00)}/24`;
-  const common = nums[0];
-  let xorAll = 0;
-  for (const n of nums) xorAll |= (common ^ n);
-  // 가장 높은 다른 비트 위치 찾기 → 공통 prefix 길이.
-  let prefix = 32;
-  for (let i = 0; i < 32; i++) {
-    if ((xorAll >>> i) & 1) prefix = 31 - i;
-  }
-  prefix = Math.max(0, Math.min(32, prefix));
-  if (prefix < 16) return null;
-  const mask = prefix === 0 ? 0 : ((0xffffffff << (32 - prefix)) >>> 0);
-  const net = (common & mask) >>> 0;
-  return `${numToIp(net)}/${prefix}`;
-}
-
-interface NodeIpEntry {
-  name: string;
-  ip?: string;
-  ips?: string[];
-  external_ip?: string;
-  master?: boolean;
-  interfaces?: { name: string; ips: string[]; scopes?: string[]; operstate?: string | null }[];
-}
-
-/** cluster.nodeIps 에서 bond0/bond1 IP 들을 모아 각 NIC 별 CIDR 을 추정. */
-function computeBondCidrs(nodeIpsJson?: string): { bond0?: string; bond1?: string } {
-  if (!nodeIpsJson) return {};
-  let parsed: NodeIpEntry[];
-  try {
-    parsed = JSON.parse(nodeIpsJson) as NodeIpEntry[];
-  } catch {
-    return {};
-  }
-  const buckets: Record<string, string[]> = { bond0: [], bond1: [] };
-  for (const n of parsed) {
-    for (const ifc of n.interfaces ?? []) {
-      const key = ifc.name?.toLowerCase();
-      if (key !== 'bond0' && key !== 'bond1') continue;
-      for (const ip of ifc.ips ?? []) buckets[key].push(ip);
-    }
-  }
-  const result: { bond0?: string; bond1?: string } = {};
-  if (buckets.bond0.length > 0) result.bond0 = inferCidr(buckets.bond0) ?? undefined;
-  if (buckets.bond1.length > 0) result.bond1 = inferCidr(buckets.bond1) ?? undefined;
-  return result;
-}
+import { extractInterfaceIps, extractInternalIps, groupInternalIps, parseNodeIps } from './internalIp';
 
 interface ClusterTableRowProps {
   cluster: Cluster;
@@ -139,7 +74,17 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
   const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
   const { data: opsLevels } = useOperationLevels();
   const lv = cluster.operationLevel ? levelBadgeClass(levelColor(opsLevels, cluster.operationLevel)) : undefined;
-  const bondCidrs = useMemo(() => computeBondCidrs(cluster.nodeIps), [cluster.nodeIps]);
+  const ipBuckets = useMemo(() => {
+    const entries = parseNodeIps(cluster.nodeIps);
+    const internalIps = extractInternalIps(entries);
+    const bond0Ips = extractInterfaceIps(entries, 'bond0');
+    const bond1Ips = extractInterfaceIps(entries, 'bond1');
+    return {
+      internal: { ips: internalIps, groups: groupInternalIps(internalIps) },
+      bond0:    { ips: bond0Ips,    groups: groupInternalIps(bond0Ips) },
+      bond1:    { ips: bond1Ips,    groups: groupInternalIps(bond1Ips) },
+    };
+  }, [cluster.nodeIps]);
 
   return (
     <tr className="border-b border-border hover:bg-secondary/20 transition-colors">
@@ -205,7 +150,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         ) : <span className="text-muted-foreground/60 text-xs">-</span>}
       </td>
 
-      {/* Node CIDR */}
+      {/* INTERNAL_IP — kubectl InternalIP 들을 정규식/Glob 형식으로 묶어 표시 */}
       <EditableCell
         isEditing={editingField === 'cidr'}
         onEnter={() => setEditingField('cidr')}
@@ -215,40 +160,79 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             value={cluster.cidr ?? ''}
             onSave={(v) => quickUpdate({ cidr: v || undefined })}
             onCancel={() => setEditingField(null)}
-            placeholder="192.168.0.0/24"
+            placeholder="192.168.0.0/24 (fallback)"
             inputClassName="text-xs font-mono"
           />
-        ) : cluster.cidr || bondCidrs.bond0 || bondCidrs.bond1 ? (
+        ) : ipBuckets.internal.groups.length > 0 || cluster.cidr ? (
           <div>
-            {cluster.cidr ? (
-              <p className="text-xs font-mono text-foreground" title="모든 노드 InternalIP 의 최소 공통 supernet">{cluster.cidr}</p>
-            ) : null}
-            {(cluster.firstHost || cluster.lastHost) && (
-              <p className="text-[10px] font-mono text-muted-foreground">{cluster.firstHost} ~ {cluster.lastHost}</p>
-            )}
-            {(bondCidrs.bond0 || bondCidrs.bond1) && (
-              <div className="mt-1 space-y-0.5 border-t border-border/40 pt-1"
-                title="NIC 수집(SSH) 결과의 interfaces[].name === bond0/bond1 IP 들로 추정한 대역">
-                {bondCidrs.bond0 && (
-                  <p className="text-[10px] font-mono text-cyan-500/80">
-                    <span className="text-muted-foreground/70">bond0</span> {bondCidrs.bond0}
-                  </p>
+            {ipBuckets.internal.groups.length > 0 ? (
+              <div title="kubectl get nodes -o wide 의 InternalIP 들을 /24 단위로 묶은 표기 (마지막 옥텟 연속 구간 압축)">
+                {ipBuckets.internal.groups.slice(0, 3).map((g, i) => (
+                  <p key={i} className="text-xs font-mono text-foreground tabular-nums">{g}</p>
+                ))}
+                {ipBuckets.internal.groups.length > 3 && (
+                  <p className="text-[10px] font-mono text-muted-foreground">+{ipBuckets.internal.groups.length - 3}개 그룹</p>
                 )}
-                {bondCidrs.bond1 && (
-                  <p className="text-[10px] font-mono text-amber-500/80">
-                    <span className="text-muted-foreground/70">bond1</span> {bondCidrs.bond1}
-                  </p>
-                )}
+                <p className="text-[10px] text-muted-foreground/80 mt-0.5">
+                  {ipBuckets.internal.ips.length}개 노드
+                </p>
               </div>
+            ) : (
+              <p className="text-xs font-mono text-muted-foreground" title="nodeIps 미수집 — 수동 입력된 fallback CIDR">
+                <span className="text-muted-foreground/60 text-[10px] mr-1">fallback</span>
+                <span className="text-foreground">{cluster.cidr}</span>
+              </p>
             )}
-            {overlapGroupIdx !== undefined && (
-              <span className="text-[10px] text-amber-400 flex items-center gap-0.5 mt-0.5">
-                <AlertTriangle className="w-2.5 h-2.5" />겹침
-              </span>
-            )}
+            <div className="flex items-center gap-1 mt-1">
+              {overlapGroupIdx !== undefined && (
+                <span className="text-[10px] text-amber-600 inline-flex items-center gap-0.5">
+                  <AlertTriangle className="w-2.5 h-2.5" />겹침
+                </span>
+              )}
+              {cluster.cidr && (
+                <Link
+                  to={`/cidr?cidr=${encodeURIComponent(cluster.cidr)}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-[10px] text-muted-foreground hover:text-primary inline-flex items-center gap-0.5 ml-auto px-1 py-0.5 rounded hover:bg-primary/10 transition-colors"
+                  title={`CIDR Calculator 에서 ${cluster.cidr} 분석`}
+                >
+                  <ArrowUpRight className="w-2.5 h-2.5" />Calc
+                </Link>
+              )}
+            </div>
           </div>
         ) : <span className="text-muted-foreground/60 text-xs">-</span>}
       </EditableCell>
+
+      {/* bond0 — 모든 노드 bond0 IP 들 정규식/Glob 그룹화 */}
+      <td className="px-3 py-2.5 align-top">
+        {ipBuckets.bond0.groups.length > 0 ? (
+          <div>
+            {ipBuckets.bond0.groups.slice(0, 3).map((g, i) => (
+              <p key={i} className="text-xs font-mono text-cyan-700 tabular-nums" title="모든 노드 bond0 IP /24 묶음">{g}</p>
+            ))}
+            {ipBuckets.bond0.groups.length > 3 && (
+              <p className="text-[10px] font-mono text-muted-foreground">+{ipBuckets.bond0.groups.length - 3}개 그룹</p>
+            )}
+            <p className="text-[10px] text-muted-foreground/80 mt-0.5">{ipBuckets.bond0.ips.length}개 IP</p>
+          </div>
+        ) : <span className="text-muted-foreground/50 text-xs" title="NIC 수집(SSH) 후 채워짐">-</span>}
+      </td>
+
+      {/* bond1 */}
+      <td className="px-3 py-2.5 align-top">
+        {ipBuckets.bond1.groups.length > 0 ? (
+          <div>
+            {ipBuckets.bond1.groups.slice(0, 3).map((g, i) => (
+              <p key={i} className="text-xs font-mono text-amber-700 tabular-nums" title="모든 노드 bond1 IP /24 묶음">{g}</p>
+            ))}
+            {ipBuckets.bond1.groups.length > 3 && (
+              <p className="text-[10px] font-mono text-muted-foreground">+{ipBuckets.bond1.groups.length - 3}개 그룹</p>
+            )}
+            <p className="text-[10px] text-muted-foreground/80 mt-0.5">{ipBuckets.bond1.ips.length}개 IP</p>
+          </div>
+        ) : <span className="text-muted-foreground/50 text-xs" title="NIC 수집(SSH) 후 채워짐">-</span>}
+      </td>
 
       {/* Pod CIDR */}
       <EditableCell

@@ -4,6 +4,8 @@ import type { Cluster } from '@/types';
 import { STATUS_STYLE, OVERLAP_COLORS } from './constants';
 import { useOperationLevels, levelBadgeClass, levelLabel, levelColor } from '@/hooks/useOperationLevels';
 import { CidrRow } from './CidrRow';
+import { InternalIpRow } from './InternalIpRow';
+import { BondIpRow } from './BondIpRow';
 
 type CardTab = 'node' | 'network';
 
@@ -26,7 +28,7 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
     : null;
 
   const hasNodeData    = !!(cluster.nodeCount || cluster.maxPod || cluster.hostname || cluster.bond0Ip || cluster.bond1Ip);
-  const hasNetworkData = !!(cluster.cidr || cluster.podCidr || cluster.svcCidr);
+  const hasNetworkData = !!(cluster.cidr || cluster.podCidr || cluster.svcCidr || cluster.nodeIps);
 
   return (
     <div className={`bg-card border border-border border-l-4 ${st.border} rounded-xl flex flex-col shadow-sm hover:shadow-md transition-shadow`}>
@@ -148,14 +150,17 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
 
         {tab === 'network' && (
           <div className="space-y-2">
-            <CidrRow label="Node CIDR" cidr={cluster.cidr} first={cluster.firstHost} last={cluster.lastHost}
-              color={{ bg: 'bg-blue-500/5', border: 'border-blue-500/20', text: 'text-blue-400', label: 'text-blue-400' }}
+            <InternalIpRow cluster={cluster}
               overlapColor={cluster.cidr ? overlapColor : null} />
+            <div className="grid grid-cols-2 gap-2">
+              <BondIpRow cluster={cluster} bond="bond0" />
+              <BondIpRow cluster={cluster} bond="bond1" />
+            </div>
             <CidrRow label="Pod CIDR" cidr={cluster.podCidr} first={cluster.podFirstHost} last={cluster.podLastHost}
-              color={{ bg: 'bg-emerald-500/5', border: 'border-emerald-500/20', text: 'text-emerald-400', label: 'text-emerald-400' }}
+              color={{ bg: 'bg-emerald-500/5', border: 'border-emerald-500/20', text: 'text-emerald-600', label: 'text-emerald-600' }}
               overlapColor={cluster.podCidr ? overlapColor : null} />
             <CidrRow label="Service CIDR" cidr={cluster.svcCidr} first={cluster.svcFirstHost} last={cluster.svcLastHost}
-              color={{ bg: 'bg-violet-500/5', border: 'border-violet-500/20', text: 'text-violet-400', label: 'text-violet-400' }}
+              color={{ bg: 'bg-violet-500/5', border: 'border-violet-500/20', text: 'text-violet-600', label: 'text-violet-600' }}
               overlapColor={cluster.svcCidr ? overlapColor : null} />
             {cluster.ciliumConfig && (
               <div className="mt-1 pt-2 border-t border-border/40">

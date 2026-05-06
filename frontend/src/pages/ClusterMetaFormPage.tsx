@@ -298,10 +298,15 @@ export function ClusterMetaFormPage() {
 
             {tab === 'network' && (
               <div className="space-y-5">
-                <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
-                  <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-3">Node CIDR 대역</p>
+                <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-4">
+                  <div className="mb-3">
+                    <p className="text-xs font-semibold text-sky-600 uppercase tracking-wider">INTERNAL_IP — 수동 입력 (fallback CIDR)</p>
+                    <p className="text-[10.5px] text-muted-foreground mt-0.5">
+                      자동수집(kubectl) 으로 받은 노드 InternalIP 가 우선 표시됩니다. 이 영역은 수집 전 임시로 사용할 supernet 만 입력하세요.
+                    </p>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div><label htmlFor={f('cidr')} className={lc}>Node CIDR</label>
+                    <div><label htmlFor={f('cidr')} className={lc}>Fallback CIDR</label>
                       <input id={f('cidr')} type="text" value={cidr} onChange={(e) => setCidr(e.target.value)} placeholder="192.168.0.0/24" className={ic} /></div>
                     <div><label htmlFor={f('firstHost')} className={lc}>First Host</label>
                       <input id={f('firstHost')} type="text" value={firstHost} onChange={(e) => setFirstHost(e.target.value)} placeholder="192.168.0.1" className={ic} /></div>

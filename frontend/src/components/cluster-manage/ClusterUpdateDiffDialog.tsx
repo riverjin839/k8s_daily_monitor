@@ -22,7 +22,7 @@ const FIELD_LABELS: Record<string, string> = {
   nodeCount: '노드 수',
   hostname: 'Master 호스트명',
   maxPod: '노드당 Max Pod',
-  cidr: 'Node CIDR',
+  cidr: 'INTERNAL_IP (집계 CIDR)',
   firstHost: 'Node 첫 호스트',
   lastHost: 'Node 마지막 호스트',
   svcCidr: 'Service CIDR',
@@ -37,6 +37,10 @@ const FIELD_LABELS: Record<string, string> = {
   k8sVersion: 'Kubernetes 버전',
   ciliumVersion: 'Cilium 버전',
   nodeIps: '노드 IP 목록',
+  bond0Ip:  'bond0 IP (master)',
+  bond0Mac: 'bond0 MAC (master)',
+  bond1Ip:  'bond1 IP (master)',
+  bond1Mac: 'bond1 MAC (master)',
 };
 
 function renderValue(v: unknown, field?: string): string {

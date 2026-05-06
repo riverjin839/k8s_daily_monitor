@@ -1,10 +1,26 @@
-import { useState } from 'react';
-import { Calculator, Copy, Check, Plus, Trash2, ExternalLink, AlertTriangle } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ArrowRight,
+  BookOpen,
+  Calculator,
+  Check,
+  Copy,
+  ExternalLink,
+  GitCompare,
+  Globe,
+  Lock,
+  Plus,
+  Scissors,
+  Trash2,
+} from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { clustersApi } from '@/services/api';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
+import { MacCard } from '@/components/ui/MacCard';
 
 // ── Pure CIDR logic ───────────────────────────────────────────────────────────
 
@@ -111,11 +127,34 @@ function cidrsOverlap(cidr1: string, cidr2: string): boolean {
   return start1 <= end2 && start2 <= end1;
 }
 
-// ── UI helpers ────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function CopyButton({ value }: { value: string }) {
+function isPrivateRange(ip: string): boolean {
+  const parts = ip.split('.').map(Number);
+  const [a, b] = parts;
+  if (a === 10) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 127) return true;
+  return false;
+}
+
+function maskBinary(mask: string): string[] {
+  return mask.split('.').map((o) => parseInt(o, 10).toString(2).padStart(8, '0'));
+}
+
+function formatHosts(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString();
+}
+
+// ── UI subatoms ───────────────────────────────────────────────────────────────
+
+function CopyButton({ value, className = '' }: { value: string; className?: string }) {
   const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
     navigator.clipboard.writeText(value).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
@@ -123,31 +162,39 @@ function CopyButton({ value }: { value: string }) {
   };
   return (
     <button
+      type="button"
       onClick={handleCopy}
-      className="ml-1 p-0.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-      title="Copy"
+      className={`inline-flex items-center justify-center p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors ${className}`}
+      title="복사"
+      aria-label={`Copy ${value}`}
     >
-      {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+      {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
     </button>
   );
 }
 
-interface InfoRowProps {
+interface StatTileProps {
   label: string;
   value: string;
-  mono?: boolean;
-  highlight?: string;
+  accent?: 'default' | 'primary' | 'success';
 }
 
-function InfoRow({ label, value, mono = true, highlight }: InfoRowProps) {
+function StatTile({ label, value, accent = 'default' }: StatTileProps) {
+  const accentCls =
+    accent === 'primary' ? 'text-primary' :
+    accent === 'success' ? 'text-emerald-600' : 'text-foreground';
   return (
-    <div className="flex items-center justify-between py-2.5 border-b border-border last:border-b-0">
-      <span className="text-sm text-muted-foreground w-36 flex-shrink-0">{label}</span>
-      <div className="flex items-center gap-1">
-        <span className={`text-sm font-medium ${mono ? 'font-mono' : ''} ${highlight ?? ''}`}>
-          {value}
+    <div className="group relative bg-secondary/40 hover:bg-secondary/70 border border-border rounded-lg px-3 py-2.5 transition-colors">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {label}
         </span>
-        {mono && <CopyButton value={value} />}
+        <span className="opacity-0 group-hover:opacity-100 transition-opacity">
+          <CopyButton value={value} />
+        </span>
+      </div>
+      <div className={`font-mono text-sm tabular-nums truncate ${accentCls}`} title={value}>
+        {value}
       </div>
     </div>
   );
@@ -165,11 +212,31 @@ function genId() {
   return Math.random().toString(36).slice(2, 8);
 }
 
+const QUICK_REF: ReadonlyArray<readonly [string, string, string]> = [
+  ['/8', '16.7M', 'hosts'],
+  ['/16', '65,534', 'hosts'],
+  ['/20', '4,094', 'hosts'],
+  ['/22', '1,022', 'hosts'],
+  ['/24', '254', 'hosts'],
+  ['/25', '126', 'hosts'],
+  ['/26', '62', 'hosts'],
+  ['/27', '30', 'hosts'],
+  ['/28', '14', 'hosts'],
+  ['/29', '6', 'hosts'],
+  ['/30', '2', 'hosts'],
+  ['/32', 'Single', 'IP'],
+];
+
 export function CidrCalculatorPage() {
+  const [searchParams] = useSearchParams();
+  const initialCidr = searchParams.get('cidr')?.trim() || '192.168.1.0/24';
+
   // Main calculator
-  const [input, setInput] = useState('192.168.1.0/24');
-  const [info, setInfo] = useState<CidrInfo | null>(() => parseCidr('192.168.1.0/24'));
-  const [inputError, setInputError] = useState('');
+  const [input, setInput] = useState(initialCidr);
+  const [info, setInfo] = useState<CidrInfo | null>(() => parseCidr(initialCidr));
+  const [inputError, setInputError] = useState(() =>
+    parseCidr(initialCidr) ? '' : '잘못된 CIDR 표기입니다. 예: 192.168.1.0/24',
+  );
 
   // Subnet divider
   const [divideCount, setDivideCount] = useState(4);
@@ -217,12 +284,11 @@ export function CidrCalculatorPage() {
     if (result) {
       setInfo(result);
       setInputError('');
-      // Auto-reset subnets when CIDR changes
       setSubnets([]);
       setDivideError('');
     } else {
       setInfo(null);
-      setInputError('Invalid CIDR notation. Example: 192.168.1.0/24');
+      setInputError('잘못된 CIDR 표기입니다. 예: 192.168.1.0/24');
     }
   };
 
@@ -230,7 +296,7 @@ export function CidrCalculatorPage() {
     if (!info) return;
     const result = divideSubnets(input, divideCount);
     if (result.length === 0) {
-      setDivideError(`Cannot divide /${info.prefix} into ${divideCount} subnets — prefix would exceed /32`);
+      setDivideError(`/${info.prefix} 을 ${divideCount}개로 분할할 수 없습니다 — prefix 가 /32 를 초과합니다`);
       setSubnets([]);
     } else {
       setSubnets(result);
@@ -250,120 +316,526 @@ export function CidrCalculatorPage() {
     setEntries((prev) => prev.filter((e) => e.id !== id));
   };
 
-  const formatHosts = (n: number): string => {
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-    return n.toLocaleString();
-  };
+  // Derived
+  const isPrivate = info ? isPrivateRange(info.network) : false;
+  const sliderPct = info ? (info.prefix / 32) * 100 : 0;
 
-  const inputClass =
-    'px-3 py-2 bg-secondary border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50';
+  const overlappingClusters = useMemo(() => {
+    if (!info) return [];
+    const cur = `${info.network}/${info.prefix}`;
+    return clusters.filter((c) => Boolean(c.cidr) && cidrsOverlap(cur, c.cidr as string));
+  }, [info, clusters]);
+
+  const inputBaseCls =
+    'px-3 py-2 bg-secondary border border-border rounded-lg text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-colors';
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-[1200px] mx-auto px-8 py-8">
-        {/* Page Header */}
-        <div className="flex items-center gap-3 mb-8">
-          <Calculator className="w-6 h-6 text-primary" />
-          <h1 className="text-xl font-bold">CIDR Calculator</h1>
-          <span className="text-sm text-muted-foreground">— Subnet 계산 · 분할 · 비교</span>
-        </div>
+      <main className="max-w-[1440px] mx-auto px-6 py-6 space-y-5">
+        {/* ── Page Header ─────────────────────────────────────────────────── */}
+        <header className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
+              <Calculator className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight">CIDR Calculator</h1>
+              <p className="text-xs text-muted-foreground">서브넷 계산 · 분할 · 충돌 검사</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-sky-500" /> Private (RFC1918)
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Public
+            </span>
+          </div>
+        </header>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-          {/* LEFT: Main Calculator */}
-          <div className="space-y-6">
-            {/* Input */}
-            <div className="bg-card border border-border rounded-xl p-6">
-              <h2 className="text-base font-semibold mb-4">CIDR 계산</h2>
-              <div className="flex gap-3">
+        {/* ── HERO: input + summary ──────────────────────────────────────── */}
+        <MacCard title="CIDR INPUT" bodyPadding="p-0">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.05fr,1fr] divide-y lg:divide-y-0 lg:divide-x divide-border">
+            {/* Left: input + slider */}
+            <div className="p-5 lg:p-6">
+              <label
+                htmlFor="cidr-input-main"
+                className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2"
+              >
+                CIDR Notation
+              </label>
+              <div className="relative">
                 <input
+                  id="cidr-input-main"
                   type="text"
                   value={input}
                   onChange={(e) => handleCalculate(e.target.value)}
                   placeholder="192.168.1.0/24"
-                  className={`${inputClass} flex-1 text-base`}
+                  spellCheck={false}
+                  className={[
+                    'w-full px-4 py-3 pr-36 bg-secondary/60 border border-border rounded-xl',
+                    'text-lg font-mono tabular-nums tracking-tight',
+                    'focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all',
+                    inputError ? 'border-rose-500/60 focus:ring-rose-500/30' : '',
+                  ].join(' ')}
                 />
+                {info && !inputError && (
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    <span className="px-2 py-0.5 text-[10px] font-semibold rounded-md bg-primary/10 text-primary border border-primary/20">
+                      Class {info.ipClass.split(' ')[0]}
+                    </span>
+                    <span
+                      className={[
+                        'px-2 py-0.5 text-[10px] font-semibold rounded-md border inline-flex items-center gap-1',
+                        isPrivate
+                          ? 'bg-sky-500/10 text-sky-600 border-sky-500/30'
+                          : 'bg-amber-500/10 text-amber-600 border-amber-500/30',
+                      ].join(' ')}
+                    >
+                      {isPrivate ? <Lock className="w-2.5 h-2.5" /> : <Globe className="w-2.5 h-2.5" />}
+                      {isPrivate ? 'Private' : 'Public'}
+                    </span>
+                  </div>
+                )}
               </div>
+
               {inputError && (
-                <p className="mt-2 text-xs text-red-400">{inputError}</p>
+                <p className="mt-2 text-xs text-rose-500 inline-flex items-center gap-1.5">
+                  <AlertTriangle className="w-3 h-3" />
+                  {inputError}
+                </p>
+              )}
+
+              {/* Address space slider */}
+              {info && (
+                <div className="mt-6">
+                  <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                    <span>Address Space</span>
+                    <span className="font-mono tabular-nums">/{info.prefix}</span>
+                  </div>
+                  <div className="relative h-2 bg-secondary rounded-full overflow-visible">
+                    <div
+                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary/50 to-primary rounded-full transition-all"
+                      style={{ width: `${sliderPct}%` }}
+                    />
+                    <div
+                      className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-card border-2 border-primary rounded-full transition-all"
+                      style={{ left: `${sliderPct}%`, boxShadow: '0 1px 4px rgba(0,0,0,0.12)' }}
+                      aria-hidden
+                    />
+                  </div>
+                  <div className="flex justify-between text-[10px] text-muted-foreground mt-2 font-mono tabular-nums">
+                    <span>/0</span>
+                    <span>/8</span>
+                    <span>/16</span>
+                    <span>/24</span>
+                    <span>/32</span>
+                  </div>
+                </div>
               )}
             </div>
 
-            {/* Results */}
-            {info && (
-              <div className="bg-card border border-border rounded-xl overflow-hidden">
-                <div className="px-6 py-3 border-b border-border bg-muted/20 flex items-center gap-2">
-                  <span className="font-semibold text-sm">{input}</span>
-                  <span className="text-xs text-muted-foreground">Class {info.ipClass}</span>
-                </div>
-                <div className="px-6 py-1">
-                  <InfoRow label="Network Address" value={`${info.network}/${info.prefix}`} />
-                  <InfoRow label="Subnet Mask" value={info.mask} />
-                  <InfoRow label="Wildcard Mask" value={info.wildcard} />
-                  <InfoRow label="Broadcast" value={info.broadcast} />
-                  <InfoRow label="First Host" value={info.firstHost} highlight="text-green-400" />
-                  <InfoRow label="Last Host" value={info.lastHost} highlight="text-green-400" />
-                  <InfoRow label="Total Hosts" value={formatHosts(info.totalHosts)} mono={false} />
-                  <InfoRow label="Usable Hosts" value={formatHosts(info.usableHosts)} mono={false} highlight="text-primary" />
+            {/* Right: summary numbers */}
+            {info ? (
+              <div className="p-5 lg:p-6 bg-muted/30">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                      Usable Hosts
+                    </div>
+                    <div className="text-3xl font-bold tabular-nums text-primary leading-none">
+                      {formatHosts(info.usableHosts)}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-1.5 font-mono tabular-nums">
+                      {info.usableHosts.toLocaleString()} addresses
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                      Total
+                    </div>
+                    <div className="text-3xl font-bold tabular-nums text-foreground leading-none">
+                      {formatHosts(info.totalHosts)}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-1.5 font-mono tabular-nums">
+                      2<sup>{32 - info.prefix}</sup> addresses
+                    </div>
+                  </div>
                 </div>
 
-                {/* Visual range bar */}
-                <div className="px-6 pb-5 pt-3">
-                  <div className="text-xs text-muted-foreground mb-1.5">Address space /{info.prefix}</div>
-                  <div className="w-full bg-secondary rounded-full h-3 overflow-hidden">
-                    <div
-                      className="h-3 bg-gradient-to-r from-primary to-blue-400 rounded-full"
-                      style={{ width: `${Math.max(((32 - info.prefix) / 32) * 100, 2)}%` }}
-                    />
+                <div className="mt-4 pt-4 border-t border-border">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                    Host Range
                   </div>
-                  <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-                    <span>/0 (all)</span>
-                    <span>/{info.prefix}</span>
-                    <span>/32 (host)</span>
+                  <div className="flex items-center gap-2 font-mono tabular-nums text-sm">
+                    <span className="text-emerald-600 font-medium">{info.firstHost}</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-muted-foreground/60 flex-shrink-0" />
+                    <span className="text-emerald-600 font-medium">{info.lastHost}</span>
+                    <CopyButton value={`${info.firstHost} - ${info.lastHost}`} className="ml-auto" />
                   </div>
                 </div>
-                {clusters.length > 0 && (() => {
-                  const currentCidr = `${info.network}/${info.prefix}`;
-                  const overlapping = clusters.filter((c) => Boolean(c.cidr) && cidrsOverlap(currentCidr, c.cidr as string));
-                  if (overlapping.length === 0) return null;
-                  return (
-                    <div className="px-6 pb-5">
-                      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                        <p className="text-xs font-semibold text-amber-400 flex items-center gap-1.5 mb-2">
-                          <AlertTriangle className="w-3.5 h-3.5" />
-                          클러스터 CIDR 겹침 — {overlapping.length}개 클러스터와 주소 범위 충돌
-                        </p>
-                        <div className="space-y-1">
-                          {overlapping.map((c) => (
-                            <div key={c.id} className="flex items-center gap-2 text-xs">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
-                              <span className="font-medium">{c.name}</span>
-                              <span className="text-muted-foreground font-mono">{c.cidr}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
+              </div>
+            ) : (
+              <div className="p-6 bg-muted/30 flex items-center justify-center text-xs text-muted-foreground">
+                CIDR 입력 시 결과가 여기에 표시됩니다.
               </div>
             )}
+          </div>
+        </MacCard>
 
-            {/* Apply CIDR to Cluster */}
-            {info && clusters.length > 0 && (
-              <div className="bg-card border border-border rounded-xl p-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <ExternalLink className="w-4 h-4 text-primary" />
-                  <h2 className="text-base font-semibold">클러스터에 적용</h2>
+        {/* ── Network Details (tiles + binary mask) ──────────────────────── */}
+        {info && (
+          <MacCard title="Network Details">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+              <StatTile label="Network" value={`${info.network}/${info.prefix}`} accent="primary" />
+              <StatTile label="Broadcast" value={info.broadcast} />
+              <StatTile label="Subnet Mask" value={info.mask} />
+              <StatTile label="Wildcard" value={info.wildcard} />
+            </div>
+
+            {/* Binary mask visualization */}
+            <div className="mt-4 p-3.5 bg-secondary/40 border border-border rounded-lg">
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Binary Mask
+                </span>
+                <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-sm bg-primary" />
+                    network bits ({info.prefix})
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-sm bg-muted-foreground/30" />
+                    host bits ({32 - info.prefix})
+                  </span>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3">
-                  계산된 Network CIDR({info.network}/{info.prefix})을 클러스터 관리 정보에 저장합니다.
+              </div>
+              <div className="font-mono text-sm tabular-nums tracking-tight flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                {maskBinary(info.mask).map((octet, i) => (
+                  <span key={i} className="inline-flex items-center">
+                    <span className="inline-flex">
+                      {octet.split('').map((bit, j) => {
+                        const bitIdx = i * 8 + j;
+                        const isNetwork = bitIdx < info.prefix;
+                        return (
+                          <span
+                            key={j}
+                            className={
+                              isNetwork
+                                ? 'text-primary font-semibold'
+                                : 'text-muted-foreground/50'
+                            }
+                          >
+                            {bit}
+                          </span>
+                        );
+                      })}
+                    </span>
+                    {i < 3 && <span className="text-border ml-2">·</span>}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Cluster overlap warning */}
+            {overlappingClusters.length > 0 && (
+              <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <p className="text-xs font-semibold text-amber-600 inline-flex items-center gap-1.5 mb-2">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  등록 클러스터와 CIDR 겹침 — {overlappingClusters.length}개 충돌
                 </p>
-                <div className="flex gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {overlappingClusters.map((c) => (
+                    <div
+                      key={c.id}
+                      className="flex items-center gap-2 text-xs px-2.5 py-1.5 bg-card/80 border border-border rounded-md"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+                      <span className="font-medium truncate">{c.name}</span>
+                      <span className="text-muted-foreground font-mono tabular-nums ml-auto">{c.cidr}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </MacCard>
+        )}
+
+        {/* ── Body grid: Subnet divider + Compare | Apply + Quick ref ───── */}
+        <div className="grid grid-cols-1 xl:grid-cols-[1.5fr,1fr] gap-5 items-start">
+          {/* LEFT column */}
+          <div className="space-y-5">
+            {/* Subnet divider */}
+            {info && (
+              <MacCard title="서브넷 분할 (SUBNET DIVIDER)">
+                <div className="flex items-end gap-3 flex-wrap">
+                  <div className="flex-shrink-0">
+                    <label
+                      htmlFor="cidr-divide-count"
+                      className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5"
+                    >
+                      분할 개수
+                    </label>
+                    <input
+                      id="cidr-divide-count"
+                      type="number"
+                      min={2}
+                      max={256}
+                      value={divideCount}
+                      onChange={(e) => setDivideCount(parseInt(e.target.value, 10) || 2)}
+                      className={`${inputBaseCls} w-24`}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDivide}
+                    className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors inline-flex items-center gap-1.5"
+                  >
+                    <Scissors className="w-3.5 h-3.5" />
+                    분할
+                  </button>
+                  <div className="flex-1 min-w-0 text-[11px] text-muted-foreground">
+                    {info.network}/{info.prefix} 을 {divideCount}개 균등 분할
+                    {(() => {
+                      const bits = Math.ceil(Math.log2(Math.max(divideCount, 2)));
+                      const newPrefix = info.prefix + bits;
+                      if (newPrefix > 32) return <> · <span className="text-rose-500">/32 초과</span></>;
+                      return <> · 결과 prefix /{newPrefix} · 각 {formatHosts(Math.pow(2, 32 - newPrefix))} addresses</>;
+                    })()}
+                  </div>
+                </div>
+
+                {divideError && (
+                  <p className="mt-3 text-xs text-rose-500 inline-flex items-center gap-1.5">
+                    <AlertTriangle className="w-3 h-3" />
+                    {divideError}
+                  </p>
+                )}
+
+                {subnets.length > 0 && (
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-72 overflow-y-auto pr-1">
+                    {subnets.map((s, i) => {
+                      const si = parseCidr(s);
+                      return (
+                        <div
+                          key={i}
+                          className="group flex items-center gap-2 px-3 py-2 bg-secondary/40 hover:bg-secondary border border-border rounded-md text-xs transition-colors"
+                        >
+                          <span className="text-[10px] text-muted-foreground font-mono tabular-nums w-7 flex-shrink-0">
+                            #{String(i + 1).padStart(2, '0')}
+                          </span>
+                          <span className="font-mono tabular-nums font-medium flex-shrink-0">{s}</span>
+                          {si && (
+                            <span className="text-[10px] text-muted-foreground font-mono tabular-nums truncate ml-auto">
+                              {si.firstHost}–{si.lastHost}
+                            </span>
+                          )}
+                          <span className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <CopyButton value={s} />
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </MacCard>
+            )}
+
+            {/* Multi-CIDR comparator */}
+            <MacCard title="멀티 CIDR 비교 (OVERLAP CHECK)">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[11px] text-muted-foreground inline-flex items-center gap-1.5">
+                  <GitCompare className="w-3.5 h-3.5" />
+                  여러 CIDR 블록의 주소 충돌을 한눈에 확인합니다
+                </p>
+                <button
+                  type="button"
+                  onClick={addEntry}
+                  className="px-2.5 py-1 text-[11px] font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-md transition-colors inline-flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  추가
+                </button>
+              </div>
+
+              <div className="space-y-2 mb-4">
+                {entries.map((entry) => (
+                  <div key={entry.id} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={entry.label}
+                      onChange={(e) => updateEntry(entry.id, 'label', e.target.value)}
+                      placeholder="Label"
+                      className="px-2 py-1.5 bg-secondary border border-border rounded-md text-xs w-32 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                    />
+                    <input
+                      type="text"
+                      value={entry.cidr}
+                      onChange={(e) => updateEntry(entry.id, 'cidr', e.target.value)}
+                      placeholder="10.0.0.0/24"
+                      spellCheck={false}
+                      className={`${inputBaseCls} flex-1 text-xs py-1.5`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeEntry(entry.id)}
+                      className="p-1.5 hover:bg-rose-500/10 rounded-md text-muted-foreground hover:text-rose-500 flex-shrink-0 transition-colors"
+                      aria-label="Remove entry"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Comparison table */}
+              <div className="overflow-x-auto border border-border rounded-md">
+                <table
+                  className="text-xs"
+                  style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}
+                >
+                  <colgroup>
+                    {(['label', 'network', 'mask', 'hosts', 'overlap'] as const).map((k) => (
+                      <col key={k} style={{ width: `${compareColW.getWidth(k)}px` }} />
+                    ))}
+                  </colgroup>
+                  <thead>
+                    <tr className="bg-muted/40 border-b border-border">
+                      <th className="relative text-left py-2 px-3 text-muted-foreground font-medium uppercase text-[10px] tracking-wider">
+                        Label
+                        <ResizeGrip onMouseDown={(e) => compareColW.beginResize('label', e)} onDoubleClick={() => compareColW.autoFit('label')} />
+                      </th>
+                      <th className="relative text-left py-2 px-3 text-muted-foreground font-medium uppercase text-[10px] tracking-wider">
+                        Network
+                        <ResizeGrip onMouseDown={(e) => compareColW.beginResize('network', e)} onDoubleClick={() => compareColW.autoFit('network')} />
+                      </th>
+                      <th className="relative text-left py-2 px-3 text-muted-foreground font-medium uppercase text-[10px] tracking-wider">
+                        Mask
+                        <ResizeGrip onMouseDown={(e) => compareColW.beginResize('mask', e)} onDoubleClick={() => compareColW.autoFit('mask')} />
+                      </th>
+                      <th className="relative text-right py-2 px-3 text-muted-foreground font-medium uppercase text-[10px] tracking-wider">
+                        Usable
+                        <ResizeGrip onMouseDown={(e) => compareColW.beginResize('hosts', e)} onDoubleClick={() => compareColW.autoFit('hosts')} />
+                      </th>
+                      <th className="relative text-left py-2 px-3 text-muted-foreground font-medium uppercase text-[10px] tracking-wider">
+                        Overlap
+                        <ResizeGrip onMouseDown={(e) => compareColW.beginResize('overlap', e)} onDoubleClick={() => compareColW.autoFit('overlap')} />
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entries.map((entry) => {
+                      const ei = parseCidr(entry.cidr);
+                      const overlappingEntries = entries.filter(
+                        (e) => e.id !== entry.id && cidrsOverlap(entry.cidr, e.cidr),
+                      );
+                      const hasOverlap = overlappingEntries.length > 0;
+                      return (
+                        <tr
+                          key={entry.id}
+                          className={`border-b border-border/60 last:border-b-0 transition-colors ${
+                            hasOverlap ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-muted/30'
+                          }`}
+                        >
+                          <td className="py-2 px-3 font-medium truncate">{entry.label || '—'}</td>
+                          <td className="py-2 px-3 font-mono tabular-nums text-muted-foreground truncate">
+                            {ei ? `${ei.network}/${ei.prefix}` : <span className="text-rose-500">invalid</span>}
+                          </td>
+                          <td className="py-2 px-3 font-mono tabular-nums text-muted-foreground truncate">
+                            {ei ? ei.mask : '—'}
+                          </td>
+                          <td className="py-2 px-3 text-right font-mono tabular-nums text-primary font-medium">
+                            {ei ? formatHosts(ei.usableHosts) : '—'}
+                          </td>
+                          <td className="py-2 px-3">
+                            {hasOverlap ? (
+                              <div className="flex flex-wrap gap-1">
+                                {overlappingEntries.map((e) => (
+                                  <span
+                                    key={e.id}
+                                    className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-600 border border-amber-500/30"
+                                  >
+                                    <AlertTriangle className="w-2.5 h-2.5" />
+                                    {e.label || e.cidr}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : ei ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+                                <Check className="w-2.5 h-2.5" />
+                                clean
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground/40">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Registered cluster overlap check */}
+              {clusters.length > 0 && (() => {
+                const conflicts: { entryLabel: string; clusterName: string; clusterCidr: string }[] = [];
+                for (const entry of entries) {
+                  for (const cluster of clusters) {
+                    if (cluster.cidr && cidrsOverlap(entry.cidr, cluster.cidr)) {
+                      conflicts.push({
+                        entryLabel: entry.label || entry.cidr,
+                        clusterName: cluster.name,
+                        clusterCidr: cluster.cidr,
+                      });
+                    }
+                  }
+                }
+                if (conflicts.length === 0) return null;
+                return (
+                  <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                    <p className="text-xs font-semibold text-amber-600 inline-flex items-center gap-1.5 mb-2">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      등록 클러스터 CIDR 겹침
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                      {conflicts.map((c, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs px-2.5 py-1.5 bg-card/80 border border-border rounded-md">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+                          <span className="font-medium truncate">{c.entryLabel}</span>
+                          <span className="text-muted-foreground/60">↔</span>
+                          <span className="font-medium truncate">{c.clusterName}</span>
+                          <span className="text-muted-foreground font-mono tabular-nums ml-auto">{c.clusterCidr}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </MacCard>
+          </div>
+
+          {/* RIGHT column */}
+          <div className="space-y-5">
+            {/* Apply to cluster */}
+            {info && clusters.length > 0 && (
+              <MacCard title="클러스터에 적용 (APPLY)">
+                <p className="text-[11px] text-muted-foreground mb-3 inline-flex items-center gap-1.5">
+                  <ExternalLink className="w-3 h-3" />
+                  계산된 Network CIDR 을 클러스터 메타정보에 저장
+                </p>
+
+                <div className="space-y-2">
+                  <label
+                    htmlFor="cidr-apply-cluster-select"
+                    className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+                  >
+                    Target Cluster
+                  </label>
                   <select
+                    id="cidr-apply-cluster-select"
                     value={applyClusterId}
                     onChange={(e) => { setApplyClusterId(e.target.value); setApplyStatus('idle'); }}
-                    className="flex-1 px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                   >
                     <option value="">— 클러스터 선택 —</option>
                     {clusters.map((c) => (
@@ -372,261 +844,101 @@ export function CidrCalculatorPage() {
                       </option>
                     ))}
                   </select>
-                  <button
-                    onClick={handleApplyToCluster}
-                    disabled={!applyClusterId || applyStatus === 'loading'}
-                    className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
-                  >
-                    {applyStatus === 'loading' ? '적용 중...' : '적용'}
-                  </button>
                 </div>
+
+                {/* Preview of what will be saved */}
+                {applyClusterId && (
+                  <div className="mt-3 p-3 bg-secondary/40 border border-border rounded-lg">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                      저장될 값
+                    </div>
+                    <dl className="space-y-1 text-xs font-mono tabular-nums">
+                      <div className="flex justify-between gap-2">
+                        <dt className="text-muted-foreground">cidr</dt>
+                        <dd className="text-primary truncate">{info.network}/{info.prefix}</dd>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <dt className="text-muted-foreground">first_host</dt>
+                        <dd className="text-emerald-600 truncate">{info.firstHost}</dd>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <dt className="text-muted-foreground">last_host</dt>
+                        <dd className="text-emerald-600 truncate">{info.lastHost}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleApplyToCluster}
+                  disabled={!applyClusterId || applyStatus === 'loading'}
+                  className="mt-3 w-full px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
+                >
+                  {applyStatus === 'loading' ? '적용 중…' : '클러스터에 적용'}
+                </button>
+
                 {applyStatus === 'success' && (
-                  <p className="mt-2 text-xs text-emerald-400 flex items-center gap-1">
-                    <Check className="w-3 h-3" /> 클러스터 CIDR이 저장되었습니다.
+                  <p className="mt-2 text-xs text-emerald-600 inline-flex items-center gap-1">
+                    <Check className="w-3 h-3" /> 클러스터 CIDR 이 저장되었습니다
                   </p>
                 )}
                 {applyStatus === 'error' && (
-                  <p className="mt-2 text-xs text-red-400">저장에 실패했습니다. 다시 시도해주세요.</p>
+                  <p className="mt-2 text-xs text-rose-500 inline-flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" /> 저장 실패 — 다시 시도해주세요
+                  </p>
                 )}
-                {info && applyClusterId && (() => {
+
+                {applyClusterId && (() => {
                   const currentCidr = `${info.network}/${info.prefix}`;
                   const conflicting = clusters.filter(
                     (c) => c.id !== applyClusterId && Boolean(c.cidr) && cidrsOverlap(currentCidr, c.cidr as string),
                   );
                   if (conflicting.length === 0) return null;
                   return (
-                    <div className="mt-2 p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                      <p className="text-xs font-semibold text-amber-400 flex items-center gap-1.5 mb-1.5">
-                        <AlertTriangle className="w-3.5 h-3.5" />
-                        다른 클러스터 CIDR과 겹침
+                    <div className="mt-3 p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                      <p className="text-[11px] font-semibold text-amber-600 inline-flex items-center gap-1.5 mb-1.5">
+                        <AlertTriangle className="w-3 h-3" />
+                        다른 클러스터와 CIDR 겹침
                       </p>
-                      {conflicting.map((c) => (
-                        <div key={c.id} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
-                          <span className="font-medium text-foreground">{c.name}</span>
-                          <span className="font-mono">{c.cidr}</span>
-                        </div>
-                      ))}
+                      <div className="space-y-1">
+                        {conflicting.map((c) => (
+                          <div key={c.id} className="flex items-center gap-1.5 text-[11px]">
+                            <span className="w-1 h-1 rounded-full bg-amber-500 flex-shrink-0" />
+                            <span className="font-medium truncate">{c.name}</span>
+                            <span className="font-mono tabular-nums text-muted-foreground ml-auto">{c.cidr}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   );
                 })()}
-              </div>
+              </MacCard>
             )}
-
-            {/* Subnet Divider */}
-            {info && (
-              <div className="bg-card border border-border rounded-xl p-6">
-                <h2 className="text-base font-semibold mb-4">서브넷 분할</h2>
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="text-sm text-muted-foreground whitespace-nowrap">분할 개수</span>
-                  <input
-                    type="number"
-                    min={2}
-                    max={256}
-                    value={divideCount}
-                    onChange={(e) => setDivideCount(parseInt(e.target.value, 10) || 2)}
-                    className={`${inputClass} w-24`}
-                  />
-                  <button
-                    onClick={handleDivide}
-                    className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
-                  >
-                    분할
-                  </button>
-                </div>
-                {divideError && <p className="text-xs text-red-400 mb-3">{divideError}</p>}
-                {subnets.length > 0 && (
-                  <div className="space-y-1 max-h-64 overflow-y-auto">
-                    {subnets.map((s, i) => {
-                      const si = parseCidr(s);
-                      return (
-                        <div
-                          key={i}
-                          className="flex items-center justify-between px-3 py-2 bg-secondary/50 rounded-lg text-sm font-mono"
-                        >
-                          <span className="text-muted-foreground text-xs mr-2">#{i + 1}</span>
-                          <span className="flex-1">{s}</span>
-                          {si && (
-                            <span className="text-xs text-muted-foreground ml-2">
-                              {si.firstHost} – {si.lastHost}
-                            </span>
-                          )}
-                          <CopyButton value={s} />
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* RIGHT: Multi-CIDR Comparator */}
-          <div className="bg-card border border-border rounded-xl p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-semibold">멀티 CIDR 비교</h2>
-              <button
-                onClick={addEntry}
-                className="px-3 py-1.5 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors flex items-center gap-1"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                추가
-              </button>
-            </div>
-
-            <div className="space-y-3 mb-6">
-              {entries.map((entry) => (
-                <div key={entry.id} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={entry.label}
-                    onChange={(e) => updateEntry(entry.id, 'label', e.target.value)}
-                    placeholder="Label"
-                    className="px-2 py-1.5 bg-secondary border border-border rounded-lg text-xs w-24 focus:outline-none focus:ring-1 focus:ring-primary/50"
-                  />
-                  <input
-                    type="text"
-                    value={entry.cidr}
-                    onChange={(e) => updateEntry(entry.id, 'cidr', e.target.value)}
-                    placeholder="10.0.0.0/24"
-                    className={`${inputClass} flex-1 text-xs`}
-                  />
-                  <button
-                    onClick={() => removeEntry(entry.id)}
-                    className="p-1.5 hover:bg-red-500/10 rounded-md text-muted-foreground hover:text-red-400 flex-shrink-0"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {/* Comparison table */}
-            <div className="overflow-x-auto">
-              <table className="text-xs" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
-                <colgroup>
-                  {(['label', 'network', 'mask', 'hosts', 'overlap'] as const).map((k) => (
-                    <col key={k} style={{ width: `${compareColW.getWidth(k)}px` }} />
-                  ))}
-                </colgroup>
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="relative text-left py-2 text-muted-foreground font-medium pr-3">Label
-                      <ResizeGrip onMouseDown={(e) => compareColW.beginResize('label', e)} onDoubleClick={() => compareColW.autoFit('label')} />
-                    </th>
-                    <th className="relative text-left py-2 text-muted-foreground font-medium pr-3">Network
-                      <ResizeGrip onMouseDown={(e) => compareColW.beginResize('network', e)} onDoubleClick={() => compareColW.autoFit('network')} />
-                    </th>
-                    <th className="relative text-left py-2 text-muted-foreground font-medium pr-3">Mask
-                      <ResizeGrip onMouseDown={(e) => compareColW.beginResize('mask', e)} onDoubleClick={() => compareColW.autoFit('mask')} />
-                    </th>
-                    <th className="relative text-right py-2 text-muted-foreground font-medium pr-3">Usable Hosts
-                      <ResizeGrip onMouseDown={(e) => compareColW.beginResize('hosts', e)} onDoubleClick={() => compareColW.autoFit('hosts')} />
-                    </th>
-                    <th className="relative text-left py-2 text-muted-foreground font-medium">겹침
-                      <ResizeGrip onMouseDown={(e) => compareColW.beginResize('overlap', e)} onDoubleClick={() => compareColW.autoFit('overlap')} />
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {entries.map((entry) => {
-                    const ei = parseCidr(entry.cidr);
-                    const overlappingEntries = entries.filter((e) => e.id !== entry.id && cidrsOverlap(entry.cidr, e.cidr));
-                    const hasOverlap = overlappingEntries.length > 0;
-                    return (
-                      <tr key={entry.id} className={`border-b border-border/50 last:border-b-0 hover:bg-muted/10 ${hasOverlap ? 'bg-amber-500/5' : ''}`}>
-                        <td className="py-2 pr-3 font-medium">{entry.label || '—'}</td>
-                        <td className="py-2 pr-3 font-mono text-muted-foreground">
-                          {ei ? `${ei.network}/${ei.prefix}` : <span className="text-red-400">invalid</span>}
-                        </td>
-                        <td className="py-2 pr-3 font-mono text-muted-foreground">
-                          {ei ? ei.mask : '—'}
-                        </td>
-                        <td className="py-2 pr-3 text-right font-mono text-primary">
-                          {ei ? formatHosts(ei.usableHosts) : '—'}
-                        </td>
-                        <td className="py-2">
-                          {hasOverlap ? (
-                            <div className="flex flex-wrap gap-1">
-                              {overlappingEntries.map((e) => (
-                                <span key={e.id} className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                                  <AlertTriangle className="w-2.5 h-2.5" />
-                                  {e.label || e.cidr}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground/40">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Registered cluster CIDR overlap check */}
-            {clusters.length > 0 && (() => {
-              const conflicts: { entryLabel: string; clusterName: string; clusterCidr: string }[] = [];
-              for (const entry of entries) {
-                for (const cluster of clusters) {
-                  if (cluster.cidr && cidrsOverlap(entry.cidr, cluster.cidr)) {
-                    conflicts.push({
-                      entryLabel: entry.label || entry.cidr,
-                      clusterName: cluster.name,
-                      clusterCidr: cluster.cidr,
-                    });
-                  }
-                }
-              }
-              if (conflicts.length === 0) return null;
-              return (
-                <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                  <p className="text-xs font-semibold text-amber-400 flex items-center gap-1.5 mb-2">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    등록 클러스터 CIDR 겹침
-                  </p>
-                  <div className="space-y-1">
-                    {conflicts.map((c, i) => (
-                      <div key={i} className="flex items-center gap-2 text-xs">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
-                        <span className="font-medium">{c.entryLabel}</span>
-                        <span className="text-muted-foreground">↔</span>
-                        <span className="font-medium text-foreground">{c.clusterName}</span>
-                        <span className="text-muted-foreground font-mono">{c.clusterCidr}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
 
             {/* Quick reference */}
-            <div className="mt-6 pt-5 border-t border-border">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                Quick Reference
+            <MacCard title="QUICK REFERENCE">
+              <p className="text-[11px] text-muted-foreground mb-3 inline-flex items-center gap-1.5">
+                <BookOpen className="w-3 h-3" />
+                자주 쓰이는 prefix별 호스트 수
               </p>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                {[
-                  ['/8', '16.7M hosts'],
-                  ['/16', '65,534 hosts'],
-                  ['/24', '254 hosts'],
-                  ['/25', '126 hosts'],
-                  ['/26', '62 hosts'],
-                  ['/27', '30 hosts'],
-                  ['/28', '14 hosts'],
-                  ['/29', '6 hosts'],
-                  ['/30', '2 hosts'],
-                  ['/32', 'Single IP'],
-                ].map(([prefix, desc]) => (
-                  <div key={prefix} className="flex items-center justify-between text-xs">
-                    <span className="font-mono text-primary">{prefix}</span>
-                    <span className="text-muted-foreground">{desc}</span>
-                  </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {QUICK_REF.map(([prefix, count, unit]) => (
+                  <button
+                    key={prefix}
+                    type="button"
+                    onClick={() => handleCalculate(`${input.split('/')[0] || '192.168.1.0'}${prefix}`)}
+                    className="group flex items-center justify-between gap-2 px-2.5 py-1.5 bg-secondary/40 hover:bg-secondary hover:border-primary/30 border border-border rounded-md transition-colors text-left"
+                    title={`${prefix} 적용`}
+                  >
+                    <span className="font-mono tabular-nums text-primary text-xs font-semibold">{prefix}</span>
+                    <span className="text-[10px] text-muted-foreground font-mono tabular-nums">
+                      <span className="text-foreground">{count}</span> {unit}
+                    </span>
+                  </button>
                 ))}
               </div>
-            </div>
+            </MacCard>
           </div>
         </div>
       </main>

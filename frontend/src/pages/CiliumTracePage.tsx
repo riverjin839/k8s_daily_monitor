@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Activity,
   AlertTriangle,
@@ -685,10 +686,46 @@ function MonitorTab({ clusterId, agents }: { clusterId: string; agents: CiliumAg
 
 function TypeFilter({ types, setTypes, disabled }: { types: Set<MonitorType>; setTypes: (s: Set<MonitorType>) => void; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
   const label = types.size === 0 ? '모든 type' : Array.from(types).join(', ');
+
+  // 드롭다운 열릴 때 버튼 위치 측정 — 부모 MacCard 의 overflow:hidden 회피용 portal.
+  useEffect(() => {
+    if (!open) { setPos(null); return; }
+    const update = () => {
+      const el = buttonRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      setPos({ top: rect.bottom + 4, left: rect.left });
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [open]);
+
+  // 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (buttonRef.current?.contains(t)) return;
+      if (popRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, [open]);
+
   return (
-    <div className="relative">
+    <>
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={disabled}
@@ -698,8 +735,12 @@ function TypeFilter({ types, setTypes, disabled }: { types: Set<MonitorType>; se
         <span className="truncate">{label}</span>
         <ChevronDown className="w-3 h-3 text-muted-foreground" />
       </button>
-      {open && (
-        <div className="absolute top-full mt-1 left-0 z-20 w-56 bg-card border border-border rounded-xl mac-shadow p-2 space-y-1">
+      {open && pos && createPortal(
+        <div
+          ref={popRef}
+          style={{ top: pos.top, left: pos.left }}
+          className="fixed z-50 w-56 bg-card border border-border rounded-xl mac-shadow p-2 space-y-1"
+        >
           {MONITOR_TYPES.map((t) => (
             <label key={t} className="flex items-center gap-2 text-xs px-2 py-1 rounded hover:bg-secondary cursor-pointer">
               <input
@@ -715,9 +756,10 @@ function TypeFilter({ types, setTypes, disabled }: { types: Set<MonitorType>; se
               {t}
             </label>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   );
 }
 

@@ -3,7 +3,7 @@ import { X, Network, Play, Loader2, CheckCircle2, AlertTriangle, Globe, Lock } f
 import { bulkExecApi, versionsApi } from '@/services/api';
 import type { NodeSummary } from '@/services/api';
 import type { NodeNicsCollectResponse } from '@/types';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
@@ -26,6 +26,7 @@ const DEFAULT_SKIP = [
  */
 export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
   const toast = useToast();
+  const queryClient = useQueryClient();
 
   const [username, setUsername] = useState('root');
   const [port, setPort] = useState(22);
@@ -79,10 +80,21 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
     onSuccess: (d) => {
       setResult(d);
       const okCount = d.hosts.filter((h) => h.status === 'ok').length;
+      // 백엔드가 cluster.node_ips / bond0_ip / bond1_ip / mac 들을 갱신하므로
+      // 클러스터 캐시를 즉시 무효화해야 ClusterManagePage 표가 새 값으로 다시
+      // 그려진다 (그렇지 않으면 useClusters 의 30s refetchInterval 전까지 stale).
+      queryClient.invalidateQueries({ queryKey: ['clusters'] });
+      // 노드 서버 스펙 페이지도 cluster.node_ips 의 bond IP/MAC 을 사용한다.
+      queryClient.invalidateQueries({ queryKey: ['node-specs'] });
+      // 자기 자신의 노드 목록도 수집 직후 새로고침 (집계 변동 가능).
+      queryClient.invalidateQueries({ queryKey: ['node-nics-nodes', clusterId] });
+      // VersionsPage 가 node_nics:{host} 스냅샷을 history 로 표시 — 새 변경 감지 시 invalidation.
+      queryClient.invalidateQueries({ queryKey: ['versions'] });
+
       if (d.changed > 0) {
         toast.success(
           'NIC 수집 완료',
-          `${okCount}개 노드 수집 · ${d.changed}건 변경 감지 · cluster.node_ips 갱신됨`,
+          `${okCount}개 노드 수집 · ${d.changed}건 변경 감지 · 표 갱신 완료`,
         );
       } else {
         toast.info('NIC 수집 완료', `${okCount}개 노드 · 변경 없음`);

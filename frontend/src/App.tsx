@@ -27,6 +27,8 @@ import { McClientPage } from '@/pages/McClientPage';
 import { WorkflowBoardPage } from '@/pages/WorkflowBoardPage';
 import { WorkGuidePage } from '@/pages/WorkGuidePage';
 import { OpsNotesPage } from '@/pages/OpsNotesPage';
+import { OpsNoteDetailPage } from '@/pages/OpsNoteDetailPage';
+import { OpsNoteFormPage } from '@/pages/OpsNoteFormPage';
 import { MindMapPage } from '@/pages/MindMapPage';
 import { WbsFlowPage } from '@/pages/WbsFlowPage';
 import { InfraTopologyPage } from '@/pages/InfraTopologyPage';
@@ -94,7 +96,13 @@ function AppShell() {
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/workflow" element={<WorkflowBoardPage />} />
               <Route path="/work-guides" element={<WorkGuidePage />} />
+              <Route path="/work-guides/new" element={<WorkGuidePage />} />
+              <Route path="/work-guides/:id" element={<WorkGuidePage />} />
+              <Route path="/work-guides/:id/edit" element={<WorkGuidePage />} />
               <Route path="/ops-notes" element={<OpsNotesPage />} />
+              <Route path="/ops-notes/new" element={<OpsNoteFormPage />} />
+              <Route path="/ops-notes/:id" element={<OpsNoteDetailPage />} />
+              <Route path="/ops-notes/:id/edit" element={<OpsNoteDetailPage />} />
               <Route path="/mindmap" element={<MindMapPage />} />
               <Route path="/wbs" element={<WbsFlowPage />} />
               <Route path="/incident-analysis" element={<IncidentAnalysisPage />} />

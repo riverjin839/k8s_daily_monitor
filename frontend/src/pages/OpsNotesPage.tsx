@@ -1,13 +1,14 @@
-import { useId, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   HelpCircle, Plus, Pencil, Trash2, X, Pin, PinOff, Search, MessageSquare,
-  Sparkles, History, ChevronRight, FileQuestion, ExternalLink,
+  Sparkles, ChevronRight, FileQuestion, ExternalLink,
 } from 'lucide-react';
-import { RichTextEditor, RichContent } from '@/components/editor';
+import { RichContent } from '@/components/editor';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsNotesApi } from '@/services/api';
-import type { OpsNote, OpsNoteCreate, OpsNoteColor, OpsNoteUpdate } from '@/types';
-import { useToast, ConfluenceUrlInput, SidePane } from '@/components/common';
+import type { OpsNote, OpsNoteColor } from '@/types';
+import { useToast } from '@/components/common';
 import { formatApiError, formatRelativeTime } from '@/lib/utils';
 import { MacCard } from '@/components/ui/MacCard';
 
@@ -32,231 +33,10 @@ const CARD_TINT: Record<OpsNoteColor, { stripe: string; tint: string; chip: stri
   purple: { stripe: 'bg-purple-400', tint: 'bg-purple-50/60 dark:bg-purple-500/[0.06]', chip: 'bg-purple-500/15 text-purple-700 dark:text-purple-300' },
 };
 
-const COLOR_OPTIONS: { value: OpsNoteColor; label: string; swatch: string }[] = [
-  { value: 'yellow', label: '노랑', swatch: 'bg-amber-300' },
-  { value: 'green',  label: '초록', swatch: 'bg-emerald-300' },
-  { value: 'blue',   label: '파랑', swatch: 'bg-sky-300' },
-  { value: 'pink',   label: '분홍', swatch: 'bg-pink-300' },
-  { value: 'purple', label: '보라', swatch: 'bg-purple-300' },
-];
-
-// ── 메모 폼 모달 ───────────────────────────────────────────────────────────────
-interface NoteFormModalProps {
-  initial?: OpsNote | null;
-  defaultService?: string;
-  onClose: () => void;
-  onSaved: () => void;
-}
-
-function NoteFormModal({ initial, defaultService, onClose, onSaved }: NoteFormModalProps) {
-  const qc = useQueryClient();
-  const isEdit = Boolean(initial);
-
-  const [service, setService]         = useState(initial?.service ?? defaultService ?? 'k8s');
-  const [title, setTitle]             = useState(initial?.title ?? '');
-  const [content, setContent]         = useState(initial?.content ?? '');
-  const [backContent, setBackContent] = useState(initial?.backContent ?? '');
-  const [color, setColor]             = useState<OpsNoteColor>(initial?.color ?? 'yellow');
-  const [author, setAuthor]           = useState(initial?.author ?? '');
-  const [pinned, setPinned]           = useState(initial?.pinned ?? false);
-  const [confluenceUrl, setConfluenceUrl] = useState(initial?.confluenceUrl ?? '');
-  const [saving, setSaving]           = useState(false);
-  const [error, setError]             = useState('');
-
-  const fid = useId();
-  const f = (k: string) => `${fid}-${k}`;
-
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['ops-notes'] });
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) { setError('질문 제목은 필수입니다.'); return; }
-    setSaving(true); setError('');
-    try {
-      const payload: OpsNoteCreate = {
-        service,
-        title: title.trim(),
-        content: content.trim() || undefined,
-        backContent: backContent.trim() || undefined,
-        color,
-        author: author.trim() || undefined,
-        pinned,
-        confluenceUrl: confluenceUrl.trim() || undefined,
-      };
-      if (isEdit && initial) {
-        await opsNotesApi.update(initial.id, payload as OpsNoteUpdate);
-      } else {
-        await opsNotesApi.create(payload);
-      }
-      invalidate();
-      onSaved();
-      onClose();
-    } catch {
-      setError('저장에 실패했습니다.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const inputCls = 'w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/40';
-  const labelCls = 'block text-sm font-medium mb-1.5';
-
-  const paneTitle = (
-    <div className="flex items-center gap-2 min-w-0">
-      <FileQuestion className="w-5 h-5 text-primary flex-shrink-0" />
-      <h2 className="text-sm font-semibold truncate">{isEdit ? 'Q&A 수정' : '새 질문 / 노트'}</h2>
-    </div>
-  );
-
-  return (
-    <SidePane open onClose={onClose} title={paneTitle} bodyClassName="px-6 py-5">
-      {error && (
-        <div className="mb-4 px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive">{error}</div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-          {/* 서비스 */}
-          <div>
-            <p className={labelCls}>대상 서비스</p>
-            <div className="flex gap-2 flex-wrap">
-              {SERVICES.map((s) => (
-                <button
-                  key={s.value}
-                  type="button"
-                  onClick={() => setService(s.value)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full border transition-colors ${
-                    service === s.value
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-background border-border text-muted-foreground hover:border-primary/50'
-                  }`}
-                >
-                  <span>{s.icon}</span>{s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 질문 제목 */}
-          <div>
-            <label htmlFor={f('title')} className={labelCls}>
-              <span className="text-primary font-bold mr-1">Q.</span>질문 / 제목 *
-            </label>
-            <input
-              id={f('title')}
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="예) coreDNS 가 NXDOMAIN 을 반환할 때 어떻게 점검하나요?"
-              className={inputCls}
-            />
-          </div>
-
-          {/* 색상 + 고정 */}
-          <div className="grid grid-cols-[1fr_auto] gap-4 items-end">
-            <div>
-              <p className={labelCls}>카드 색상</p>
-              <div className="flex gap-2">
-                {COLOR_OPTIONS.map((c) => (
-                  <button
-                    key={c.value}
-                    type="button"
-                    onClick={() => setColor(c.value)}
-                    className={`w-7 h-7 rounded-full border-2 transition-all ${c.swatch} ${
-                      color === c.value ? 'border-foreground scale-110 shadow' : 'border-transparent hover:scale-105'
-                    }`}
-                    title={c.label}
-                    aria-label={`색상 ${c.label}`}
-                  />
-                ))}
-              </div>
-            </div>
-            <label className="flex items-center gap-2 cursor-pointer select-none px-3 py-2 rounded-xl border border-border hover:bg-secondary/40 transition-colors">
-              <input
-                type="checkbox"
-                checked={pinned}
-                onChange={(e) => setPinned(e.target.checked)}
-                className="w-4 h-4 accent-primary"
-              />
-              <Pin className="w-3.5 h-3.5 text-primary" />
-              <span className="text-sm font-medium">상단 고정</span>
-            </label>
-          </div>
-
-          {/* 답변 */}
-          <div>
-            <label htmlFor={f('front')} className={labelCls}>
-              <span className="text-emerald-500 font-bold mr-1">A.</span>답변 / 핵심 요약
-            </label>
-            <div id={f('front')}>
-              <RichTextEditor
-                value={content}
-                onChange={setContent}
-                placeholder="해결 절차, 명령어, 핵심 포인트를 적어주세요."
-                minHeight="120px"
-              />
-            </div>
-          </div>
-
-          {/* 히스토리 */}
-          <div>
-            <label htmlFor={f('back')} className={labelCls}>
-              <History className="inline-block w-3.5 h-3.5 mr-1 -mt-0.5 text-muted-foreground" />
-              상세 / 히스토리 <span className="text-muted-foreground font-normal text-xs">(선택)</span>
-            </label>
-            <div id={f('back')}>
-              <RichTextEditor
-                value={backContent}
-                onChange={setBackContent}
-                placeholder="배경, 시도 / 실패 이력, 참고 링크 등"
-                minHeight="100px"
-              />
-            </div>
-          </div>
-
-          {/* 작성자 */}
-          <div>
-            <label htmlFor={f('author')} className={labelCls}>작성자</label>
-            <input
-              id={f('author')}
-              type="text"
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              placeholder="이름 또는 팀명"
-              className={inputCls}
-            />
-          </div>
-
-          {/* Confluence 링크 */}
-          <ConfluenceUrlInput
-            id={f('confluence')}
-            value={confluenceUrl}
-            onChange={setConfluenceUrl}
-          />
-
-          <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors"
-            >
-              취소
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors disabled:opacity-60"
-            >
-              {saving ? '저장 중…' : '저장'}
-            </button>
-          </div>
-        </form>
-    </SidePane>
-  );
-}
-
 // ── Q&A 카드 ──────────────────────────────────────────────────────────────────
 interface QnaCardProps {
   note: OpsNote;
+  onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onTogglePin: () => void;
@@ -264,7 +44,7 @@ interface QnaCardProps {
 
 type CardTab = 'answer' | 'history';
 
-function QnaCard({ note, onEdit, onDelete, onTogglePin }: QnaCardProps) {
+function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) {
   const svc = SERVICE_MAP[note.service];
   const tint = CARD_TINT[note.color] ?? CARD_TINT.yellow;
   const hasBack = Boolean(note.backContent?.trim());
@@ -272,9 +52,15 @@ function QnaCard({ note, onEdit, onDelete, onTogglePin }: QnaCardProps) {
   const [tab, setTab] = useState<CardTab>('answer');
   const activeTab = !hasAnswer && hasBack ? 'history' : tab;
 
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
+
   return (
-    <article
-      className={`group relative rounded-2xl border border-border overflow-hidden bg-card hover:shadow-md hover:-translate-y-0.5 transition-all flex flex-col ${tint.tint}`}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
+      className={`group relative rounded-2xl border border-border overflow-hidden bg-card hover:shadow-md hover:-translate-y-0.5 transition-all flex flex-col cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40 ${tint.tint}`}
       style={{ minHeight: '230px' }}
     >
       {/* 색상 띠 (좌측) */}
@@ -294,7 +80,7 @@ function QnaCard({ note, onEdit, onDelete, onTogglePin }: QnaCardProps) {
         </div>
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
-            onClick={onTogglePin}
+            onClick={(e) => { stop(e); onTogglePin(); }}
             className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-primary transition-colors"
             title={note.pinned ? '고정 해제' : '상단 고정'}
             aria-label={note.pinned ? '고정 해제' : '상단 고정'}
@@ -302,7 +88,7 @@ function QnaCard({ note, onEdit, onDelete, onTogglePin }: QnaCardProps) {
             {note.pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
           </button>
           <button
-            onClick={onEdit}
+            onClick={(e) => { stop(e); onEdit(); }}
             className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-primary transition-colors"
             title="수정"
             aria-label="수정"
@@ -310,7 +96,7 @@ function QnaCard({ note, onEdit, onDelete, onTogglePin }: QnaCardProps) {
             <Pencil className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={onDelete}
+            onClick={(e) => { stop(e); onDelete(); }}
             className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-red-500 transition-colors"
             title="삭제"
             aria-label="삭제"
@@ -338,7 +124,7 @@ function QnaCard({ note, onEdit, onDelete, onTogglePin }: QnaCardProps) {
           {(['answer', 'history'] as const).map((t) => (
             <button
               key={t}
-              onClick={() => setTab(t)}
+              onClick={(e) => { stop(e); setTab(t); }}
               className={`text-[11px] px-2 py-0.5 rounded-md transition-colors ${
                 activeTab === t
                   ? 'bg-foreground/10 text-foreground font-semibold'
@@ -384,7 +170,7 @@ function QnaCard({ note, onEdit, onDelete, onTogglePin }: QnaCardProps) {
               href={note.confluenceUrl}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
+              onClick={stop}
               className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-[10px] font-semibold"
               title={note.confluenceUrl}
             >
@@ -394,7 +180,7 @@ function QnaCard({ note, onEdit, onDelete, onTogglePin }: QnaCardProps) {
         </span>
         <span className="flex-shrink-0 tabular-nums">{formatRelativeTime(note.updatedAt)}</span>
       </footer>
-    </article>
+    </div>
   );
 }
 
@@ -402,11 +188,10 @@ function QnaCard({ note, onEdit, onDelete, onTogglePin }: QnaCardProps) {
 export function OpsNotesPage() {
   const qc = useQueryClient();
   const toast = useToast();
+  const navigate = useNavigate();
 
   const [filterService, setFilterService] = useState('');
   const [search, setSearch]               = useState('');
-  const [showForm, setShowForm]           = useState(false);
-  const [editNote, setEditNote]           = useState<OpsNote | null>(null);
   const [deletingId, setDeletingId]       = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
@@ -478,6 +263,10 @@ export function OpsNotesPage() {
     return { authorCount: authors.size, answered, answerRate };
   }, [allNotes]);
 
+  const newNoteHref = filterService
+    ? `/ops-notes/new?service=${encodeURIComponent(filterService)}`
+    : '/ops-notes/new';
+
   return (
     <div className="min-h-screen bg-background">
       <main className="mx-auto px-4 lg:px-6 py-5 space-y-4 max-w-[1600px]">
@@ -493,7 +282,7 @@ export function OpsNotesPage() {
             </div>
           </div>
           <button
-            onClick={() => { setEditNote(null); setShowForm(true); }}
+            onClick={() => navigate(newNoteHref)}
             className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors mac-shadow"
           >
             <Plus className="w-4 h-4" /> 새 Q&amp;A
@@ -570,7 +359,8 @@ export function OpsNotesPage() {
                 <div key={note.id} className={deletingId === note.id ? 'opacity-40 pointer-events-none' : ''}>
                   <QnaCard
                     note={note}
-                    onEdit={() => { setEditNote(note); setShowForm(true); }}
+                    onOpen={() => navigate(`/ops-notes/${note.id}`)}
+                    onEdit={() => navigate(`/ops-notes/${note.id}/edit`)}
                     onDelete={() => handleDelete(note)}
                     onTogglePin={() => handleTogglePin(note)}
                   />
@@ -607,7 +397,7 @@ export function OpsNotesPage() {
               </p>
               {allNotes.length === 0 && (
                 <button
-                  onClick={() => setShowForm(true)}
+                  onClick={() => navigate('/ops-notes/new')}
                   className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-2 text-sm bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-colors"
                 >
                   <Plus className="w-4 h-4" /> 첫 번째 Q&amp;A 만들기
@@ -621,7 +411,8 @@ export function OpsNotesPage() {
                 <div key={note.id} className={deletingId === note.id ? 'opacity-40 pointer-events-none' : ''}>
                   <QnaCard
                     note={note}
-                    onEdit={() => { setEditNote(note); setShowForm(true); }}
+                    onOpen={() => navigate(`/ops-notes/${note.id}`)}
+                    onEdit={() => navigate(`/ops-notes/${note.id}/edit`)}
                     onDelete={() => handleDelete(note)}
                     onTogglePin={() => handleTogglePin(note)}
                   />
@@ -631,15 +422,6 @@ export function OpsNotesPage() {
           )}
         </MacCard>
       </main>
-
-      {showForm && (
-        <NoteFormModal
-          initial={editNote}
-          defaultService={filterService || 'k8s'}
-          onClose={() => { setShowForm(false); setEditNote(null); }}
-          onSaved={() => {}}
-        />
-      )}
     </div>
   );
 }
@@ -669,3 +451,4 @@ function StatCell({ label, value, hint, icon, accent }: StatCellProps) {
     </div>
   );
 }
+

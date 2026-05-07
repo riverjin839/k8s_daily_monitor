@@ -23,6 +23,7 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
   '/issues':             { defaultLabel: '이슈 게시판',    icon: ClipboardList },
   '/tasks':              { defaultLabel: '작업 게시판',    icon: ListTodo },
   '/todo-today':         { defaultLabel: '오늘 할일',      icon: CalendarCheck2 },
+  '/work-summary':       { defaultLabel: '업무 현황',      icon: BarChart3 },
   '/members':            { defaultLabel: '멤버별 업무',    icon: Users },
   '/cluster-manage':     { defaultLabel: '클러스터 관리',  icon: Server },
   '/versions':           { defaultLabel: '버전 / 설정',     icon: GitCommit },
@@ -62,7 +63,7 @@ const DOCS_SECTIONS: Array<{ id: string; label: string; paths: string[] }> = [
 type GroupId = 'monitoring' | 'work' | 'cluster' | 'analysis' | 'docs' | 'system';
 const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[] }> = [
   { id: 'monitoring', label: '모니터링', icon: LayoutDashboard, paths: ['/', '/playbooks'] },
-  { id: 'work',       label: '작업관리', icon: ListTodo,        paths: ['/issues', '/tasks', '/todo-today', '/members'] },
+  { id: 'work',       label: '작업관리', icon: ListTodo,        paths: ['/issues', '/tasks', '/todo-today', '/work-summary', '/members'] },
   { id: 'cluster',    label: '클러스터', icon: Server,          paths: ['/cluster-manage', '/node-specs', '/versions', '/bulk-exec', '/etcdctl', '/batch-jobs', '/mc', '/kernel-params', '/infra-topology', '/links', '/node-labels', '/node-images', '/cidr'] },
   { id: 'analysis',   label: 'AI 분석',  icon: Sparkles,        paths: ['/incident-analysis', '/packet-flow', '/cilium-trace', '/ontology', '/trends'] },
   { id: 'docs',       label: '지식 허브', icon: BookOpen,        paths: [] },  // sections 사용

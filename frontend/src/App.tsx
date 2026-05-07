@@ -9,6 +9,7 @@ import { TaskBoardPage } from '@/pages/TaskBoardPage';
 import { TaskFormPage } from '@/pages/TaskFormPage';
 import { TaskDetailPage } from '@/pages/TaskDetailPage';
 import { TodoTodayPage } from '@/pages/TodoTodayPage';
+import { WorkSummaryPage } from '@/pages/WorkSummaryPage';
 import { MemberBoardPage } from '@/pages/MemberBoardPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { ClusterLinksPage } from '@/pages/ClusterLinksPage';
@@ -27,6 +28,8 @@ import { McClientPage } from '@/pages/McClientPage';
 import { WorkflowBoardPage } from '@/pages/WorkflowBoardPage';
 import { WorkGuidePage } from '@/pages/WorkGuidePage';
 import { OpsNotesPage } from '@/pages/OpsNotesPage';
+import { OpsNoteDetailPage } from '@/pages/OpsNoteDetailPage';
+import { OpsNoteFormPage } from '@/pages/OpsNoteFormPage';
 import { MindMapPage } from '@/pages/MindMapPage';
 import { WbsFlowPage } from '@/pages/WbsFlowPage';
 import { InfraTopologyPage } from '@/pages/InfraTopologyPage';
@@ -73,6 +76,7 @@ function AppShell() {
               <Route path="/tasks/:id" element={<TaskDetailPage />} />
               <Route path="/tasks/:id/edit" element={<TaskDetailPage />} />
               <Route path="/todo-today" element={<TodoTodayPage />} />
+              <Route path="/work-summary" element={<WorkSummaryPage />} />
               <Route path="/members" element={<MemberBoardPage />} />
               <Route path="/links" element={<ClusterLinksPage />} />
               <Route path="/node-labels" element={<NodeLabelsPage />} />
@@ -94,7 +98,13 @@ function AppShell() {
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/workflow" element={<WorkflowBoardPage />} />
               <Route path="/work-guides" element={<WorkGuidePage />} />
+              <Route path="/work-guides/new" element={<WorkGuidePage />} />
+              <Route path="/work-guides/:id" element={<WorkGuidePage />} />
+              <Route path="/work-guides/:id/edit" element={<WorkGuidePage />} />
               <Route path="/ops-notes" element={<OpsNotesPage />} />
+              <Route path="/ops-notes/new" element={<OpsNoteFormPage />} />
+              <Route path="/ops-notes/:id" element={<OpsNoteDetailPage />} />
+              <Route path="/ops-notes/:id/edit" element={<OpsNoteDetailPage />} />
               <Route path="/mindmap" element={<MindMapPage />} />
               <Route path="/wbs" element={<WbsFlowPage />} />
               <Route path="/incident-analysis" element={<IncidentAnalysisPage />} />

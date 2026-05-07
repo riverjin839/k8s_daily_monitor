@@ -5,9 +5,8 @@ import { create } from 'zustand';
 const CLUSTER_KEY = 'k8s:cluster-sidebar-width';
 const NAV_GROUPS_KEY = 'k8s:sidebar-collapsed-groups-v1';
 
-// 아이콘 전용 레일 — 호버 툴팁 + 클릭 flyout 디자인. 패널/레이블은 flyout 안에 들어감.
+// 아이콘 전용 레일 — 호버 툴팁 + 클릭 popover 디자인. 패널은 클릭한 아이콘 우측에 컴팩트하게 떠서 폭/높이 자동.
 export const NAV_WIDTH = 56;
-export const FLYOUT_WIDTH = 240;
 
 export const CLUSTER_DEFAULT = 240;
 export const CLUSTER_MIN = 180;

@@ -5,7 +5,7 @@ import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, Calenda
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { TaskDetailModal, TaskCalendar, TaskKanban } from '@/components/tasks';
+import { TaskCalendar, TaskKanban } from '@/components/tasks';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { ServiceChip } from '@/components/services/ServiceChip';
@@ -112,7 +112,6 @@ function SortableTaskRow({
 export function TaskBoardPage() {
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>('table');
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [filterClusterId, setFilterClusterId] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
@@ -192,19 +191,19 @@ export function TaskBoardPage() {
     localStorage.removeItem('k8s:img:task:' + task.id);
   };
 
+  // 행/카드의 ✏️ 버튼 — 수정 라우트로 진입.
   const handleEdit = (task: Task) => {
-    setSelectedTask(null);
     navigate(`/tasks/${task.id}/edit`);
   };
 
+  // 하위 작업 등록.
   const handleAddSubTask = (task: Task) => {
-    setSelectedTask(null);
     navigate(`/tasks/new?parentId=${task.id}`);
   };
 
-  const handleDetailEdit = (task: Task) => {
-    setSelectedTask(null);
-    navigate(`/tasks/${task.id}/edit`);
+  // 행 / 카드 클릭 — read 라우트로 진입.
+  const openTaskDetail = (task: Task) => {
+    navigate(`/tasks/${task.id}`);
   };
 
   const handleExportCsv = async () => {
@@ -411,7 +410,7 @@ export function TaskBoardPage() {
           ) : (
             <TaskKanban
               tasks={sortedTasks}
-              onTaskClick={setSelectedTask}
+              onTaskClick={openTaskDetail}
               onEdit={handleEdit}
               onDelete={handleDelete}
             />
@@ -428,7 +427,7 @@ export function TaskBoardPage() {
                 ))}
               </div>
             ) : (
-              <TaskCalendar tasks={tasks} onTaskClick={setSelectedTask} />
+              <TaskCalendar tasks={tasks} onTaskClick={openTaskDetail} />
             )}
           </div>
         ) : isLoading ? (
@@ -513,7 +512,7 @@ export function TaskBoardPage() {
                     };
                     return (
                       <SortableTaskRow key={task.id} id={task.id} isDragDisabled={!!sortKey}>
-                        <td className="px-4 py-3 cursor-pointer" onClick={() => setSelectedTask(task)}>
+                        <td className="px-4 py-3 cursor-pointer" onClick={() => openTaskDetail(task)}>
                           <span className="flex items-center gap-1.5">
                             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${KS_DOT[ks] ?? 'bg-slate-400'}`} />
                             <span className={`text-xs font-medium whitespace-nowrap ${KS_TEXT[ks] ?? 'text-slate-400'}`}>
@@ -521,13 +520,13 @@ export function TaskBoardPage() {
                             </span>
                           </span>
                         </td>
-                        <td className="px-4 py-3 cursor-pointer" onClick={() => setSelectedTask(task)}>
+                        <td className="px-4 py-3 cursor-pointer" onClick={() => openTaskDetail(task)}>
                           <span className="flex items-center gap-1.5">
                             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${pStyle.dot}`} />
                             <span className={`text-xs font-medium ${pStyle.text}`}>{pStyle.label}</span>
                           </span>
                         </td>
-                        <td className="px-4 py-3 font-medium whitespace-nowrap cursor-pointer" onClick={() => setSelectedTask(task)}>
+                        <td className="px-4 py-3 font-medium whitespace-nowrap cursor-pointer" onClick={() => openTaskDetail(task)}>
                           <div className="flex items-center gap-1.5">
                             <span className="px-2 py-0.5 text-[11px] rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
                               정: {task.primaryAssignee || task.assignee}
@@ -539,10 +538,10 @@ export function TaskBoardPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap cursor-pointer" onClick={() => setSelectedTask(task)}>
+                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap cursor-pointer" onClick={() => openTaskDetail(task)}>
                           {task.clusterName || '-'}
                         </td>
-                        <td className="px-4 py-3 cursor-pointer" onClick={() => setSelectedTask(task)}>
+                        <td className="px-4 py-3 cursor-pointer" onClick={() => openTaskDetail(task)}>
                           <div className="flex items-center gap-1 flex-wrap">
                             <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
                               {task.taskCategory}
@@ -550,7 +549,7 @@ export function TaskBoardPage() {
                             {task.service && <ServiceChip service={task.service} />}
                           </div>
                         </td>
-                        <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => setSelectedTask(task)}>
+                        <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => openTaskDetail(task)}>
                           <div className="flex items-start gap-1.5">
                             <p className="line-clamp-2 text-foreground/90">{stripHtml(task.taskContent)}</p>
                             {hasImages && (
@@ -558,18 +557,18 @@ export function TaskBoardPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => setSelectedTask(task)}>
+                        <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => openTaskDetail(task)}>
                           <p className="line-clamp-2 text-muted-foreground">
                             {stripHtml(task.resultContent) || '-'}
                           </p>
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedTask(task)}>
+                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => openTaskDetail(task)}>
                           {formatDateTime(task.scheduledAt)}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedTask(task)}>
+                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => openTaskDetail(task)}>
                           {formatDateTime(task.completedAt)}
                         </td>
-                        <td className="px-4 py-3 max-w-[120px] cursor-pointer" onClick={() => setSelectedTask(task)}>
+                        <td className="px-4 py-3 max-w-[120px] cursor-pointer" onClick={() => openTaskDetail(task)}>
                           <p className="line-clamp-2 text-muted-foreground text-xs">
                             {task.remarks || '-'}
                           </p>
@@ -611,13 +610,6 @@ export function TaskBoardPage() {
         ))}
       </main>
 
-      {selectedTask && (
-        <TaskDetailModal
-          task={selectedTask}
-          onClose={() => setSelectedTask(null)}
-          onEdit={handleDetailEdit}
-        />
-      )}
     </div>
   );
 }

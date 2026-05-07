@@ -4,8 +4,10 @@ import { Dashboard } from '@/pages/Dashboard';
 import { PlaybooksPage } from '@/pages/PlaybooksPage';
 import { IssueBoardPage } from '@/pages/IssueBoardPage';
 import { IssueFormPage } from '@/pages/IssueFormPage';
+import { IssueDetailPage } from '@/pages/IssueDetailPage';
 import { TaskBoardPage } from '@/pages/TaskBoardPage';
 import { TaskFormPage } from '@/pages/TaskFormPage';
+import { TaskDetailPage } from '@/pages/TaskDetailPage';
 import { TodoTodayPage } from '@/pages/TodoTodayPage';
 import { MemberBoardPage } from '@/pages/MemberBoardPage';
 import { SettingsPage } from '@/pages/SettingsPage';
@@ -64,10 +66,12 @@ function AppShell() {
               <Route path="/playbooks" element={<PlaybooksPage />} />
               <Route path="/issues" element={<IssueBoardPage />} />
               <Route path="/issues/new" element={<IssueFormPage />} />
-              <Route path="/issues/:id/edit" element={<IssueFormPage />} />
+              <Route path="/issues/:id" element={<IssueDetailPage />} />
+              <Route path="/issues/:id/edit" element={<IssueDetailPage />} />
               <Route path="/tasks" element={<TaskBoardPage />} />
               <Route path="/tasks/new" element={<TaskFormPage />} />
-              <Route path="/tasks/:id/edit" element={<TaskFormPage />} />
+              <Route path="/tasks/:id" element={<TaskDetailPage />} />
+              <Route path="/tasks/:id/edit" element={<TaskDetailPage />} />
               <Route path="/todo-today" element={<TodoTodayPage />} />
               <Route path="/members" element={<MemberBoardPage />} />
               <Route path="/links" element={<ClusterLinksPage />} />

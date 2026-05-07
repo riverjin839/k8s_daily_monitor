@@ -11,7 +11,7 @@ import {
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useThemeStore, type Theme } from '@/stores/themeStore';
-import { NAV_WIDTH, FLYOUT_WIDTH } from '@/stores/sidebarStore';
+import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { useAuthStore } from '@/stores/authStore';
 import { InlineEdit } from '@/components/common';
 
@@ -79,7 +79,8 @@ interface RailIconButtonProps {
   Icon: ComponentType<{ className?: string }>;
   active?: boolean;
   highlighted?: boolean;
-  onClick: () => void;
+  /** 클릭 시 호출. 클릭한 버튼의 화면상 위치를 같이 넘겨 — 호출 측이 popover 앵커링에 활용. */
+  onClick: (rect: DOMRect) => void;
   /** flyout 이 열려있을 때는 툴팁을 숨김 (중복) */
   suppressTooltip?: boolean;
 }
@@ -98,13 +99,18 @@ function RailIconButton({ label, Icon, active, highlighted, onClick, suppressToo
   };
   const hideTooltip = () => setTooltipPos(null);
 
+  const handleClick = () => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (rect) onClick(rect);
+  };
+
   return (
     <>
       <button
         ref={buttonRef}
         type="button"
         aria-label={label}
-        onClick={onClick}
+        onClick={handleClick}
         onMouseEnter={showTooltip}
         onMouseLeave={hideTooltip}
         onFocus={showTooltip}
@@ -136,39 +142,47 @@ function RailIconButton({ label, Icon, active, highlighted, onClick, suppressToo
   );
 }
 
-// ── Flyout 패널 — 클릭한 그룹의 항목을 흰색 배경 박스로 표시 ───────────────
+// ── Flyout 패널 — 클릭한 아이콘 우측에 컴팩트 popover 형태로 표시 ─────────────
 interface FlyoutProps {
   title: string;
+  /** 앵커 아이콘의 viewport 좌표. flyout 의 top 을 여기 맞춤. */
+  anchorRect: DOMRect;
   children: React.ReactNode;
   onClose: () => void;
 }
 
-function FlyoutShell({ title, children, onClose }: FlyoutProps) {
-  return (
+function FlyoutShell({ title, anchorRect, children, onClose }: FlyoutProps) {
+  // popover top 은 아이콘의 top 에 맞추되, 화면 아래로 넘치면 위로 끌어올림.
+  // max-height 로 본문 스크롤을 보장.
+  const top = Math.min(anchorRect.top, window.innerHeight - 100);
+  const maxHeight = window.innerHeight - top - 8;
+
+  return createPortal(
     <div
-      style={{ left: NAV_WIDTH, width: FLYOUT_WIDTH }}
-      className="fixed top-0 h-full bg-white text-black border-r border-zinc-200 shadow-2xl z-40 flex flex-col"
+      style={{ top, left: NAV_WIDTH, maxHeight }}
+      className="fixed z-50 bg-white text-black border border-zinc-200 rounded-md shadow-xl flex flex-col min-w-[180px] max-w-[260px] overflow-hidden"
       role="dialog"
       aria-label={title}
     >
-      <div className="px-4 py-3 border-b border-zinc-200 flex items-center justify-between">
-        <span className="text-sm font-semibold text-zinc-900">{title}</span>
+      <div className="px-3 py-1.5 border-b border-zinc-200 flex items-center justify-between bg-zinc-50">
+        <span className="text-[11px] font-semibold text-zinc-700 uppercase tracking-wider truncate">{title}</span>
         <button
           type="button"
           onClick={onClose}
           aria-label="닫기"
-          className="p-1 rounded text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+          className="p-0.5 rounded text-zinc-400 hover:bg-zinc-200 hover:text-zinc-900"
         >
-          <X className="w-4 h-4" />
+          <X className="w-3 h-3" />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto py-2">{children}</div>
-    </div>
+      <div className="overflow-y-auto py-1">{children}</div>
+    </div>,
+    document.body,
   );
 }
 
 // flyout 내부에서 항목 한 줄을 그릴 때 쓰는 공통 스타일.
-const FLYOUT_LINK_BASE = 'flex items-center gap-2 px-3 py-2 mx-1.5 rounded-md text-sm transition-colors';
+const FLYOUT_LINK_BASE = 'flex items-center gap-2 px-2.5 py-1.5 mx-1 rounded text-[13px] transition-colors';
 const FLYOUT_LINK_INACTIVE = 'text-black hover:bg-zinc-100';
 const FLYOUT_LINK_ACTIVE = 'bg-primary/10 text-primary font-semibold';
 
@@ -206,6 +220,8 @@ export function Sidebar() {
   const logout = useAuthStore((s) => s.clear);
 
   const [openGroup, setOpenGroup] = useState<GroupId | null>(null);
+  // flyout 의 위치를 클릭한 아이콘 우측에 맞추기 위해 마지막 클릭한 버튼의 rect 를 보관.
+  const [openAnchor, setOpenAnchor] = useState<DOMRect | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editingNavPath, setEditingNavPath] = useState<string | null>(null);
@@ -273,9 +289,10 @@ export function Sidebar() {
     setEditingNavPath(null);
   };
 
-  const toggleGroup = (id: GroupId) => {
+  const toggleGroup = (id: GroupId, rect: DOMRect) => {
     setEditMode(false);
     setOpenGroup((cur) => (cur === id ? null : id));
+    setOpenAnchor(rect);
   };
 
   // 그룹별 flyout 본문 렌더링
@@ -286,7 +303,7 @@ export function Sidebar() {
 
     if (id === 'docs') {
       return (
-        <div className="space-y-3 pb-2">
+        <div className="space-y-1 pb-1">
           {servicePaths.length > 0 && (
             <FlyoutSection title="서비스 카탈로그">
               {servicePaths.map((p) => {
@@ -419,7 +436,7 @@ export function Sidebar() {
                 active={activeGroup === g.id}
                 highlighted={openGroup === g.id}
                 suppressTooltip={openGroup === g.id}
-                onClick={() => toggleGroup(g.id)}
+                onClick={(rect) => toggleGroup(g.id, rect)}
               />
             ))}
           </div>
@@ -449,15 +466,19 @@ export function Sidebar() {
         </div>
       </aside>
 
-      {/* Flyout — 그룹 클릭 시 우측에 박스 리스트 (흰색 배경 / 검은색 글자) */}
-      {openGroup && (
+      {/* Flyout — 그룹 아이콘 우측에 컴팩트 popover. 외부 클릭으로 닫힘 (투명 캐처). */}
+      {openGroup && openAnchor && (
         <>
           <div
-            className="fixed inset-0 z-30 bg-black/10"
+            className="fixed inset-0 z-40"
             onClick={() => setOpenGroup(null)}
             aria-hidden
           />
-          <FlyoutShell title={flyoutTitle} onClose={() => setOpenGroup(null)}>
+          <FlyoutShell
+            title={flyoutTitle}
+            anchorRect={openAnchor}
+            onClose={() => setOpenGroup(null)}
+          >
             {renderFlyoutBody(openGroup)}
           </FlyoutShell>
         </>
@@ -549,10 +570,10 @@ export function Sidebar() {
 function FlyoutSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+      <div className="px-3 pt-1.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
         {title}
       </div>
-      <div className="space-y-0.5">{children}</div>
+      <div>{children}</div>
     </div>
   );
 }

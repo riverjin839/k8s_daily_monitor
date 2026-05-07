@@ -5,7 +5,7 @@ import { Plus, Download, Pencil, Trash2, ClipboardList, Search, X, ImagePlus, Ch
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { IssueDetailModal, IssueKanban } from '@/components/issues';
+import { IssueKanban } from '@/components/issues';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { ServiceChip } from '@/components/services/ServiceChip';
@@ -105,7 +105,6 @@ function SortableIssueRow({
 
 export function IssueBoardPage() {
   const navigate = useNavigate();
-  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [filterClusterId, setFilterClusterId] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
   const [filterArea, setFilterArea] = useState('');
@@ -178,14 +177,14 @@ export function IssueBoardPage() {
     localStorage.removeItem('k8s:img:issue:' + issue.id);
   };
 
+  // 행 / 칸반의 ✏️ 버튼 — 수정 라우트로 진입.
   const handleEdit = (issue: Issue) => {
-    setSelectedIssue(null);
     navigate(`/issues/${issue.id}/edit`);
   };
 
-  const handleDetailEdit = (issue: Issue) => {
-    setSelectedIssue(null);
-    navigate(`/issues/${issue.id}/edit`);
+  // 행 / 카드 클릭 — read 라우트로 진입.
+  const openIssueDetail = (issue: Issue) => {
+    navigate(`/issues/${issue.id}`);
   };
 
   const handleExportCsv = async () => {
@@ -350,7 +349,7 @@ export function IssueBoardPage() {
           ) : (
             <IssueKanban
               issues={sortedIssues}
-              onIssueClick={setSelectedIssue}
+              onIssueClick={openIssueDetail}
               onEdit={handleEdit}
               onDelete={handleDelete}
             />
@@ -425,7 +424,7 @@ export function IssueBoardPage() {
                     const hasImages = hasLocalImages(issue.id);
                     return (
                       <SortableIssueRow key={issue.id} id={issue.id} isDragDisabled={!!sortKey}>
-                        <td className="px-4 py-3 cursor-pointer" onClick={() => setSelectedIssue(issue)}>
+                        <td className="px-4 py-3 cursor-pointer" onClick={() => openIssueDetail(issue)}>
                           <span className="flex items-center gap-1.5">
                             <span
                               className={`w-2 h-2 rounded-full flex-shrink-0 ${
@@ -441,7 +440,7 @@ export function IssueBoardPage() {
                             </span>
                           </span>
                         </td>
-                        <td className="px-4 py-3 font-medium whitespace-nowrap cursor-pointer" onClick={() => setSelectedIssue(issue)}>
+                        <td className="px-4 py-3 font-medium whitespace-nowrap cursor-pointer" onClick={() => openIssueDetail(issue)}>
                           <div className="flex items-center gap-1.5">
                             <span className="px-2 py-0.5 text-[11px] rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
                               정: {issue.primaryAssignee || issue.assignee}
@@ -453,10 +452,10 @@ export function IssueBoardPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap cursor-pointer" onClick={() => setSelectedIssue(issue)}>
+                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap cursor-pointer" onClick={() => openIssueDetail(issue)}>
                           {issue.clusterName || '-'}
                         </td>
-                        <td className="px-4 py-3 cursor-pointer" onClick={() => setSelectedIssue(issue)}>
+                        <td className="px-4 py-3 cursor-pointer" onClick={() => openIssueDetail(issue)}>
                           <div className="flex items-center gap-1 flex-wrap">
                             <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
                               {issue.issueArea}
@@ -464,7 +463,7 @@ export function IssueBoardPage() {
                             {issue.service && <ServiceChip service={issue.service} />}
                           </div>
                         </td>
-                        <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => setSelectedIssue(issue)}>
+                        <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => openIssueDetail(issue)}>
                           <div className="flex items-start gap-1.5">
                             <p className="line-clamp-2 text-foreground/90">{stripHtml(issue.issueContent)}</p>
                             {hasImages && (
@@ -472,18 +471,18 @@ export function IssueBoardPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => setSelectedIssue(issue)}>
+                        <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => openIssueDetail(issue)}>
                           <p className="line-clamp-2 text-muted-foreground">
                             {stripHtml(issue.actionContent) || '-'}
                           </p>
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedIssue(issue)}>
+                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => openIssueDetail(issue)}>
                           {formatDateTime(issue.occurredAt)}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => setSelectedIssue(issue)}>
+                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => openIssueDetail(issue)}>
                           {formatDateTime(issue.resolvedAt)}
                         </td>
-                        <td className="px-4 py-3 max-w-[120px] cursor-pointer" onClick={() => setSelectedIssue(issue)}>
+                        <td className="px-4 py-3 max-w-[120px] cursor-pointer" onClick={() => openIssueDetail(issue)}>
                           <p className="line-clamp-2 text-muted-foreground text-xs">
                             {issue.remarks || '-'}
                           </p>
@@ -518,13 +517,6 @@ export function IssueBoardPage() {
         ))}
       </main>
 
-      {selectedIssue && (
-        <IssueDetailModal
-          issue={selectedIssue}
-          onClose={() => setSelectedIssue(null)}
-          onEdit={handleDetailEdit}
-        />
-      )}
     </div>
   );
 }

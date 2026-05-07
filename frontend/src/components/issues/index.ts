@@ -1,3 +1,3 @@
-export { IssueDetailModal } from './IssueDetailModal';
 export { IssueKanban } from './IssueKanban';
 export { IssueForm } from './IssueForm';
+export { IssueReadView } from './IssueReadView';

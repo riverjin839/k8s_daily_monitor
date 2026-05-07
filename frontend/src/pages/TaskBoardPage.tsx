@@ -5,7 +5,7 @@ import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, Calenda
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { TaskDetailModal, TaskCalendar, TaskKanban } from '@/components/tasks';
+import { TaskCalendar, TaskKanban } from '@/components/tasks';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { ServiceChip } from '@/components/services/ServiceChip';
@@ -112,8 +112,6 @@ function SortableTaskRow({
 export function TaskBoardPage() {
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>('table');
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [selectedMode, setSelectedMode] = useState<'read' | 'edit'>('read');
   const [filterClusterId, setFilterClusterId] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
@@ -193,23 +191,19 @@ export function TaskBoardPage() {
     localStorage.removeItem('k8s:img:task:' + task.id);
   };
 
-  // 행/카드의 ✏️ 버튼 — 풀페이지 라우트 대신 우측 패널을 edit 모드로 직접 연다.
+  // 행/카드의 ✏️ 버튼 — 수정 라우트로 진입.
   const handleEdit = (task: Task) => {
-    setSelectedTask(task);
-    setSelectedMode('edit');
+    navigate(`/tasks/${task.id}/edit`);
   };
 
-  // 하위 작업 등록은 parentId 쿼리가 필요해 라우트를 그대로 유지.
+  // 하위 작업 등록.
   const handleAddSubTask = (task: Task) => {
-    setSelectedTask(null);
-    setSelectedMode('read');
     navigate(`/tasks/new?parentId=${task.id}`);
   };
 
-  // 행 / 카드 클릭으로 상세 패널을 read 모드로 연다.
+  // 행 / 카드 클릭 — read 라우트로 진입.
   const openTaskDetail = (task: Task) => {
-    setSelectedTask(task);
-    setSelectedMode('read');
+    navigate(`/tasks/${task.id}`);
   };
 
   const handleExportCsv = async () => {
@@ -616,13 +610,6 @@ export function TaskBoardPage() {
         ))}
       </main>
 
-      {selectedTask && (
-        <TaskDetailModal
-          task={selectedTask}
-          initialMode={selectedMode}
-          onClose={() => { setSelectedTask(null); setSelectedMode('read'); }}
-        />
-      )}
     </div>
   );
 }

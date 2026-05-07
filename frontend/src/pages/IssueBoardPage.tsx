@@ -5,7 +5,7 @@ import { Plus, Download, Pencil, Trash2, ClipboardList, Search, X, ImagePlus, Ch
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { IssueDetailModal, IssueKanban } from '@/components/issues';
+import { IssueKanban } from '@/components/issues';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { ServiceChip } from '@/components/services/ServiceChip';
@@ -105,8 +105,6 @@ function SortableIssueRow({
 
 export function IssueBoardPage() {
   const navigate = useNavigate();
-  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
-  const [selectedMode, setSelectedMode] = useState<'read' | 'edit'>('read');
   const [filterClusterId, setFilterClusterId] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
   const [filterArea, setFilterArea] = useState('');
@@ -179,16 +177,14 @@ export function IssueBoardPage() {
     localStorage.removeItem('k8s:img:issue:' + issue.id);
   };
 
-  // 행 또는 칸반의 ✏️ 버튼 — 풀페이지 라우트 대신 우측 패널을 edit 모드로 직접 연다.
+  // 행 / 칸반의 ✏️ 버튼 — 수정 라우트로 진입.
   const handleEdit = (issue: Issue) => {
-    setSelectedIssue(issue);
-    setSelectedMode('edit');
+    navigate(`/issues/${issue.id}/edit`);
   };
 
-  // 행 / 카드 클릭으로 상세 패널을 read 모드로 연다.
+  // 행 / 카드 클릭 — read 라우트로 진입.
   const openIssueDetail = (issue: Issue) => {
-    setSelectedIssue(issue);
-    setSelectedMode('read');
+    navigate(`/issues/${issue.id}`);
   };
 
   const handleExportCsv = async () => {
@@ -521,13 +517,6 @@ export function IssueBoardPage() {
         ))}
       </main>
 
-      {selectedIssue && (
-        <IssueDetailModal
-          issue={selectedIssue}
-          initialMode={selectedMode}
-          onClose={() => { setSelectedIssue(null); setSelectedMode('read'); }}
-        />
-      )}
     </div>
   );
 }

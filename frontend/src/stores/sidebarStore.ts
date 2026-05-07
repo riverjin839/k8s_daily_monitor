@@ -5,7 +5,9 @@ import { create } from 'zustand';
 const CLUSTER_KEY = 'k8s:cluster-sidebar-width';
 const NAV_GROUPS_KEY = 'k8s:sidebar-collapsed-groups-v1';
 
-export const NAV_WIDTH = 168;         // fixed sidebar width (≈70% of original 240)
+// 아이콘 전용 레일 — 호버 툴팁 + 클릭 flyout 디자인. 패널/레이블은 flyout 안에 들어감.
+export const NAV_WIDTH = 56;
+export const FLYOUT_WIDTH = 240;
 
 export const CLUSTER_DEFAULT = 240;
 export const CLUSTER_MIN = 180;

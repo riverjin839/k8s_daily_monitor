@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type ComponentType } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation, Link } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, ListTodo, Sparkles, Settings, Server,
@@ -84,15 +85,30 @@ interface RailIconButtonProps {
 }
 
 function RailIconButton({ label, Icon, active, highlighted, onClick, suppressTooltip }: RailIconButtonProps) {
-  const [hover, setHover] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  // top / left 는 viewport 기준 (position: fixed). 툴팁은 부모 overflow:auto 의 클리핑을
+  // 회피하기 위해 document.body 에 portal 로 렌더한다.
+  const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
+
+  const showTooltip = () => {
+    const el = buttonRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setTooltipPos({ top: rect.top + rect.height / 2, left: rect.right + 8 });
+  };
+  const hideTooltip = () => setTooltipPos(null);
+
   return (
-    <div className="relative">
+    <>
       <button
+        ref={buttonRef}
         type="button"
         aria-label={label}
         onClick={onClick}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
+        onMouseEnter={showTooltip}
+        onMouseLeave={hideTooltip}
+        onFocus={showTooltip}
+        onBlur={hideTooltip}
         className={`relative flex items-center justify-center w-10 h-10 rounded-md transition-colors ${
           active
             ? 'bg-primary/15 text-primary'
@@ -106,16 +122,17 @@ function RailIconButton({ label, Icon, active, highlighted, onClick, suppressToo
         )}
         <Icon className="w-5 h-5" />
       </button>
-      {hover && !suppressTooltip && (
+      {tooltipPos && !suppressTooltip && createPortal(
         <span
           role="tooltip"
-          aria-hidden
-          className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 text-xs font-medium whitespace-nowrap bg-zinc-700 text-white rounded shadow-lg pointer-events-none z-[60]"
+          style={{ top: tooltipPos.top, left: tooltipPos.left, transform: 'translateY(-50%)' }}
+          className="fixed px-2 py-1 text-xs font-medium whitespace-nowrap bg-zinc-700 text-white rounded shadow-lg pointer-events-none z-[60]"
         >
           {label}
-        </span>
+        </span>,
+        document.body,
       )}
-    </div>
+    </>
   );
 }
 

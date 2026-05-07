@@ -24,6 +24,7 @@ import { ClusterSidebar } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { getAuthToken } from '@/stores/authStore';
 import api from '@/services/api';
+import { useAnalyzeNamespaces, useAnalyzePods } from '@/hooks/useIncidentAnalysis';
 
 // ── Types (kept inline; this is the only consumer) ──────────────────────────
 interface CiliumStatus {
@@ -832,6 +833,10 @@ interface HubbleFlowEvent {
   parsed?: Record<string, unknown>;
 }
 
+// Hubble flow 필터 자동완성용 정적 enum.
+const HUBBLE_PROTOCOLS = ['tcp', 'udp', 'http', 'dns', 'icmp', 'sctp', 'kafka', 'grpc'] as const;
+const HUBBLE_VERDICTS = ['FORWARDED', 'DROPPED', 'AUDIT', 'ERROR', 'REDIRECTED', 'TRACED'] as const;
+
 function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleInstalled: boolean }) {
   const [filters, setFilters] = useState({
     fromPod: '',
@@ -849,12 +854,76 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
   const buffer = useRef<HubbleFlowEvent[]>([]);
   const flushTimer = useRef<number | null>(null);
 
+  // 클러스터 namespace 목록 — datalist 소스.
+  const { data: nsData } = useAnalyzeNamespaces(clusterId);
+  // 입력된 from/to namespace 의 pod 목록 — datalist 소스.
+  const { data: fromPodsData } = useAnalyzePods(clusterId, filters.fromNamespace);
+  const { data: toPodsData } = useAnalyzePods(clusterId, filters.toNamespace);
+
+  // 실시간 flow 이벤트에서 관측된 namespace/pod 누적 — autocomplete 보조.
+  const [seenNs, setSeenNs] = useState<Set<string>>(new Set());
+  const [seenPods, setSeenPods] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     return () => {
       handleRef.current?.abort();
       if (flushTimer.current) window.clearInterval(flushTimer.current);
     };
   }, []);
+
+  // 들어오는 events 마다 flow.source/destination 의 namespace, pod_name 추출.
+  useEffect(() => {
+    if (events.length === 0) return;
+    const ns = new Set(seenNs);
+    const pods = new Set(seenPods);
+    let nsChanged = false;
+    let podsChanged = false;
+    for (const ev of events) {
+      const flow = (ev.parsed as Record<string, unknown> | undefined)?.flow as Record<string, unknown> | undefined;
+      const candidates: Array<Record<string, unknown> | undefined> = [
+        flow?.source as Record<string, unknown> | undefined,
+        flow?.destination as Record<string, unknown> | undefined,
+      ];
+      for (const ep of candidates) {
+        if (!ep) continue;
+        const epNs = typeof ep.namespace === 'string' ? ep.namespace : undefined;
+        const epPod = typeof ep.pod_name === 'string' ? ep.pod_name : undefined;
+        if (epNs && !ns.has(epNs)) { ns.add(epNs); nsChanged = true; }
+        if (epNs && epPod) {
+          const key = `${epNs}/${epPod}`;
+          if (!pods.has(key)) { pods.add(key); podsChanged = true; }
+        }
+      }
+    }
+    if (nsChanged) setSeenNs(ns);
+    if (podsChanged) setSeenPods(pods);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events]);
+
+  // ── datalist 데이터 합치기 ───────────────────────────────────────────────
+  const namespaceOptions = useMemo(() => {
+    const set = new Set<string>(seenNs);
+    for (const n of nsData?.namespaces ?? []) set.add(n.name);
+    return Array.from(set).sort();
+  }, [nsData, seenNs]);
+
+  const fromPodOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of fromPodsData?.pods ?? []) set.add(`${p.namespace}/${p.name}`);
+    for (const k of seenPods) {
+      if (!filters.fromNamespace || k.startsWith(`${filters.fromNamespace}/`)) set.add(k);
+    }
+    return Array.from(set).sort();
+  }, [fromPodsData, seenPods, filters.fromNamespace]);
+
+  const toPodOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of toPodsData?.pods ?? []) set.add(`${p.namespace}/${p.name}`);
+    for (const k of seenPods) {
+      if (!filters.toNamespace || k.startsWith(`${filters.toNamespace}/`)) set.add(k);
+    }
+    return Array.from(set).sort();
+  }, [toPodsData, seenPods, filters.toNamespace]);
 
   const start = () => {
     handleRef.current?.abort();
@@ -926,24 +995,72 @@ function HubbleTab({ clusterId, hubbleInstalled }: { clusterId: string; hubbleIn
     <div className="space-y-4">
       <MacCard bodyPadding="p-3">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-2">
-          {([
-            { k: 'fromPod',       ph: 'from-pod (ns/name)' },
-            { k: 'toPod',         ph: 'to-pod (ns/name)' },
-            { k: 'fromNamespace', ph: 'from-namespace' },
-            { k: 'toNamespace',   ph: 'to-namespace' },
-            { k: 'protocol',      ph: 'protocol (tcp/udp/http/dns)' },
-            { k: 'verdict',       ph: 'verdict (FORWARDED/DROPPED)' },
-          ] as const).map((f) => (
-            <input
-              key={f.k}
-              value={filters[f.k]}
-              onChange={(e) => setFilters((s) => ({ ...s, [f.k]: e.target.value }))}
-              disabled={running}
-              placeholder={f.ph}
-              className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
-            />
-          ))}
+          <input
+            value={filters.fromNamespace}
+            onChange={(e) => setFilters((s) => ({ ...s, fromNamespace: e.target.value }))}
+            disabled={running}
+            placeholder="from-namespace"
+            list="hubble-ns-list"
+            className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+          />
+          <input
+            value={filters.fromPod}
+            onChange={(e) => setFilters((s) => ({ ...s, fromPod: e.target.value }))}
+            disabled={running}
+            placeholder="from-pod (ns/name)"
+            list="hubble-from-pod-list"
+            className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+          />
+          <input
+            value={filters.protocol}
+            onChange={(e) => setFilters((s) => ({ ...s, protocol: e.target.value }))}
+            disabled={running}
+            placeholder="protocol (tcp/udp/http/dns)"
+            list="hubble-protocol-list"
+            className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+          />
+          <input
+            value={filters.toNamespace}
+            onChange={(e) => setFilters((s) => ({ ...s, toNamespace: e.target.value }))}
+            disabled={running}
+            placeholder="to-namespace"
+            list="hubble-ns-list"
+            className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+          />
+          <input
+            value={filters.toPod}
+            onChange={(e) => setFilters((s) => ({ ...s, toPod: e.target.value }))}
+            disabled={running}
+            placeholder="to-pod (ns/name)"
+            list="hubble-to-pod-list"
+            className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+          />
+          <input
+            value={filters.verdict}
+            onChange={(e) => setFilters((s) => ({ ...s, verdict: e.target.value }))}
+            disabled={running}
+            placeholder="verdict (FORWARDED/DROPPED)"
+            list="hubble-verdict-list"
+            className="text-xs bg-background border border-border rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+          />
         </div>
+
+        {/* 자동완성 데이터 — namespace / pod 는 API + 관측, protocol / verdict 는 정적 enum */}
+        <datalist id="hubble-ns-list">
+          {namespaceOptions.map((n) => <option key={n} value={n} />)}
+        </datalist>
+        <datalist id="hubble-from-pod-list">
+          {fromPodOptions.map((p) => <option key={p} value={p} />)}
+        </datalist>
+        <datalist id="hubble-to-pod-list">
+          {toPodOptions.map((p) => <option key={p} value={p} />)}
+        </datalist>
+        <datalist id="hubble-protocol-list">
+          {HUBBLE_PROTOCOLS.map((p) => <option key={p} value={p} />)}
+        </datalist>
+        <datalist id="hubble-verdict-list">
+          {HUBBLE_VERDICTS.map((v) => <option key={v} value={v} />)}
+        </datalist>
         <div className="flex items-center gap-2 flex-wrap pt-1">
           {!running ? (
             <button

@@ -1,14 +1,19 @@
+import { useState } from 'react';
 import { ImagePlus, ExternalLink, Pencil } from 'lucide-react';
 import { Task } from '@/types';
 import { loadTaskImages } from '@/lib/taskImages';
 import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from './taskKanbanUtils';
 import { RichContent } from '@/components/editor';
 import { SidePane } from '@/components/common';
+import { TaskForm } from './TaskForm';
 
 interface TaskDetailModalProps {
   task: Task;
   onClose: () => void;
-  onEdit: (task: Task) => void;
+  /** 수정 시작 시 외부 동작 (선택). 미지정 시 패널 내부에서 read↔edit 토글. */
+  onEdit?: (task: Task) => void;
+  /** 패널이 처음 뜰 때의 모드. 기본 'read'. */
+  initialMode?: 'read' | 'edit';
 }
 
 const PRIORITY_STYLES: Record<string, { dot: string; label: string; text: string }> = {
@@ -35,13 +40,33 @@ function Field({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
-export function TaskDetailModal({ task, onClose, onEdit }: TaskDetailModalProps) {
+export function TaskDetailModal({ task, onClose, onEdit, initialMode = 'read' }: TaskDetailModalProps) {
+  const [mode, setMode] = useState<'read' | 'edit'>(initialMode);
   const images = loadTaskImages(task.id);
   const isCompleted = !!task.completedAt;
   const pStyle = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium;
   const moduleCfg = task.module ? MODULE_CONFIG[task.module] : null;
   const typeCfg = task.typeLabel ? TYPE_LABEL_CONFIG[task.typeLabel] : null;
   const kanbanLabel = KANBAN_STATUS_LABEL[task.kanbanStatus ?? 'todo'];
+
+  if (mode === 'edit') {
+    const editTitle = (
+      <div className="flex items-center gap-2 min-w-0">
+        <Pencil className="w-4 h-4 text-primary flex-shrink-0" />
+        <h2 className="text-sm font-semibold truncate">작업 수정</h2>
+      </div>
+    );
+    return (
+      <SidePane open onClose={onClose} title={editTitle} bodyClassName="px-6 py-5">
+        <TaskForm
+          initial={task}
+          embedded
+          onCancel={() => setMode('read')}
+          onSaved={() => setMode('read')}
+        />
+      </SidePane>
+    );
+  }
 
   const title = (
     <div className="flex items-center gap-2 flex-wrap min-w-0">
@@ -78,7 +103,10 @@ export function TaskDetailModal({ task, onClose, onEdit }: TaskDetailModalProps)
 
   const headerActions = (
     <button
-      onClick={() => onEdit(task)}
+      onClick={() => {
+        if (onEdit) onEdit(task);
+        else setMode('edit');
+      }}
       className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
       title="수정"
     >

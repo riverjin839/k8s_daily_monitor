@@ -1043,16 +1043,13 @@ function ReferenceSelect({ type, value, onChange }: ReferenceSelectProps) {
       case 'cluster':
         return (clusters ?? []).map((c) => ({ id: c.id, label: c.name }));
       case 'issue':
-        return ((issuesData?.data ?? []) as Array<{ id: string; title: string }>)
-          .map((i) => ({ id: i.id, label: i.title }));
+        return (issuesData?.data ?? []).map((i) => ({ id: i.id, label: i.issueContent }));
       case 'task':
-        return ((tasksData?.data ?? []) as Array<{ id: string; title: string }>)
-          .map((t) => ({ id: t.id, label: t.title }));
+        return (tasksData?.data ?? []).map((t) => ({ id: t.id, label: t.taskContent }));
       case 'playbook':
         return (playbooksData ?? []).map((p) => ({ id: p.id, label: p.name }));
       case 'work_guide':
-        return ((workGuidesData?.data ?? []) as Array<{ id: string; title: string }>)
-          .map((w) => ({ id: w.id, label: w.title }));
+        return (workGuidesData?.data ?? []).map((w) => ({ id: w.id, label: w.title }));
       case 'metric_card':
         return (metricCardsData ?? []).map((m) => ({ id: m.id, label: m.title }));
       default:

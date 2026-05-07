@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Layers, Tag } from 'lucide-react';
 import type { NodeImagesInfo } from '@/hooks/useNodeImages';
-import { formatBytes } from './NodeImagesTable';
+import { formatBytes } from './utils';
 
 interface Props {
   nodes: NodeImagesInfo[];

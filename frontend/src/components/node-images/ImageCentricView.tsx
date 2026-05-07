@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Layers, Server } from 'lucide-react';
 import type { NodeImagesInfo } from '@/hooks/useNodeImages';
-import { formatBytes, pickPrimaryName } from './NodeImagesTable';
+import { formatBytes, pickPrimaryName } from './utils';
 
 interface Props {
   nodes: NodeImagesInfo[];

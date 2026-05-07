@@ -288,6 +288,8 @@ export interface Issue {
   occurredAt: string;   // ISO date "YYYY-MM-DD"
   resolvedAt?: string;  // ISO date "YYYY-MM-DD"
   remarks?: string;
+  /** Confluence 문서 링크 (운영 페이지) */
+  confluenceUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -311,6 +313,7 @@ export interface IssueCreate {
   occurredAt: string;
   resolvedAt?: string | null;
   remarks?: string;
+  confluenceUrl?: string;
 }
 
 export interface IssueUpdate extends Partial<IssueCreate> {}
@@ -344,6 +347,8 @@ export interface Task {
   issueId?: string;       // 연결된 이슈 (optional)
   /** 통합지식 service tag — ui_settings.serviceCatalog 의 slug 와 매칭. */
   service?: string;
+  /** Confluence 문서 링크 (운영 페이지) */
+  confluenceUrl?: string;
   subtasks?: Task[];
   createdAt: string;
   updatedAt: string;
@@ -380,6 +385,7 @@ export interface TaskCreate {
   parentId?: string;
   issueId?: string;
   service?: string;
+  confluenceUrl?: string;
 }
 
 export interface TaskUpdate extends Partial<TaskCreate> {}
@@ -524,6 +530,8 @@ export interface WorkGuide {
   status: string;      // draft / active / archived
   author?: string;
   sortOrder: number;
+  /** Confluence 문서 링크 */
+  confluenceUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -538,6 +546,7 @@ export interface WorkGuideCreate {
   author?: string;
   parentId?: string | null;
   sortOrder?: number;
+  confluenceUrl?: string;
 }
 
 export interface WorkGuideUpdate extends Partial<WorkGuideCreate> {}
@@ -576,6 +585,8 @@ export interface OpsNote {
   color: OpsNoteColor;
   author?: string;
   pinned: boolean;
+  /** Confluence 문서 링크 */
+  confluenceUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -588,6 +599,7 @@ export interface OpsNoteCreate {
   color: OpsNoteColor;
   author?: string;
   pinned?: boolean;
+  confluenceUrl?: string;
 }
 
 export interface OpsNoteUpdate extends Partial<OpsNoteCreate> {}

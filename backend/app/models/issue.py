@@ -23,6 +23,7 @@ class Issue(Base):
     occurred_at = Column(DateTime, nullable=False)               # 이슈 발생일시
     resolved_at = Column(DateTime, nullable=True)                # 이슈 조치일시
     remarks = Column(Text, nullable=True)                        # 비고
+    confluence_url = Column(Text, nullable=True)                 # Confluence 문서 링크
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

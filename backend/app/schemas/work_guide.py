@@ -14,6 +14,7 @@ class WorkGuideCreate(BaseModel):
     author: Optional[str] = None
     parent_id: Optional[UUID] = None
     sort_order: int = 0
+    confluence_url: Optional[str] = Field(None, max_length=2048)
 
 
 class WorkGuideUpdate(BaseModel):
@@ -26,6 +27,7 @@ class WorkGuideUpdate(BaseModel):
     author: Optional[str] = None
     parent_id: Optional[UUID] = None
     sort_order: Optional[int] = None
+    confluence_url: Optional[str] = Field(None, max_length=2048)
 
 
 class WorkGuideResponse(BaseModel):
@@ -39,6 +41,7 @@ class WorkGuideResponse(BaseModel):
     status: str
     author: Optional[str] = None
     sort_order: int = 0
+    confluence_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

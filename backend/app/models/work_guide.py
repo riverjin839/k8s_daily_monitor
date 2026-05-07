@@ -18,6 +18,7 @@ class WorkGuide(Base):
     status = Column(String(20), default='draft')     # draft / active / archived
     author = Column(String(100), nullable=True)
     sort_order = Column(Integer, default=0)          # 동일 레벨 내 정렬 순서
+    confluence_url = Column(Text, nullable=True)     # Confluence 문서 링크
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

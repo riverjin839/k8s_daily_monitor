@@ -1,13 +1,13 @@
 import { useId, useMemo, useState } from 'react';
 import {
   HelpCircle, Plus, Pencil, Trash2, X, Pin, PinOff, Search, MessageSquare,
-  Sparkles, History, ChevronRight, FileQuestion,
+  Sparkles, History, ChevronRight, FileQuestion, ExternalLink,
 } from 'lucide-react';
 import { RichTextEditor, RichContent } from '@/components/editor';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsNotesApi } from '@/services/api';
 import type { OpsNote, OpsNoteCreate, OpsNoteColor, OpsNoteUpdate } from '@/types';
-import { useToast } from '@/components/common';
+import { useToast, ConfluenceUrlInput } from '@/components/common';
 import { formatApiError, formatRelativeTime } from '@/lib/utils';
 import { MacCard } from '@/components/ui/MacCard';
 
@@ -59,6 +59,7 @@ function NoteFormModal({ initial, defaultService, onClose, onSaved }: NoteFormMo
   const [color, setColor]             = useState<OpsNoteColor>(initial?.color ?? 'yellow');
   const [author, setAuthor]           = useState(initial?.author ?? '');
   const [pinned, setPinned]           = useState(initial?.pinned ?? false);
+  const [confluenceUrl, setConfluenceUrl] = useState(initial?.confluenceUrl ?? '');
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
 
@@ -80,6 +81,7 @@ function NoteFormModal({ initial, defaultService, onClose, onSaved }: NoteFormMo
         color,
         author: author.trim() || undefined,
         pinned,
+        confluenceUrl: confluenceUrl.trim() || undefined,
       };
       if (isEdit && initial) {
         await opsNotesApi.update(initial.id, payload as OpsNoteUpdate);
@@ -229,6 +231,13 @@ function NoteFormModal({ initial, defaultService, onClose, onSaved }: NoteFormMo
             />
           </div>
 
+          {/* Confluence 링크 */}
+          <ConfluenceUrlInput
+            id={f('confluence')}
+            value={confluenceUrl}
+            onChange={setConfluenceUrl}
+          />
+
           <div className="flex justify-end gap-2 pt-1">
             <button
               type="button"
@@ -374,8 +383,20 @@ function QnaCard({ note, onEdit, onDelete, onTogglePin }: QnaCardProps) {
 
       {/* 푸터 */}
       <footer className="flex items-center justify-between gap-2 px-4 py-2 border-t border-border/60 bg-background/40 text-[11px] text-muted-foreground">
-        <span className="truncate flex-1 min-w-0">
+        <span className="truncate flex-1 min-w-0 flex items-center gap-1.5">
           {note.author ? <>✍ {note.author}</> : <span className="opacity-60">작성자 없음</span>}
+          {note.confluenceUrl && (
+            <a
+              href={note.confluenceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-[10px] font-semibold"
+              title={note.confluenceUrl}
+            >
+              <ExternalLink className="w-2.5 h-2.5" /> Confluence
+            </a>
+          )}
         </span>
         <span className="flex-shrink-0 tabular-nums">{formatRelativeTime(note.updatedAt)}</span>
       </footer>

@@ -27,6 +27,8 @@ class TaskBase(BaseModel):
     issue_id: Optional[UUID] = None
     # 통합지식 service tag — ui_settings.serviceCatalog 의 slug. 자유 입력 (카탈로그에 없는 값도 허용).
     service: Optional[str] = Field(None, max_length=64)
+    # Confluence 문서 링크 — 빈 문자열은 None 으로 정규화 (frontend 호환).
+    confluence_url: Optional[str] = Field(None, max_length=2048)
 
 
 class TaskCreate(TaskBase):
@@ -53,6 +55,7 @@ class TaskUpdate(BaseModel):
     done_condition: Optional[str] = None
     issue_id: Optional[UUID] = None
     service: Optional[str] = Field(None, max_length=64)
+    confluence_url: Optional[str] = Field(None, max_length=2048)
 
 
 class TaskStatusPatch(BaseModel):

@@ -16,6 +16,7 @@ class OpsNote(Base):
     color = Column(String(20), nullable=False, default="yellow")  # yellow / green / blue / pink / purple
     author = Column(String(100), nullable=True)
     pinned = Column(Boolean, nullable=False, default=False)
+    confluence_url = Column(Text, nullable=True)       # Confluence 문서 링크
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

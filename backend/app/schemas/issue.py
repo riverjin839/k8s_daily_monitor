@@ -19,6 +19,7 @@ class IssueBase(BaseModel):
     occurred_at: datetime
     resolved_at: Optional[datetime] = None
     remarks: Optional[str] = None
+    confluence_url: Optional[str] = Field(None, max_length=2048)
 
 
 class IssueCreate(IssueBase):
@@ -39,6 +40,7 @@ class IssueUpdate(BaseModel):
     occurred_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
     remarks: Optional[str] = None
+    confluence_url: Optional[str] = Field(None, max_length=2048)
 
 
 class IssueResponse(IssueBase):

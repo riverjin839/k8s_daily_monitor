@@ -1,4 +1,4 @@
-import { X, ImagePlus } from 'lucide-react';
+import { X, ImagePlus, ExternalLink } from 'lucide-react';
 import { Issue } from '@/types';
 import { loadIssueImages } from '@/lib/issueImages';
 import { RichContent } from '@/components/editor';
@@ -98,6 +98,21 @@ export function IssueDetailModal({ issue, onClose, onEdit }: IssueDetailModalPro
           )}
 
           <Field label="비고" value={issue.remarks} />
+
+          {issue.confluenceUrl && (
+            <div className="space-y-1">
+              <p className="text-[11px] text-muted-foreground">Confluence 링크</p>
+              <a
+                href={issue.confluenceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline break-all"
+              >
+                <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="truncate max-w-md">{issue.confluenceUrl}</span>
+              </a>
+            </div>
+          )}
 
           {/* Images */}
           {images.length > 0 && (

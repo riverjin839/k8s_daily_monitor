@@ -7,6 +7,7 @@ import { loadTaskImages, saveTaskImages } from '@/lib/taskImages';
 import { RichTextEditor } from '@/components/editor';
 import { DateTimePicker } from '@/components/ui/DateTimePicker';
 import { useAssignees } from '@/hooks/useAssignees';
+import { ConfluenceUrlInput } from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
@@ -105,6 +106,7 @@ export function TaskFormPage() {
   const [completedAt, setCompletedAt] = useState('');
   const [priority, setPriority] = useState('medium');
   const [remarks, setRemarks] = useState('');
+  const [confluenceUrl, setConfluenceUrl] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [customCategories, setCustomCategories] = useState<string[]>(loadCustomCategories);
   const [showCatManage, setShowCatManage] = useState(false);
@@ -137,6 +139,7 @@ export function TaskFormPage() {
       setCompletedAt(toDatetimeLocal(editTask.completedAt));
       setPriority(editTask.priority);
       setRemarks(editTask.remarks ?? '');
+      setConfluenceUrl(editTask.confluenceUrl ?? '');
       setImages(loadTaskImages(editTask.id));
       setKanbanStatus(editTask.kanbanStatus ?? 'todo');
       setModule((editTask.module ?? '') as TaskModule | '');
@@ -198,6 +201,7 @@ export function TaskFormPage() {
       completedAt: completedAt || null,
       priority,
       remarks: remarks.trim() || undefined,
+      confluenceUrl: confluenceUrl.trim() || undefined,
       kanbanStatus,
       module: module || undefined,
       typeLabel: typeLabel || undefined,
@@ -518,6 +522,13 @@ export function TaskFormPage() {
               />
             </div>
           </div>
+
+          {/* Confluence 링크 */}
+          <ConfluenceUrlInput
+            id={f('confluenceUrl')}
+            value={confluenceUrl}
+            onChange={setConfluenceUrl}
+          />
 
           {/* 연결된 이슈 */}
           <div>

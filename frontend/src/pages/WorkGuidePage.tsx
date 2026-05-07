@@ -2,13 +2,13 @@ import { useId, useMemo, useState } from 'react';
 import {
   BookMarked, Plus, Pencil, Trash2, X, GitFork,
   ChevronRight, ChevronDown, FolderOpen, Folder,
-  FileText, CheckCircle, Archive, AlertCircle,
+  FileText, CheckCircle, Archive, AlertCircle, ExternalLink,
 } from 'lucide-react';
 import { RichTextEditor, RichContent } from '@/components/editor';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { workGuidesApi, workflowsApi } from '@/services/api';
 import type { WorkGuide, WorkGuideCreate, WorkGuideUpdate } from '@/types';
-import { useToast } from '@/components/common';
+import { useToast, ConfluenceUrlInput } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -143,6 +143,7 @@ function GuideFormModal({ initial, allGuides, defaultParentId, onClose, onSaved 
   const [tags, setTags]         = useState(initial?.tags ?? '');
   const [status, setStatus]     = useState(initial?.status ?? 'draft');
   const [author, setAuthor]     = useState(initial?.author ?? '');
+  const [confluenceUrl, setConfluenceUrl] = useState(initial?.confluenceUrl ?? '');
   const [parentId, setParentId] = useState<string>(
     initial?.parentId ?? defaultParentId ?? '',
   );
@@ -173,6 +174,7 @@ function GuideFormModal({ initial, allGuides, defaultParentId, onClose, onSaved 
         status,
         author: author.trim() || undefined,
         parentId: parentId || null,
+        confluenceUrl: confluenceUrl.trim() || undefined,
       };
       if (isEdit && initial) {
         await workGuidesApi.update(initial.id, payload as WorkGuideUpdate);
@@ -274,6 +276,12 @@ function GuideFormModal({ initial, allGuides, defaultParentId, onClose, onSaved 
                 placeholder="예: k8s, nginx, 긴급" className={inputCls} />
             </div>
           </div>
+
+          <ConfluenceUrlInput
+            id={f('confluence')}
+            value={confluenceUrl}
+            onChange={setConfluenceUrl}
+          />
 
           <div>
             <label htmlFor={f('content')} className="text-sm font-medium block mb-2">내용</label>
@@ -443,6 +451,18 @@ function PageView({ guide, allGuides, onSelect, onEdit, onAddChild, onAddToWorkf
                 {pc.label}
               </span>
               {guide.author && <span className="text-muted-foreground">✍ {guide.author}</span>}
+              {guide.confluenceUrl && (
+                <a
+                  href={guide.confluenceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 text-[10px] font-semibold transition-colors"
+                  title={guide.confluenceUrl}
+                >
+                  <ExternalLink className="w-2.5 h-2.5" /> Confluence
+                </a>
+              )}
               <span className="text-muted-foreground">{guide.updatedAt?.slice(0, 10)}</span>
             </div>
           </div>

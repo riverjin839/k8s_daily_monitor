@@ -9,6 +9,7 @@ import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
 import { useIssues, useCreateIssue, useUpdateIssue } from '@/hooks/useIssues';
+import { ConfluenceUrlInput } from '@/components/common';
 
 const DEFAULT_ISSUE_AREAS = [
   'API Server',
@@ -87,6 +88,7 @@ export function IssueFormPage() {
   const [occurredAt, setOccurredAt] = useState(todayDatetimeLocal());
   const [resolvedAt, setResolvedAt] = useState('');
   const [remarks, setRemarks] = useState('');
+  const [confluenceUrl, setConfluenceUrl] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [hydrated, setHydrated] = useState(!isEdit);
 
@@ -127,6 +129,7 @@ export function IssueFormPage() {
     setOccurredAt(toDatetimeLocal(editIssue.occurredAt));
     setResolvedAt(toDatetimeLocal(editIssue.resolvedAt));
     setRemarks(editIssue.remarks ?? '');
+    setConfluenceUrl(editIssue.confluenceUrl ?? '');
     setImages(loadIssueImages(editIssue.id));
     setHydrated(true);
   }, [isEdit, editIssue, hydrated]);
@@ -157,6 +160,7 @@ export function IssueFormPage() {
       occurredAt,
       resolvedAt: resolvedAt || null,
       remarks: remarks.trim() || undefined,
+      confluenceUrl: confluenceUrl.trim() || undefined,
     };
 
     if (isEdit && editIssue) {
@@ -469,6 +473,13 @@ export function IssueFormPage() {
                 className={inputClass}
               />
             </div>
+
+            {/* Confluence 링크 */}
+            <ConfluenceUrlInput
+              id={f('confluenceUrl')}
+              value={confluenceUrl}
+              onChange={setConfluenceUrl}
+            />
           </div>
 
         </form>

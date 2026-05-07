@@ -5,7 +5,7 @@ import {
   Pencil, Moon, Sun, Monitor, X, LogOut, User, ChevronRight,
   ClipboardList, CalendarCheck2, Link2, Tags, Calculator, GitFork, BookMarked, Layers, Boxes,
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
-  ClipboardCheck, ListTree,
+  ClipboardCheck, ListTree, Waves,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
@@ -38,6 +38,7 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
   '/cidr':               { defaultLabel: 'CIDR 계산기',    icon: Calculator },
   '/incident-analysis':  { defaultLabel: '장애 로그 분석', icon: Zap },
   '/packet-flow':        { defaultLabel: '패킷 흐름 분석', icon: Route },
+  '/cilium-trace':       { defaultLabel: 'Cilium BPF Trace', icon: Waves },
   '/ontology':           { defaultLabel: '온톨로지 그래프', icon: Share2 },
   '/trends':             { defaultLabel: '기술 동향',      icon: Rss },
   '/work-guides':        { defaultLabel: '표준 작업 가이드', icon: BookMarked },
@@ -62,7 +63,7 @@ const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ classNam
   { id: 'monitoring', label: '모니터링', icon: LayoutDashboard, paths: ['/', '/playbooks'] },
   { id: 'work',       label: '작업관리', icon: ListTodo,        paths: ['/issues', '/tasks', '/todo-today', '/members'] },
   { id: 'cluster',    label: '클러스터', icon: Server,          paths: ['/cluster-manage', '/node-specs', '/versions', '/bulk-exec', '/etcdctl', '/batch-jobs', '/mc', '/kernel-params', '/infra-topology', '/links', '/node-labels', '/node-images', '/cidr'] },
-  { id: 'analysis',   label: 'AI 분석',  icon: Sparkles,        paths: ['/incident-analysis', '/packet-flow', '/ontology', '/trends'] },
+  { id: 'analysis',   label: 'AI 분석',  icon: Sparkles,        paths: ['/incident-analysis', '/packet-flow', '/cilium-trace', '/ontology', '/trends'] },
   { id: 'docs',       label: '지식 허브', icon: BookOpen,        paths: [] },  // sections 사용
   { id: 'system',     label: '시스템',   icon: Settings,        paths: ['/settings'] },
 ];

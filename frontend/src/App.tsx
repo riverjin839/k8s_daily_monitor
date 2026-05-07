@@ -35,6 +35,7 @@ import { IncidentAnalysisPage } from '@/pages/IncidentAnalysisPage';
 import { PacketFlowPage } from '@/pages/PacketFlowPage';
 import { OntologyPage } from '@/pages/OntologyPage';
 import { TrendDigestPage } from '@/pages/TrendDigestPage';
+import { CiliumTracePage } from '@/pages/CiliumTracePage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar } from '@/components/layout';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
@@ -96,6 +97,7 @@ function AppShell() {
               <Route path="/packet-flow" element={<PacketFlowPage />} />
               <Route path="/ontology" element={<OntologyPage />} />
               <Route path="/trends" element={<TrendDigestPage />} />
+              <Route path="/cilium-trace" element={<CiliumTracePage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
       </div>

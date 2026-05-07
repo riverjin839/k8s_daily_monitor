@@ -360,15 +360,18 @@ function NodeEditor({ initial, onSave, onClose, title }: NodeEditorProps) {
     });
   };
 
-  const inputClass = 'w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary';
+  const inputClass = 'w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/40';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-xl p-5 w-full max-w-lg shadow-xl max-h-[85vh] overflow-y-auto">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-card border border-border rounded-2xl p-5 w-full max-w-lg mac-shadow max-h-[88vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold">{title}</h3>
-          <button onClick={onClose} className="p-1 hover:bg-secondary rounded-md">
+          <h3 className="text-sm font-semibold flex items-center gap-1.5">
+            <MapIcon className="w-4 h-4 text-primary" />
+            {title}
+          </h3>
+          <button onClick={onClose} className="p-1.5 hover:bg-secondary rounded-lg text-muted-foreground hover:text-foreground transition-colors" aria-label="닫기">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -452,13 +455,13 @@ function NodeEditor({ initial, onSave, onClose, title }: NodeEditorProps) {
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-1">
+          <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose}
-              className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg">
+              className="px-3.5 py-2 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-xl transition-colors">
               취소
             </button>
             <button type="submit"
-              className="px-3 py-1.5 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg flex items-center gap-1">
+              className="px-3.5 py-2 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl flex items-center gap-1.5 transition-colors">
               <Check className="w-3.5 h-3.5" /> 저장
             </button>
           </div>
@@ -693,21 +696,29 @@ function MindMapCanvas({
 
   return (
     <div className="relative w-full h-full">
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-1 bg-card border border-border rounded-lg p-1">
-        <button onClick={() => setZoom((z) => Math.min(3, z + 0.1))} className="p-1.5 hover:bg-secondary rounded" title="확대"><ZoomIn className="w-4 h-4" /></button>
-        <button onClick={() => setZoom((z) => Math.max(0.2, z - 0.1))} className="p-1.5 hover:bg-secondary rounded" title="축소"><ZoomOut className="w-4 h-4" /></button>
-        <button onClick={fitToScreen} className="p-1.5 hover:bg-secondary rounded" title="리셋"><Maximize2 className="w-4 h-4" /></button>
-        <div className="w-px h-4 bg-border mx-0.5" />
-        <button onClick={handleAutoLayout} className="p-1.5 hover:bg-secondary rounded" title="자동 배치"><GitBranch className="w-4 h-4" /></button>
-        <div className="w-px h-4 bg-border mx-0.5" />
-        <button onClick={() => setLayoutMode('mindmap')} className={`p-1.5 rounded ${layoutMode === 'mindmap' ? 'bg-primary/15 text-primary' : 'hover:bg-secondary'}`} title="Mindmap"><LayoutGrid className="w-4 h-4" /></button>
-        <button onClick={() => setLayoutMode('tree')} className={`p-1.5 rounded ${layoutMode === 'tree' ? 'bg-primary/15 text-primary' : 'hover:bg-secondary'}`} title="Tree"><Rows3 className="w-4 h-4" /></button>
-        <button onClick={() => setLayoutMode('orgchart')} className={`p-1.5 rounded ${layoutMode === 'orgchart' ? 'bg-primary/15 text-primary' : 'hover:bg-secondary'}`} title="Org Chart"><Building2 className="w-4 h-4" /></button>
-        <div className="w-px h-4 bg-border mx-0.5" />
-        <button onClick={() => setConnStyle('bezier')} className={`p-1.5 rounded ${connStyle === 'bezier' ? 'bg-primary/15 text-primary' : 'hover:bg-secondary'}`} title="Bezier"><Spline className="w-4 h-4" /></button>
-        <button onClick={() => setConnStyle('straight')} className={`p-1.5 rounded ${connStyle === 'straight' ? 'bg-primary/15 text-primary' : 'hover:bg-secondary'}`} title="Straight"><Minus className="w-4 h-4" /></button>
-        <button onClick={() => setConnStyle('elbow')} className={`p-1.5 rounded ${connStyle === 'elbow' ? 'bg-primary/15 text-primary' : 'hover:bg-secondary'}`} title="Elbow"><CornerDownRight className="w-4 h-4" /></button>
-        <span className="text-xs text-muted-foreground px-1">{Math.round(zoom * 100)}%</span>
+      <div className="absolute top-3 right-3 z-10 flex items-center gap-0.5 bg-card/90 backdrop-blur-md border border-border rounded-2xl p-1 mac-shadow">
+        <ToolGroup>
+          <ToolBtn onClick={() => setZoom((z) => Math.min(3, z + 0.1))} title="확대 (+)"><ZoomIn className="w-4 h-4" /></ToolBtn>
+          <ToolBtn onClick={() => setZoom((z) => Math.max(0.2, z - 0.1))} title="축소 (-)"><ZoomOut className="w-4 h-4" /></ToolBtn>
+          <ToolBtn onClick={fitToScreen} title="화면 맞춤 (Ctrl+0)"><Maximize2 className="w-4 h-4" /></ToolBtn>
+        </ToolGroup>
+        <ToolDivider />
+        <ToolGroup>
+          <ToolBtn onClick={handleAutoLayout} title="자동 배치"><GitBranch className="w-4 h-4" /></ToolBtn>
+        </ToolGroup>
+        <ToolDivider />
+        <ToolGroup>
+          <ToolBtn onClick={() => setLayoutMode('mindmap')} active={layoutMode === 'mindmap'} title="마인드맵"><LayoutGrid className="w-4 h-4" /></ToolBtn>
+          <ToolBtn onClick={() => setLayoutMode('tree')} active={layoutMode === 'tree'} title="트리"><Rows3 className="w-4 h-4" /></ToolBtn>
+          <ToolBtn onClick={() => setLayoutMode('orgchart')} active={layoutMode === 'orgchart'} title="조직도"><Building2 className="w-4 h-4" /></ToolBtn>
+        </ToolGroup>
+        <ToolDivider />
+        <ToolGroup>
+          <ToolBtn onClick={() => setConnStyle('bezier')} active={connStyle === 'bezier'} title="베지어"><Spline className="w-4 h-4" /></ToolBtn>
+          <ToolBtn onClick={() => setConnStyle('straight')} active={connStyle === 'straight'} title="직선"><Minus className="w-4 h-4" /></ToolBtn>
+          <ToolBtn onClick={() => setConnStyle('elbow')} active={connStyle === 'elbow'} title="꺾은선"><CornerDownRight className="w-4 h-4" /></ToolBtn>
+        </ToolGroup>
+        <span className="text-[11px] text-muted-foreground tabular-nums px-2 font-medium select-none">{Math.round(zoom * 100)}%</span>
       </div>
 
       <svg
@@ -849,27 +860,43 @@ function MindMapCanvas({
           onClick={() => setShowShortcuts((s) => !s)}
           onMouseEnter={() => setHoverShortcut(true)}
           onMouseLeave={() => setHoverShortcut(false)}
-          className="p-2 rounded-full border border-border bg-card shadow hover:bg-secondary"
+          className="p-2 rounded-full border border-border bg-card/90 backdrop-blur-md mac-shadow hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
           title="단축키 도움말 (?)"
+          aria-label="단축키 도움말"
         >
           <HelpCircle className="w-4 h-4" />
         </button>
       </div>
 
       {(showShortcuts || hoverShortcut) && (
-        <div className="absolute bottom-14 right-4 bg-card border border-border rounded-lg p-3 text-xs shadow-xl w-64 z-20">
-          <p className="font-semibold mb-2">Keyboard Shortcuts</p>
-          <div className="space-y-1 text-muted-foreground">
-            <p>Tab: 자식 노드 추가</p>
-            <p>Enter: 형제 노드 추가</p>
-            <p>Delete/Backspace: 노드 삭제</p>
-            <p>F2: 노드 수정</p>
-            <p>Esc: 선택 해제</p>
-            <p>←→↑↓: 인접 노드 이동</p>
-            <p>+/=: 확대, -: 축소</p>
-            <p>0: 100%, Ctrl+0: 화면 맞춤</p>
-            <p>?: 도움말 토글</p>
+        <div className="absolute bottom-14 right-4 bg-card/95 backdrop-blur-md border border-border rounded-2xl p-4 text-xs mac-shadow w-72 z-20">
+          <div className="flex items-center justify-between mb-3">
+            <p className="font-semibold flex items-center gap-1.5">
+              <HelpCircle className="w-3.5 h-3.5 text-primary" />
+              키보드 단축키
+            </p>
+            <span className="text-[10px] text-muted-foreground">? 키 토글</span>
           </div>
+          <ul className="space-y-1.5">
+            {[
+              ['Tab', '자식 노드 추가'],
+              ['Enter', '형제 노드 추가'],
+              ['Delete / Backspace', '노드 삭제'],
+              ['F2', '노드 수정'],
+              ['Esc', '선택 해제'],
+              ['← → ↑ ↓', '인접 노드 이동'],
+              ['+ / -', '확대 / 축소'],
+              ['0', '100%'],
+              ['Ctrl + 0', '화면 맞춤'],
+            ].map(([k, v]) => (
+              <li key={k} className="flex items-center justify-between gap-3 text-muted-foreground">
+                <kbd className="px-1.5 py-0.5 rounded-md bg-secondary border border-border text-[10px] font-mono text-foreground">
+                  {k}
+                </kbd>
+                <span className="text-[11px]">{v}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -877,13 +904,45 @@ function MindMapCanvas({
         const node = nodes.find((n) => n.id === selectedNodeId);
         if (!node?.note) return null;
         return (
-          <div className="absolute bottom-4 left-4 bg-card border border-border rounded-lg px-4 py-3 max-w-sm shadow-lg">
-            <p className="text-xs font-semibold text-muted-foreground mb-1">{node.label}</p>
-            <p className="text-sm whitespace-pre-wrap">{node.note}</p>
+          <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur-md border border-border rounded-2xl px-4 py-3 max-w-sm mac-shadow">
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{node.label}</p>
+            </div>
+            <p className="text-sm whitespace-pre-wrap text-foreground/90 leading-relaxed">{node.note}</p>
           </div>
         );
       })()}
     </div>
+  );
+}
+
+// ── Toolbar primitives ───────────────────────────────────────────────────────
+function ToolGroup({ children }: { children: React.ReactNode }) {
+  return <div className="flex items-center gap-0.5">{children}</div>;
+}
+
+function ToolDivider() {
+  return <span className="w-px h-5 bg-border mx-1" />;
+}
+
+function ToolBtn({
+  onClick, title, active, children,
+}: { onClick: () => void; title: string; active?: boolean; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      aria-pressed={active}
+      className={`p-1.5 rounded-lg transition-colors ${
+        active
+          ? 'bg-primary/15 text-primary'
+          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -978,50 +1037,102 @@ export function MindMapPage() {
 
   return (
     <div className="min-h-screen bg-background flex">
-      <aside className="w-60 flex-shrink-0 border-r border-border bg-card flex flex-col">
-        <div className="px-4 py-4 border-b border-border flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <MapIcon className="w-4 h-4 text-primary" />
-            <span className="text-sm font-semibold">마인드맵</span>
+      <aside className="w-64 flex-shrink-0 border-r border-border bg-card flex flex-col">
+        <div className="px-4 py-3.5 border-b border-border flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <MapIcon className="w-4 h-4 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold leading-tight truncate">마인드맵</p>
+              <p className="text-[10px] text-muted-foreground tabular-nums">전체 {maps.length}개</p>
+            </div>
           </div>
-          <button onClick={() => { setShowCreateMap(true); setEditingMapTitle(''); }} className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground" title="새 마인드맵">
+          <button
+            onClick={() => { setShowCreateMap(true); setEditingMapTitle(''); }}
+            className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-primary transition-colors"
+            title="새 마인드맵"
+            aria-label="새 마인드맵"
+          >
             <Plus className="w-4 h-4" />
           </button>
         </div>
 
         {showCreateMap && (
-          <form onSubmit={handleCreateMap} className="px-3 py-2 border-b border-border bg-muted/10">
-            <input type="text" value={editingMapTitle} onChange={(e) => setEditingMapTitle(e.target.value)} placeholder="제목 입력 후 Enter" className="w-full px-2 py-1.5 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary" autoFocus />
-            <div className="flex gap-1 mt-1.5">
-              <button type="submit" className="flex-1 py-1 text-xs bg-primary text-primary-foreground rounded">생성</button>
-              <button type="button" onClick={() => setShowCreateMap(false)} className="flex-1 py-1 text-xs bg-secondary border border-border rounded">취소</button>
+          <form onSubmit={handleCreateMap} className="px-3 py-2.5 border-b border-border bg-muted/20">
+            <input
+              type="text"
+              value={editingMapTitle}
+              onChange={(e) => setEditingMapTitle(e.target.value)}
+              placeholder="제목을 입력하고 Enter"
+              className="w-full px-2.5 py-1.5 text-xs bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
+              autoFocus
+            />
+            <div className="flex gap-1.5 mt-1.5">
+              <button type="submit" className="flex-1 py-1.5 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors">생성</button>
+              <button type="button" onClick={() => setShowCreateMap(false)} className="flex-1 py-1.5 text-xs bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors">취소</button>
             </div>
           </form>
         )}
 
-        <div className="flex-1 overflow-y-auto py-2">
+        <div className="flex-1 overflow-y-auto py-2 space-y-0.5">
           {mapsLoading ? (
-            <p className="text-xs text-muted-foreground text-center py-6">로딩 중...</p>
+            <div className="space-y-2 px-2">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="h-12 rounded-xl bg-secondary/40 animate-pulse" />
+              ))}
+            </div>
           ) : maps.length === 0 ? (
-            <div className="text-center py-8 px-4">
-              <MapIcon className="w-8 h-8 mx-auto mb-2 text-muted-foreground/30" />
-              <p className="text-xs text-muted-foreground">마인드맵이 없습니다.</p>
-              <button onClick={() => setShowCreateMap(true)} className="mt-2 text-xs text-primary">+ 새로 만들기</button>
+            <div className="text-center py-10 px-4">
+              <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-secondary flex items-center justify-center">
+                <MapIcon className="w-6 h-6 text-muted-foreground/50" />
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">마인드맵이 없습니다.</p>
+              <button
+                onClick={() => setShowCreateMap(true)}
+                className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" /> 새로 만들기
+              </button>
             </div>
           ) : (
-            maps.map((m) => (
-              <div key={m.id} onClick={() => { setSelectedMapId(m.id); setSelectedNodeId(null); }}
-                className={`group mx-2 px-3 py-2.5 rounded-lg cursor-pointer transition-colors flex items-center justify-between ${selectedMapId === m.id ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-foreground'}`}>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium truncate">{m.title}</p>
-                  <p className="text-[10px] text-muted-foreground">{m.nodeCount}개 노드</p>
+            maps.map((m) => {
+              const isActive = selectedMapId === m.id;
+              return (
+                <div
+                  key={m.id}
+                  onClick={() => { setSelectedMapId(m.id); setSelectedNodeId(null); }}
+                  className={`group mx-2 px-3 py-2.5 rounded-xl cursor-pointer transition-colors flex items-center justify-between gap-2 ${
+                    isActive
+                      ? 'bg-primary/10 text-primary ring-1 ring-primary/20'
+                      : 'hover:bg-secondary text-foreground'
+                  }`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs truncate ${isActive ? 'font-semibold' : 'font-medium'}`}>{m.title}</p>
+                    <p className="text-[10px] text-muted-foreground tabular-nums">{m.nodeCount}개 노드</p>
+                  </div>
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); updateMap.mutate({ id: m.id, data: { title: prompt('새 제목', m.title) ?? m.title } }); }}
+                      className="p-1 hover:bg-secondary rounded-md text-muted-foreground hover:text-primary"
+                      title="이름 변경"
+                      aria-label="이름 변경"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteMap(m.id); }}
+                      className="p-1 hover:bg-red-500/10 rounded-md text-muted-foreground hover:text-red-500"
+                      title="삭제"
+                      aria-label="삭제"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={(e) => { e.stopPropagation(); updateMap.mutate({ id: m.id, data: { title: prompt('새 제목', m.title) ?? m.title } }); }} className="p-1 hover:bg-secondary rounded text-muted-foreground" title="이름 변경"><Edit2 className="w-3 h-3" /></button>
-                  <button onClick={(e) => { e.stopPropagation(); handleDeleteMap(m.id); }} className="p-1 hover:bg-red-500/10 rounded text-muted-foreground hover:text-red-400" title="삭제"><Trash2 className="w-3 h-3" /></button>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </aside>
@@ -1030,12 +1141,18 @@ export function MindMapPage() {
         <div className="px-6 py-3 border-b border-border flex items-center gap-3 bg-card">
           {currentMap ? (
             <>
-              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">마인드맵</span>
+              <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
               <span className="text-sm font-semibold">{currentMap.title}</span>
-              <span className="text-xs text-muted-foreground">{currentMap.nodes.length}개 노드</span>
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-secondary text-muted-foreground tabular-nums">
+                {currentMap.nodes.length} 노드
+              </span>
               <div className="flex-1" />
-              <button onClick={handleAddRootNode} className="px-3 py-1.5 text-xs font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors flex items-center gap-1">
-                <Plus className="w-3.5 h-3.5" /> 루트 노드 추가
+              <button
+                onClick={handleAddRootNode}
+                className="px-3 py-1.5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors flex items-center gap-1.5 mac-shadow"
+              >
+                <Plus className="w-3.5 h-3.5" /> 루트 노드
               </button>
             </>
           ) : (
@@ -1043,14 +1160,29 @@ export function MindMapPage() {
           )}
         </div>
 
-        <div className="flex-1 bg-background/50 relative overflow-hidden" style={{ backgroundImage: 'radial-gradient(circle, rgba(99,102,241,0.06) 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
+        <div
+          className="flex-1 relative overflow-hidden bg-background"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px)',
+            backgroundSize: '24px 24px',
+          }}
+        >
           {currentMap ? (
             currentMap.nodes.length === 0 ? (
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center">
-                  <MapIcon className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
-                  <p className="text-sm text-muted-foreground mb-2">노드가 없습니다.</p>
-                  <button onClick={handleAddRootNode} className="px-4 py-2 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg">첫 번째 노드 추가</button>
+                <div className="text-center px-6 py-8 rounded-2xl bg-card/80 backdrop-blur-md border border-border mac-shadow max-w-sm">
+                  <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-primary/10 flex items-center justify-center">
+                    <MapIcon className="w-7 h-7 text-primary" />
+                  </div>
+                  <p className="text-sm font-semibold mb-1">노드가 없습니다</p>
+                  <p className="text-xs text-muted-foreground mb-4">루트 노드부터 시작해 자식 노드를 자유롭게 추가하세요.</p>
+                  <button
+                    onClick={handleAddRootNode}
+                    className="px-4 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors inline-flex items-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" /> 첫 번째 노드 추가
+                  </button>
                 </div>
               </div>
             ) : (
@@ -1067,7 +1199,9 @@ export function MindMapPage() {
           ) : (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center">
-                <MapIcon className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+                <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-secondary flex items-center justify-center">
+                  <MapIcon className="w-7 h-7 text-muted-foreground/50" />
+                </div>
                 <p className="text-sm text-muted-foreground">좌측에서 마인드맵을 선택하세요</p>
               </div>
             </div>

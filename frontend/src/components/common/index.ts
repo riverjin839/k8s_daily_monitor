@@ -17,3 +17,4 @@ export { StatusBadge, StatusDot, statusToVariant } from './StatusBadge';
 export type { StatusVariant } from './StatusBadge';
 export { ResizeGrip } from './ResizeGrip';
 export { MasterHostPicker } from './MasterHostPicker';
+export { ConfluenceUrlInput } from './ConfluenceUrlInput';

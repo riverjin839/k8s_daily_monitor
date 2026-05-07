@@ -31,6 +31,7 @@ class Task(Base):
     done_condition = Column(Text, nullable=True)    # 완료 조건
     parent_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=True)
     issue_id = Column(UUID(as_uuid=True), ForeignKey("issues.id", ondelete="SET NULL"), nullable=True)  # 연결된 이슈
+    confluence_url = Column(Text, nullable=True)                 # Confluence 문서 링크
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

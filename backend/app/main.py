@@ -36,6 +36,7 @@ from app.routers import (
     versions_router,
     bulk_exec_router,
     etcdctl_router,
+    cilium_trace_router,
     mc_client_router,
     node_server_specs_router,
     cluster_custom_fields_router,
@@ -379,6 +380,15 @@ def _run_migrations():
             if col_name not in wg_cols:
                 with engine.begin() as conn:
                     conn.execute(text(f"ALTER TABLE work_guides ADD COLUMN {col_name} {col_type}"))
+
+    # confluence_url 컬럼 — 모든 게시글 (tasks/issues/ops_notes/work_guides)에
+    # 공통으로 Confluence 문서 링크를 저장하기 위해 일괄 추가.
+    for tbl in ("tasks", "issues", "ops_notes", "work_guides"):
+        if tbl in inspector.get_table_names():
+            cols = [col["name"] for col in inspector.get_columns(tbl)]
+            if "confluence_url" not in cols:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN confluence_url TEXT"))
 
     # node_server_specs: 자산 대장 신규 필드
     if "node_server_specs" in inspector.get_table_names():
@@ -725,6 +735,7 @@ app.include_router(trends_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(versions_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(bulk_exec_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(etcdctl_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(cilium_trace_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(mc_client_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(node_server_specs_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(cluster_custom_fields_router, prefix="/api/v1", dependencies=_auth)

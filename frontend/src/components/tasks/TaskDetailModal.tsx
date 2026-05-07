@@ -1,4 +1,4 @@
-import { X, ImagePlus } from 'lucide-react';
+import { X, ImagePlus, ExternalLink } from 'lucide-react';
 import { Task } from '@/types';
 import { loadTaskImages } from '@/lib/taskImages';
 import { KANBAN_STATUS_LABEL, MODULE_CONFIG, TYPE_LABEL_CONFIG } from './taskKanbanUtils';
@@ -133,6 +133,21 @@ export function TaskDetailModal({ task, onClose, onEdit }: TaskDetailModalProps)
           )}
 
           <Field label="비고" value={task.remarks} />
+
+          {task.confluenceUrl && (
+            <div className="space-y-1">
+              <p className="text-[11px] text-muted-foreground">Confluence 링크</p>
+              <a
+                href={task.confluenceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline break-all"
+              >
+                <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="truncate max-w-md">{task.confluenceUrl}</span>
+              </a>
+            </div>
+          )}
 
           {/* Images */}
           {images.length > 0 && (

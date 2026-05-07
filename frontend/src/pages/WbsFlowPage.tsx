@@ -4,10 +4,10 @@ import { tasksApi, issuesApi } from '@/services/api';
 import type { Task, Issue } from '@/types';
 import {
   ChevronLeft, ChevronRight, Calendar, Users, Filter,
-  CheckCircle2, Clock, AlertCircle, Circle, BarChart3, X,
+  CheckCircle2, Clock, AlertCircle, Circle, BarChart3,
   ListChecks, Activity,
 } from 'lucide-react';
-import { ViewModeBar } from '@/components/common';
+import { ViewModeBar, SidePane } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { stripHtml } from '@/lib/utils';
 
@@ -144,56 +144,46 @@ function ItemCard({ item, onClick }: { item: DayItem; onClick: () => void }) {
 
 function DetailModal({ item, onClose }: { item: DayItem; onClose: () => void }) {
   const isIssue = item.type === 'issue';
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-2xl p-5 w-full max-w-md mac-shadow">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${isIssue ? 'bg-orange-500/15 text-orange-600 dark:text-orange-300' : 'bg-sky-500/15 text-sky-600 dark:text-sky-300'}`}>
-              {isIssue ? '이슈' : '작업'}
-            </span>
-            {item.module && (
-              <span className={`text-[11px] px-2 py-0.5 rounded-full ${MODULE_COLOR[item.module] ?? 'bg-secondary text-muted-foreground'}`}>
-                {item.module}
-              </span>
-            )}
-            {item.priority && (
-              <span className={`text-[11px] px-2 py-0.5 rounded-full border ${PRIORITY_COLOR[item.priority] ?? ''}`}>
-                {item.priority}
-              </span>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="닫기"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <h3 className="text-base font-semibold leading-snug mb-1">{stripHtml(item.label)}</h3>
-        {item.sub && <p className="text-sm text-muted-foreground mb-4">{item.sub}</p>}
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-          <div className="rounded-lg bg-secondary/40 px-3 py-2">
-            <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">시작일</dt>
-            <dd className="font-medium tabular-nums">{item.startDate || '-'}</dd>
-          </div>
-          {item.endDate && (
-            <div className="rounded-lg bg-secondary/40 px-3 py-2">
-              <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">완료일</dt>
-              <dd className="font-medium tabular-nums">{item.endDate}</dd>
-            </div>
-          )}
-          <div className="rounded-lg bg-secondary/40 px-3 py-2">
-            <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">상태</dt>
-            <dd className="font-medium">
-              {isIssue ? (item.resolved ? '해결' : '미해결') : (KANBAN_LABEL[item.status] ?? item.status)}
-            </dd>
-          </div>
-        </dl>
-      </div>
+  const title = (
+    <div className="flex items-center gap-2 flex-wrap min-w-0">
+      <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${isIssue ? 'bg-orange-500/15 text-orange-600 dark:text-orange-300' : 'bg-sky-500/15 text-sky-600 dark:text-sky-300'}`}>
+        {isIssue ? '이슈' : '작업'}
+      </span>
+      {item.module && (
+        <span className={`text-[11px] px-2 py-0.5 rounded-full flex-shrink-0 ${MODULE_COLOR[item.module] ?? 'bg-secondary text-muted-foreground'}`}>
+          {item.module}
+        </span>
+      )}
+      {item.priority && (
+        <span className={`text-[11px] px-2 py-0.5 rounded-full border flex-shrink-0 ${PRIORITY_COLOR[item.priority] ?? ''}`}>
+          {item.priority}
+        </span>
+      )}
     </div>
+  );
+  return (
+    <SidePane open onClose={onClose} title={title} bodyClassName="px-5 py-4" width="55%">
+      <h3 className="text-base font-semibold leading-snug mb-1">{stripHtml(item.label)}</h3>
+      {item.sub && <p className="text-sm text-muted-foreground mb-4">{item.sub}</p>}
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+        <div className="rounded-lg bg-secondary/40 px-3 py-2">
+          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">시작일</dt>
+          <dd className="font-medium tabular-nums">{item.startDate || '-'}</dd>
+        </div>
+        {item.endDate && (
+          <div className="rounded-lg bg-secondary/40 px-3 py-2">
+            <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">완료일</dt>
+            <dd className="font-medium tabular-nums">{item.endDate}</dd>
+          </div>
+        )}
+        <div className="rounded-lg bg-secondary/40 px-3 py-2">
+          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">상태</dt>
+          <dd className="font-medium">
+            {isIssue ? (item.resolved ? '해결' : '미해결') : (KANBAN_LABEL[item.status] ?? item.status)}
+          </dd>
+        </div>
+      </dl>
+    </SidePane>
   );
 }
 

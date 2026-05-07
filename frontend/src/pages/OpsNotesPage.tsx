@@ -7,7 +7,7 @@ import { RichTextEditor, RichContent } from '@/components/editor';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsNotesApi } from '@/services/api';
 import type { OpsNote, OpsNoteCreate, OpsNoteColor, OpsNoteUpdate } from '@/types';
-import { useToast, ConfluenceUrlInput } from '@/components/common';
+import { useToast, ConfluenceUrlInput, SidePane } from '@/components/common';
 import { formatApiError, formatRelativeTime } from '@/lib/utils';
 import { MacCard } from '@/components/ui/MacCard';
 
@@ -101,25 +101,20 @@ function NoteFormModal({ initial, defaultService, onClose, onSaved }: NoteFormMo
   const inputCls = 'w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/40';
   const labelCls = 'block text-sm font-medium mb-1.5';
 
+  const paneTitle = (
+    <div className="flex items-center gap-2 min-w-0">
+      <FileQuestion className="w-5 h-5 text-primary flex-shrink-0" />
+      <h2 className="text-sm font-semibold truncate">{isEdit ? 'Q&A 수정' : '새 질문 / 노트'}</h2>
+    </div>
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-2xl p-6 w-full max-w-xl shadow-xl max-h-[92vh] overflow-y-auto mac-shadow">
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-2">
-            <FileQuestion className="w-5 h-5 text-primary" />
-            <h2 className="text-lg font-semibold">{isEdit ? 'Q&A 수정' : '새 질문 / 노트'}</h2>
-          </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-secondary rounded-lg" aria-label="닫기">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <SidePane open onClose={onClose} title={paneTitle} bodyClassName="px-6 py-5">
+      {error && (
+        <div className="mb-4 px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive">{error}</div>
+      )}
 
-        {error && (
-          <div className="mb-4 px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive">{error}</div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
           {/* 서비스 */}
           <div>
             <p className={labelCls}>대상 서비스</p>
@@ -255,8 +250,7 @@ function NoteFormModal({ initial, defaultService, onClose, onSaved }: NoteFormMo
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </SidePane>
   );
 }
 

@@ -1,6 +1,6 @@
 import { useId, useMemo, useState } from 'react';
 import {
-  BookMarked, Plus, Pencil, Trash2, X, GitFork,
+  BookMarked, Plus, Pencil, Trash2, GitFork,
   ChevronRight, ChevronDown, FolderOpen, Folder,
   FileText, CheckCircle, Archive, AlertCircle, ExternalLink,
 } from 'lucide-react';
@@ -8,7 +8,7 @@ import { RichTextEditor, RichContent } from '@/components/editor';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { workGuidesApi, workflowsApi } from '@/services/api';
 import type { WorkGuide, WorkGuideCreate, WorkGuideUpdate } from '@/types';
-import { useToast, ConfluenceUrlInput } from '@/components/common';
+import { useToast, ConfluenceUrlInput, SidePane } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -198,23 +198,14 @@ function GuideFormModal({ initial, allGuides, defaultParentId, onClose, onSaved 
   const labelCls = 'block text-sm font-medium mb-1';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-xl p-6 w-full max-w-3xl shadow-xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold">{isEdit ? '페이지 수정' : '새 페이지'}</h2>
-          <button onClick={onClose} className="p-1 hover:bg-secondary rounded-md">
-            <X className="w-5 h-5" />
-          </button>
+    <SidePane open onClose={onClose} title={isEdit ? '페이지 수정' : '새 페이지'} bodyClassName="p-6">
+      {error && (
+        <div className="mb-4 px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
         </div>
+      )}
 
-        {error && (
-          <div className="mb-4 px-3 py-2 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor={f('title')} className={labelCls}>제목 *</label>
             <input
@@ -306,8 +297,7 @@ function GuideFormModal({ initial, allGuides, defaultParentId, onClose, onSaved 
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </SidePane>
   );
 }
 
@@ -353,62 +343,57 @@ function AddToWorkflowModal({ guide, onClose }: AddToWorkflowModalProps) {
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-xl">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <GitFork className="w-4 h-4 text-primary" />
-            <h2 className="text-sm font-semibold">워크플로에 노드로 추가</h2>
-          </div>
-          <button onClick={onClose} className="p-1 hover:bg-secondary rounded-md">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <p className="text-xs text-muted-foreground mb-4 bg-secondary/50 rounded-lg p-2.5 border border-border">
-          <span className="font-medium text-foreground">{guide.title}</span>{' '}가이드를 워크플로 노드로 연결합니다.
-        </p>
-        {done ? (
-          <div className="flex items-center gap-2 text-sm text-emerald-400 py-2">
-            <CheckCircle className="w-4 h-4" /> 워크플로에 추가되었습니다!
-          </div>
-        ) : (
-          <>
-            {error && <p className="text-xs text-destructive mb-3">{error}</p>}
-            <div className="mb-4">
-              <label htmlFor={wfId} className="block text-sm font-medium mb-1.5">워크플로 선택</label>
-              {workflows.length === 0 ? (
-                <p className="text-xs text-muted-foreground">등록된 워크플로가 없습니다.</p>
-              ) : (
-                <select
-                  id={wfId}
-                  value={selectedWfId}
-                  onChange={(e) => setSelectedWfId(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="">— 선택 —</option>
-                  {workflows.map((wf) => (
-                    <option key={wf.id} value={wf.id}>{wf.title} ({wf.steps.length}단계)</option>
-                  ))}
-                </select>
-              )}
-            </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={onClose}
-                className="px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors">
-                취소
-              </button>
-              <button onClick={handleAdd} disabled={adding || workflows.length === 0}
-                className="px-3 py-1.5 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-60 flex items-center gap-1.5">
-                <GitFork className="w-3.5 h-3.5" />
-                {adding ? '추가 중...' : '워크플로에 추가'}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+  const paneTitle = (
+    <div className="flex items-center gap-2 min-w-0">
+      <GitFork className="w-4 h-4 text-primary flex-shrink-0" />
+      <h2 className="text-sm font-semibold truncate">워크플로에 노드로 추가</h2>
     </div>
+  );
+
+  return (
+    <SidePane open onClose={onClose} title={paneTitle} bodyClassName="p-6" width="40%">
+      <p className="text-xs text-muted-foreground mb-4 bg-secondary/50 rounded-lg p-2.5 border border-border">
+        <span className="font-medium text-foreground">{guide.title}</span>{' '}가이드를 워크플로 노드로 연결합니다.
+      </p>
+      {done ? (
+        <div className="flex items-center gap-2 text-sm text-emerald-500 py-2">
+          <CheckCircle className="w-4 h-4" /> 워크플로에 추가되었습니다!
+        </div>
+      ) : (
+        <>
+          {error && <p className="text-xs text-destructive mb-3">{error}</p>}
+          <div className="mb-4">
+            <label htmlFor={wfId} className="block text-sm font-medium mb-1.5">워크플로 선택</label>
+            {workflows.length === 0 ? (
+              <p className="text-xs text-muted-foreground">등록된 워크플로가 없습니다.</p>
+            ) : (
+              <select
+                id={wfId}
+                value={selectedWfId}
+                onChange={(e) => setSelectedWfId(e.target.value)}
+                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="">— 선택 —</option>
+                {workflows.map((wf) => (
+                  <option key={wf.id} value={wf.id}>{wf.title} ({wf.steps.length}단계)</option>
+                ))}
+              </select>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <button onClick={onClose}
+              className="px-3 py-1.5 text-sm bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors">
+              취소
+            </button>
+            <button onClick={handleAdd} disabled={adding || workflows.length === 0}
+              className="px-3 py-1.5 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-60 flex items-center gap-1.5">
+              <GitFork className="w-3.5 h-3.5" />
+              {adding ? '추가 중...' : '워크플로에 추가'}
+            </button>
+          </div>
+        </>
+      )}
+    </SidePane>
   );
 }
 

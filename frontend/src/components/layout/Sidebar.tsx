@@ -5,7 +5,7 @@ import {
   Settings, Link2, Tags, Calculator, Server, GitFork, BookMarked, Layers, Boxes,
   Pencil, Moon, Sun, Monitor, Map, BarChart3, Network,
   Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
-  PanelLeftOpen, X, ClipboardCheck, ListTree, ChevronRight, LogOut, Waves,
+  PanelLeftOpen, X, ClipboardCheck, ListTree, ChevronRight, LogOut, Waves, Sparkles,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
@@ -66,8 +66,9 @@ const DOCS_TASK_SECTIONS: Array<{ id: string; label: string; icon: ComponentType
 ];
 
 const DEFAULT_TITLE = 'DEVOPS MANAGEMENT';
-const THEME_CYCLE: Record<Theme, Theme> = { light: 'dark', dark: 'system', system: 'light' };
-const THEME_LABEL: Record<Theme, string> = { dark: '다크', light: '라이트', system: '시스템' };
+// 라이트 → 다크 → 시스템 → Claude → 라이트 …
+const THEME_CYCLE: Record<Theme, Theme> = { light: 'dark', dark: 'system', system: 'claude', claude: 'light' };
+const THEME_LABEL: Record<Theme, string> = { dark: '다크', light: '라이트', system: '시스템', claude: 'Claude' };
 
 // ── 개별 nav item ───────────────────────────────────────────────────────────
 
@@ -306,7 +307,12 @@ export function Sidebar() {
           )}
           <NavActionItem
             label={`테마: ${THEME_LABEL[theme]}`}
-            Icon={theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor}
+            Icon={
+              theme === 'dark'   ? Moon
+              : theme === 'light'  ? Sun
+              : theme === 'claude' ? Sparkles
+              : Monitor
+            }
             onClick={() => setTheme(THEME_CYCLE[theme])}
           />
           {currentUser && (

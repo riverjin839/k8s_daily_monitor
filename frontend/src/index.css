@@ -157,6 +157,80 @@
     --sidebar-border:           217 30% 24%;
     --sidebar-primary:          200 98% 60%;
   }
+
+  /* ── Claude theme — Anthropic 브랜드 톤 (옵션) ─────────────────────────────
+     기본 light/dark 보다 더 따뜻한 paper 배경 + 큰 radius + soft shadow +
+     코랄(#D97757) 액센트. 노트/문서 느낌으로 차분하게 보여주는 모드. */
+  html.claude {
+    --background: 36 38% 96%;          /* #F7F2EA — warm paper */
+    --foreground: 28 18% 16%;          /* #2E2620 — deep cocoa */
+    --card: 38 50% 99%;                /* near-white with warm tint */
+    --card-foreground: 28 18% 16%;
+    --popover: 38 50% 99%;
+    --popover-foreground: 28 18% 16%;
+    --primary: 17 60% 56%;             /* #D97757 — Anthropic coral */
+    --primary-foreground: 38 50% 99%;
+    --secondary: 35 30% 92%;           /* #EFE7DA — cream */
+    --secondary-foreground: 28 18% 16%;
+    --muted: 35 30% 94%;
+    --muted-foreground: 28 12% 38%;    /* #645847 */
+    --accent: 17 70% 92%;              /* peach hover */
+    --accent-foreground: 28 18% 16%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 38 50% 99%;
+    --border: 32 22% 86%;              /* #DCD2C2 — softer than slate */
+    --input: 32 22% 86%;
+    --ring: 17 60% 56%;
+    --radius: 0.875rem;                /* 14px — Claude scale */
+    --mac-red:    #FF5F57;
+    --mac-yellow: #FEBC2E;
+    --mac-green:  #28C840;
+    --card-shadow: 0 1px 3px rgba(46, 38, 32, 0.04), 0 6px 20px -8px rgba(46, 38, 32, 0.08);
+
+    /* Sidebar — same warm paper, not a dark navy slab */
+    --sidebar:                  35 28% 90%;     /* #E8DECF */
+    --sidebar-foreground:       28 18% 16%;
+    --sidebar-muted-foreground: 28 12% 38%;
+    --sidebar-accent:           17 60% 88%;     /* warm peach for active */
+    --sidebar-accent-foreground: 17 60% 30%;
+    --sidebar-border:           32 22% 80%;
+    --sidebar-primary:          17 60% 50%;
+
+    /* Status — keep semantic, slightly muted to match warm palette */
+    --status-healthy:     142 55% 40%;
+    --status-healthy-bg:  142 40% 90%;
+    --status-warning:     30 85% 50%;
+    --status-warning-bg:  30 70% 92%;
+    --status-critical:    0 65% 50%;
+    --status-critical-bg: 0 60% 92%;
+    --status-unknown:     28 10% 45%;
+    --status-unknown-bg:  35 15% 88%;
+    --status-pending:     28 10% 45%;
+    --status-pending-bg:  35 15% 88%;
+    --status-info:        199 65% 42%;
+    --status-info-bg:     199 50% 92%;
+    --status-neutral:     28 10% 50%;
+    --status-neutral-bg:  35 15% 90%;
+
+    --motion-fast: 150ms;
+    --motion-base: 200ms;
+    --motion-slow: 300ms;
+    --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}
+
+/* Claude 모드 한정 — 카드/버튼이 기본보다 둥글고 은은한 그림자가 살아남.
+   기본 light/dark 의 'flat' 톤은 그대로 유지해 사용자가 둘 사이를
+   명확하게 구분할 수 있도록 함. */
+html.claude .mac-shadow,
+html.claude [class*="rounded-2xl"][class*="bg-card"],
+html.claude [class*="rounded-xl"][class*="bg-card"] {
+  box-shadow: var(--card-shadow);
+}
+html.claude body {
+  /* paper 느낌을 살리기 위해 미세한 grain 효과 (1px noise) */
+  background-image: radial-gradient(circle at 1px 1px, rgba(46, 38, 32, 0.025) 1px, transparent 0);
+  background-size: 24px 24px;
 }
 
 @layer base {

@@ -1,7 +1,8 @@
-import { X, ImagePlus, ExternalLink } from 'lucide-react';
+import { ImagePlus, ExternalLink, Pencil } from 'lucide-react';
 import { Issue } from '@/types';
 import { loadIssueImages } from '@/lib/issueImages';
 import { RichContent } from '@/components/editor';
+import { SidePane } from '@/components/common';
 
 interface IssueDetailModalProps {
   issue: Issue;
@@ -31,36 +32,31 @@ export function IssueDetailModal({ issue, onClose, onEdit }: IssueDetailModalPro
   const images = loadIssueImages(issue.id);
   const isResolved = !!issue.resolvedAt;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-card border border-border rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <div className="flex items-center gap-3">
-            <span className={`flex items-center gap-1.5 text-sm font-medium ${isResolved ? 'text-emerald-400' : 'text-amber-400'}`}>
-              <span className={`w-2 h-2 rounded-full ${isResolved ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-              {isResolved ? '조치완료' : '미조치'}
-            </span>
-            <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary border border-primary/20">
-              {issue.issueArea}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => onEdit(issue)}
-              className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
-            >
-              수정
-            </button>
-            <button onClick={onClose} className="p-1 hover:bg-secondary rounded-md">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
+  const title = (
+    <div className="flex items-center gap-3 min-w-0">
+      <span className={`flex items-center gap-1.5 text-sm font-medium flex-shrink-0 ${isResolved ? 'text-emerald-500' : 'text-amber-500'}`}>
+        <span className={`w-2 h-2 rounded-full ${isResolved ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+        {isResolved ? '조치완료' : '미조치'}
+      </span>
+      <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary border border-primary/20 flex-shrink-0">
+        {issue.issueArea}
+      </span>
+    </div>
+  );
 
-        {/* Body */}
-        <div className="px-6 py-5 space-y-5">
+  const headerActions = (
+    <button
+      onClick={() => onEdit(issue)}
+      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+      title="수정"
+    >
+      <Pencil className="w-3 h-3" /> 수정
+    </button>
+  );
+
+  return (
+    <SidePane open onClose={onClose} title={title} headerActions={headerActions} bodyClassName="px-6 py-5">
+      <div className="space-y-5">{/* preserve original body padding via parent */}
           {/* Meta row */}
           <div className="grid grid-cols-2 gap-4">
             <Field label="담당자" value={issue.assignee} />
@@ -142,8 +138,7 @@ export function IssueDetailModal({ issue, onClose, onEdit }: IssueDetailModalPro
               <span>수정: {issue.updatedAt?.slice(0, 10)}</span>
             )}
           </div>
-        </div>
       </div>
-    </div>
+    </SidePane>
   );
 }

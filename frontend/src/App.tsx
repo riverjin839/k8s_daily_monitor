@@ -9,6 +9,7 @@ import { TaskBoardPage } from '@/pages/TaskBoardPage';
 import { TaskFormPage } from '@/pages/TaskFormPage';
 import { TaskDetailPage } from '@/pages/TaskDetailPage';
 import { TodoTodayPage } from '@/pages/TodoTodayPage';
+import { WorkSummaryPage } from '@/pages/WorkSummaryPage';
 import { MemberBoardPage } from '@/pages/MemberBoardPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { ClusterLinksPage } from '@/pages/ClusterLinksPage';
@@ -75,6 +76,7 @@ function AppShell() {
               <Route path="/tasks/:id" element={<TaskDetailPage />} />
               <Route path="/tasks/:id/edit" element={<TaskDetailPage />} />
               <Route path="/todo-today" element={<TodoTodayPage />} />
+              <Route path="/work-summary" element={<WorkSummaryPage />} />
               <Route path="/members" element={<MemberBoardPage />} />
               <Route path="/links" element={<ClusterLinksPage />} />
               <Route path="/node-labels" element={<NodeLabelsPage />} />

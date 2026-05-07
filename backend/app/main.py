@@ -36,6 +36,7 @@ from app.routers import (
     versions_router,
     bulk_exec_router,
     etcdctl_router,
+    cilium_trace_router,
     mc_client_router,
     node_server_specs_router,
     cluster_custom_fields_router,
@@ -725,6 +726,7 @@ app.include_router(trends_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(versions_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(bulk_exec_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(etcdctl_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(cilium_trace_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(mc_client_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(node_server_specs_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(cluster_custom_fields_router, prefix="/api/v1", dependencies=_auth)

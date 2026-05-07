@@ -24,6 +24,7 @@ from app.routers.trends import router as trends_router
 from app.routers.versions import router as versions_router
 from app.routers.bulk_exec import router as bulk_exec_router
 from app.routers.etcdctl import router as etcdctl_router
+from app.routers.cilium_trace import router as cilium_trace_router
 from app.routers.mc_client import router as mc_client_router
 from app.routers.node_server_specs import router as node_server_specs_router
 from app.routers.cluster_custom_fields import router as cluster_custom_fields_router
@@ -63,6 +64,7 @@ __all__ = [
     "versions_router",
     "bulk_exec_router",
     "etcdctl_router",
+    "cilium_trace_router",
     "mc_client_router",
     "node_server_specs_router",
     "cluster_custom_fields_router",

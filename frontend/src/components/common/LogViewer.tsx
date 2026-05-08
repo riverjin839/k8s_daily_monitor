@@ -43,7 +43,108 @@ function detectFormat(text: string): LogFormat {
   return 'plain';
 }
 
-// ── JSON Syntax highlight ──────────────────────────────────────────────────
+// ── ANSI 이스케이프 제거 ──────────────────────────────────────────────────────
+// SSH/journalctl 결과에 ESC[31m 같은 컬러 코드가 섞여 들어오는 경우가 많아
+// 시각적 노이즈를 만든다. 우리가 자체 syntax highlight 를 입히므로 strip.
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\[[0-9;]*[A-Za-z]/g;
+function stripAnsi(s: string): string {
+  return s.replace(ANSI_RE, '');
+}
+
+// ── 토큰 단위 inline 컬러 (PlainView / JournalView 에서 공용) ────────────────
+// IP / 상태코드 / true·false / boolean-ish 키워드 / 경로 / UUID / 숫자 등을
+// 함께 칠해 가독성을 끌어올린다. 라인 분류색(에러/경고)이 있으면 그 라인은
+// 그 색을 우선시키되, 라벨/숫자 같은 "강조 후보" 만 토큰 색을 덮어쓴다.
+
+const TOKEN_RE = new RegExp([
+  // boolean / null 류
+  '\\b(true|false|null|None|nil)\\b',
+  // 시간 — HH:MM:SS(.ms)
+  '\\b\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?\\b',
+  // ISO date — 2024-05-08 또는 2024-05-08T...
+  '\\b\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:?\\d{2})?)?\\b',
+  // IPv4 (선택적 prefix /24)
+  '\\b(?:\\d{1,3}\\.){3}\\d{1,3}(?:\\/\\d{1,2})?\\b',
+  // HTTP status code 200~599 (단어 경계, 옆에 / 가 없는)
+  '(?<![\\w/])[1-5]\\d{2}(?![\\w/])',
+  // UUID
+  '\\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\b',
+  // 16진수 hash / id (8자 이상)
+  '\\b0x[0-9a-fA-F]+\\b|\\b[0-9a-fA-F]{12,40}\\b',
+  // 절대경로 — /usr/bin/foo, /var/log/...
+  '(?<![\\w])/(?:[\\w.+\\-@]+/)+[\\w.+\\-@]+',
+  // 강조 키워드 — 운영 도구 결과에서 자주 등장
+  '\\b(ERROR|ERR|FATAL|PANIC|FAIL(?:ED)?|REFUSED|DENIED|TIMEOUT|UNAVAILABLE|CRITICAL)\\b',
+  '\\b(WARN(?:ING)?|DEPRECATED|RETRY)\\b',
+  '\\b(SUCCESS|SUCCESSFUL|SUCCEEDED|OK|READY|ACTIVE|RUNNING|HEALTHY|UP|STARTED|COMPLETED|ENABLED)\\b',
+  '\\b(STOPPED|INACTIVE|DOWN|DISABLED|TERMINATED|EVICTED|KILLED|UNKNOWN)\\b',
+  '\\b(INFO|NOTICE)\\b',
+  '\\b(DEBUG|TRACE)\\b',
+  // 따옴표로 감싼 문자열 (적당히 짧게)
+  '"[^"\\n]{0,200}"',
+  "'[^'\\n]{0,200}'",
+  // 일반 정수/실수
+  '\\b\\d+(?:\\.\\d+)?(?:ms|s|m|h|d|MB|GB|KB|B|%)?\\b',
+].join('|'), 'g');
+
+const TOKEN_GREEN  = /^(true|SUCCESS|SUCCESSFUL|SUCCEEDED|OK|READY|ACTIVE|RUNNING|HEALTHY|UP|STARTED|COMPLETED|ENABLED|NOTICE)$/;
+const TOKEN_RED    = /^(false|ERROR|ERR|FATAL|PANIC|FAIL|FAILED|REFUSED|DENIED|TIMEOUT|UNAVAILABLE|CRITICAL)$/;
+const TOKEN_AMBER  = /^(WARN|WARNING|DEPRECATED|RETRY|STOPPED|INACTIVE|DOWN|DISABLED|TERMINATED|EVICTED|KILLED|UNKNOWN)$/;
+const TOKEN_SKY    = /^(INFO)$/;
+const TOKEN_MUTED  = /^(DEBUG|TRACE|null|None|nil)$/;
+
+function classifyToken(tok: string): string {
+  if (TOKEN_GREEN.test(tok))  return 'text-emerald-500';
+  if (TOKEN_RED.test(tok))    return 'text-red-500 font-semibold';
+  if (TOKEN_AMBER.test(tok))  return 'text-amber-500';
+  if (TOKEN_SKY.test(tok))    return 'text-sky-500';
+  if (TOKEN_MUTED.test(tok))  return 'text-muted-foreground/70';
+  // IPv4
+  if (/^(?:\d{1,3}\.){3}\d{1,3}(?:\/\d{1,2})?$/.test(tok)) return 'text-sky-500';
+  // ISO date / time
+  if (/^\d{4}-\d{2}-\d{2}/.test(tok) || /^\d{2}:\d{2}:\d{2}/.test(tok)) return 'text-muted-foreground';
+  // HTTP status
+  if (/^[1-5]\d{2}$/.test(tok)) {
+    const n = parseInt(tok, 10);
+    if (n >= 500) return 'text-red-500 font-semibold';
+    if (n >= 400) return 'text-amber-500';
+    if (n >= 300) return 'text-sky-500';
+    return 'text-emerald-500';
+  }
+  // UUID / hash
+  if (/^[0-9a-fA-F]{12,}$/.test(tok) || /^0x[0-9a-fA-F]+$/.test(tok) || /^[0-9a-fA-F]{8}-/.test(tok)) {
+    return 'text-purple-400/80';
+  }
+  // 경로
+  if (tok.startsWith('/')) return 'text-cyan-500/80';
+  // 따옴표 문자열
+  if (tok.startsWith('"') || tok.startsWith("'")) return 'text-emerald-500/80';
+  // 숫자 (단위 포함)
+  if (/^\d/.test(tok)) return 'text-amber-400/90';
+  return '';
+}
+
+function tokenize(line: string): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  TOKEN_RE.lastIndex = 0;
+  while ((m = TOKEN_RE.exec(line)) !== null) {
+    const start = m.index;
+    if (start > last) out.push(line.slice(last, start));
+    const tok = m[0];
+    const cls = classifyToken(tok);
+    out.push(cls ? <span key={`${start}-${tok}`} className={cls}>{tok}</span> : tok);
+    last = TOKEN_RE.lastIndex;
+    // 0-width match 방지 (정규식 특성)
+    if (last === start) TOKEN_RE.lastIndex = start + 1;
+  }
+  if (last < line.length) out.push(line.slice(last));
+  return out;
+}
+
+
 
 function renderJsonLine(line: string, key: number): React.ReactNode {
   // 간단 토큰화 — key(파랑), string(초록), number/boolean(앰버), null(회색), punctuation
@@ -123,11 +224,11 @@ function renderJournalLine(line: string, key: number): React.ReactNode {
         <span className="text-muted-foreground">{ts}</span>{' '}
         <span className="text-slate-400">{host}</span>{' '}
         <span className="text-purple-400">{unit}:</span>{' '}
-        <span>{rest}</span>
+        <span>{tokenize(rest)}</span>
       </div>
     );
   }
-  return <div key={key} className={cls}>{line || ' '}</div>;
+  return <div key={key} className={cls}>{line ? tokenize(line) : ' '}</div>;
 }
 
 function JournalView({ text }: { text: string }) {
@@ -180,7 +281,7 @@ function PlainView({ text }: { text: string }) {
     <>
       {text.split('\n').map((line, i) => {
         const { cls } = classifyLine(line);
-        return <div key={i} className={cls}>{line || ' '}</div>;
+        return <div key={i} className={cls}>{line ? tokenize(line) : ' '}</div>;
       })}
     </>
   );
@@ -200,13 +301,15 @@ export function LogViewer({
   // 상위가 제어하면 그걸 쓰고, 아니면 자체 필터
   const filter = filterOverride !== undefined ? filterOverride : localFilter;
 
-  const fmt = useMemo(() => detectFormat(text), [text]);
+  // ANSI escape 제거된 텍스트를 한 번만 계산해 모든 view 가 공유.
+  const cleanText = useMemo(() => stripAnsi(text), [text]);
+  const fmt = useMemo(() => detectFormat(cleanText), [cleanText]);
 
   const filtered = useMemo(() => {
-    if (!filter.trim()) return text;
+    if (!filter.trim()) return cleanText;
     const q = filter.toLowerCase();
-    return text.split('\n').filter((l) => l.toLowerCase().includes(q)).join('\n');
-  }, [text, filter]);
+    return cleanText.split('\n').filter((l) => l.toLowerCase().includes(q)).join('\n');
+  }, [cleanText, filter]);
 
   const formatLabel = (
     { json: 'JSON', journal: 'journal', table: 'table', plain: 'plain' } as const

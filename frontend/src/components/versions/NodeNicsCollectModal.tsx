@@ -86,9 +86,9 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
       queryClient.invalidateQueries({ queryKey: ['clusters'] });
       // 노드 서버 스펙 페이지도 cluster.node_ips 의 bond IP/MAC 을 사용한다.
       queryClient.invalidateQueries({ queryKey: ['node-specs'] });
-      // 자기 자신의 노드 목록도 수집 직후 새로고침.
+      // 자기 자신의 노드 목록도 수집 직후 새로고침 (집계 변동 가능).
       queryClient.invalidateQueries({ queryKey: ['node-nics-nodes', clusterId] });
-      // VersionsPage 의 node_nics:{host} 스냅샷 history.
+      // VersionsPage 가 node_nics:{host} 스냅샷을 history 로 표시 — 새 변경 감지 시 invalidation.
       queryClient.invalidateQueries({ queryKey: ['versions'] });
 
       const noNicCount = d.hosts.filter(

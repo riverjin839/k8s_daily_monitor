@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import {
-  CheckCircle, Clock, Play, Plus, ShieldAlert, Trash2, Wifi, XCircle, ListTree,
+  CheckCircle, Clock, Eye, History,
+  Play, Plus, ShieldAlert, Trash2, Wifi, XCircle, ListTree,
 } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
@@ -474,75 +475,247 @@ function RunModal({ job, onClose }: RunModalProps) {
   );
 }
 
-function RunsList({ jobId }: { jobId: string }) {
-  const runsQ = useBatchJobRuns(jobId);
+// ── 단일 잡의 최근 실행 이력 모달 ──────────────────────────────────────────
+interface JobRunsModalProps {
+  job: BatchJob;
+  onSelectRun: (run: BatchJobRun) => void;
+  onClose: () => void;
+}
+
+function JobRunsModal({ job, onSelectRun, onClose }: JobRunsModalProps) {
+  const runsQ = useBatchJobRuns(job.id);
   const runs = runsQ.data ?? [];
-  if (runs.length === 0) {
-    return <p className="text-[11px] text-muted-foreground py-2">아직 실행 이력이 없습니다.</p>;
-  }
+
   return (
-    <ul className="space-y-1">
-      {runs.slice(0, 5).map((r) => (
-        <li key={r.id} className="flex items-center gap-2 text-[11px]">
-          <StatusPill status={r.status} />
-          <span className="font-mono text-muted-foreground">{r.startedAt.replace('T', ' ').slice(0, 19)}</span>
-          <span className="text-muted-foreground">{r.durationMs}ms</span>
-          {r.host && <span className="font-mono text-muted-foreground">@ {r.host}</span>}
-        </li>
-      ))}
-    </ul>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-3xl max-h-[92vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="px-5 py-3 border-b border-border flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold">{job.name} — 실행 이력</h3>
+            <p className="text-[11px] text-muted-foreground font-mono">{job.jobType}</p>
+          </div>
+          <button onClick={onClose} className="text-xs text-muted-foreground hover:text-foreground">닫기</button>
+        </header>
+        <div className="p-3">
+          {runsQ.isLoading ? (
+            <p className="text-xs text-muted-foreground p-3">로딩 중…</p>
+          ) : runs.length === 0 ? (
+            <p className="text-xs text-muted-foreground p-3">아직 실행 이력이 없습니다.</p>
+          ) : (
+            <div className="border border-border rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-[11px]">
+                  <thead>
+                    <tr className="text-left text-muted-foreground border-b border-border bg-muted/20">
+                      <th className="px-3 py-1.5 font-medium w-24">상태</th>
+                      <th className="px-3 py-1.5 font-medium">실행 시각</th>
+                      <th className="px-3 py-1.5 font-medium w-24">소요</th>
+                      <th className="px-3 py-1.5 font-medium w-20">트리거</th>
+                      <th className="px-3 py-1.5 font-medium">호스트</th>
+                      <th className="px-3 py-1.5 font-medium w-16 text-right">상세</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {runs.slice(0, 20).map((r) => (
+                      <tr
+                        key={r.id}
+                        className="border-b border-border/60 last:border-b-0 hover:bg-muted/10 cursor-pointer"
+                        onClick={() => onSelectRun(r)}
+                      >
+                        <td className="px-3 py-1.5"><StatusPill status={r.status} /></td>
+                        <td className="px-3 py-1.5 font-mono text-muted-foreground whitespace-nowrap">
+                          {r.startedAt.replace('T', ' ').slice(0, 19)}
+                        </td>
+                        <td className="px-3 py-1.5 font-mono text-muted-foreground tabular-nums">{r.durationMs}ms</td>
+                        <td className="px-3 py-1.5 text-muted-foreground">{r.trigger}</td>
+                        <td className="px-3 py-1.5 font-mono text-muted-foreground truncate max-w-[260px]">
+                          {r.host || '-'}
+                        </td>
+                        <td className="px-3 py-1.5 text-right">
+                          <span className="inline-flex items-center gap-1 text-primary hover:underline">
+                            <Eye className="w-3 h-3" />
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
-// ── 매트릭스 셀 — (클러스터 × jobType) 교차점 하나의 잡 + 마지막 실행 표시 ─────
-interface JobCellProps {
-  job: BatchJob;
-  extraCount: number;          // 같은 (cluster, jobType) 의 잡이 더 있을 때 +N more
-  onRun: () => void;
-  onDelete: () => void;
+// ── 과거 실행 이력 상세 보기 모달 ────────────────────────────────────────────
+interface RunDetailModalProps {
+  run: BatchJobRun;
+  jobName: string;
+  onClose: () => void;
 }
 
-function JobCell({ job, extraCount, onRun, onDelete }: JobCellProps) {
+function RunDetailModal({ run, jobName, onClose }: RunDetailModalProps) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-1.5 flex-wrap">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-3xl max-h-[92vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="px-5 py-3 border-b border-border flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold">{jobName}</h3>
+            <p className="text-[11px] text-muted-foreground font-mono">
+              {run.startedAt.replace('T', ' ').slice(0, 19)}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-xs text-muted-foreground hover:text-foreground">닫기</button>
+        </header>
+        <div className="p-5">
+          <div className="border border-border rounded-xl overflow-hidden">
+            <div className="px-3 py-2 border-b border-border bg-muted/20 flex items-center gap-3 flex-wrap">
+              <StatusPill status={run.status} />
+              {run.host && <span className="text-[11px] font-mono text-muted-foreground">{run.host}</span>}
+              {run.exitCode !== null && run.exitCode !== undefined && (
+                <span className="text-[11px] font-mono text-muted-foreground">exit {run.exitCode}</span>
+              )}
+              <span className="text-[11px] font-mono text-muted-foreground">{run.durationMs}ms</span>
+              <span className="text-[11px] font-mono text-muted-foreground">trigger: {run.trigger}</span>
+            </div>
+            <div className="p-3 space-y-2">
+              {run.executedCommand && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">command</p>
+                  <pre className="text-[11px] font-mono bg-background border border-border rounded p-2 overflow-auto whitespace-pre-wrap">
+                    {run.executedCommand}
+                  </pre>
+                </div>
+              )}
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stdout</p>
+                <LogViewer text={run.stdout} maxHeight="max-h-[300px]" />
+              </div>
+              {run.stderr && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">stderr</p>
+                  <LogViewer text={run.stderr} maxHeight="max-h-[200px]" asError />
+                </div>
+              )}
+              {run.error && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">error</p>
+                  <pre className="text-[11px] font-mono bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-400 rounded p-2 overflow-auto whitespace-pre-wrap">
+                    {run.error}
+                  </pre>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 매트릭스 셀 — (클러스터 × jobType) 교차점에 등록된 N개의 잡 + 각 잡의 마지막 실행 표시 ─
+interface JobCellProps {
+  jobs: BatchJob[];
+  onRun: (job: BatchJob) => void;
+  onShowRuns: (job: BatchJob) => void;
+  onDelete: (job: BatchJob) => void;
+  onAdd: () => void;
+}
+
+function JobEntry({
+  job, onRun, onShowRuns, onDelete,
+}: {
+  job: BatchJob;
+  onRun: () => void;
+  onShowRuns: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1.5 min-w-0">
         <StatusPill status={job.lastStatus} />
+        <span className="text-[11px] font-medium text-foreground truncate flex-1 min-w-0" title={job.name}>
+          {job.name}
+        </span>
         {!job.enabled && (
-          <span className="text-[10px] px-1 rounded bg-muted text-muted-foreground">disabled</span>
+          <span className="text-[10px] px-1 rounded bg-muted text-muted-foreground flex-shrink-0">off</span>
         )}
       </div>
-      <div className="text-[11px] font-medium text-foreground truncate" title={job.name}>{job.name}</div>
-      {job.lastRunAt && (
-        <div className="text-[10px] text-muted-foreground font-mono">
-          {job.lastRunAt.replace('T', ' ').slice(0, 16)}
-        </div>
-      )}
-      {job.cron && (
-        <div className="text-[10px] text-muted-foreground font-mono truncate" title={`cron: ${job.cron}`}>
-          ⏱ {job.cron}
-        </div>
-      )}
-      <div className="flex items-center gap-1 mt-0.5">
+      <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono min-w-0">
+        {job.lastRunAt ? (
+          <span className="truncate">{job.lastRunAt.replace('T', ' ').slice(5, 16)}</span>
+        ) : (
+          <span className="opacity-60">미실행</span>
+        )}
+        {job.cron && (
+          <span className="truncate" title={`cron: ${job.cron}`}>⏱ {job.cron}</span>
+        )}
+      </div>
+      <div className="flex items-center gap-1">
         <button
           onClick={onRun}
-          className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
           title="실행"
         >
-          <Play className="w-2.5 h-2.5" /> 실행
+          <Play className="w-2.5 h-2.5" />
+        </button>
+        <button
+          onClick={onShowRuns}
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-md bg-secondary text-secondary-foreground hover:bg-secondary/80"
+          title="실행 이력"
+        >
+          <History className="w-2.5 h-2.5" />
         </button>
         <button
           onClick={onDelete}
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-md text-muted-foreground hover:bg-red-500/10 hover:text-red-500"
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-md text-muted-foreground hover:bg-red-500/10 hover:text-red-500 ml-auto"
           title="삭제"
         >
           <Trash2 className="w-2.5 h-2.5" />
         </button>
-        {extraCount > 0 && (
-          <span className="text-[10px] text-muted-foreground/70 ml-auto" title="같은 분류의 다른 잡 존재">
-            +{extraCount}
-          </span>
-        )}
       </div>
+    </div>
+  );
+}
+
+function JobCell({ jobs, onRun, onShowRuns, onDelete, onAdd }: JobCellProps) {
+  if (jobs.length === 0) {
+    return (
+      <button
+        onClick={onAdd}
+        className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-md border border-dashed border-border hover:border-primary/40 w-full justify-center"
+      >
+        <Plus className="w-3 h-3" /> 등록
+      </button>
+    );
+  }
+  return (
+    <div className="flex flex-col divide-y divide-border/60">
+      {jobs.map((j, idx) => (
+        <div key={j.id} className={idx === 0 ? 'pb-1.5' : 'py-1.5'}>
+          <JobEntry
+            job={j}
+            onRun={() => onRun(j)}
+            onShowRuns={() => onShowRuns(j)}
+            onDelete={() => onDelete(j)}
+          />
+        </div>
+      ))}
+      <button
+        onClick={onAdd}
+        className="inline-flex items-center justify-center gap-1 mt-1.5 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-md border border-dashed border-border hover:border-primary/40"
+        title="이 셀에 잡 추가"
+      >
+        <Plus className="w-2.5 h-2.5" /> 추가
+      </button>
     </div>
   );
 }
@@ -555,7 +728,9 @@ export function BatchJobsPage() {
 
   const [createCtx, setCreateCtx] = useState<{ clusterId: string; jobType?: string } | null>(null);
   const [runJob, setRunJob] = useState<BatchJob | null>(null);
+  const [runsJob, setRunsJob] = useState<BatchJob | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<BatchJob | null>(null);
+  const [runDetail, setRunDetail] = useState<{ run: BatchJobRun; jobName: string } | null>(null);
 
   const jobs = useMemo(() => allJobsQ.data ?? [], [allJobsQ.data]);
   const types = useMemo(() => typesQ.data ?? [], [typesQ.data]);
@@ -593,7 +768,10 @@ export function BatchJobsPage() {
             <ListTree className="w-5 h-5" /> Batch Jobs
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            행 = 클러스터, 열 = 잡 종류. 셀 = 해당 클러스터에 등록된 잡과 마지막 실행 결과. 빈 셀의 + 등록 버튼으로 새 잡을 추가합니다.
+            행 = 클러스터, 열 = 잡 종류. 한 셀에 1, 2, 3 … N 개의 잡을 등록할 수 있고, 각 잡의 마지막 실행 결과가 함께 표시됩니다.
+            <span className="inline-flex items-center gap-1 ml-1">
+              <History className="w-3 h-3" /> 버튼으로 실행 이력을 볼 수 있습니다.
+            </span>
           </p>
         </div>
       </div>
@@ -638,26 +816,16 @@ export function BatchJobsPage() {
                     </td>
                     {columns.map((col) => {
                       const cellJobs = matrix[cluster.id]?.[col.jobType] ?? [];
-                      const j = cellJobs[0];
                       return (
                         <td key={col.jobType}
-                          className="px-3 py-3 align-top border-r border-border last:border-r-0">
-                          {j ? (
-                            <JobCell
-                              job={j}
-                              extraCount={cellJobs.length - 1}
-                              onRun={() => setRunJob(j)}
-                              onDelete={() => setConfirmDelete(j)}
-                            />
-                          ) : (
-                            <button
-                              onClick={() => setCreateCtx({ clusterId: cluster.id, jobType: col.jobType })}
-                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-md border border-dashed border-border hover:border-primary/40 w-full justify-center"
-                              title={`${cluster.name} 에 ${col.label} 잡 등록`}
-                            >
-                              <Plus className="w-3 h-3" /> 등록
-                            </button>
-                          )}
+                          className="px-3 py-2 align-top border-r border-border last:border-r-0">
+                          <JobCell
+                            jobs={cellJobs}
+                            onRun={(j) => setRunJob(j)}
+                            onShowRuns={(j) => setRunsJob(j)}
+                            onDelete={(j) => setConfirmDelete(j)}
+                            onAdd={() => setCreateCtx({ clusterId: cluster.id, jobType: col.jobType })}
+                          />
                         </td>
                       );
                     })}
@@ -668,34 +836,6 @@ export function BatchJobsPage() {
           </div>
         )}
       </MacCard>
-
-      {/* 선택된 잡의 최근 실행 이력 — 매트릭스 아래에 별도 카드로 노출 */}
-      {runJob === null && (
-        <details className="bg-card border border-border rounded-xl">
-          <summary className="px-4 py-2.5 cursor-pointer text-xs font-semibold text-muted-foreground hover:text-foreground">
-            등록된 모든 잡의 최근 실행 이력 보기
-          </summary>
-          <div className="p-4 space-y-3">
-            {jobs.length === 0 ? (
-              <p className="text-xs text-muted-foreground">등록된 잡이 없습니다.</p>
-            ) : (
-              jobs.map((j) => (
-                <div key={j.id} className="border border-border rounded-lg p-2.5">
-                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                    <span className="text-xs font-semibold">
-                      {clusters.find((c) => c.id === j.clusterId)?.name ?? j.clusterId.slice(0, 8)}
-                    </span>
-                    <span className="text-muted-foreground/60 text-xs">·</span>
-                    <span className="text-xs font-medium">{j.name}</span>
-                    <span className="text-[10px] font-mono text-muted-foreground">{j.jobType}</span>
-                  </div>
-                  <RunsList jobId={j.id} />
-                </div>
-              ))
-            )}
-          </div>
-        </details>
-      )}
 
       {createCtx && (
         <CreateJobModal
@@ -708,6 +848,25 @@ export function BatchJobsPage() {
       )}
 
       {runJob && <RunModal job={runJob} onClose={() => setRunJob(null)} />}
+
+      {runsJob && (
+        <JobRunsModal
+          job={runsJob}
+          onSelectRun={(run) => {
+            setRunDetail({ run, jobName: runsJob.name });
+            setRunsJob(null);
+          }}
+          onClose={() => setRunsJob(null)}
+        />
+      )}
+
+      {runDetail && (
+        <RunDetailModal
+          run={runDetail.run}
+          jobName={runDetail.jobName}
+          onClose={() => setRunDetail(null)}
+        />
+      )}
 
       {confirmDelete && (
         <ConfirmDialog

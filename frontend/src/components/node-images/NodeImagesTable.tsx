@@ -1,29 +1,11 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Layers } from 'lucide-react';
 import type { NodeImagesInfo } from '@/hooks/useNodeImages';
+import { formatBytes, pickPrimaryName } from './utils';
 
 interface Props {
   nodes: NodeImagesInfo[];
   searchQuery: string;
-}
-
-function formatBytes(n: number): string {
-  if (!n || n <= 0) return '-';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let i = 0;
-  let v = n;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i += 1;
-  }
-  return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
-}
-
-function pickPrimaryName(names: string[]): string {
-  if (names.length === 0) return '(unknown)';
-  // Prefer the tagged name (`repo:tag`) over the digest (`repo@sha256:...`).
-  const tagged = names.find((n) => !n.includes('@sha256:'));
-  return tagged || names[0];
 }
 
 function nodeMatches(node: NodeImagesInfo, q: string): boolean {
@@ -122,9 +104,11 @@ function RowGroup({
         <td className="px-4 py-3 align-middle">
           <StatusBadge status={node.status} />
         </td>
-        <td className="px-4 py-3 align-middle text-right tabular-nums">{node.image_count}</td>
         <td className="px-4 py-3 align-middle text-right tabular-nums">
-          {formatBytes(node.total_size_bytes)}
+          <span className="font-semibold text-foreground">{node.imageCount.toLocaleString()}</span>
+        </td>
+        <td className="px-4 py-3 align-middle text-right tabular-nums">
+          {formatBytes(node.totalSizeBytes)}
         </td>
       </tr>
       {isOpen && (
@@ -180,7 +164,7 @@ function ImageList({ images }: { images: NodeImagesInfo['images'] }) {
                   </div>
                 </div>
               </td>
-              <td className="py-1.5 text-right tabular-nums">{formatBytes(img.size_bytes)}</td>
+              <td className="py-1.5 text-right tabular-nums">{formatBytes(img.sizeBytes)}</td>
             </tr>
           ))}
         </tbody>

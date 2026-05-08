@@ -9,7 +9,7 @@ class WorkflowStepCreate(BaseModel):
     description: Optional[str] = None
     completed: bool = False
     step_type: str = 'action'
-    status: str = 'idle'
+    status: str = 'todo'
     pos_x: float = 100.0
     pos_y: float = 100.0
     order_index: int = 0

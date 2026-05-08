@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pencil, Trash2, Cpu, Network, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
+import { Pencil, Trash2, Cpu, Network, AlertTriangle, RefreshCw, Loader2, Cable } from 'lucide-react';
 import type { Cluster } from '@/types';
 import { STATUS_STYLE, OVERLAP_COLORS } from './constants';
 import { useOperationLevels, levelBadgeClass, levelLabel, levelColor } from '@/hooks/useOperationLevels';
@@ -17,9 +17,11 @@ interface ClusterCardProps {
   overlapGroupIdx: number | undefined;
   onAutoUpdate: (c: Cluster) => void;
   autoUpdatingId: string | null;
+  /** SSH 기반 NIC 수집(bond0/bond1 채움) 모달 열기 */
+  onCollectNics?: (c: Cluster) => void;
 }
 
-export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onAutoUpdate, autoUpdatingId }: ClusterCardProps) {
+export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onAutoUpdate, autoUpdatingId, onCollectNics }: ClusterCardProps) {
   const [tab, setTab] = useState<CardTab>('node');
   const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
   const { data: opsLevels } = useOperationLevels();
@@ -66,6 +68,13 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 : <RefreshCw className="w-3.5 h-3.5" />}
             </button>
+            {onCollectNics && (
+              <button onClick={() => onCollectNics(cluster)}
+                className="p-1.5 hover:bg-primary/10 rounded-md transition-colors text-muted-foreground hover:text-primary"
+                title="NIC 수집 (SSH 기반) — bond0/bond1 IP/MAC 채움">
+                <Cable className="w-3.5 h-3.5" />
+              </button>
+            )}
             <button onClick={() => onEdit(cluster)}
               className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground" title="수정">
               <Pencil className="w-3.5 h-3.5" />

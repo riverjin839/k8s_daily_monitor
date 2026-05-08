@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom';
 import { useLocation, Link } from 'react-router-dom';
 import {
-  LayoutDashboard, BookOpen, ClipboardList, ListTodo, CalendarCheck2,
-  Settings, Link2, Tags, Calculator, Server, GitFork, BookMarked, Layers, Boxes,
-  Pencil, Moon, Sun, Monitor, Map, BarChart3, Network,
-  Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
-  X, ClipboardCheck, ListTree, ChevronRight, LogOut, Waves, Sparkles, User,
+  LayoutDashboard, BookOpen, ListTodo, Sparkles, Settings, Server,
+  Pencil, Moon, Sun, Monitor, X, LogOut, User, ChevronRight,
+  ClipboardList, CalendarCheck2, Link2, Tags, Calculator, GitFork, BookMarked, Layers, Boxes,
+  Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
+  ClipboardCheck, ListTree, Waves,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';

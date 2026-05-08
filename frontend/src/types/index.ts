@@ -15,8 +15,11 @@ export interface Cluster {
   operationLevel?: string;
   maxPod?: number;
   ciliumConfig?: string;
-  // INTERNAL_IP — 자동수집된 nodeIps 가 우선 표시. cidr/firstHost/lastHost 는 미수집 시 fallback supernet.
+  // INTERNAL_IP — 우선순위: 자동수집 nodeIps > 수동입력 internalIps(IP 리스트 정규식) > fallback supernet cidr.
+  // cidr 은 CIDR Calculator 의 클러스터 겹침 검사에도 계속 사용됨.
   cidr?: string;
+  /** IP 리스트 정규식 (예: "10.0.1.[5-7,10]\n10.0.2.[1-3]") — nodeIps 미수집 시 표시용 */
+  internalIps?: string;
   firstHost?: string;
   lastHost?: string;
   // Pod CIDR
@@ -87,6 +90,7 @@ export interface ClusterManageUpdate {
   maxPod?: number;
   ciliumConfig?: string;
   cidr?: string;
+  internalIps?: string;
   firstHost?: string;
   lastHost?: string;
   podCidr?: string;
@@ -429,9 +433,10 @@ export interface OperationLevelItem {
   color: string;
 }
 
-// Workflow Board
+// Workflow Board — 큰 작업을 단계별로 시각화하는 기획 게시판.
+// (실행엔진이 아니라 진행 추적용. 상태는 todo/in-progress/blocked/done/skipped.)
 export type WorkflowStepType = 'trigger' | 'action' | 'condition' | 'wait' | 'notification';
-export type WorkflowStepStatus = 'idle' | 'running' | 'success' | 'failed' | 'skipped';
+export type WorkflowStepStatus = 'todo' | 'in-progress' | 'blocked' | 'done' | 'skipped';
 
 export interface WorkflowStep {
   id: string;

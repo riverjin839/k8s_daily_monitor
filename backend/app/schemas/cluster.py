@@ -22,8 +22,10 @@ class ClusterBase(BaseModel):
     operation_level: Optional[str] = None
     max_pod: Optional[int] = None
     cilium_config: Optional[str] = None
-    # Node CIDR
+    # Node CIDR (legacy supernet — 겹침 검사에 계속 사용)
     cidr: Optional[str] = None
+    # INTERNAL_IP — IP 리스트 정규식 (예: "10.0.1.[5-7,10]"). nodeIps 미수집 시 우선 표시.
+    internal_ips: Optional[str] = None
     first_host: Optional[str] = None
     last_host: Optional[str] = None
     # Pod CIDR
@@ -64,6 +66,7 @@ class ClusterUpdate(BaseModel):
     max_pod: Optional[int] = None
     cilium_config: Optional[str] = None
     cidr: Optional[str] = None
+    internal_ips: Optional[str] = None
     first_host: Optional[str] = None
     last_host: Optional[str] = None
     pod_cidr: Optional[str] = None

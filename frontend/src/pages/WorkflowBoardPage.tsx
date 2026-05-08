@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   GitFork, Plus, Trash2, Check, X, ChevronRight,
@@ -6,6 +6,13 @@ import {
   ZoomIn, ZoomOut, Maximize2, LayoutGrid, Link2,
 } from 'lucide-react';
 import { workflowsApi } from '@/services/api';
+import { useToast } from '@/components/common';
+import { useClusters } from '@/hooks/useCluster';
+import { useIssues } from '@/hooks/useIssues';
+import { useTasks } from '@/hooks/useTasks';
+import { usePlaybooks } from '@/hooks/usePlaybook';
+import { useWorkGuides } from '@/hooks/useWorkGuide';
+import { useMetricCards } from '@/hooks/useMetricCards';
 import type {
   WorkflowStep, WorkflowEdge,
   WorkflowStepType, WorkflowStepStatus,
@@ -34,15 +41,32 @@ const STEP_TYPE: Record<WorkflowStepType, StepTypeCfg> = {
 const STEP_TYPE_KEYS = Object.keys(STEP_TYPE) as WorkflowStepType[];
 
 // ─── step status config ───────────────────────────────────────────────────────
-type StepStatusCfg = { label: string; cls: string; pulse?: boolean };
+// 기획 게시판용 상태. 실행 색채 제거: pulse 애니메이션 없음, "실패" 빨간색 → "막힘" amber.
+type StepStatusCfg = { label: string; cls: string; barCls: string };
 const STEP_STATUS: Record<WorkflowStepStatus, StepStatusCfg> = {
-  idle:    { label: '대기',    cls: 'bg-zinc-500/20 text-zinc-400' },
-  running: { label: '실행 중', cls: 'bg-blue-500/20 text-blue-400', pulse: true },
-  success: { label: '성공',    cls: 'bg-emerald-500/20 text-emerald-400' },
-  failed:  { label: '실패',    cls: 'bg-red-500/20 text-red-400' },
-  skipped: { label: '건너뜀',  cls: 'bg-zinc-500/20 text-zinc-400 opacity-50' },
+  'todo':        { label: '할 일',    cls: 'bg-zinc-500/15 text-zinc-500',     barCls: 'bg-zinc-400/60' },
+  'in-progress': { label: '진행 중',  cls: 'bg-blue-500/15 text-blue-600',     barCls: 'bg-blue-500' },
+  'blocked':     { label: '막힘',     cls: 'bg-amber-500/15 text-amber-600',   barCls: 'bg-amber-500' },
+  'done':        { label: '완료',     cls: 'bg-emerald-500/15 text-emerald-600',barCls: 'bg-emerald-500' },
+  'skipped':     { label: '제외',     cls: 'bg-zinc-500/10 text-zinc-400 opacity-60', barCls: 'bg-zinc-300' },
 };
 const STEP_STATUS_KEYS = Object.keys(STEP_STATUS) as WorkflowStepStatus[];
+
+/**
+ * 레거시 상태값(idle/running/success/failed) 을 새 어휘로 normalise.
+ * DB 마이그레이션이 돌기 전 / 외부에서 들어온 데이터에도 안전하게 동작하도록.
+ */
+function normalizeStatus(raw: string | null | undefined): WorkflowStepStatus {
+  switch (raw) {
+    case 'idle':    return 'todo';
+    case 'running': return 'in-progress';
+    case 'success': return 'done';
+    case 'failed':  return 'blocked';
+    case 'todo': case 'in-progress': case 'blocked': case 'done': case 'skipped':
+      return raw;
+    default: return 'todo';
+  }
+}
 
 // ─── port SVG colors ──────────────────────────────────────────────────────────
 const TYPE_SVG_COLOR: Record<string, { fill: string; stroke: string }> = {
@@ -156,6 +180,7 @@ export function WorkflowBoardPage() {
 
   // ── data ─────────────────────────────────────────────────────────────────────
   const queryClient = useQueryClient();
+  const toast = useToast();
   const { data } = useQuery({
     queryKey: ['workflows'],
     queryFn: () => workflowsApi.getAll().then((r) => r.data),
@@ -163,6 +188,20 @@ export function WorkflowBoardPage() {
   });
   const workflows = data?.data ?? [];
   const selectedWf = workflows.find((w) => w.id === selectedId) ?? null;
+
+  // 선택된 워크플로우의 상태별 카운트 (헤더 진행률 시각화용)
+  const statusCounts = useMemo(() => {
+    const init: Record<WorkflowStepStatus, number> = {
+      'todo': 0, 'in-progress': 0, 'blocked': 0, 'done': 0, 'skipped': 0,
+    };
+    if (!selectedWf) return init;
+    for (const s of selectedWf.steps) {
+      // completed=true 인 단계는 status 와 무관하게 'done' 으로 카운트 (체크박스 단축)
+      const eff = s.completed ? 'done' : normalizeStatus(s.status);
+      init[eff] = (init[eff] ?? 0) + 1;
+    }
+    return init;
+  }, [selectedWf]);
 
   const invalidate = useCallback(
     () => queryClient.invalidateQueries({ queryKey: ['workflows'] }),
@@ -266,14 +305,27 @@ export function WorkflowBoardPage() {
   // ── helpers ───────────────────────────────────────────────────────────────────
   const getPos = (step: WorkflowStep) => localPos[step.id] ?? { x: step.posX, y: step.posY };
 
-  const handleAutoLayout = () => {
+  const handleAutoLayout = async () => {
     if (!selectedWf) return;
     const positions = computeAutoLayout(selectedWf.steps, selectedWf.edges);
+    // 1. 로컬 위치 즉시 반영 — 사용자가 변화를 바로 보게.
     setLocalPos((prev) => ({ ...prev, ...positions }));
-    selectedWf.steps.forEach((s) => {
-      const p = positions[s.id];
-      if (p) updateStep.mutate({ wfId: selectedWf.id, stepId: s.id, stepData: { posX: p.x, posY: p.y } });
-    });
+    // 2. 백엔드는 Promise.all 로 병렬 호출하고, invalidate 는 마지막에 한 번만.
+    //    각 mutation 을 따로 .mutate 하면 invalidate 가 N번 → N번 refetch 라 비효율.
+    const targets = selectedWf.steps
+      .map((s) => ({ s, p: positions[s.id] }))
+      .filter((t) => t.p);
+    try {
+      await Promise.all(
+        targets.map(({ s, p }) =>
+          workflowsApi.updateStep(selectedWf.id, s.id, { posX: p.x, posY: p.y }),
+        ),
+      );
+      invalidate();
+      toast.success('자동 배치 완료', `${targets.length}개 단계 위치 갱신`);
+    } catch (e) {
+      toast.error('자동 배치 실패', e instanceof Error ? e.message : String(e));
+    }
   };
 
   const handleCardPointerDown = (e: React.PointerEvent<HTMLDivElement>, step: WorkflowStep) => {
@@ -550,9 +602,33 @@ export function WorkflowBoardPage() {
                     <Pencil className="w-3 h-3 text-muted-foreground/40 group-hover/title:text-primary transition-colors flex-shrink-0" />
                   </button>
                 )}
-                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                  {selectedWf.steps.length}단계 · {selectedWf.steps.filter((s) => s.completed).length} 완료 · {selectedWf.edges.length}개 연결
-                </span>
+                {/* 진행률 바 + 상태별 카운트 — 기획 게시판이라 진행 추적이 핵심 */}
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex h-1.5 w-32 rounded-full overflow-hidden bg-secondary/60">
+                    {(STEP_STATUS_KEYS as WorkflowStepStatus[]).map((st) => {
+                      const n = statusCounts[st];
+                      const total = selectedWf.steps.length || 1;
+                      if (n === 0) return null;
+                      return (
+                        <div
+                          key={st}
+                          className={`h-full ${STEP_STATUS[st].barCls}`}
+                          style={{ width: `${(n / total) * 100}%` }}
+                          title={`${STEP_STATUS[st].label}: ${n}`}
+                        />
+                      );
+                    })}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px] whitespace-nowrap">
+                    <span className="text-muted-foreground">{selectedWf.steps.length}단계</span>
+                    {(STEP_STATUS_KEYS as WorkflowStepStatus[]).filter((st) => statusCounts[st] > 0).map((st) => (
+                      <span key={st} className={`px-1.5 py-0.5 rounded ${STEP_STATUS[st].cls}`}>
+                        {STEP_STATUS[st].label} {statusCounts[st]}
+                      </span>
+                    ))}
+                    <span className="text-muted-foreground/60">· 연결 {selectedWf.edges.length}</span>
+                  </div>
+                </div>
                 {pendingEdge && (
                   <span className="text-xs px-2.5 py-1 bg-primary/10 text-primary border border-primary/30 rounded-full animate-pulse">
                     연결할 대상 포트에 드롭하세요 · Esc 취소
@@ -661,7 +737,7 @@ export function WorkflowBoardPage() {
                       );
                     })}
 
-                    {/* 2. Existing edges (on top of port circles) */}
+                    {/* 2. Existing edges (on top of port circles) — hover 시 중간에 X 버튼으로 안전하게 삭제 */}
                     {selectedWf.edges.map((edge) => {
                       const src = selectedWf.steps.find((s) => s.id === edge.sourceStepId);
                       const tgt = selectedWf.steps.find((s) => s.id === edge.targetStepId);
@@ -672,15 +748,14 @@ export function WorkflowBoardPage() {
                       const sy = sp.y + CARD_H / 2;
                       const tx = tp.x;
                       const ty = tp.y + CARD_H / 2;
+                      const mx = (sx + tx) / 2;
+                      const my = (sy + ty) / 2;
                       const d = bezierPath(sx, sy, tx, ty);
                       return (
-                        <g
-                          key={edge.id}
-                          className="group/edge"
-                          style={{ pointerEvents: 'all', cursor: 'pointer' }}
-                          onClick={() => deleteEdge.mutate({ wfId: selectedWf.id, edgeId: edge.id })}
-                        >
+                        <g key={edge.id} className="group/edge" style={{ pointerEvents: 'all' }}>
+                          {/* 넓은 hover 영역 (투명) */}
                           <path d={d} stroke="transparent" strokeWidth={16} fill="none" />
+                          {/* 실제 라인 */}
                           <path
                             d={d}
                             stroke="hsl(var(--muted-foreground))"
@@ -688,9 +763,22 @@ export function WorkflowBoardPage() {
                             strokeWidth={1.8}
                             fill="none"
                             markerEnd="url(#wf-arrow)"
-                            className="group-hover/edge:stroke-red-400 group-hover/edge:opacity-100 transition-colors"
+                            className="group-hover/edge:stroke-rose-400 group-hover/edge:stroke-[2.4px] transition-colors"
                             style={{ pointerEvents: 'none' }}
                           />
+                          {/* hover 시에만 보이는 중간 X 버튼 — 클릭 한 번 더 필요해 실수 방지 */}
+                          <g
+                            className="opacity-0 group-hover/edge:opacity-100 transition-opacity"
+                            style={{ cursor: 'pointer' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteEdge.mutate({ wfId: selectedWf.id, edgeId: edge.id });
+                            }}
+                          >
+                            <circle cx={mx} cy={my} r={9} fill="hsl(var(--card))" stroke="hsl(var(--rose-400, 251 113 133))" strokeWidth={1.6} className="stroke-rose-400" />
+                            <line x1={mx - 3.5} y1={my - 3.5} x2={mx + 3.5} y2={my + 3.5} stroke="currentColor" className="text-rose-500" strokeWidth={1.8} strokeLinecap="round" />
+                            <line x1={mx + 3.5} y1={my - 3.5} x2={mx - 3.5} y2={my + 3.5} stroke="currentColor" className="text-rose-500" strokeWidth={1.8} strokeLinecap="round" />
+                          </g>
                         </g>
                       );
                     })}
@@ -716,7 +804,8 @@ export function WorkflowBoardPage() {
                     const isDraggingThis = dragging?.stepId === step.id;
                     const isEditing = editingStep === step.id;
                     const typeCfg = STEP_TYPE[step.stepType as WorkflowStepType] ?? STEP_TYPE.action;
-                    const statusCfg = STEP_STATUS[step.status as WorkflowStepStatus] ?? STEP_STATUS.idle;
+                    const stepStatus = normalizeStatus(step.status);
+                    const statusCfg = STEP_STATUS[stepStatus] ?? STEP_STATUS['todo'];
                     const isSourceOfPending = pendingEdge?.sourceStepId === step.id;
 
                     return (
@@ -768,7 +857,7 @@ export function WorkflowBoardPage() {
                             <div className="relative" onClick={(e) => e.stopPropagation()}>
                               <button
                                 onClick={() => { setStatusMenuStep(statusMenuStep === step.id ? null : step.id); setTypeMenuStep(null); }}
-                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${statusCfg.cls} ${statusCfg.pulse ? 'animate-pulse' : ''}`}
+                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${statusCfg.cls}`}
                               >
                                 {statusCfg.label}
                               </button>
@@ -777,10 +866,10 @@ export function WorkflowBoardPage() {
                                   {STEP_STATUS_KEYS.map((st) => (
                                     <button key={st}
                                       onClick={() => { if (selectedWf) updateStep.mutate({ wfId: selectedWf.id, stepId: step.id, stepData: { status: st } }); setStatusMenuStep(null); }}
-                                      className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-secondary transition-colors ${step.status === st ? 'font-semibold' : ''}`}
+                                      className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-secondary transition-colors ${stepStatus === st ? 'font-semibold' : ''}`}
                                     >
                                       <span className={`px-1.5 py-0.5 rounded text-xs ${STEP_STATUS[st].cls}`}>{STEP_STATUS[st].label}</span>
-                                      {step.status === st && <Check className="w-3 h-3 ml-auto text-primary" />}
+                                      {stepStatus === st && <Check className="w-3 h-3 ml-auto text-primary" />}
                                     </button>
                                   ))}
                                 </div>
@@ -838,11 +927,11 @@ export function WorkflowBoardPage() {
                                 rows={2}
                                 className="w-full text-xs bg-background border border-border rounded px-2 py-1 focus:outline-none focus:border-primary resize-none"
                               />
-                              {/* 연계 항목 선택 */}
+                              {/* 연계 항목 선택 — 타입 선택 시 해당 카테고리의 실제 항목 목록을 드롭다운으로 노출 */}
                               <div className="mt-1.5 space-y-1" onClick={(e) => e.stopPropagation()}>
                                 <select
                                   value={stepRefType}
-                                  onChange={(e) => { setStepRefType(e.target.value); if (!e.target.value) setStepRefId(''); }}
+                                  onChange={(e) => { setStepRefType(e.target.value); setStepRefId(''); }}
                                   className="w-full text-[11px] bg-background border border-border rounded px-2 py-1 focus:outline-none focus:border-primary text-muted-foreground"
                                 >
                                   <option value="">— 연계 항목 없음 —</option>
@@ -851,12 +940,10 @@ export function WorkflowBoardPage() {
                                   ))}
                                 </select>
                                 {stepRefType && (
-                                  <input
-                                    type="text"
+                                  <ReferenceSelect
+                                    type={stepRefType}
                                     value={stepRefId}
-                                    onChange={(e) => setStepRefId(e.target.value)}
-                                    placeholder="항목 ID (UUID)"
-                                    className="w-full text-[11px] bg-background border border-border rounded px-2 py-1 focus:outline-none focus:border-primary font-mono"
+                                    onChange={setStepRefId}
                                   />
                                 )}
                               </div>
@@ -928,5 +1015,62 @@ export function WorkflowBoardPage() {
         )}
       </main>
     </div>
+  );
+}
+
+// ─── Reference 항목 드롭다운 ───────────────────────────────────────────────────
+// type 별로 적합한 hook 을 호출해 실제 항목 목록을 보여준다. 사용자가 UUID 를
+// 직접 외워서 입력하지 않아도 되게 함.
+interface ReferenceSelectProps {
+  type: string;
+  value: string;
+  onChange: (id: string) => void;
+}
+
+function ReferenceSelect({ type, value, onChange }: ReferenceSelectProps) {
+  const { data: clusters } = useClusters();
+  const { data: issuesData } = useIssues();
+  const { data: tasksData } = useTasks();
+  const { data: playbooksData } = usePlaybooks();
+  const { data: workGuidesData } = useWorkGuides();
+  const { data: metricCardsData } = useMetricCards();
+
+  // 각 hook 의 반환 형태가 제각각이라 분기로 정규화한다.
+  // - useClusters / usePlaybooks / useMetricCards 는 배열 자체를 돌려줌
+  // - useIssues / useTasks / useWorkGuides 는 { data: [...] } 형태
+  const options = useMemo<{ id: string; label: string }[]>(() => {
+    switch (type) {
+      case 'cluster':
+        return (clusters ?? []).map((c) => ({ id: c.id, label: c.name }));
+      case 'issue':
+        return (issuesData?.data ?? []).map((i) => ({ id: i.id, label: i.issueContent }));
+      case 'task':
+        return (tasksData?.data ?? []).map((t) => ({ id: t.id, label: t.taskContent }));
+      case 'playbook':
+        return (playbooksData ?? []).map((p) => ({ id: p.id, label: p.name }));
+      case 'work_guide':
+        return (workGuidesData?.data ?? []).map((w) => ({ id: w.id, label: w.title }));
+      case 'metric_card':
+        return (metricCardsData ?? []).map((m) => ({ id: m.id, label: m.title }));
+      default:
+        return [];
+    }
+  }, [type, clusters, issuesData, tasksData, playbooksData, workGuidesData, metricCardsData]);
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full text-[11px] bg-background border border-border rounded px-2 py-1 focus:outline-none focus:border-primary"
+    >
+      <option value="">— 항목 선택 —</option>
+      {options.map((o) => (
+        <option key={o.id} value={o.id}>{o.label}</option>
+      ))}
+      {/* 현재 ID 가 목록에 없으면(삭제됐거나 아직 로드 안 됨) 그대로 보여줘 잃지 않도록 */}
+      {value && !options.some((o) => o.id === value) && (
+        <option value={value}>(존재 확인 안됨) {value}</option>
+      )}
+    </select>
   );
 }

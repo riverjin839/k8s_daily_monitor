@@ -10,9 +10,6 @@ import {
   AddMetricCardModal,
   KubeconfigEditModal,
   KanbanSummaryCharts,
-  YesterdayChanges,
-  WorkCalendar,
-  MemberTodayTodos,
 } from '@/components/dashboard';
 import { PlaybookCard, AddPlaybookModal, RunCredsModal } from '@/components/playbooks';
 import type { PlaybookSshCreds } from '@/types';
@@ -380,21 +377,6 @@ export function Dashboard() {
               </div>
             </>
           )}
-        </MacCard>
-
-        {/* ── Yesterday Changes ↔ Member Today Todos (2-col) ─────────────── */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 min-w-0">
-          <MacCard title="어제 클러스터 작업 변경 사항" bodyPadding="p-4" className="overflow-hidden" rootClassName="min-w-0">
-            <YesterdayChanges selectedClusterId={selectedClusterId} />
-          </MacCard>
-          <MacCard title="멤버별 오늘 할일" bodyPadding="p-4" className="overflow-hidden" rootClassName="min-w-0">
-            <MemberTodayTodos selectedClusterId={selectedClusterId} />
-          </MacCard>
-        </div>
-
-        {/* ── Work Calendar (full width) ─────────────────────────────────── */}
-        <MacCard title="업무 진행 달력" bodyPadding="p-4" className="overflow-hidden" rootClassName="min-w-0">
-          <WorkCalendar selectedClusterId={selectedClusterId} />
         </MacCard>
 
         {/* ── Prometheus Insights (우측 컬럼) ─────────────────────────────── */}

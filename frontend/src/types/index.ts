@@ -1092,6 +1092,11 @@ export interface NodeNicsPerHost {
   interfaces?: NicInterface[];
   all_ips?: NicAllIp[];
   error?: string | null;
+  // 진단용 — status=ok 인데 interfaces 가 0개거나 status=error 일 때 백엔드가 채움.
+  // 'ip -j' 미지원 / 권한 부족 / 출력 비어있음 진단에 사용.
+  raw_stdout?: string | null;
+  raw_stderr?: string | null;
+  exit_code?: number | null;
 }
 
 export interface NodeNicsCollectResponse {

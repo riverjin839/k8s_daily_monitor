@@ -91,10 +91,18 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
       // VersionsPage 가 node_nics:{host} 스냅샷을 history 로 표시 — 새 변경 감지 시 invalidation.
       queryClient.invalidateQueries({ queryKey: ['versions'] });
 
+      const noNicCount = d.hosts.filter(
+        (h) => h.status === 'ok' && (h.interfaces?.length ?? 0) === 0,
+      ).length;
       if (d.changed > 0) {
         toast.success(
           'NIC 수집 완료',
           `${okCount}개 노드 수집 · ${d.changed}건 변경 감지 · 표 갱신 완료`,
+        );
+      } else if (noNicCount > 0) {
+        toast.info(
+          'NIC 수집 완료',
+          `${okCount}개 노드 · ${noNicCount}개 노드는 NIC 미검출 (raw 출력 확인)`,
         );
       } else {
         toast.info('NIC 수집 완료', `${okCount}개 노드 · 변경 없음`);
@@ -276,9 +284,27 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
                         </td>
                         <td className="px-2 py-1.5">
                           {h.status !== 'ok' ? (
-                            <span className="text-[11px] text-red-400">{h.error ?? '-'}</span>
+                            <div className="space-y-1">
+                              <span className="text-[11px] text-red-400">{h.error ?? '-'}</span>
+                              {(h.raw_stdout || h.raw_stderr) && (
+                                <RawOutputDetails
+                                  stdout={h.raw_stdout}
+                                  stderr={h.raw_stderr}
+                                  exitCode={h.exit_code}
+                                />
+                              )}
+                            </div>
                           ) : (h.interfaces?.length ?? 0) === 0 ? (
-                            <span className="text-[11px] text-muted-foreground">검출된 NIC 없음</span>
+                            <div className="space-y-1">
+                              <span className="text-[11px] text-amber-500">
+                                검출된 NIC 없음 — bond/eth/en*/em* 정규식과 일치하지 않거나 출력 파싱 실패
+                              </span>
+                              <RawOutputDetails
+                                stdout={h.raw_stdout}
+                                stderr={h.raw_stderr}
+                                exitCode={h.exit_code}
+                              />
+                            </div>
                           ) : (
                             <div className="space-y-0.5">
                               {(h.interfaces ?? []).map((ifc) => (
@@ -341,6 +367,44 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
         </div>
       </div>
     </div>
+  );
+}
+
+// "검출된 NIC 없음" / 에러 케이스 진단용 — 백엔드가 응답에 같이 실어준
+// 원본 stdout / stderr / exit code 를 펼침형으로 노출.
+function RawOutputDetails({
+  stdout, stderr, exitCode,
+}: {
+  stdout?: string | null;
+  stderr?: string | null;
+  exitCode?: number | null;
+}) {
+  const hasStdout = !!stdout;
+  const hasStderr = !!stderr;
+  if (!hasStdout && !hasStderr && exitCode === undefined) return null;
+  return (
+    <details className="text-[10px]">
+      <summary className="cursor-pointer text-muted-foreground hover:text-foreground select-none">
+        raw 출력 보기
+        {exitCode !== null && exitCode !== undefined && (
+          <span className="ml-1 font-mono">(exit {exitCode})</span>
+        )}
+      </summary>
+      <div className="mt-1 space-y-1">
+        {hasStdout && (
+          <div>
+            <div className="text-[9px] uppercase tracking-wider text-muted-foreground">stdout</div>
+            <pre className="font-mono text-[10px] bg-background border border-border rounded p-1.5 max-h-40 overflow-auto whitespace-pre-wrap">{stdout}</pre>
+          </div>
+        )}
+        {hasStderr && (
+          <div>
+            <div className="text-[9px] uppercase tracking-wider text-muted-foreground">stderr</div>
+            <pre className="font-mono text-[10px] bg-red-500/5 border border-red-500/20 text-red-400 rounded p-1.5 max-h-40 overflow-auto whitespace-pre-wrap">{stderr}</pre>
+          </div>
+        )}
+      </div>
+    </details>
   );
 }
 

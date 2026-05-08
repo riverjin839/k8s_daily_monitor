@@ -1442,7 +1442,28 @@ async def collect_node_nics(
         raise HTTPException(status_code=422, detail="password 또는 private_key 중 하나는 필수입니다.")
 
     sudo = "sudo -n " if payload.use_sudo else ""
-    cmd = f"{sudo}ip -j addr show 2>/dev/null"
+    # k8s 워커는 pod 마다 veth*, calico cali*, cilium_*, kube-ipvs0, flannel.1 등이
+    # 누적돼 `ip -j addr show` JSON 이 수십 KB ~ 수백 KB 까지 커진다. _exec_ssh 의
+    # stdout truncation (기본 8000 chars) 에 잘리면 JSON 이 깨져 파서가 [] 를 반환,
+    # "검출된 NIC 없음" 으로 표시된다. 이를 막기 위해 원격에서 jq 로 사전 필터하여
+    # bond / eth / en* / em* 같은 물리 NIC 만 보낸다. jq 없는 노드는 raw 출력 그대로
+    # 받되 max_stdout_chars 를 충분히 늘려 truncation 을 회피.
+    #
+    # 필터 정규식 (interface 이름 기준):
+    #   bond[0-9]+    예: bond0, bond1
+    #   eth[0-9]+     예: eth0, eth1
+    #   en[oxsp][^.]* 예: ens3, eno1, enp4s0, enx00... (predictable NIC names)
+    #   em[0-9]+      예: em1 (구 RHEL/Dell)
+    iface_regex = "^(bond[0-9]+|eth[0-9]+|en[oxsp][^.]*|em[0-9]+)$"
+    # 출력을 변수에 캡처 후 jq 시도 → 실패하면 (jq 미설치 / JSON 파싱 실패 등)
+    # 캡처한 raw 를 그대로 흘려보냄. 파이프 통과 후 폴백용 cat 은 stdin 이 비어
+    # 있어 동작 못 하므로 변수 캡처 방식이 정답.
+    cmd = (
+        f"out=$({sudo}ip -j addr show 2>&1); "
+        f"printf '%s' \"$out\" | "
+        f"jq -c '[.[] | select(.ifname | test(\"{iface_regex}\"))]' 2>/dev/null "
+        f"|| printf '%s' \"$out\""
+    )
     skip_patterns = list(payload.skip_iface_patterns or [])
     now = datetime.utcnow()
 
@@ -1469,10 +1490,20 @@ async def collect_node_nics(
             host=host, port=payload.port, username=payload.username,
             password=payload.password, private_key=payload.private_key,
         )
-        res = _exec_ssh(target, cmd, connect_timeout=payload.connect_timeout, exec_timeout=15)
+        # ip -j addr show 의 raw JSON 은 노드당 100KB 이상까지도 가능 (워커의 pod
+        # veth 누적). 기본 8000 chars truncation 을 충분히 키워 JSON 손실 방지.
+        res = _exec_ssh(
+            target, cmd,
+            connect_timeout=payload.connect_timeout, exec_timeout=15,
+            max_stdout_chars=2_000_000,
+        )
         entry: dict = {"host": host, "status": res.status}
         if res.status != "ok":
             entry["error"] = res.error or res.stderr[:200]
+            # 진단을 위해 raw 도 같이 — 'ip' 가 사용 못 하는 옵션이라며 종료한 케이스 추적용.
+            entry["raw_stdout"] = (res.stdout or "")[:1500]
+            entry["raw_stderr"] = (res.stderr or "")[:800]
+            entry["exit_code"] = res.exit_code
             return entry
         ifaces = _parse_ip_json(res.stdout, skip_patterns)
         entry["interfaces"] = ifaces
@@ -1490,6 +1521,13 @@ async def collect_node_nics(
                     "scope": _categorize_ip(a["ip"]),  # public / private / linklocal
                 })
         entry["all_ips"] = all_ips
+        # status=ok 인데 인터페이스가 0개로 검출되는 케이스 — 'ip -j' 미지원,
+        # 권한 부족, 출력이 비어있음 등 — raw 출력을 같이 실어서 모달에서 진단할
+        # 수 있게 한다.
+        if not ifaces:
+            entry["raw_stdout"] = (res.stdout or "")[:1500]
+            entry["raw_stderr"] = (res.stderr or "")[:800]
+            entry["exit_code"] = res.exit_code
         return entry
 
     per_host = await _parallel_collect(

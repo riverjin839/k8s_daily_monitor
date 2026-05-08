@@ -3,7 +3,7 @@ import { X, Network, Play, Loader2, CheckCircle2, AlertTriangle, Globe, Lock } f
 import { bulkExecApi, versionsApi } from '@/services/api';
 import type { NodeSummary } from '@/services/api';
 import type { NodeNicsCollectResponse } from '@/types';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import { useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
@@ -26,6 +26,7 @@ const DEFAULT_SKIP = [
  */
 export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
   const toast = useToast();
+  const queryClient = useQueryClient();
 
   const [username, setUsername] = useState('root');
   const [port, setPort] = useState(22);
@@ -79,10 +80,29 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
     onSuccess: (d) => {
       setResult(d);
       const okCount = d.hosts.filter((h) => h.status === 'ok').length;
+      // 백엔드가 cluster.node_ips / bond0_ip / bond1_ip / mac 들을 갱신하므로
+      // 클러스터 캐시를 즉시 무효화해야 ClusterManagePage 표가 새 값으로 다시
+      // 그려진다 (그렇지 않으면 useClusters 의 30s refetchInterval 전까지 stale).
+      queryClient.invalidateQueries({ queryKey: ['clusters'] });
+      // 노드 서버 스펙 페이지도 cluster.node_ips 의 bond IP/MAC 을 사용한다.
+      queryClient.invalidateQueries({ queryKey: ['node-specs'] });
+      // 자기 자신의 노드 목록도 수집 직후 새로고침.
+      queryClient.invalidateQueries({ queryKey: ['node-nics-nodes', clusterId] });
+      // VersionsPage 의 node_nics:{host} 스냅샷 history.
+      queryClient.invalidateQueries({ queryKey: ['versions'] });
+
+      const noNicCount = d.hosts.filter(
+        (h) => h.status === 'ok' && (h.interfaces?.length ?? 0) === 0,
+      ).length;
       if (d.changed > 0) {
         toast.success(
           'NIC 수집 완료',
-          `${okCount}개 노드 수집 · ${d.changed}건 변경 감지 · cluster.node_ips 갱신됨`,
+          `${okCount}개 노드 수집 · ${d.changed}건 변경 감지 · 표 갱신 완료`,
+        );
+      } else if (noNicCount > 0) {
+        toast.info(
+          'NIC 수집 완료',
+          `${okCount}개 노드 · ${noNicCount}개 노드는 NIC 미검출 (raw 출력 확인)`,
         );
       } else {
         toast.info('NIC 수집 완료', `${okCount}개 노드 · 변경 없음`);
@@ -264,9 +284,27 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
                         </td>
                         <td className="px-2 py-1.5">
                           {h.status !== 'ok' ? (
-                            <span className="text-[11px] text-red-400">{h.error ?? '-'}</span>
+                            <div className="space-y-1">
+                              <span className="text-[11px] text-red-400">{h.error ?? '-'}</span>
+                              {(h.raw_stdout || h.raw_stderr) && (
+                                <RawOutputDetails
+                                  stdout={h.raw_stdout}
+                                  stderr={h.raw_stderr}
+                                  exitCode={h.exit_code}
+                                />
+                              )}
+                            </div>
                           ) : (h.interfaces?.length ?? 0) === 0 ? (
-                            <span className="text-[11px] text-muted-foreground">검출된 NIC 없음</span>
+                            <div className="space-y-1">
+                              <span className="text-[11px] text-amber-500">
+                                검출된 NIC 없음 — bond/eth/en*/em* 정규식과 일치하지 않거나 출력 파싱 실패
+                              </span>
+                              <RawOutputDetails
+                                stdout={h.raw_stdout}
+                                stderr={h.raw_stderr}
+                                exitCode={h.exit_code}
+                              />
+                            </div>
                           ) : (
                             <div className="space-y-0.5">
                               {(h.interfaces ?? []).map((ifc) => (
@@ -329,6 +367,44 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
         </div>
       </div>
     </div>
+  );
+}
+
+// "검출된 NIC 없음" / 에러 케이스 진단용 — 백엔드가 응답에 같이 실어준
+// 원본 stdout / stderr / exit code 를 펼침형으로 노출.
+function RawOutputDetails({
+  stdout, stderr, exitCode,
+}: {
+  stdout?: string | null;
+  stderr?: string | null;
+  exitCode?: number | null;
+}) {
+  const hasStdout = !!stdout;
+  const hasStderr = !!stderr;
+  if (!hasStdout && !hasStderr && exitCode === undefined) return null;
+  return (
+    <details className="text-[10px]">
+      <summary className="cursor-pointer text-muted-foreground hover:text-foreground select-none">
+        raw 출력 보기
+        {exitCode !== null && exitCode !== undefined && (
+          <span className="ml-1 font-mono">(exit {exitCode})</span>
+        )}
+      </summary>
+      <div className="mt-1 space-y-1">
+        {hasStdout && (
+          <div>
+            <div className="text-[9px] uppercase tracking-wider text-muted-foreground">stdout</div>
+            <pre className="font-mono text-[10px] bg-background border border-border rounded p-1.5 max-h-40 overflow-auto whitespace-pre-wrap">{stdout}</pre>
+          </div>
+        )}
+        {hasStderr && (
+          <div>
+            <div className="text-[9px] uppercase tracking-wider text-muted-foreground">stderr</div>
+            <pre className="font-mono text-[10px] bg-red-500/5 border border-red-500/20 text-red-400 rounded p-1.5 max-h-40 overflow-auto whitespace-pre-wrap">{stderr}</pre>
+          </div>
+        )}
+      </div>
+    </details>
   );
 }
 

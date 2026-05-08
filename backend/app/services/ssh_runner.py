@@ -87,7 +87,13 @@ def _build_client(tgt: SSHTarget, connect_timeout: int) -> paramiko.SSHClient:
     return client
 
 
-def _exec_ssh(tgt: SSHTarget, command: str, connect_timeout: int, exec_timeout: int) -> SSHResult:
+def _exec_ssh(
+    tgt: SSHTarget, command: str, connect_timeout: int, exec_timeout: int,
+    max_stdout_chars: int = 8000,
+) -> SSHResult:
+    """SSH 로 명령 실행. stdout 은 기본 8000 chars 로 잘리는데, JSON 등 구조화된
+    큰 출력을 받는 호출은 max_stdout_chars 를 넉넉히 늘려야 한다 (예: ip -j addr show
+    가 노드당 인터페이스 수에 따라 수십 KB 까지 커짐 — 잘리면 JSON 파싱 실패)."""
     start = time.monotonic()
     client: Optional[paramiko.SSHClient] = None
     try:
@@ -98,11 +104,13 @@ def _exec_ssh(tgt: SSHTarget, command: str, connect_timeout: int, exec_timeout: 
         err = stderr.read().decode("utf-8", errors="replace")
         rc = stdout.channel.recv_exit_status()
         elapsed = int((time.monotonic() - start) * 1000)
+        # tail 만 보존 (앞쪽 잘리면 JSON 같은 구조화 출력은 깨지지만, 일반 로그는 마지막
+        # 쪽이 더 가치 있음 — 호출자가 max_stdout_chars 로 정책을 조정).
         return SSHResult(
             host=tgt.host,
             status="ok" if rc == 0 else "error",
             exit_code=rc,
-            stdout=out[-8000:],        # 너무 길면 뒤쪽만
+            stdout=out[-max_stdout_chars:] if max_stdout_chars > 0 else out,
             stderr=err[-4000:],
             duration_ms=elapsed,
             error=None if rc == 0 else f"exit {rc}",

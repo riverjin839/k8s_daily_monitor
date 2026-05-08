@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pencil, Trash2, Cpu, Network, AlertTriangle, RefreshCw, Loader2, Cable } from 'lucide-react';
 import type { Cluster } from '@/types';
 import { STATUS_STYLE, OVERLAP_COLORS } from './constants';
@@ -6,6 +6,9 @@ import { useOperationLevels, levelBadgeClass, levelLabel, levelColor } from '@/h
 import { CidrRow } from './CidrRow';
 import { InternalIpRow } from './InternalIpRow';
 import { BondIpRow } from './BondIpRow';
+import {
+  extractInterfaceIps, extractInterfaceMacs, groupInternalIps, parseNodeIps,
+} from './internalIp';
 
 type CardTab = 'node' | 'network';
 
@@ -29,7 +32,30 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
     ? OVERLAP_COLORS[overlapGroupIdx % OVERLAP_COLORS.length]
     : null;
 
-  const hasNodeData    = !!(cluster.nodeCount || cluster.maxPod || cluster.hostname || cluster.bond0Ip || cluster.bond1Ip);
+  // bond0/bond1 IP/MAC — nodeIps 의 모든 노드 인터페이스에서 모아 정규식 그룹 표기.
+  // master 한 대에서만 채워지는 cluster.bond0Ip / bond1Ip 단일 필드는 fallback 으로만 사용.
+  const nicData = useMemo(() => {
+    const entries = parseNodeIps(cluster.nodeIps);
+    const bond0Ips = extractInterfaceIps(entries, 'bond0');
+    const bond1Ips = extractInterfaceIps(entries, 'bond1');
+    return {
+      bond0: {
+        ips: bond0Ips,
+        groups: groupInternalIps(bond0Ips),
+        macs: extractInterfaceMacs(entries, 'bond0'),
+      },
+      bond1: {
+        ips: bond1Ips,
+        groups: groupInternalIps(bond1Ips),
+        macs: extractInterfaceMacs(entries, 'bond1'),
+      },
+    };
+  }, [cluster.nodeIps]);
+
+  const hasBondData = nicData.bond0.ips.length > 0 || nicData.bond1.ips.length > 0
+    || !!cluster.bond0Ip || !!cluster.bond1Ip
+    || !!cluster.bond0Mac || !!cluster.bond1Mac;
+  const hasNodeData    = !!(cluster.nodeCount || cluster.maxPod || cluster.hostname) || hasBondData;
   const hasNetworkData = !!(cluster.cidr || cluster.podCidr || cluster.svcCidr || cluster.nodeIps);
 
   return (
@@ -129,24 +155,26 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
                 <p className="text-xs font-mono text-foreground truncate">{cluster.hostname}</p>
               </div>
             )}
-            {(cluster.bond0Ip || cluster.bond0Mac || cluster.bond1Ip || cluster.bond1Mac) ? (
+            {hasBondData ? (
               <div className="space-y-2">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">NIC</p>
                 <div className="grid grid-cols-2 gap-2">
-                  {(cluster.bond0Ip || cluster.bond0Mac) && (
-                    <div className="border border-border rounded-lg px-2.5 py-2 bg-muted/10">
-                      <p className="text-[10px] font-bold text-primary mb-1.5">bond0</p>
-                      {cluster.bond0Ip && <div className="mb-1"><p className="text-[9px] text-muted-foreground uppercase">IP</p><p className="text-[11px] font-mono text-foreground">{cluster.bond0Ip}</p></div>}
-                      {cluster.bond0Mac && <div><p className="text-[9px] text-muted-foreground uppercase">MAC</p><p className="text-[11px] font-mono text-foreground">{cluster.bond0Mac}</p></div>}
-                    </div>
-                  )}
-                  {(cluster.bond1Ip || cluster.bond1Mac) && (
-                    <div className="border border-border rounded-lg px-2.5 py-2 bg-muted/10">
-                      <p className="text-[10px] font-bold text-primary mb-1.5">bond1</p>
-                      {cluster.bond1Ip && <div className="mb-1"><p className="text-[9px] text-muted-foreground uppercase">IP</p><p className="text-[11px] font-mono text-foreground">{cluster.bond1Ip}</p></div>}
-                      {cluster.bond1Mac && <div><p className="text-[9px] text-muted-foreground uppercase">MAC</p><p className="text-[11px] font-mono text-foreground">{cluster.bond1Mac}</p></div>}
-                    </div>
-                  )}
+                  <NicCompact
+                    label="bond0"
+                    groups={nicData.bond0.groups}
+                    ipCount={nicData.bond0.ips.length}
+                    macs={nicData.bond0.macs}
+                    fallbackIp={cluster.bond0Ip ?? null}
+                    fallbackMac={cluster.bond0Mac ?? null}
+                  />
+                  <NicCompact
+                    label="bond1"
+                    groups={nicData.bond1.groups}
+                    ipCount={nicData.bond1.ips.length}
+                    macs={nicData.bond1.macs}
+                    fallbackIp={cluster.bond1Ip ?? null}
+                    fallbackMac={cluster.bond1Mac ?? null}
+                  />
                 </div>
               </div>
             ) : (
@@ -188,6 +216,72 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
           <p className="text-[10px] text-muted-foreground/70 line-clamp-2">{cluster.description}</p>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * 노드 스펙 카드의 NIC 한 칸 — 모든 노드의 bond0/bond1 IP 들을 정규식 그룹 표기로,
+ * MAC 들은 모든 값을 나열 (노드별 unique 라 그룹화 불가). nodeIps 미수집 시
+ * fallback 으로 cluster.bond0Ip / bond0Mac 단일 값을 표시.
+ */
+function NicCompact({
+  label, groups, ipCount, macs, fallbackIp, fallbackMac,
+}: {
+  label: string;
+  groups: string[];
+  ipCount: number;
+  macs: string[];
+  fallbackIp: string | null;
+  fallbackMac: string | null;
+}) {
+  const hasGroups = groups.length > 0;
+  const hasMacs = macs.length > 0;
+  const hasFallback = !!fallbackIp || !!fallbackMac;
+  if (!hasGroups && !hasMacs && !hasFallback) return null;
+  return (
+    <div className="border border-border rounded-lg px-2.5 py-2 bg-muted/10">
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-[10px] font-bold text-primary">{label}</p>
+        {ipCount > 0 && (
+          <span className="text-[9px] font-mono text-muted-foreground tabular-nums">{ipCount}개</span>
+        )}
+      </div>
+      {/* IP — 그룹 표기 우선, 없으면 master 단일 값 fallback */}
+      {hasGroups ? (
+        <div className="mb-1">
+          <p className="text-[9px] text-muted-foreground uppercase">IP</p>
+          <div className="space-y-0.5">
+            {groups.map((g, i) => (
+              <p key={i} className="text-[11px] font-mono text-foreground tabular-nums"
+                title="/24 단위로 묶어 마지막 옥텟의 연속 구간을 압축한 표기">
+                {g}
+              </p>
+            ))}
+          </div>
+        </div>
+      ) : fallbackIp ? (
+        <div className="mb-1">
+          <p className="text-[9px] text-muted-foreground uppercase">IP (master)</p>
+          <p className="text-[11px] font-mono text-foreground">{fallbackIp}</p>
+        </div>
+      ) : null}
+      {/* MAC — 모든 노드 MAC 나열 (보통 5개 이하). fallback 은 master 단일 */}
+      {hasMacs ? (
+        <div>
+          <p className="text-[9px] text-muted-foreground uppercase">MAC ({macs.length})</p>
+          <div className="space-y-0.5">
+            {macs.map((m) => (
+              <p key={m} className="text-[10px] font-mono text-foreground/90">{m}</p>
+            ))}
+          </div>
+        </div>
+      ) : fallbackMac ? (
+        <div>
+          <p className="text-[9px] text-muted-foreground uppercase">MAC (master)</p>
+          <p className="text-[11px] font-mono text-foreground">{fallbackMac}</p>
+        </div>
+      ) : null}
     </div>
   );
 }

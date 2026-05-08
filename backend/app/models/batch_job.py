@@ -37,9 +37,17 @@ class BatchJob(Base):
     # Per-job_type parameters — schema validated by the executor
     params = Column(JSONB, nullable=True)
 
-    # cron expression (optional) — if set, Celery Beat picks it up
+    # cron expression (optional) — if set, the periodic dispatcher
+    # (`run_batch_job_dispatcher` in celery_app.py) picks it up.
     cron = Column(String(80), nullable=True)
     enabled = Column(Boolean, default=True)
+
+    # SSH credentials for **scheduled** runs only. Manual runs must still
+    # supply credentials in the request payload (the unencrypted form
+    # never leaves the request). Stored ciphertext only — see
+    # `app.services.secret_box`.
+    encrypted_password = Column(String, nullable=True)
+    encrypted_private_key = Column(String, nullable=True)
 
     last_status = Column(String(20), default="unknown")  # ok / error / running / unknown
     last_run_at = Column(DateTime, nullable=True)

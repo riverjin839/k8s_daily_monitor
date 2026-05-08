@@ -52,6 +52,12 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.run_trend_collect",
         "schedule": crontab(hour=7, minute=0),
     },
+    # BatchJob.cron 디스패처 — 매 분마다 등록된 잡들을 스캔하고
+    # cron 표현식이 매치하는 잡을 run_batch_job 으로 큐잉.
+    "batch-job-dispatcher": {
+        "task": "app.celery_app.run_batch_job_dispatcher",
+        "schedule": crontab(minute="*"),
+    },
 }
 
 
@@ -149,8 +155,9 @@ def run_trend_collect(self):
 def run_batch_job(self, job_id: str, *, password: str | None = None, private_key: str | None = None):
     """Execute a registered batch job by id.
 
-    Credentials must be passed in (they are not stored on BatchJob).
     Used for scheduled runs (Celery Beat) and ad-hoc background triggers.
+    If `password`/`private_key` are not supplied, `execute_job` falls
+    back to the encrypted credentials saved on the BatchJob row.
     """
     from uuid import UUID
     from app.database import SessionLocal
@@ -182,6 +189,75 @@ def run_batch_job(self, job_id: str, *, password: str | None = None, private_key
             "run_id": str(run.id),
             "status": result.status,
             "duration_ms": result.duration_ms,
+        }
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_batch_job_dispatcher")
+def run_batch_job_dispatcher(self):
+    """Scan registered BatchJob rows and queue any whose cron expression
+    is due. Runs every minute via Celery Beat.
+
+    A job fires when its cron's "previous fire time" is strictly newer
+    than ``last_run_at`` — that way Beat downtime (worker restart, brief
+    outage) doesn't cause a flood of catch-up runs, and a normal-running
+    minute fires each cron at most once.
+    """
+    import logging
+    from datetime import datetime, timedelta
+    from app.database import SessionLocal
+    from app.models import BatchJob
+
+    log = logging.getLogger(__name__)
+
+    try:
+        from croniter import croniter
+    except ImportError:
+        log.warning("croniter not installed — batch job dispatcher disabled")
+        return {"dispatched": 0, "reason": "croniter_missing"}
+
+    db = SessionLocal()
+    dispatched: list[str] = []
+    skipped_reasons: dict[str, int] = {}
+    try:
+        now = datetime.utcnow()
+        jobs = (
+            db.query(BatchJob)
+            .filter(BatchJob.enabled.is_(True))
+            .filter(BatchJob.cron.isnot(None))
+            .all()
+        )
+        for job in jobs:
+            cron_expr = (job.cron or "").strip()
+            if not cron_expr:
+                continue
+            if not croniter.is_valid(cron_expr):
+                skipped_reasons["invalid_cron"] = skipped_reasons.get("invalid_cron", 0) + 1
+                continue
+            if not (job.encrypted_password or job.encrypted_private_key):
+                # No saved credentials → unattended run can't authenticate.
+                skipped_reasons["no_credentials"] = skipped_reasons.get("no_credentials", 0) + 1
+                continue
+
+            anchor = job.last_run_at or (now - timedelta(days=1))
+            try:
+                next_fire = croniter(cron_expr, anchor).get_next(datetime)
+            except Exception:
+                skipped_reasons["cron_eval_error"] = skipped_reasons.get("cron_eval_error", 0) + 1
+                continue
+            if next_fire > now:
+                continue
+
+            run_batch_job.delay(str(job.id))
+            dispatched.append(str(job.id))
+
+        return {
+            "checked": len(jobs),
+            "dispatched": len(dispatched),
+            "dispatched_ids": dispatched,
+            "skipped": skipped_reasons,
+            "executed_at": now.isoformat(),
         }
     finally:
         db.close()

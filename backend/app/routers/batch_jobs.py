@@ -32,8 +32,33 @@ from app.services.batch_job_service import (
     get_job_or_404,
 )
 from app.services.batch_jobs import get_executor, list_executors
+from app.services.secret_box import encrypt as encrypt_secret
 
 router = APIRouter(prefix="/batch-jobs", tags=["batch-jobs"])
+
+
+def _to_response(job: BatchJob) -> dict:
+    """Serialise a BatchJob row into the response shape, hiding ciphertext
+    behind boolean has_* flags."""
+    return {
+        "id": job.id,
+        "cluster_id": job.cluster_id,
+        "name": job.name,
+        "description": job.description,
+        "job_type": job.job_type,
+        "default_host": job.default_host,
+        "default_port": job.default_port or 22,
+        "default_username": job.default_username or "root",
+        "params": job.params,
+        "cron": job.cron,
+        "enabled": job.enabled if job.enabled is not None else True,
+        "last_status": job.last_status or "unknown",
+        "last_run_at": job.last_run_at,
+        "created_at": job.created_at,
+        "updated_at": job.updated_at,
+        "has_saved_password": bool(job.encrypted_password),
+        "has_saved_private_key": bool(job.encrypted_private_key),
+    }
 
 
 # ── job type registry ────────────────────────────────────────────────────────
@@ -58,7 +83,7 @@ def list_jobs(
     if job_type:
         q = q.filter(BatchJob.job_type == job_type)
     jobs = q.order_by(BatchJob.created_at.desc()).all()
-    return BatchJobListResponse(data=jobs)
+    return BatchJobListResponse(data=[_to_response(j) for j in jobs])
 
 
 @router.post("", response_model=BatchJobResponse, status_code=status.HTTP_201_CREATED)
@@ -71,17 +96,25 @@ def create_job(payload: BatchJobCreate, db: Session = Depends(get_db)):
             detail=f"Unknown job_type '{payload.job_type}'. See GET /batch-jobs/types.",
         )
 
-    job = BatchJob(**payload.model_dump())
+    data = payload.model_dump()
+    saved_password = data.pop("saved_password", None)
+    saved_private_key = data.pop("saved_private_key", None)
+
+    job = BatchJob(**data)
+    if saved_password:
+        job.encrypted_password = encrypt_secret(saved_password)
+    if saved_private_key:
+        job.encrypted_private_key = encrypt_secret(saved_private_key)
     db.add(job)
     db.commit()
     db.refresh(job)
-    return job
+    return _to_response(job)
 
 
 @router.get("/{job_id}", response_model=BatchJobResponse)
 def get_job(job_id: UUID, db: Session = Depends(get_db)):
     try:
-        return get_job_or_404(db, job_id)
+        return _to_response(get_job_or_404(db, job_id))
     except BatchJobNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BatchJob not found")
 
@@ -93,11 +126,27 @@ def update_job(job_id: UUID, payload: BatchJobUpdate, db: Session = Depends(get_
     except BatchJobNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BatchJob not found")
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    update = payload.model_dump(exclude_unset=True)
+    saved_password = update.pop("saved_password", None)
+    saved_private_key = update.pop("saved_private_key", None)
+    clear_password = update.pop("clear_saved_password", False)
+    clear_private_key = update.pop("clear_saved_private_key", False)
+
+    for field, value in update.items():
         setattr(job, field, value)
+
+    if clear_password:
+        job.encrypted_password = None
+    elif saved_password is not None:
+        job.encrypted_password = encrypt_secret(saved_password) if saved_password else None
+    if clear_private_key:
+        job.encrypted_private_key = None
+    elif saved_private_key is not None:
+        job.encrypted_private_key = encrypt_secret(saved_private_key) if saved_private_key else None
+
     db.commit()
     db.refresh(job)
-    return job
+    return _to_response(job)
 
 
 @router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -106,6 +155,8 @@ def delete_job(job_id: UUID, db: Session = Depends(get_db)):
         job = get_job_or_404(db, job_id)
     except BatchJobNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BatchJob not found")
+    # Cascade deletes BatchJobRun rows via the relationship's
+    # `cascade="all, delete-orphan"`.
     db.delete(job)
     db.commit()
     return None
@@ -120,10 +171,12 @@ async def run_job(job_id: UUID, payload: BatchJobRunRequest, db: Session = Depen
     except BatchJobNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BatchJob not found")
 
-    if not payload.password and not payload.private_key:
+    # Either the request supplies credentials, or the job has saved ones.
+    has_saved = bool(job.encrypted_password or job.encrypted_private_key)
+    if not payload.password and not payload.private_key and not has_saved:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="password 또는 private_key 중 하나는 필수입니다.",
+            detail="password 또는 private_key 중 하나는 필수입니다 (또는 잡에 저장된 자격증명 등록).",
         )
 
     try:

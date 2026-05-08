@@ -414,6 +414,17 @@ def _run_migrations():
                         conn.execute(text("ALTER TABLE node_server_specs ALTER COLUMN disk_type TYPE VARCHAR(255)"))
                 break
 
+    # batch_jobs: 저장형 자격증명 컬럼 추가 (스케줄 실행용)
+    if "batch_jobs" in inspector.get_table_names():
+        bj_cols = [col["name"] for col in inspector.get_columns("batch_jobs")]
+        for col_name, col_type in [
+            ("encrypted_password", "TEXT"),
+            ("encrypted_private_key", "TEXT"),
+        ]:
+            if col_name not in bj_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE batch_jobs ADD COLUMN {col_name} {col_type}"))
+
 
 def _seed_default_metric_cards():
     """Seed default PromQL metric cards if the table is empty."""

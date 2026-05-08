@@ -41,6 +41,7 @@ function StatusPill({ status }: { status: string }) {
 
 interface CreateJobModalProps {
   open: boolean;
+  /** Empty string → modal lets the user pick from all clusters. */
   clusterId: string;
   defaultJobType?: string;
   onClose: () => void;
@@ -50,7 +51,9 @@ interface CreateJobModalProps {
 function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }: CreateJobModalProps) {
   const typesQ = useBatchJobTypes();
   const create = useCreateBatchJob();
+  const { data: clusters = [] } = useClusters();
 
+  const [selectedClusterId, setSelectedClusterId] = useState(clusterId);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [jobType, setJobType] = useState('');
@@ -60,6 +63,8 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
   const [defaultPort, setDefaultPort] = useState(22);
   const [defaultUsername, setDefaultUsername] = useState('root');
   const [cron, setCron] = useState('');
+  const [savedPassword, setSavedPassword] = useState('');
+  const [savedPrivateKey, setSavedPrivateKey] = useState('');
   const [paramsJson, setParamsJson] = useState('{}');
   const [error, setError] = useState<string | null>(null);
 
@@ -70,6 +75,12 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
     () => typesQ.data?.find((t) => t.jobType === jobType),
     [typesQ.data, jobType],
   );
+
+  // 모달이 열릴 때마다 props 의 clusterId 가 우선; 비어있으면 사용자가 직접 선택.
+  useEffect(() => {
+    if (!open) return;
+    setSelectedClusterId(clusterId);
+  }, [open, clusterId]);
 
   // 모달이 열릴 때마다 defaultJobType 우선, 없으면 첫 번째 타입을 기본값으로.
   useEffect(() => {
@@ -101,13 +112,17 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
       setError('params JSON 파싱 실패 — 올바른 JSON 인지 확인해주세요.');
       return;
     }
-    if (!name.trim() || !jobType || !clusterId) {
+    if (!name.trim() || !jobType || !selectedClusterId) {
       setError('name, jobType, cluster 는 필수입니다.');
+      return;
+    }
+    if (cron.trim() && !savedPassword && !savedPrivateKey) {
+      setError('cron 스케줄을 사용하려면 저장된 자격증명(비밀번호 또는 개인키)이 필요합니다.');
       return;
     }
     try {
       await create.mutateAsync({
-        clusterId,
+        clusterId: selectedClusterId,
         name: name.trim(),
         description: description.trim() || undefined,
         jobType,
@@ -116,11 +131,14 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
         defaultUsername: defaultUsername.trim() || 'root',
         cron: cron.trim() || undefined,
         params,
+        savedPassword: savedPassword || undefined,
+        savedPrivateKey: savedPrivateKey || undefined,
       });
       onCreated();
       onClose();
       setName(''); setDescription(''); setDefaultHost(''); setCron('');
       setHostSelectedName(''); setHostCustom('');
+      setSavedPassword(''); setSavedPrivateKey('');
     } catch (e) {
       setError(formatApiError(e));
     }
@@ -138,6 +156,25 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
         </header>
 
         <div className="p-5 space-y-4">
+          {!clusterId && (
+            <div>
+              <label htmlFor={f('cluster')} className="block text-xs text-muted-foreground mb-1">클러스터</label>
+              <select
+                id={f('cluster')}
+                value={selectedClusterId}
+                onChange={(e) => setSelectedClusterId(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl"
+              >
+                <option value="">선택하세요…</option>
+                {clusters.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}{c.region ? ` (${c.region})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div>
             <label htmlFor={f('jobType')} className="block text-xs text-muted-foreground mb-1">Job Type</label>
             <select
@@ -193,7 +230,7 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
               <MasterHostPicker
-                clusterId={clusterId}
+                clusterId={selectedClusterId}
                 customHost={hostCustom}
                 selectedName={hostSelectedName}
                 label="기본 호스트 (master 노드 후보)"
@@ -250,6 +287,40 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
               </details>
             )}
           </div>
+
+          <details className="border border-border rounded-xl px-3 py-2" open={!!cron.trim()}>
+            <summary className="text-xs font-medium cursor-pointer">
+              저장된 자격증명 <span className="text-muted-foreground">(스케줄 실행 전용 — 선택)</span>
+            </summary>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              cron 으로 자동 실행할 때 SSH 인증에 사용됩니다. 수동 실행에서는 실행 모달에서 별도 입력하면 되므로 비워두어도 무방합니다.
+              값은 서버의 <code className="font-mono">SECRET_KEY</code> 로 암호화되어 저장됩니다.
+            </p>
+            <div className="mt-2 space-y-2">
+              <div>
+                <label htmlFor={f('savedPw')} className="block text-xs text-muted-foreground mb-1">저장 비밀번호</label>
+                <input
+                  id={f('savedPw')}
+                  type="password"
+                  value={savedPassword}
+                  onChange={(e) => setSavedPassword(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl"
+                  autoComplete="new-password"
+                />
+              </div>
+              <div>
+                <label htmlFor={f('savedPem')} className="block text-xs text-muted-foreground mb-1">저장 개인키 (PEM)</label>
+                <textarea
+                  id={f('savedPem')}
+                  value={savedPrivateKey}
+                  onChange={(e) => setSavedPrivateKey(e.target.value)}
+                  rows={3}
+                  placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                  className="w-full px-3 py-2 text-xs bg-background border border-border rounded-xl font-mono"
+                />
+              </div>
+            </div>
+          </details>
 
           {error && <div className="text-xs text-red-500">{error}</div>}
         </div>
@@ -658,6 +729,14 @@ function JobEntry({
         {job.cron && (
           <span className="truncate" title={`cron: ${job.cron}`}>⏱ {job.cron}</span>
         )}
+        {job.cron && !job.hasSavedPassword && !job.hasSavedPrivateKey && (
+          <span
+            className="text-amber-600"
+            title="cron 이 설정되어 있지만 저장된 자격증명이 없어 스케줄 실행이 불가합니다."
+          >
+            ⚠ 자격증명 없음
+          </span>
+        )}
       </div>
       <div className="flex items-center gap-1">
         <button
@@ -762,7 +841,7 @@ export function BatchJobsPage() {
 
   return (
     <main className="mx-auto p-5 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold flex items-center gap-2">
             <ListTree className="w-5 h-5" /> Batch Jobs
@@ -774,6 +853,14 @@ export function BatchJobsPage() {
             </span>
           </p>
         </div>
+        <button
+          onClick={() => setCreateCtx({ clusterId: '' })}
+          disabled={clusters.length === 0 || types.length === 0}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+          title={clusters.length === 0 ? '먼저 클러스터를 등록하세요' : types.length === 0 ? '사용 가능한 잡 타입이 없습니다' : '새 배치 잡 등록'}
+        >
+          <Plus className="w-3.5 h-3.5" /> 새 배치 잡
+        </button>
       </div>
 
       <MacCard title="배치 잡 매트릭스" bodyPadding="p-0">

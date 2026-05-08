@@ -91,6 +91,11 @@ class ClusterResponse(ClusterBase):
     status: StatusEnum
     created_at: datetime
     updated_at: datetime
+    # 자동수집 / NIC 수집으로 채워지는 노드 IP 메타 (JSON 문자열).
+    # 프론트의 ClusterTableRow / BondIpRow 가 이 필드에서 bond0/bond1 IP 들을
+    # 추출 표시. 응답에서 빠져 있으면 cluster.nodeIps == undefined 가 되어
+    # bond0/bond1 컬럼이 영구적으로 비어있게 보인다.
+    node_ips: Optional[str] = None
 
     class Config:
         from_attributes = True

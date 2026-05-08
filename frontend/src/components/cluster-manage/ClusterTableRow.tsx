@@ -178,24 +178,18 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
           <div>
             {hasAuto ? (
               <div title="kubectl get nodes -o wide 의 InternalIP 들을 /24 단위로 묶은 표기 (마지막 옥텟 연속 구간 압축)">
-                {ipBuckets.internal.groups.slice(0, 3).map((g, i) => (
+                {ipBuckets.internal.groups.map((g, i) => (
                   <p key={i} className="text-xs font-mono text-foreground tabular-nums">{g}</p>
                 ))}
-                {ipBuckets.internal.groups.length > 3 && (
-                  <p className="text-[10px] font-mono text-muted-foreground">+{ipBuckets.internal.groups.length - 3}개 그룹</p>
-                )}
                 <p className="text-[10px] text-muted-foreground/80 mt-0.5">
                   {ipBuckets.internal.ips.length}개 노드
                 </p>
               </div>
             ) : hasManual ? (
               <div title="수동 입력된 IP 리스트 (정규식)">
-                {manualGroups.slice(0, 3).map((g, i) => (
+                {manualGroups.map((g, i) => (
                   <p key={i} className="text-xs font-mono text-foreground tabular-nums">{g}</p>
                 ))}
-                {manualGroups.length > 3 && (
-                  <p className="text-[10px] font-mono text-muted-foreground">+{manualGroups.length - 3}개 그룹</p>
-                )}
                 <p className="text-[10px] text-muted-foreground/80 mt-0.5">수동 입력 (정규식)</p>
               </div>
             ) : (
@@ -230,12 +224,9 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       <td className="px-3 py-2.5 align-top">
         {ipBuckets.bond0.groups.length > 0 ? (
           <div>
-            {ipBuckets.bond0.groups.slice(0, 3).map((g, i) => (
+            {ipBuckets.bond0.groups.map((g, i) => (
               <p key={i} className="text-xs font-mono text-cyan-700 tabular-nums" title="모든 노드 bond0 IP /24 묶음">{g}</p>
             ))}
-            {ipBuckets.bond0.groups.length > 3 && (
-              <p className="text-[10px] font-mono text-muted-foreground">+{ipBuckets.bond0.groups.length - 3}개 그룹</p>
-            )}
             <p className="text-[10px] text-muted-foreground/80 mt-0.5">{ipBuckets.bond0.ips.length}개 IP</p>
           </div>
         ) : <span className="text-muted-foreground/50 text-xs" title="NIC 수집(SSH) 후 채워짐">-</span>}
@@ -245,12 +236,9 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       <td className="px-3 py-2.5 align-top">
         {ipBuckets.bond1.groups.length > 0 ? (
           <div>
-            {ipBuckets.bond1.groups.slice(0, 3).map((g, i) => (
+            {ipBuckets.bond1.groups.map((g, i) => (
               <p key={i} className="text-xs font-mono text-amber-700 tabular-nums" title="모든 노드 bond1 IP /24 묶음">{g}</p>
             ))}
-            {ipBuckets.bond1.groups.length > 3 && (
-              <p className="text-[10px] font-mono text-muted-foreground">+{ipBuckets.bond1.groups.length - 3}개 그룹</p>
-            )}
             <p className="text-[10px] text-muted-foreground/80 mt-0.5">{ipBuckets.bond1.ips.length}개 IP</p>
           </div>
         ) : <span className="text-muted-foreground/50 text-xs" title="NIC 수집(SSH) 후 채워짐">-</span>}

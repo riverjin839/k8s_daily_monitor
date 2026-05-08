@@ -841,6 +841,24 @@ export const workGuidesApi = {
   delete: (id: string) => api.delete(`/work-guides/${id}`),
 };
 
+// Commands API (지식 허브 - 주요 명령어/파라미터 모음)
+export const commandsApi = {
+  list: (params?: { category?: string; importance?: string; q?: string }) =>
+    api.get<{ data: import('@/types').CommandEntry[]; total: number }>('/commands', {
+      params: params
+        ? Object.fromEntries(
+            Object.entries(params).filter(([, v]) => v !== undefined && v !== ''),
+          )
+        : undefined,
+    }),
+  get: (id: string) => api.get<import('@/types').CommandEntry>(`/commands/${id}`),
+  create: (data: import('@/types').CommandEntryCreate) =>
+    api.post<import('@/types').CommandEntry>('/commands', data),
+  update: (id: string, data: Partial<import('@/types').CommandEntryCreate>) =>
+    api.put<import('@/types').CommandEntry>(`/commands/${id}`, data),
+  delete: (id: string) => api.delete(`/commands/${id}`),
+};
+
 // Ops Notes API (업무 게시판)
 export const opsNotesApi = {
   getAll: (service?: string) =>

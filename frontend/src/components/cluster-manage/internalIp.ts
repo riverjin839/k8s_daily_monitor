@@ -16,7 +16,13 @@ export interface NodeIpEntry {
   ips?: string[];
   external_ip?: string;
   master?: boolean;
-  interfaces?: { name: string; ips: string[]; scopes?: string[]; operstate?: string | null }[];
+  interfaces?: {
+    name: string;
+    ips: string[];
+    scopes?: string[];
+    mac?: string | null;
+    operstate?: string | null;
+  }[];
 }
 
 export function parseNodeIps(json?: string | null): NodeIpEntry[] {
@@ -39,6 +45,27 @@ export function extractInternalIps(entries: NodeIpEntry[]): string[] {
     if (seen.has(ip)) continue;
     seen.add(ip);
     out.push(ip);
+  }
+  return out;
+}
+
+/**
+ * `nodeIps[].interfaces[]` 에서 특정 NIC 이름의 MAC 들을 모두 모은다.
+ * 노드별 unique 한 값이라 정규식 그룹화 불가능 — 그대로 나열.
+ */
+export function extractInterfaceMacs(entries: NodeIpEntry[], name: string): string[] {
+  const target = name.toLowerCase();
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const e of entries) {
+    for (const ifc of e.interfaces ?? []) {
+      if (ifc.name?.toLowerCase() !== target) continue;
+      const mac = ifc.mac;
+      if (!mac) continue;
+      if (seen.has(mac)) continue;
+      seen.add(mac);
+      out.push(mac);
+    }
   }
   return out;
 }

@@ -274,24 +274,60 @@ def _detect_vm(labels: dict) -> Optional[bool]:
     return None
 
 
-def _bond_info_from_cluster_node_ips(cluster: Cluster, hostname: str) -> dict[str, Optional[str]]:
-    """Cluster.node_ips(collect-node-nics 결과)에서 bond0/bond1 IP/MAC 추출."""
+def _bond_info_from_cluster_node_ips(
+    cluster: Cluster,
+    hostname: str,
+    internal_ip: Optional[str] = None,
+) -> dict[str, Optional[str]]:
+    """Cluster.node_ips(collect-node-nics 결과)에서 bond0/bond1 IP/MAC 추출.
+
+    매칭 전략 — 둘 중 하나라도 일치하면 해당 entry 채택:
+      1) entry["name"] == hostname  (k8s 노드 이름 기준)
+      2) internal_ip ∈ entry["ips"] OR entry["ip"] == internal_ip  (IP 기준)
+
+    NIC 수집(/clusters/.../collect-node-nics) 이 k8s 자동수집보다 먼저 실행된
+    클러스터는 entry["name"] 이 hostname 이 아니라 IP 로 박혀있을 수 있다
+    (versions.py 의 name = name_by_ip.get(host, host) 폴백). 이 경우 hostname
+    매칭만으로는 거의 모든 노드가 미매칭 → bond 정보가 전혀 안 채워졌음.
+    """
+    empty = {"bond0_ip": None, "bond0_mac": None, "bond1_ip": None, "bond1_mac": None}
     raw = cluster.node_ips
     if not raw:
-        return {"bond0_ip": None, "bond0_mac": None, "bond1_ip": None, "bond1_mac": None}
+        return dict(empty)
     try:
         nodes = json.loads(raw)
     except Exception:
-        return {"bond0_ip": None, "bond0_mac": None, "bond1_ip": None, "bond1_mac": None}
+        return dict(empty)
     if not isinstance(nodes, list):
-        return {"bond0_ip": None, "bond0_mac": None, "bond1_ip": None, "bond1_mac": None}
-    target = next((n for n in nodes if isinstance(n, dict) and n.get("name") == hostname), None)
+        return dict(empty)
+
+    target: Optional[dict] = None
+    # 1차 — hostname 일치
+    for n in nodes:
+        if not isinstance(n, dict):
+            continue
+        if n.get("name") == hostname:
+            target = n
+            break
+    # 2차 — IP 일치 (NIC 수집이 hostname 없이 IP 로 저장한 케이스 폴백)
+    if target is None and internal_ip:
+        for n in nodes:
+            if not isinstance(n, dict):
+                continue
+            ips = n.get("ips")
+            if isinstance(ips, list) and internal_ip in ips:
+                target = n
+                break
+            if n.get("ip") == internal_ip:
+                target = n
+                break
+
     if not target:
-        return {"bond0_ip": None, "bond0_mac": None, "bond1_ip": None, "bond1_mac": None}
+        return dict(empty)
     ifaces = target.get("interfaces") or []
     if not isinstance(ifaces, list):
-        return {"bond0_ip": None, "bond0_mac": None, "bond1_ip": None, "bond1_mac": None}
-    out = {"bond0_ip": None, "bond0_mac": None, "bond1_ip": None, "bond1_mac": None}
+        return dict(empty)
+    out = dict(empty)
     for ifc in ifaces:
         if not isinstance(ifc, dict):
             continue
@@ -436,7 +472,9 @@ def import_from_cluster(
 
             disk_type, is_ssd_detected = _detect_disk_info(labels)
             vm_detected = _detect_vm(labels)
-            bond_info = _bond_info_from_cluster_node_ips(cluster, host)
+            # internal_ip 까지 같이 넘겨서 hostname 매핑이 깨진 클러스터(NIC 수집을
+            # k8s 자동수집보다 먼저 실행한 케이스)에서도 IP 기준 폴백 매칭이 동작.
+            bond_info = _bond_info_from_cluster_node_ips(cluster, host, internal_ip)
 
             collected = {
                 "node_name": host,
@@ -521,9 +559,22 @@ async def collect_host_facts(
         raise HTTPException(status_code=422, detail="password 또는 private_key 중 하나는 필수입니다.")
 
     sudo = "sudo -n " if payload.use_sudo else ""
+    # k8s 워커는 pod 마다 veth*, calico cali*, cilium_*, kube-ipvs0, flannel.1 등으로
+    # ip -j addr show JSON 이 수십 KB 이상까지 커진다. 다음 두 출력(lsblk / systemd-
+    # detect-virt) 와 함께 합치면 _exec_ssh 의 stdout truncation 에 걸려 split marker
+    # 까지 잘려나갈 수 있다 → "수집 출력 파싱 실패". 원격에서 jq 로 사전 필터링하여
+    # bond/eth/en*/em* 만 보내고, max_stdout_chars 도 충분히 늘림. jq 미설치 노드는
+    # raw 그대로 흘리되, _parse_host_fact_stdout 가 큰 raw 도 받을 수 있도록 buffer 확보.
+    iface_regex = "^(bond[0-9]+|eth[0-9]+|en[oxsp][^.]*|em[0-9]+)$"
+    ip_cmd = (
+        f"out=$({sudo}ip -j addr show 2>&1); "
+        f"printf '%s' \"$out\" | "
+        f"jq -c '[.[] | select(.ifname | test(\"{iface_regex}\"))]' 2>/dev/null "
+        f"|| printf '%s' \"$out\""
+    )
     command = (
-        f"{sudo}ip -j addr show 2>/dev/null; "
-        "echo __NODE_SPEC_SPLIT__; "
+        f"{ip_cmd}; "
+        "echo; echo __NODE_SPEC_SPLIT__; "
         f"{sudo}lsblk -b -J -o NAME,TYPE,MODEL,SIZE,TRAN,ROTA,MOUNTPOINT 2>/dev/null; "
         "echo __NODE_SPEC_SPLIT__; "
         f"{sudo}systemd-detect-virt 2>/dev/null || echo none"
@@ -539,6 +590,7 @@ async def collect_host_facts(
         parallelism=payload.parallelism,
         chunk_size=payload.chunk_size,
         chunk_pause_ms=payload.chunk_pause_ms,
+        max_stdout_chars=2_000_000,
     )
     inserted = updated = skipped = 0
     errors: list[str] = []

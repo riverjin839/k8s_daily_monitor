@@ -212,6 +212,7 @@ async def run_bulk(
     parallelism: int = 10,
     chunk_size: int = 30,
     chunk_pause_ms: int = 200,
+    max_stdout_chars: int = 8000,
 ) -> list[SSHResult]:
     """여러 target 에 대해 SSH/SCP 일괄 실행.
 
@@ -226,7 +227,10 @@ async def run_bulk(
 
     def one(t: SSHTarget) -> SSHResult:
         if action == "ssh":
-            res = _exec_ssh(t, command or "", connect_timeout, exec_timeout)
+            res = _exec_ssh(
+                t, command or "", connect_timeout, exec_timeout,
+                max_stdout_chars=max_stdout_chars,
+            )
         elif action == "scp":
             res = _exec_scp_push(t, scp_content or b"", scp_remote_path or "", connect_timeout)
         else:

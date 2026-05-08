@@ -6,7 +6,7 @@ import {
   Pencil, Moon, Sun, Monitor, X, LogOut, User, ChevronRight,
   ClipboardList, CalendarCheck2, Link2, Tags, Calculator, GitFork, BookMarked, Layers, Boxes,
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
-  ClipboardCheck, ListTree, Waves,
+  ClipboardCheck, ListTree, Waves, TerminalSquare,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
@@ -44,6 +44,7 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
   '/ontology':           { defaultLabel: '온톨로지 그래프', icon: Share2 },
   '/trends':             { defaultLabel: '기술 동향',      icon: Rss },
   '/work-guides':        { defaultLabel: '표준 작업 가이드', icon: BookMarked },
+  '/commands':           { defaultLabel: '주요 명령어',     icon: TerminalSquare },
   '/ops-notes':          { defaultLabel: '운영 노트보드',   icon: Layers },
   '/wbs':                { defaultLabel: 'WBS 작업흐름',   icon: BarChart3 },
   '/mindmap':            { defaultLabel: '마인드맵',       icon: Map },
@@ -54,7 +55,7 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
 // docs 그룹의 서브섹션. /services (통합 지식/SOP) 은 운영 기준에서 제거됨.
 const DOCS_SECTIONS: Array<{ id: string; label: string; paths: string[] }> = [
   { id: 'ops',   label: '운영 기준',  paths: ['/ops-notes'] },
-  { id: 'work',  label: '작업 기준',  paths: ['/work-guides', '/tasks'] },
+  { id: 'work',  label: '작업 기준',  paths: ['/work-guides', '/commands', '/tasks'] },
   { id: 'issue', label: '이슈/장애',   paths: ['/issues', '/incident-analysis'] },
   { id: 'flow',  label: '흐름/설계',  paths: ['/workflow', '/wbs', '/mindmap'] },
 ];

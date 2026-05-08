@@ -1106,6 +1106,38 @@ export interface NodeNicsCollectResponse {
   errors: string[];
 }
 
+// ── 주요 명령어 / 파라미터 모음 (지식 허브 작업 기준) ───────────────────────
+export type CommandImportance = 'info' | 'low' | 'medium' | 'high' | 'critical';
+
+export interface CommandEntry {
+  id: string;
+  category?: string | null;
+  command: string;
+  description?: string | null;
+  caution?: string | null;
+  importance: CommandImportance;
+  examples?: string | null;
+  tags?: string | null;
+  pinned: boolean;
+  sortOrder: number;
+  author?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommandEntryCreate {
+  category?: string;
+  command: string;
+  description?: string;
+  caution?: string;
+  importance?: CommandImportance;
+  examples?: string;
+  tags?: string;
+  pinned?: boolean;
+  sortOrder?: number;
+  author?: string;
+}
+
 // ── MinIO / AIStor 수집 응답 ──────────────────────────────────────────
 export interface MinioCollectTenantSummary {
   namespace: string | null;

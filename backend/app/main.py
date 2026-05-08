@@ -43,6 +43,7 @@ from app.routers import (
     backup_router,
     service_entries_router,
     batch_jobs_router,
+    commands_router,
     ansible_files_router,
     ansible_inventories_router,
     auth_router,
@@ -742,6 +743,7 @@ app.include_router(cluster_custom_fields_router, prefix="/api/v1", dependencies=
 app.include_router(backup_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(service_entries_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(batch_jobs_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(commands_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ansible_files_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ansible_inventories_router, prefix="/api/v1", dependencies=_auth)
 

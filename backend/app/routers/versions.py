@@ -1477,12 +1477,40 @@ async def collect_node_nics(
             if isinstance(arr, list):
                 for n in arr:
                     nm = n.get("name")
-                    if nm:
+                    # 기존 데이터에서 name 이 이미 IP 형태이면 (NIC 수집을 k8s 자동수집보다
+                    # 먼저 실행한 케이스) 매핑 소스로 신뢰 못 함 — 폐기.
+                    is_ip_like = isinstance(nm, str) and bool(re.fullmatch(r"\d{1,3}(\.\d{1,3}){3}", nm))
+                    if nm and not is_ip_like:
                         name_master[nm] = bool(n.get("master"))
-                    for ip in n.get("ips", []) or [n.get("ip")] or []:
-                        if ip and nm:
-                            name_by_ip[ip] = nm
+                        for ip in n.get("ips", []) or [n.get("ip")] or []:
+                            if ip:
+                                name_by_ip[ip] = nm
         except Exception:
+            pass
+
+    # 기존 데이터가 비어있거나 IP 만 있는 클러스터를 위해 k8s API 로도 hostname↔IP 매핑
+    # 시도. 실패해도 (kubeconfig 미등록 / API 미접속) 무시 — 기존 폴백(host 그대로) 유지.
+    if not name_by_ip:
+        try:
+            kc_path = _ensure_kubeconfig_file_for(cluster)
+            if kc_path:
+                api_client = k8s_config.new_client_from_config(config_file=kc_path)
+                v1 = k8s_client.CoreV1Api(api_client)
+                k8s_nodes = v1.list_node(_request_timeout=10)
+                for kn in k8s_nodes.items:
+                    nm = kn.metadata.name
+                    if not nm:
+                        continue
+                    is_master = bool(
+                        (kn.metadata.labels or {}).get("node-role.kubernetes.io/control-plane") is not None
+                        or (kn.metadata.labels or {}).get("node-role.kubernetes.io/master") is not None
+                    )
+                    name_master.setdefault(nm, is_master)
+                    for addr in (kn.status.addresses or []) if kn.status else []:
+                        if addr.type == "InternalIP" and addr.address:
+                            name_by_ip[addr.address] = nm
+        except Exception:
+            # 조회 실패는 silently 무시 — host 그대로 폴백.
             pass
 
     def _one(host: str) -> dict:

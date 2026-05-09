@@ -19,6 +19,11 @@ class BatchJobBase(BaseModel):
 
 class BatchJobCreate(BatchJobBase):
     cluster_id: UUID
+    # Optional saved credentials for scheduled runs. Plaintext on the way
+    # in; the router encrypts before persisting. Manual runs do not need
+    # these — they pass credentials per-request.
+    saved_password: Optional[str] = None
+    saved_private_key: Optional[str] = None
 
 
 class BatchJobUpdate(BaseModel):
@@ -30,6 +35,11 @@ class BatchJobUpdate(BaseModel):
     params: Optional[dict[str, Any]] = None
     cron: Optional[str] = None
     enabled: Optional[bool] = None
+    # `null` clears the saved secret; omitting the field leaves it unchanged.
+    saved_password: Optional[str] = None
+    saved_private_key: Optional[str] = None
+    clear_saved_password: bool = False
+    clear_saved_private_key: bool = False
 
 
 class BatchJobResponse(BatchJobBase):
@@ -39,6 +49,9 @@ class BatchJobResponse(BatchJobBase):
     last_run_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    # We never return the ciphertext; just whether something is saved.
+    has_saved_password: bool = False
+    has_saved_private_key: bool = False
 
     class Config:
         from_attributes = True

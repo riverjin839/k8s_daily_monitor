@@ -1113,6 +1113,8 @@ export interface BatchJob {
   lastRunAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  hasSavedPassword: boolean;
+  hasSavedPrivateKey: boolean;
 }
 
 export interface BatchJobCreate {
@@ -1127,6 +1129,25 @@ export interface BatchJobCreate {
   params?: Record<string, any>;
   cron?: string;
   enabled?: boolean;
+  // Plaintext on the way in; backend encrypts before persisting.
+  savedPassword?: string;
+  savedPrivateKey?: string;
+}
+
+export interface BatchJobUpdate {
+  name?: string;
+  description?: string;
+  defaultHost?: string;
+  defaultPort?: number;
+  defaultUsername?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  params?: Record<string, any>;
+  cron?: string;
+  enabled?: boolean;
+  savedPassword?: string;
+  savedPrivateKey?: string;
+  clearSavedPassword?: boolean;
+  clearSavedPrivateKey?: boolean;
 }
 
 export interface BatchJobRunRequest {
@@ -1163,7 +1184,7 @@ export const batchJobsApi = {
     api.get<{ data: BatchJob[] }>('/batch-jobs', { params }),
   get: (id: string) => api.get<BatchJob>(`/batch-jobs/${id}`),
   create: (data: BatchJobCreate) => api.post<BatchJob>('/batch-jobs', data),
-  update: (id: string, data: Partial<BatchJobCreate>) => api.put<BatchJob>(`/batch-jobs/${id}`, data),
+  update: (id: string, data: BatchJobUpdate) => api.put<BatchJob>(`/batch-jobs/${id}`, data),
   delete: (id: string) => api.delete(`/batch-jobs/${id}`),
   run: (id: string, payload: BatchJobRunRequest, signal?: AbortSignal) =>
     api.post<BatchJobRun>(`/batch-jobs/${id}/run`, payload, { signal, timeout: 600000 }),

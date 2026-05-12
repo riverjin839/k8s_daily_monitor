@@ -1,16 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   HelpCircle, Plus, Pencil, Trash2, X, Pin, PinOff, Search, MessageSquare,
-  Sparkles, ChevronRight, FileQuestion, ExternalLink,
+  Sparkles, ChevronRight, FileQuestion, ExternalLink, List, LayoutGrid,
 } from 'lucide-react';
 import { RichContent } from '@/components/editor';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { opsNotesApi } from '@/services/api';
 import type { OpsNote, OpsNoteColor } from '@/types';
-import { useToast } from '@/components/common';
+import { useToast, ViewModeBar } from '@/components/common';
 import { formatApiError, formatRelativeTime } from '@/lib/utils';
 import { MacCard } from '@/components/ui/MacCard';
+import { OpsNoteTable, type OpsNoteSortKey } from '@/components/ops-notes/OpsNoteTable';
 
 // ── 서비스 목록 ───────────────────────────────────────────────────────────────
 const SERVICES = [
@@ -184,6 +185,18 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
   );
 }
 
+// ── 뷰 모드 (테이블 = 디폴트, 카드 = 옵션) ────────────────────────────────────
+const VIEW_MODE_KEY = 'k8s:ops-notes:viewMode';
+type ViewMode = 'table' | 'card';
+
+function readStoredViewMode(): ViewMode {
+  try {
+    return localStorage.getItem(VIEW_MODE_KEY) === 'card' ? 'card' : 'table';
+  } catch {
+    return 'table';
+  }
+}
+
 // ── 메인 페이지 ───────────────────────────────────────────────────────────────
 export function OpsNotesPage() {
   const qc = useQueryClient();
@@ -193,6 +206,18 @@ export function OpsNotesPage() {
   const [filterService, setFilterService] = useState('');
   const [search, setSearch]               = useState('');
   const [deletingId, setDeletingId]       = useState<string | null>(null);
+  const [viewMode, setViewMode]           = useState<ViewMode>(readStoredViewMode);
+  const [sortKey, setSortKey]             = useState<OpsNoteSortKey>('updatedAt');
+  const [sortDir, setSortDir]             = useState<'asc' | 'desc'>('desc');
+
+  useEffect(() => {
+    try { localStorage.setItem(VIEW_MODE_KEY, viewMode); } catch { /* ignore */ }
+  }, [viewMode]);
+
+  const handleSort = (key: OpsNoteSortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortKey(key); setSortDir(key === 'updatedAt' ? 'desc' : 'asc'); }
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ['ops-notes'],
@@ -219,6 +244,21 @@ export function OpsNotesPage() {
 
   const pinnedNotes = useMemo(() => filtered.filter((n) => n.pinned), [filtered]);
   const regularNotes = useMemo(() => filtered.filter((n) => !n.pinned), [filtered]);
+
+  /** 테이블 뷰 — pinned 우선 표시 후 sortKey 기준 정렬. */
+  const tableNotes = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      let cmp = 0;
+      switch (sortKey) {
+        case 'title':     cmp = a.title.localeCompare(b.title); break;
+        case 'service':   cmp = a.service.localeCompare(b.service); break;
+        case 'author':    cmp = (a.author ?? '').localeCompare(b.author ?? ''); break;
+        case 'updatedAt': cmp = a.updatedAt.localeCompare(b.updatedAt); break;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [filtered, sortKey, sortDir]);
 
   const handleDelete = async (note: OpsNote) => {
     if (!confirm(`"${note.title}" Q&A 를 삭제하시겠습니까?`)) return;
@@ -281,12 +321,23 @@ export function OpsNotesPage() {
               <p className="text-xs text-muted-foreground">운영 중 만난 질문과 해결책을 한 곳에서.</p>
             </div>
           </div>
-          <button
-            onClick={() => navigate(newNoteHref)}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors mac-shadow"
-          >
-            <Plus className="w-4 h-4" /> 새 Q&amp;A
-          </button>
+          <div className="flex items-center gap-3">
+            <ViewModeBar
+              modes={[
+                { id: 'table', label: '리스트', icon: <List       className="w-3.5 h-3.5" /> },
+                { id: 'card',  label: '카드',   icon: <LayoutGrid className="w-3.5 h-3.5" /> },
+              ]}
+              active={viewMode}
+              onChange={(v) => setViewMode(v as ViewMode)}
+              showStylePanel={false}
+            />
+            <button
+              onClick={() => navigate(newNoteHref)}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-colors mac-shadow"
+            >
+              <Plus className="w-4 h-4" /> 새 Q&amp;A
+            </button>
+          </div>
         </div>
 
         {/* ── Stat strip ──────────────────────────────────────────────── */}
@@ -351,76 +402,132 @@ export function OpsNotesPage() {
           </div>
         </MacCard>
 
-        {/* ── Pinned section ─────────────────────────────────────────── */}
-        {!isLoading && pinnedNotes.length > 0 && (
-          <MacCard title={`고정 Q&A · ${pinnedNotes.length}`} bodyPadding="p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {pinnedNotes.map((note) => (
-                <div key={note.id} className={deletingId === note.id ? 'opacity-40 pointer-events-none' : ''}>
-                  <QnaCard
-                    note={note}
-                    onOpen={() => navigate(`/ops-notes/${note.id}`)}
-                    onEdit={() => navigate(`/ops-notes/${note.id}/edit`)}
-                    onDelete={() => handleDelete(note)}
-                    onTogglePin={() => handleTogglePin(note)}
-                  />
-                </div>
-              ))}
-            </div>
+        {viewMode === 'table' ? (
+          /* ── 리스트(테이블) 뷰 — 디폴트 ─────────────────────────────── */
+          <MacCard
+            title={
+              filterService
+                ? `${SERVICE_MAP[filterService]?.label ?? filterService} · ${tableNotes.length}`
+                : `Q&A · ${tableNotes.length}`
+            }
+            bodyPadding="p-0"
+          >
+            {isLoading ? (
+              <div className="p-4 space-y-2">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="h-12 rounded bg-secondary/40 animate-pulse" />
+                ))}
+              </div>
+            ) : tableNotes.length === 0 ? (
+              <div className="text-center py-16">
+                <FileQuestion className="w-12 h-12 mx-auto mb-4 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">
+                  {allNotes.length === 0
+                    ? '아직 등록된 Q&A 가 없습니다.'
+                    : search.trim()
+                      ? `"${search}" 검색 결과가 없습니다.`
+                      : '해당 서비스의 Q&A 가 없습니다.'}
+                </p>
+                {allNotes.length === 0 && (
+                  <button
+                    onClick={() => navigate('/ops-notes/new')}
+                    className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-2 text-sm bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-colors"
+                  >
+                    <Plus className="w-4 h-4" /> 첫 번째 Q&amp;A 만들기
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <OpsNoteTable
+                notes={tableNotes}
+                services={SERVICES}
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSort}
+                onOpen={(n) => navigate(`/ops-notes/${n.id}`)}
+                onEdit={(n) => navigate(`/ops-notes/${n.id}/edit`)}
+                onDelete={handleDelete}
+                onTogglePin={handleTogglePin}
+                deletingId={deletingId}
+              />
+            )}
           </MacCard>
-        )}
-
-        {/* ── Regular grid ────────────────────────────────────────────── */}
-        <MacCard
-          title={
-            filterService
-              ? `${SERVICE_MAP[filterService]?.label ?? filterService} · ${regularNotes.length}`
-              : `최근 Q&A · ${regularNotes.length}`
-          }
-          bodyPadding="p-4"
-        >
-          {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {[...Array(8)].map((_, i) => (
-                <div key={i} className="h-56 rounded-2xl bg-secondary/40 animate-pulse" />
-              ))}
-            </div>
-          ) : regularNotes.length === 0 ? (
-            <div className="text-center py-16">
-              <FileQuestion className="w-12 h-12 mx-auto mb-4 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">
-                {allNotes.length === 0
-                  ? '아직 등록된 Q&A 가 없습니다.'
-                  : search.trim()
-                    ? `"${search}" 검색 결과가 없습니다.`
-                    : '해당 서비스의 Q&A 가 없습니다.'}
-              </p>
-              {allNotes.length === 0 && (
-                <button
-                  onClick={() => navigate('/ops-notes/new')}
-                  className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-2 text-sm bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-colors"
-                >
-                  <Plus className="w-4 h-4" /> 첫 번째 Q&amp;A 만들기
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {regularNotes.map((note) => (
-                <div key={note.id} className={deletingId === note.id ? 'opacity-40 pointer-events-none' : ''}>
-                  <QnaCard
-                    note={note}
-                    onOpen={() => navigate(`/ops-notes/${note.id}`)}
-                    onEdit={() => navigate(`/ops-notes/${note.id}/edit`)}
-                    onDelete={() => handleDelete(note)}
-                    onTogglePin={() => handleTogglePin(note)}
-                  />
+        ) : (
+          /* ── 카드 뷰 — 옵션 ─────────────────────────────────────────── */
+          <>
+            {/* Pinned section */}
+            {!isLoading && pinnedNotes.length > 0 && (
+              <MacCard title={`고정 Q&A · ${pinnedNotes.length}`} bodyPadding="p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {pinnedNotes.map((note) => (
+                    <div key={note.id} className={deletingId === note.id ? 'opacity-40 pointer-events-none' : ''}>
+                      <QnaCard
+                        note={note}
+                        onOpen={() => navigate(`/ops-notes/${note.id}`)}
+                        onEdit={() => navigate(`/ops-notes/${note.id}/edit`)}
+                        onDelete={() => handleDelete(note)}
+                        onTogglePin={() => handleTogglePin(note)}
+                      />
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-        </MacCard>
+              </MacCard>
+            )}
+
+            {/* Regular grid */}
+            <MacCard
+              title={
+                filterService
+                  ? `${SERVICE_MAP[filterService]?.label ?? filterService} · ${regularNotes.length}`
+                  : `최근 Q&A · ${regularNotes.length}`
+              }
+              bodyPadding="p-4"
+            >
+              {isLoading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {[...Array(8)].map((_, i) => (
+                    <div key={i} className="h-56 rounded-2xl bg-secondary/40 animate-pulse" />
+                  ))}
+                </div>
+              ) : regularNotes.length === 0 ? (
+                <div className="text-center py-16">
+                  <FileQuestion className="w-12 h-12 mx-auto mb-4 text-muted-foreground/40" />
+                  <p className="text-sm text-muted-foreground">
+                    {allNotes.length === 0
+                      ? '아직 등록된 Q&A 가 없습니다.'
+                      : search.trim()
+                        ? `"${search}" 검색 결과가 없습니다.`
+                        : '해당 서비스의 Q&A 가 없습니다.'}
+                  </p>
+                  {allNotes.length === 0 && (
+                    <button
+                      onClick={() => navigate('/ops-notes/new')}
+                      className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-2 text-sm bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-colors"
+                    >
+                      <Plus className="w-4 h-4" /> 첫 번째 Q&amp;A 만들기
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {regularNotes.map((note) => (
+                    <div key={note.id} className={deletingId === note.id ? 'opacity-40 pointer-events-none' : ''}>
+                      <QnaCard
+                        note={note}
+                        onOpen={() => navigate(`/ops-notes/${note.id}`)}
+                        onEdit={() => navigate(`/ops-notes/${note.id}/edit`)}
+                        onDelete={() => handleDelete(note)}
+                        onTogglePin={() => handleTogglePin(note)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </MacCard>
+          </>
+        )}
       </main>
     </div>
   );

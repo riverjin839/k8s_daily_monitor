@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
-import { Plus, Play, BookOpen, Download, ArrowUpDown } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Plus, Play, BookOpen, Download, ArrowUpDown, List, LayoutGrid } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { PlaybookCard, AddPlaybookModal, RunCredsModal } from '@/components/playbooks';
+import { PlaybookCard, PlaybookTable, AddPlaybookModal, RunCredsModal } from '@/components/playbooks';
+import { ViewModeBar } from '@/components/common';
 import type { PlaybookFormSubmit } from '@/components/playbooks/AddPlaybookModal';
 import type { PlaybookSshCreds } from '@/types';
 import { usePlaybooks, useCreatePlaybook, useUpdatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
@@ -38,6 +39,17 @@ function SortablePlaybookCard({ playbook, isRunning, onRun, onEdit, onDelete, on
 }
 
 const SESSION_CREDS_KEY = 'k8s:playbook-ssh-creds';
+const VIEW_MODE_KEY = 'k8s:playbooks:viewMode';
+type ViewMode = 'table' | 'card';
+
+function readStoredViewMode(): ViewMode {
+  try {
+    const v = localStorage.getItem(VIEW_MODE_KEY);
+    return v === 'card' ? 'card' : 'table';
+  } catch {
+    return 'table';
+  }
+}
 
 function readSessionCreds(): PlaybookSshCreds | null {
   try {
@@ -58,8 +70,18 @@ export function PlaybooksPage() {
   const [selectedClusterId, setSelectedClusterId] = useState<string>('');
   const [sortKey, setSortKey] = useState<PlaybookSortKey>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [viewMode, setViewMode] = useState<ViewMode>(readStoredViewMode);
   // 단일 실행 시 자격증명 모달용 — 어떤 playbook 을 실행할지 보관.
   const [credsTarget, setCredsTarget] = useState<Playbook | null>(null);
+
+  useEffect(() => {
+    try { localStorage.setItem(VIEW_MODE_KEY, viewMode); } catch { /* ignore */ }
+  }, [viewMode]);
+
+  const handleSort = (key: PlaybookSortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortKey(key); setSortDir('asc'); }
+  };
 
   const { clusters } = useClusterStore();
   useClusters(); // fetch
@@ -208,26 +230,39 @@ export function PlaybooksPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Sort Controls */}
-          <div className="flex items-center gap-1.5">
-            <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
-            <select
-              value={sortKey}
-              onChange={(e) => setSortKey(e.target.value as PlaybookSortKey)}
-              className="px-2 py-1.5 text-xs bg-background border border-border rounded-lg"
-            >
-              <option value="name">이름순</option>
-              <option value="status">상태순</option>
-              <option value="lastRunAt">최근 실행순</option>
-            </select>
-            <button
-              onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
-              className="px-2 py-1.5 text-xs bg-background border border-border rounded-lg hover:bg-secondary transition-colors"
-              title={sortDir === 'asc' ? '오름차순' : '내림차순'}
-            >
-              {sortDir === 'asc' ? '↑' : '↓'}
-            </button>
-          </div>
+          {/* View mode toggle — 리스트(기본) ↔ 카드 */}
+          <ViewModeBar
+            modes={[
+              { id: 'table', label: '리스트', icon: <List       className="w-3.5 h-3.5" /> },
+              { id: 'card',  label: '카드',   icon: <LayoutGrid className="w-3.5 h-3.5" /> },
+            ]}
+            active={viewMode}
+            onChange={(v) => setViewMode(v as ViewMode)}
+            showStylePanel={false}
+          />
+
+          {/* Sort Controls — 카드 모드에서만 노출 (리스트는 컬럼 헤더 클릭으로 정렬) */}
+          {viewMode === 'card' && (
+            <div className="flex items-center gap-1.5">
+              <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
+              <select
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value as PlaybookSortKey)}
+                className="px-2 py-1.5 text-xs bg-background border border-border rounded-lg"
+              >
+                <option value="name">이름순</option>
+                <option value="status">상태순</option>
+                <option value="lastRunAt">최근 실행순</option>
+              </select>
+              <button
+                onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+                className="px-2 py-1.5 text-xs bg-background border border-border rounded-lg hover:bg-secondary transition-colors"
+                title={sortDir === 'asc' ? '오름차순' : '내림차순'}
+              >
+                {sortDir === 'asc' ? '↑' : '↓'}
+              </button>
+            </div>
+          )}
 
           {/* Cluster Selector */}
           {clusters.length > 1 && (
@@ -274,11 +309,19 @@ export function PlaybooksPage() {
 
       {/* Content */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-card border border-border rounded-xl p-5 h-48 animate-pulse" />
-          ))}
-        </div>
+        viewMode === 'card' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-card border border-border rounded-xl p-5 h-48 animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <div className="bg-card border border-border rounded-xl overflow-hidden">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-14 border-b border-border last:border-b-0 animate-pulse bg-muted/30" />
+            ))}
+          </div>
+        )
       ) : filteredPlaybooks.length === 0 ? (
         <div className="text-center py-16">
           <BookOpen className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
@@ -290,6 +333,23 @@ export function PlaybooksPage() {
             + Register your first playbook
           </button>
         </div>
+      ) : viewMode === 'table' ? (
+        <PlaybookTable
+          playbooks={filteredPlaybooks}
+          runningIds={runningIds}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={handleSort}
+          onRun={handleRunOne}
+          onEdit={handleOpenEdit}
+          onDelete={(pb) => {
+            if (confirm(`Delete playbook "${pb.name}"?`)) {
+              deletePlaybook.mutate(pb.id);
+            }
+          }}
+          onToggleDashboard={(pb) => toggleDashboard.mutate(pb.id)}
+          onReorder={dndHandleDragEnd}
+        />
       ) : (
         <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={(e: DragEndEvent) => { if (e.over) dndHandleDragEnd(String(e.active.id), String(e.over.id)); }}>
           <SortableContext items={filteredPlaybooks.map((p) => p.id)} strategy={rectSortingStrategy}>

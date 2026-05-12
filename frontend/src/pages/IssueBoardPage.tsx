@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ViewModeBar } from '@/components/common';
+import { ClusterSidebar, ResizeGrip, ViewModeBar } from '@/components/common';
 import { Plus, Download, ClipboardList, Search, X, ChevronUp, ChevronDown, ArrowUpDown, Kanban, List } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { IssueKanban, IssueTableRow } from '@/components/issues';
-import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { useIssues, useDeleteIssue } from '@/hooks/useIssues';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
@@ -173,7 +172,16 @@ export function IssueBoardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="mx-auto px-8 py-8">
+      <main className="mx-auto px-4 lg:px-6 py-6 flex gap-3">
+        <ClusterSidebar
+          clusters={clusters}
+          selectedId={filterClusterId || null}
+          onSelect={(id) => setFilterClusterId(id ?? '')}
+          allowAll
+          allLabel="전체 이슈"
+          title="클러스터"
+        />
+        <div className="flex-1 min-w-0">
         {/* Page Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -244,18 +252,7 @@ export function IssueBoardPage() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-            <select
-              value={filterClusterId}
-              onChange={(e) => setFilterClusterId(e.target.value)}
-              className="px-3 py-2 text-sm bg-background border border-border rounded-lg"
-            >
-              <option value="">전체 클러스터</option>
-              {clusters.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-
+          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3">
             <input
               type="text"
               value={filterAssignee}
@@ -392,6 +389,7 @@ export function IssueBoardPage() {
             </div>
           </div>
         ))}
+        </div>
       </main>
 
     </div>

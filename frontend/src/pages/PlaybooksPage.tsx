@@ -4,7 +4,7 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type D
 import { SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { PlaybookCard, PlaybookTable, AddPlaybookModal, RunCredsModal } from '@/components/playbooks';
-import { ViewModeBar } from '@/components/common';
+import { ClusterSidebar, ViewModeBar } from '@/components/common';
 import type { PlaybookFormSubmit } from '@/components/playbooks/AddPlaybookModal';
 import type { PlaybookSshCreds } from '@/types';
 import { usePlaybooks, useCreatePlaybook, useUpdatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
@@ -86,7 +86,9 @@ export function PlaybooksPage() {
   const { clusters } = useClusterStore();
   useClusters(); // fetch
 
-  const activeClusterId = selectedClusterId || clusters[0]?.id || '';
+  // '' === 전체. AddPlaybookModal 의 defaultClusterId 는 빈 문자열이면 첫 번째로 폴백.
+  const activeClusterId = selectedClusterId;
+  const modalDefaultClusterId = selectedClusterId || clusters[0]?.id || '';
   const { isLoading } = usePlaybooks(activeClusterId || undefined);
   const { playbooks, runningIds } = usePlaybookStore();
 
@@ -204,7 +206,16 @@ export function PlaybooksPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="mx-auto px-8 py-8">
+      <main className="mx-auto px-4 lg:px-6 py-6 flex gap-3">
+      <ClusterSidebar
+        clusters={clusters}
+        selectedId={selectedClusterId || null}
+        onSelect={(id) => setSelectedClusterId(id ?? '')}
+        allowAll
+        allLabel="전체 Playbook"
+        title="클러스터"
+      />
+      <div className="flex-1 min-w-0">
       {/* Page Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -262,20 +273,6 @@ export function PlaybooksPage() {
                 {sortDir === 'asc' ? '↑' : '↓'}
               </button>
             </div>
-          )}
-
-          {/* Cluster Selector */}
-          {clusters.length > 1 && (
-            <select
-              value={selectedClusterId}
-              onChange={(e) => setSelectedClusterId(e.target.value)}
-              className="px-3 py-2 text-sm bg-background border border-border rounded-lg"
-            >
-              <option value="">All Clusters</option>
-              {clusters.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
           )}
 
           {filteredPlaybooks.length > 0 && (
@@ -381,7 +378,7 @@ export function PlaybooksPage() {
         onClose={handleModalClose}
         onSubmit={editPlaybook ? handleUpdate : handleCreate}
         clusters={clusters}
-        defaultClusterId={activeClusterId}
+        defaultClusterId={modalDefaultClusterId}
         initialData={editPlaybook}
       />
 
@@ -397,6 +394,7 @@ export function PlaybooksPage() {
           }
         }}
       />
+      </div>
       </main>
     </div>
   );

@@ -7,11 +7,38 @@ export const opsLevelsKeys = {
 };
 
 const FALLBACK: OperationLevelItem[] = [
-  { value: 'production', label: '운영 (Production)', color: 'red' },
-  { value: 'staging',    label: '스테이징 (Staging)', color: 'amber' },
-  { value: 'dev',        label: '개발 (Dev)',         color: 'blue' },
-  { value: 'test',       label: '테스트 (Test)',      color: 'slate' },
-  { value: 'dr',         label: 'DR',                 color: 'purple' },
+  { value: 'production', label: '운영 (Production)', color: 'red',    icon: '🚀' },
+  { value: 'staging',    label: '스테이징 (Staging)', color: 'amber',  icon: '✨' },
+  { value: 'dev',        label: '개발 (Dev)',         color: 'blue',   icon: '💻' },
+  { value: 'test',       label: '테스트 (Test)',      color: 'slate',  icon: '🧪' },
+  { value: 'dr',         label: 'DR',                 color: 'purple', icon: '🛡️' },
+];
+
+/** 사용자가 운영레벨 별로 고를 수 있는 10개의 이모지. */
+export const EMOJI_OPTIONS: ReadonlyArray<{ emoji: string; description: string }> = [
+  { emoji: '🚀', description: '운영 · 런칭 / Live' },
+  { emoji: '🏭', description: '운영 · 대규모 / Production' },
+  { emoji: '✨', description: '스테이징 · 새 빌드' },
+  { emoji: '💻', description: '개발 / Dev' },
+  { emoji: '🧪', description: '테스트 / QA' },
+  { emoji: '🛡️', description: 'DR · 재해복구' },
+  { emoji: '🔧', description: '유지보수 · Maintenance' },
+  { emoji: '⚙️', description: '일반 / Generic' },
+  { emoji: '📦', description: '컨테이너 · 빌드' },
+  { emoji: '🌐', description: '공개 · 글로벌' },
+];
+
+/** 운영레벨 value 가 EMOJI_OPTIONS 에 없을 때 쓰는 기본 fallback. */
+const DEFAULT_FALLBACK_EMOJI = '⚙️';
+
+/** 키워드 기반 fallback — icon 이 미지정인 운영레벨에 자동 매칭. */
+const VALUE_HINT_EMOJI: Array<{ test: RegExp; emoji: string }> = [
+  { test: /prod|운영|live/i,                emoji: '🚀' },
+  { test: /stag|스테이지|스테이징/i,         emoji: '✨' },
+  { test: /dev|개발/i,                      emoji: '💻' },
+  { test: /test|qa|테스트/i,                emoji: '🧪' },
+  { test: /dr|disaster|재해|복구/i,         emoji: '🛡️' },
+  { test: /main|maint|유지/i,               emoji: '🔧' },
 ];
 
 export function useOperationLevels() {
@@ -69,4 +96,16 @@ export function levelColor(levels: OperationLevelItem[] | undefined, value: stri
   if (!value) return 'slate';
   const hit = levels?.find((l) => l.value === value);
   return hit?.color ?? 'slate';
+}
+
+/** value → 이모지. 명시된 icon 우선 → value/label 키워드 hint → fallback. */
+export function levelIcon(levels: OperationLevelItem[] | undefined, value: string | null | undefined): string {
+  if (!value) return '';
+  const hit = levels?.find((l) => l.value === value);
+  if (hit?.icon && hit.icon.trim()) return hit.icon;
+  const haystack = `${hit?.value ?? value} ${hit?.label ?? ''}`;
+  for (const { test, emoji } of VALUE_HINT_EMOJI) {
+    if (test.test(haystack)) return emoji;
+  }
+  return DEFAULT_FALLBACK_EMOJI;
 }

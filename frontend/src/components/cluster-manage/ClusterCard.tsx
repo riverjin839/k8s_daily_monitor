@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Pencil, Trash2, Cpu, Network, AlertTriangle, RefreshCw, Loader2, Cable } from 'lucide-react';
 import type { Cluster } from '@/types';
 import { STATUS_STYLE, OVERLAP_COLORS } from './constants';
-import { useOperationLevels, levelBadgeClass, levelLabel, levelColor } from '@/hooks/useOperationLevels';
+import { useOperationLevels, levelBadgeClass, levelLabel, levelColor, levelIcon } from '@/hooks/useOperationLevels';
 import { CidrRow } from './CidrRow';
 import { InternalIpRow } from './InternalIpRow';
 import { BondIpRow } from './BondIpRow';
@@ -66,13 +66,22 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1.5">
               <span className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />
+              {cluster.operationLevel && (
+                <span
+                  className="text-lg leading-none flex-shrink-0"
+                  title={`운영레벨: ${levelLabel(opsLevels, cluster.operationLevel)}`}
+                >
+                  {levelIcon(opsLevels, cluster.operationLevel)}
+                </span>
+              )}
               <h3 className="text-sm font-bold truncate">{cluster.name}</h3>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${st.badge}`}>{st.label}</span>
               {cluster.operationLevel && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${levelBadgeClass(levelColor(opsLevels, cluster.operationLevel))}`}>
-                  {levelLabel(opsLevels, cluster.operationLevel)}
+                <span className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border ${levelBadgeClass(levelColor(opsLevels, cluster.operationLevel))}`}>
+                  <span>{levelIcon(opsLevels, cluster.operationLevel)}</span>
+                  <span>{levelLabel(opsLevels, cluster.operationLevel)}</span>
                 </span>
               )}
               {cluster.region && (

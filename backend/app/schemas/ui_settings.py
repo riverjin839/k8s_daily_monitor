@@ -62,10 +62,12 @@ class OperationLevelItem(BaseModel):
     - value: 클러스터.operation_level 에 저장되는 식별자 (영문 슬러그 권장).
     - label: 화면 표시 이름 (한글 가능).
     - color: 컬러 키 (red/amber/emerald/sky/slate/purple/blue/yellow/pink/cyan/violet/orange/muted).
+    - icon: 클러스터 카드/행에 표시될 이모지 1자. 비어있으면 운영레벨별 기본값 사용.
     """
     value: str = Field(..., min_length=1, max_length=64)
     label: str = Field(..., min_length=1, max_length=64)
     color: str = Field(default="slate", max_length=32)
+    icon: str | None = Field(default=None, max_length=8)
 
 
 class OperationLevelsResponse(BaseModel):

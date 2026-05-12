@@ -5,7 +5,7 @@ import type { Cluster, ClusterCustomField } from '@/types';
 import { useUpdateCluster } from '@/hooks/useCluster';
 import { InlineEdit } from '@/components/common';
 import { STATUS_STYLE } from './constants';
-import { useOperationLevels, levelBadgeClass, levelLabel, levelColor } from '@/hooks/useOperationLevels';
+import { useOperationLevels, levelBadgeClass, levelLabel, levelColor, levelIcon } from '@/hooks/useOperationLevels';
 import { ClusterCustomCell } from './ClusterCustomCell';
 import { extractInterfaceIps, extractInternalIps, groupInternalIps, parseNodeIps } from './internalIp';
 
@@ -93,6 +93,14 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       <td className="px-3 py-2.5">
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />
+          {cluster.operationLevel && (
+            <span
+              className="text-base leading-none flex-shrink-0"
+              title={`운영레벨: ${levelLabel(opsLevels, cluster.operationLevel)}`}
+            >
+              {levelIcon(opsLevels, cluster.operationLevel)}
+            </span>
+          )}
           <span className="font-medium text-sm text-foreground">{cluster.name}</span>
         </div>
         {cluster.hostname && (
@@ -137,8 +145,9 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             {(opsLevels ?? []).map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
           </select>
         ) : cluster.operationLevel ? (
-          <span className={`text-[11px] px-2 py-0.5 rounded-full border ${lv}`}>
-            {levelLabel(opsLevels, cluster.operationLevel)}
+          <span className={`inline-flex items-center gap-0.5 text-[11px] px-2 py-0.5 rounded-full border ${lv}`}>
+            <span>{levelIcon(opsLevels, cluster.operationLevel)}</span>
+            <span>{levelLabel(opsLevels, cluster.operationLevel)}</span>
           </span>
         ) : <span className="text-muted-foreground/60 text-xs">-</span>}
       </EditableCell>

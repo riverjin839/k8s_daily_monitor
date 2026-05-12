@@ -47,6 +47,9 @@ export interface Cluster {
   // 사용자 정의 컬럼 값 (ClusterCustomField.key → value)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   customValues?: Record<string, any> | null;
+  // 사이드바 표시용 사용자 지정 아이콘 — lucide-react 컴포넌트 이름 (예: "Server") 또는 emoji 1자.
+  // null/empty 면 status 기반 기본 아이콘으로 fallback.
+  icon?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -108,6 +111,7 @@ export interface ClusterManageUpdate {
   hostname?: string;
   bgpEnabled?: boolean;
   asNumber?: string;
+  icon?: string | null;
 }
 
 // Addon

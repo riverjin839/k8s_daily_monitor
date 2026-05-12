@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2, ArrowUpRight, Cable } from 'lucide-react';
+import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2, ArrowUpRight, Cable, Server } from 'lucide-react';
 import type { Cluster, ClusterCustomField } from '@/types';
 import { useUpdateCluster } from '@/hooks/useCluster';
-import { InlineEdit } from '@/components/common';
+import { InlineEdit, ClusterIconPicker } from '@/components/common';
+import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { STATUS_STYLE } from './constants';
 import { useOperationLevels, levelBadgeClass, levelLabel, levelColor } from '@/hooks/useOperationLevels';
 import { ClusterCustomCell } from './ClusterCustomCell';
@@ -69,10 +70,15 @@ function EditableCell({
 export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onCilium, onAutoUpdate, autoUpdatingId, customFields = [], onCollectNodeIps, collectingNodeIpsId, onCollectNics }: ClusterTableRowProps) {
   const updateCluster = useUpdateCluster();
   const [editingField, setEditingField] = useState<EditField>(null);
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const iconAnchorRef = useRef<HTMLButtonElement | null>(null);
 
   const quickUpdate = (patch: Partial<Cluster>) => {
     updateCluster.mutate({ id: cluster.id, data: patch }, { onSettled: () => setEditingField(null) });
   };
+
+  const resolvedIcon = resolveClusterIcon(cluster.icon);
+  const FallbackIcon = Server;
   const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
   const { data: opsLevels } = useOperationLevels();
   const lv = cluster.operationLevel ? levelBadgeClass(levelColor(opsLevels, cluster.operationLevel)) : undefined;
@@ -93,10 +99,33 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       <td className="px-3 py-2.5">
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />
+          <button
+            ref={iconAnchorRef}
+            type="button"
+            onClick={() => setIconPickerOpen(true)}
+            className="flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors flex-shrink-0"
+            title="사이드바 아이콘 변경 (현재: status 자동)"
+            aria-label="아이콘 변경"
+          >
+            {resolvedIcon?.kind === 'text'
+              ? <span className="text-base leading-none" aria-hidden>{resolvedIcon.value}</span>
+              : resolvedIcon?.kind === 'lucide'
+                ? <resolvedIcon.Component className="w-4 h-4" />
+                : <FallbackIcon className="w-4 h-4 opacity-50" />}
+          </button>
           <span className="font-medium text-sm text-foreground">{cluster.name}</span>
         </div>
         {cluster.hostname && (
           <p className="text-[10px] font-mono text-muted-foreground mt-0.5 ml-4">{cluster.hostname}</p>
+        )}
+        {iconPickerOpen && (
+          <ClusterIconPicker
+            value={cluster.icon}
+            clusterName={cluster.name}
+            anchorRect={iconAnchorRef.current?.getBoundingClientRect() ?? null}
+            onChange={(next) => updateCluster.mutate({ id: cluster.id, data: { icon: next } })}
+            onClose={() => setIconPickerOpen(false)}
+          />
         )}
       </td>
       <td className="px-3 py-2.5">

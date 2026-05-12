@@ -62,6 +62,9 @@ class Cluster(Base):
     node_ips = Column(Text, nullable=True)                         # JSON 배열 (InternalIP 목록)
     # 사용자 정의 컬럼 값 — ClusterCustomField 의 key 에 대응
     custom_values = Column(JSONB, nullable=True)                   # {field_key: value, ...}
+    # 사용자 지정 사이드바 아이콘 — lucide-react 컴포넌트 이름 (예: "Server") 또는 emoji 1자.
+    # null/empty 면 status 기반 기본 아이콘으로 fallback.
+    icon = Column(String(64), nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

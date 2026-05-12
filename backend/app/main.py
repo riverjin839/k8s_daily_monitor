@@ -119,6 +119,7 @@ def _run_migrations():
             ("node_ips", "TEXT"),
             ("custom_values", "JSONB"),
             ("seq", "INTEGER NOT NULL DEFAULT 1000"),
+            ("icon", "VARCHAR(64)"),
         ]
         for col_name, col_type in new_cluster_cols:
             if col_name not in columns:

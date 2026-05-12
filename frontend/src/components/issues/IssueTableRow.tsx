@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { GripVertical, Pencil, Trash2, ImagePlus, Plus, Check, X } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Issue, Cluster } from '@/types';
+import type { Issue, Cluster, IssueUpdate } from '@/types';
 import { useUpdateIssue } from '@/hooks/useIssues';
 import { ServiceChip } from '@/components/services/ServiceChip';
 import { stripHtml } from '@/lib/utils';
@@ -193,7 +193,7 @@ export function IssueTableRow({ issue, clusters, isDragDisabled, onEdit, onDelet
   const updateIssue = useUpdateIssue();
   const [editing, setEditing] = useState<EditField>(null);
 
-  const save = (patch: Partial<Issue>) => {
+  const save = (patch: IssueUpdate) => {
     updateIssue.mutate({ id: issue.id, data: patch }, { onSettled: () => setEditing(null) });
   };
 

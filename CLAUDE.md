@@ -622,6 +622,17 @@ Required GitHub secrets: `KUBECONFIG_DEV`, `KUBECONFIG_PROD`
 - Feature branches: `feature/<short-description>`
 - PRs target `main`
 
+### Pull Request Description (Required)
+
+**Every PR must include a description that summarises the actual changes** — never open a PR with an empty body. The PR body must contain at minimum:
+
+1. **## Summary** — 1~5 bullets describing *what changed and why*, written from the user-visible / reviewer perspective. Reference the file/area touched (e.g., "PlaybooksPage: 사이드바로 클러스터 선택 통일") rather than the implementation tactic.
+2. **## Changes** — bullet list of concrete edits grouped by area (frontend / backend / docs / infra). One bullet per logical change. Include new files, removed files, renamed exports.
+3. **## Test plan** — markdown checklist of how a reviewer can verify the change locally (commands to run, UI flows to click). Mark anything skipped explicitly (e.g., "- [ ] ESLint — preexisting v9 config breakage, skipped").
+4. **(optional) ## Screenshots / Notes** — when UI changed or there are caveats worth flagging (preexisting issues, follow-ups, migrations).
+
+Always pass the body via a heredoc (`gh pr create --body "$(cat <<'EOF' … EOF)"` or the MCP equivalent) to keep markdown formatting intact. The body is what reviewers see first — treat it as the primary deliverable of the PR alongside the diff. If the user did not explicitly ask for a PR, do not create one — but when they do, the description above is mandatory.
+
 ### Adding a New Health Checker
 
 1. Create `backend/app/services/checkers/my_checker.py` extending `base.BaseChecker`.

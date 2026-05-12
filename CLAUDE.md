@@ -419,6 +419,80 @@ min-h-screen bg-background
 - **Section titles inside MacCard**: content should NOT repeat the card title as an `<h2>` — the MacCard header already carries it.
 - **Colors**: avoid raw hex in JSX; prefer Tailwind tokens (`text-primary`, `bg-secondary`, etc.) or `hsl(var(--*))`.
 
+### Cluster Sidebar Standard (`ClusterSidebar`) — required for all per-cluster pages
+
+**Component:** `frontend/src/components/common/ClusterSidebar.tsx`
+
+페이지에 클러스터 선택 사이드바를 표시할 때는 **항상 `iconOnly` 모드**를 사용한다. 이는 메인 사이드바와 시각 일관성을 유지하기 위한 표준이며, 폭 56px 의 아이콘 레일로 렌더되고 호버 시 클러스터 이름·region·운영등급이 툴팁으로 표시된다. 시퀀스 번호(`seq`)는 어떤 모드에서도 노출하지 않는다.
+
+**시각적 형태 (iconOnly 모드):**
+```
+┌────┐
+│ ▦  │  ← 전체 (allowAll 시) — LayoutGrid 아이콘
+├────┤
+│ ✓●│  ← 클러스터 1 (status 아이콘 + 우상단 status dot)
+│ ⚠●│  ← 클러스터 2 (warning)
+│ ✕●│  ← 클러스터 3 (critical)
+└────┘
+   ↑ 호버하면 우측에 "이름 · region · 등급" 툴팁이 portal 로 표시됨
+```
+
+**사용 패턴 (3가지):**
+
+| 시나리오 | 필수 props | 예시 페이지 |
+|---|---|---|
+| 단일 선택 (전체 옵션 X) | `iconOnly` + `selectedId` + `onSelect` | CiliumTracePage |
+| 단일 선택 + 전체 옵션 | `iconOnly` + `allowAll` + `allLabel` + `selectedId` + `onSelect` | Dashboard |
+| 다중 선택 (빈 배열 = 전체) | `iconOnly` + `multiSelect` + `selectedIds` + `onMultiSelectChange` (+ optional `allowAll` `allLabel`) | PlaybooksPage, BulkExecPage |
+
+**예시 — 단일 선택:**
+```tsx
+<ClusterSidebar
+  clusters={clusters}
+  selectedId={clusterId || null}
+  onSelect={(id) => setClusterId(id ?? '')}
+  iconOnly
+/>
+```
+
+**예시 — 단일 선택 + 전체:**
+```tsx
+<ClusterSidebar
+  clusters={clusters}
+  selectedId={selectedClusterId}
+  onSelect={setSelectedClusterId}
+  allowAll
+  allLabel="전체 현황"
+  iconOnly
+/>
+```
+
+**예시 — 다중 선택 (PlaybooksPage 패턴):**
+```tsx
+<ClusterSidebar
+  clusters={clusters}
+  selectedId={null}
+  onSelect={() => { /* multiSelect 모드라 미사용 */ }}
+  allowAll
+  allLabel="전체 클러스터"
+  iconOnly
+  multiSelect
+  selectedIds={selectedClusterIds}
+  onMultiSelectChange={setSelectedClusterIds}
+/>
+```
+
+**레이아웃 규칙:**
+- 부모는 `flex gap-3` (또는 `gap-4`) 가로 레이아웃을 잡고, 사이드바 옆에 `<div className="flex-1 min-w-0">` 으로 본문을 감싼다.
+- 사이드바는 `sticky top-4` 로 고정되어 스크롤해도 따라온다.
+- `MacCard` 등 본문 wrapper 와 같은 row 에 둔다.
+
+**금지:**
+- ❌ 와이드 폼 (`iconOnly` 없이 사용) — 신규 페이지에서 절대 사용 금지. 기존 페이지도 모두 iconOnly 로 마이그레이션됨.
+- ❌ `seq` 번호를 별도로 표시하는 어떤 UI 도 금지 (레거시 동작).
+- ❌ 페이지 내 dropdown 형태 클러스터 선택기 (`<select>`) — 대신 좌측 사이드바를 쓴다.
+- ❌ `onReorder` prop — iconOnly 에서는 정렬 토글이 노출되지 않으므로 사용 금지. 클러스터 정렬은 `/cluster-manage` 페이지에서만 한다.
+
 ---
 
 ## Frontend Architecture Details

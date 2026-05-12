@@ -623,6 +623,7 @@ export function BulkExecPage() {
           // 단일선택 props 는 multiSelect 가 true 면 무시되지만 인터페이스 호환을 위해 채워둠
           selectedId={clusterIds[0] ?? null}
           onSelect={() => {}}
+          iconOnly
           multiSelect
           selectedIds={clusterIds}
           onMultiSelectChange={setClusterIds}

@@ -181,6 +181,7 @@ export function CiliumTracePage() {
         selectedId={selectedClusterId}
         onSelect={setSelectedClusterId}
         allowAll={false}
+        iconOnly
       />
       <main className="flex-1 min-w-0 px-4 lg:px-6 py-5 space-y-4 max-w-[1700px]">
         {/* Header */}

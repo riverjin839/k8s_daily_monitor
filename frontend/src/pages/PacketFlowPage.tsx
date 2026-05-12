@@ -173,6 +173,7 @@ export function PacketFlowPage() {
           clusters={clusters}
           selectedId={clusterId || null}
           onSelect={(id) => { setClusterId(id ?? ''); setResponse(null); setSelectedIdx(null); }}
+          iconOnly
         />
 
         <div className="flex-1 min-w-0">

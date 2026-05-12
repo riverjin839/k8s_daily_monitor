@@ -23,11 +23,11 @@ OPERATION_LEVELS_KEY = "operation_levels"
 DEFAULT_ASSIGNEES = []
 DEFAULT_OPERATION_LEVELS = {
     "levels": [
-        {"value": "production", "label": "운영 (Production)", "color": "red"},
-        {"value": "staging",    "label": "스테이징 (Staging)", "color": "amber"},
-        {"value": "dev",        "label": "개발 (Dev)",         "color": "blue"},
-        {"value": "test",       "label": "테스트 (Test)",      "color": "slate"},
-        {"value": "dr",         "label": "DR",                 "color": "purple"},
+        {"value": "production", "label": "운영 (Production)", "color": "red",    "icon": "🚀"},
+        {"value": "staging",    "label": "스테이징 (Staging)", "color": "amber",  "icon": "✨"},
+        {"value": "dev",        "label": "개발 (Dev)",         "color": "blue",   "icon": "💻"},
+        {"value": "test",       "label": "테스트 (Test)",      "color": "slate",  "icon": "🧪"},
+        {"value": "dr",         "label": "DR",                 "color": "purple", "icon": "🛡️"},
     ]
 }
 
@@ -202,10 +202,12 @@ def get_operation_levels(db: Session = Depends(get_db)):
         if not v or v in seen:
             continue
         seen.add(v)
+        icon_raw = it.get("icon")
         items.append(OperationLevelItem(
             value=v,
             label=str(it.get("label", v)),
             color=str(it.get("color", "slate")),
+            icon=str(icon_raw) if isinstance(icon_raw, str) and icon_raw.strip() else None,
         ))
     if not items:
         items = [OperationLevelItem(**x) for x in DEFAULT_OPERATION_LEVELS["levels"]]
@@ -222,7 +224,8 @@ def update_operation_levels(payload: OperationLevelsUpdate, db: Session = Depend
         if not v or v in seen:
             continue
         seen.add(v)
-        cleaned.append({"value": v, "label": it.label.strip() or v, "color": it.color or "slate"})
+        icon = (it.icon or "").strip() or None
+        cleaned.append({"value": v, "label": it.label.strip() or v, "color": it.color or "slate", "icon": icon})
     setting.value = {"levels": cleaned}
     db.commit()
     db.refresh(setting)

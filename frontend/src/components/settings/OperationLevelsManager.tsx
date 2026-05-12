@@ -1,9 +1,82 @@
-import { useEffect, useState } from 'react';
-import { Plus, Trash2, Save, Loader2, Layers } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Plus, Trash2, Save, Loader2, Layers, ChevronDown } from 'lucide-react';
 import type { OperationLevelItem } from '@/types';
-import { COLOR_OPTIONS, levelBadgeClass, useOperationLevels, useUpdateOperationLevels } from '@/hooks/useOperationLevels';
+import {
+  COLOR_OPTIONS,
+  EMOJI_OPTIONS,
+  levelBadgeClass,
+  levelIcon,
+  useOperationLevels,
+  useUpdateOperationLevels,
+} from '@/hooks/useOperationLevels';
 import { useToast } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
+
+function EmojiPicker({
+  value,
+  fallback,
+  onChange,
+}: {
+  value: string | undefined;
+  fallback: string;
+  onChange: (v: string | undefined) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  const shown = value || fallback;
+  const isAuto = !value;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 px-2 py-1 text-sm bg-background border border-border rounded hover:border-primary/40 transition-colors"
+        title={isAuto ? `자동(${fallback}) — 클릭하여 변경` : `${shown} — 클릭하여 변경`}
+      >
+        <span className="text-base leading-none">{shown}</span>
+        {isAuto && <span className="text-[9px] text-muted-foreground/70">auto</span>}
+        <ChevronDown className="w-3 h-3 text-muted-foreground" />
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 left-0 w-56 p-2 bg-card border border-border rounded-lg shadow-lg">
+          <div className="grid grid-cols-5 gap-1">
+            {EMOJI_OPTIONS.map((opt) => (
+              <button
+                key={opt.emoji}
+                type="button"
+                onClick={() => { onChange(opt.emoji); setOpen(false); }}
+                title={opt.description}
+                className={`p-1.5 text-lg rounded hover:bg-primary/10 transition-colors ${
+                  value === opt.emoji ? 'bg-primary/15 ring-1 ring-primary/40' : ''
+                }`}
+              >
+                {opt.emoji}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => { onChange(undefined); setOpen(false); }}
+            className="mt-2 w-full px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary rounded"
+          >
+            자동 (운영레벨 기반 추론)
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function deriveValue(label: string): string {
   return label.trim().toLowerCase()
@@ -39,7 +112,7 @@ export function OperationLevelsManager() {
   };
 
   const add = () => {
-    setDraft((d) => [...d, { value: '', label: '', color: 'slate' }]);
+    setDraft((d) => [...d, { value: '', label: '', color: 'slate', icon: undefined }]);
     setDirty(true);
   };
 
@@ -64,7 +137,7 @@ export function OperationLevelsManager() {
       const value = (l.value || deriveValue(label)).trim();
       if (!value || seen.has(value)) continue;
       seen.add(value);
-      cleaned.push({ value, label, color: l.color || 'slate' });
+      cleaned.push({ value, label, color: l.color || 'slate', icon: l.icon || undefined });
     }
     try {
       await updateMut.mutateAsync(cleaned);
@@ -91,9 +164,10 @@ export function OperationLevelsManager() {
         <div className="flex-1 min-w-0">
           <h2 className="font-semibold">운영레벨 관리</h2>
           <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-            클러스터 운영 단계 라벨/색상을 자유롭게 정의합니다. 여기서 정의한 항목은 클러스터 관리 페이지의
-            "운영레벨" 컬럼/필터/모달에 즉시 반영됩니다. <strong>value</strong> 는 저장된 식별자(라벨이 비어
-            있으면 자동 생성), <strong>label</strong> 은 화면 표시 이름.
+            클러스터 운영 단계 라벨/색상/이모지를 자유롭게 정의합니다. 여기서 정의한 항목은 클러스터 관리 페이지의
+            "운영레벨" 컬럼/필터/모달과 클러스터 카드 이모지에 즉시 반영됩니다. <strong>value</strong> 는 저장된
+            식별자(라벨이 비어 있으면 자동 생성), <strong>label</strong> 은 화면 표시 이름,
+            <strong> 이모지</strong>는 클러스터 카드 앞에 표시됩니다(자동 = 운영레벨 이름으로 추론).
           </p>
         </div>
       </div>
@@ -106,13 +180,14 @@ export function OperationLevelsManager() {
               <th className="px-2 py-1.5">표시 라벨</th>
               <th className="px-2 py-1.5">value (식별자)</th>
               <th className="px-2 py-1.5">색상</th>
+              <th className="px-2 py-1.5 w-24">이모지</th>
               <th className="px-2 py-1.5">미리보기</th>
               <th className="px-2 py-1.5 w-10"></th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={6} className="text-center py-6 text-xs text-muted-foreground">
+              <tr><td colSpan={7} className="text-center py-6 text-xs text-muted-foreground">
                 <Loader2 className="w-3 h-3 inline animate-spin mr-1" /> 로딩...
               </td></tr>
             )}
@@ -152,8 +227,18 @@ export function OperationLevelsManager() {
                   </select>
                 </td>
                 <td className="px-2 py-1">
-                  <span className={`inline-block text-[11px] px-2 py-0.5 rounded-full border ${levelBadgeClass(l.color)}`}>
-                    {l.label || l.value || '?'}
+                  <EmojiPicker
+                    value={l.icon}
+                    fallback={levelIcon([{ value: l.value || 'auto', label: l.label, color: l.color }], l.value || 'auto')}
+                    onChange={(v) => update(idx, { icon: v })}
+                  />
+                </td>
+                <td className="px-2 py-1">
+                  <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${levelBadgeClass(l.color)}`}>
+                    <span className="text-sm leading-none">
+                      {l.icon || levelIcon([{ value: l.value || 'auto', label: l.label, color: l.color }], l.value || 'auto')}
+                    </span>
+                    <span>{l.label || l.value || '?'}</span>
                   </span>
                 </td>
                 <td className="px-2 py-1 text-right">
@@ -165,7 +250,7 @@ export function OperationLevelsManager() {
               </tr>
             ))}
             {!isLoading && draft.length === 0 && (
-              <tr><td colSpan={6} className="text-center py-6 text-xs text-muted-foreground">
+              <tr><td colSpan={7} className="text-center py-6 text-xs text-muted-foreground">
                 운영레벨이 비어있습니다. "항목 추가" 로 시작하세요.
               </td></tr>
             )}

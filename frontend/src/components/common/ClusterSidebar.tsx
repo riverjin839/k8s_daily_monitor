@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Server, CheckCircle, AlertTriangle, XCircle, WifiOff, LayoutGrid, GripVertical, ArrowDownUp } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
@@ -32,7 +33,12 @@ interface ClusterSidebarProps {
   selectedIds?: string[];
   /** multiSelect 모드일 때 선택 변경 콜백 */
   onMultiSelectChange?: (ids: string[]) => void;
+  /** 아이콘 전용 레일 모드 — 메인 사이드바처럼 좁은 폭에 아이콘만 표시하고 호버 시 클러스터 이름 툴팁.
+   *  multiSelect / onReorder 와 함께 쓰지 않는다 (Dashboard 같이 단일 선택 페이지 전용). */
+  iconOnly?: boolean;
 }
+
+const ICON_RAIL_WIDTH = 56;
 
 const STATUS_ICON: Record<Status, React.ComponentType<{ className?: string }>> = {
   healthy: CheckCircle,
@@ -98,9 +104,6 @@ function ClusterRow({ cluster, active, sortMode, onSelect, multiSelect, checked 
         disabled={sortMode}
         className={`flex-1 flex items-center gap-2 ${sortMode ? 'pl-1' : 'pl-2'} pr-2 py-1.5 text-left min-w-0 disabled:cursor-default`}
       >
-        <span className="text-[10px] font-mono text-muted-foreground/70 w-7 text-right tabular-nums flex-shrink-0">
-          #{cluster.seq ?? '-'}
-        </span>
         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[cluster.status] ?? 'bg-slate-400'}`} />
         <span className="flex-1 min-w-0">
           <span className="block text-sm font-medium truncate">{cluster.name}</span>
@@ -118,16 +121,144 @@ function ClusterRow({ cluster, active, sortMode, onSelect, multiSelect, checked 
   );
 }
 
+// ── 아이콘 전용 레일 버튼 — 메인 Sidebar 의 RailIconButton 패턴을 차용. ────────
+interface IconRailButtonProps {
+  label: string;
+  /** 우측 상단 작은 상태 도트 색상 (Tailwind class). 미지정 시 도트 미표시. */
+  dotClass?: string;
+  Icon: React.ComponentType<{ className?: string }>;
+  active?: boolean;
+  onClick: () => void;
+}
+
+function IconRailButton({ label, dotClass, Icon, active, onClick }: IconRailButtonProps) {
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  // viewport 좌표 — 부모 overflow 를 회피하기 위해 portal 로 렌더한다.
+  const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
+
+  const showTooltip = () => {
+    const el = buttonRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setTooltipPos({ top: rect.top + rect.height / 2, left: rect.right + 8 });
+  };
+  const hideTooltip = () => setTooltipPos(null);
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-label={label}
+        onClick={onClick}
+        onMouseEnter={showTooltip}
+        onMouseLeave={hideTooltip}
+        onFocus={showTooltip}
+        onBlur={hideTooltip}
+        className={`relative flex items-center justify-center w-10 h-10 rounded-md transition-colors ${
+          active
+            ? 'bg-primary/15 text-primary'
+            : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
+        }`}
+      >
+        {active && (
+          <span aria-hidden className="absolute left-0 top-1.5 -translate-x-[3px] w-1 h-7 bg-primary rounded-r" />
+        )}
+        <Icon className="w-5 h-5" />
+        {dotClass && (
+          <span
+            aria-hidden
+            className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ring-1 ring-card ${dotClass}`}
+          />
+        )}
+      </button>
+      {tooltipPos && createPortal(
+        <span
+          role="tooltip"
+          style={{ top: tooltipPos.top, left: tooltipPos.left, transform: 'translateY(-50%)' }}
+          className="fixed px-2 py-1 text-xs font-medium whitespace-nowrap bg-zinc-700 text-white rounded shadow-lg pointer-events-none z-[60]"
+        >
+          {label}
+        </span>,
+        document.body,
+      )}
+    </>
+  );
+}
+
 /** 좌측 클러스터 선택 사이드바 — 드래그로 폭 조절 가능.
  *  부모가 flex row 레이아웃을 잡아주면, 이 컴포넌트는 자기 폭을 가짐.
  *  onReorder 가 주어지면 정렬 모드 토글 버튼이 노출되고, 모드에서 드래그로 seq 를 재할당한다.
  */
+function ClusterSidebarIconRail({
+  clusters, selectedId, onSelect, highlightActive, allowAll, allLabel,
+}: Pick<ClusterSidebarProps, 'clusters' | 'selectedId' | 'onSelect' | 'highlightActive' | 'allowAll' | 'allLabel'>) {
+  return (
+    <aside
+      style={{ width: ICON_RAIL_WIDTH }}
+      className="flex-shrink-0 bg-card border border-border rounded-xl py-2 h-fit sticky top-4"
+    >
+      <div className="flex flex-col items-center gap-1">
+        {allowAll && (
+          <IconRailButton
+            label={`${allLabel ?? '전체'} (${clusters.length})`}
+            Icon={LayoutGrid}
+            active={selectedId === null && (highlightActive ?? true)}
+            onClick={() => onSelect(null)}
+          />
+        )}
+        {clusters.length === 0 ? (
+          <p className="px-1 py-3 text-[10px] text-muted-foreground/70 text-center">없음</p>
+        ) : (
+          clusters.map((c) => {
+            const Icon = STATUS_ICON[c.status] ?? Server;
+            const subtitle = [c.region, c.operationLevel].filter(Boolean).join(' · ');
+            const tooltip = subtitle ? `${c.name} · ${subtitle}` : c.name;
+            return (
+              <IconRailButton
+                key={c.id}
+                label={tooltip}
+                Icon={Icon}
+                dotClass={STATUS_DOT[c.status] ?? 'bg-slate-400'}
+                active={(highlightActive ?? true) && c.id === selectedId}
+                onClick={() => onSelect(c.id)}
+              />
+            );
+          })
+        )}
+      </div>
+    </aside>
+  );
+}
+
 export function ClusterSidebar({
   clusters, selectedId, onSelect, title = '클러스터',
   highlightActive = true, allowAll = false, allLabel = '전체 클러스터',
   onReorder,
   multiSelect = false, selectedIds, onMultiSelectChange,
+  iconOnly = false,
 }: ClusterSidebarProps) {
+  // hooks-order: 모든 훅은 어떤 early return 보다도 위에 있어야 한다.
+  const width = useSidebarStore((s) => s.clusterSidebarWidth);
+  const setWidth = useSidebarStore((s) => s.setClusterSidebarWidth);
+  const reset = useSidebarStore((s) => s.resetClusterSidebar);
+  const [sortMode, setSortMode] = useState(false);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  // 아이콘 레일 모드 — 메인 사이드바 스타일. multiSelect/onReorder 와 함께 쓰이는 경우는 없음.
+  if (iconOnly) {
+    return (
+      <ClusterSidebarIconRail
+        clusters={clusters}
+        selectedId={selectedId}
+        onSelect={onSelect}
+        highlightActive={highlightActive}
+        allowAll={allowAll}
+        allLabel={allLabel}
+      />
+    );
+  }
+
   const selectedSet = multiSelect ? new Set(selectedIds ?? []) : null;
   const toggleMulti = (id: string) => {
     if (!multiSelect || !onMultiSelectChange) return;
@@ -144,12 +275,7 @@ export function ClusterSidebar({
     if ((selectedSet?.size ?? 0) === all.length) onMultiSelectChange([]);
     else onMultiSelectChange(all);
   };
-  const width = useSidebarStore((s) => s.clusterSidebarWidth);
-  const setWidth = useSidebarStore((s) => s.setClusterSidebarWidth);
-  const reset = useSidebarStore((s) => s.resetClusterSidebar);
   const totalN = clusters.length;
-  const [sortMode, setSortMode] = useState(false);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const handleDragEnd = (e: DragEndEvent) => {
     if (!onReorder) return;

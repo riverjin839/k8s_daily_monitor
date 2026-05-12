@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ViewModeBar } from '@/components/common';
+import { ClusterSidebar, ViewModeBar } from '@/components/common';
 import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, GripVertical, Kanban, GitBranch } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -238,7 +238,16 @@ export function TaskBoardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="mx-auto px-8 py-8">
+      <main className="mx-auto px-4 lg:px-6 py-6 flex gap-3">
+        <ClusterSidebar
+          clusters={clusters}
+          selectedId={filterClusterId || null}
+          onSelect={(id) => setFilterClusterId(id ?? '')}
+          allowAll
+          allLabel="전체 작업"
+          title="클러스터"
+        />
+        <div className="flex-1 min-w-0">
         {/* Page Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -342,18 +351,7 @@ export function TaskBoardPage() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            <select
-              value={filterClusterId}
-              onChange={(e) => setFilterClusterId(e.target.value)}
-              className="px-3 py-2 text-sm bg-background border border-border rounded-lg"
-            >
-              <option value="">전체 클러스터</option>
-              {clusters.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             <input
               type="text"
               value={filterAssignee}
@@ -608,6 +606,7 @@ export function TaskBoardPage() {
             </div>
           </div>
         ))}
+        </div>
       </main>
 
     </div>

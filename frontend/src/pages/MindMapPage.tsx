@@ -18,6 +18,8 @@ import {
   Minus,
   CornerDownRight,
   HelpCircle,
+  ExternalLink,
+  Link2,
 } from 'lucide-react';
 import {
   useMindMaps, useMindMap, useCreateMindMap, useUpdateMindMap, useDeleteMindMap,
@@ -961,6 +963,7 @@ export function MindMapPage() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [showCreateMap, setShowCreateMap] = useState(false);
   const [editingMapTitle, setEditingMapTitle] = useState('');
+  const [editingMapConfluence, setEditingMapConfluence] = useState('');
   const [nodeEditorState, setNodeEditorState] = useState<{
     mode: 'create' | 'edit';
     parentId?: string;
@@ -974,10 +977,14 @@ export function MindMapPage() {
   const handleCreateMap = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingMapTitle.trim()) return;
-    const m = await createMap.mutateAsync({ title: editingMapTitle.trim() });
+    const m = await createMap.mutateAsync({
+      title: editingMapTitle.trim(),
+      confluenceUrl: editingMapConfluence.trim() || undefined,
+    });
     setSelectedMapId(m.id);
     setShowCreateMap(false);
     setEditingMapTitle('');
+    setEditingMapConfluence('');
   };
 
   const handleDeleteMap = (mapId: string) => {
@@ -1059,7 +1066,7 @@ export function MindMapPage() {
         </div>
 
         {showCreateMap && (
-          <form onSubmit={handleCreateMap} className="px-3 py-2.5 border-b border-border bg-muted/20">
+          <form onSubmit={handleCreateMap} className="px-3 py-2.5 border-b border-border bg-muted/20 space-y-1.5">
             <input
               type="text"
               value={editingMapTitle}
@@ -1068,9 +1075,16 @@ export function MindMapPage() {
               className="w-full px-2.5 py-1.5 text-xs bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
               autoFocus
             />
-            <div className="flex gap-1.5 mt-1.5">
+            <input
+              type="url"
+              value={editingMapConfluence}
+              onChange={(e) => setEditingMapConfluence(e.target.value)}
+              placeholder="Confluence URL (선택)"
+              className="w-full px-2.5 py-1.5 text-xs bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+            <div className="flex gap-1.5">
               <button type="submit" className="flex-1 py-1.5 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors">생성</button>
-              <button type="button" onClick={() => setShowCreateMap(false)} className="flex-1 py-1.5 text-xs bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors">취소</button>
+              <button type="button" onClick={() => { setShowCreateMap(false); setEditingMapConfluence(''); }} className="flex-1 py-1.5 text-xs bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors">취소</button>
             </div>
           </form>
         )}
@@ -1109,10 +1123,37 @@ export function MindMapPage() {
                   }`}
                 >
                   <div className="flex-1 min-w-0">
-                    <p className={`text-xs truncate ${isActive ? 'font-semibold' : 'font-medium'}`}>{m.title}</p>
+                    <div className="flex items-center gap-1">
+                      <p className={`text-xs truncate ${isActive ? 'font-semibold' : 'font-medium'}`}>{m.title}</p>
+                      {m.confluenceUrl && (
+                        <a
+                          href={m.confluenceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-0.5 rounded text-primary hover:bg-primary/10"
+                          title={`Confluence: ${m.confluenceUrl}`}
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
                     <p className="text-[10px] text-muted-foreground tabular-nums">{m.nodeCount}개 노드</p>
                   </div>
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const next = prompt('Confluence URL (비우면 제거)', m.confluenceUrl ?? '');
+                        if (next === null) return;
+                        updateMap.mutate({ id: m.id, data: { confluenceUrl: next.trim() || undefined } });
+                      }}
+                      className="p-1 hover:bg-secondary rounded-md text-muted-foreground hover:text-primary"
+                      title="Confluence 링크 변경"
+                      aria-label="Confluence 링크 변경"
+                    >
+                      <Link2 className="w-3 h-3" />
+                    </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); updateMap.mutate({ id: m.id, data: { title: prompt('새 제목', m.title) ?? m.title } }); }}
                       className="p-1 hover:bg-secondary rounded-md text-muted-foreground hover:text-primary"

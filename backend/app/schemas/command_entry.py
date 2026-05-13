@@ -17,6 +17,7 @@ class CommandEntryBase(BaseModel):
     pinned: bool = False
     sort_order: int = 1000
     author: Optional[str] = Field(default=None, max_length=100)
+    confluence_url: Optional[str] = Field(default=None, max_length=2048)
 
 
 class CommandEntryCreate(CommandEntryBase):
@@ -34,6 +35,7 @@ class CommandEntryUpdate(BaseModel):
     pinned: Optional[bool] = None
     sort_order: Optional[int] = None
     author: Optional[str] = Field(default=None, max_length=100)
+    confluence_url: Optional[str] = Field(default=None, max_length=2048)
 
 
 class CommandEntryResponse(CommandEntryBase):

@@ -23,6 +23,7 @@ def list_mindmaps(db: Session = Depends(get_db)):
             id=m.id,
             title=m.title,
             description=m.description,
+            confluence_url=m.confluence_url,
             created_at=m.created_at,
             updated_at=m.updated_at,
             node_count=len(m.nodes),
@@ -33,7 +34,11 @@ def list_mindmaps(db: Session = Depends(get_db)):
 
 @router.post("/", response_model=MindMapResponse, status_code=status.HTTP_201_CREATED)
 def create_mindmap(payload: MindMapCreate, db: Session = Depends(get_db)):
-    m = MindMap(title=payload.title, description=payload.description)
+    m = MindMap(
+        title=payload.title,
+        description=payload.description,
+        confluence_url=payload.confluence_url,
+    )
     db.add(m)
     db.commit()
     db.refresh(m)
@@ -57,6 +62,8 @@ def update_mindmap(map_id: UUID, payload: MindMapUpdate, db: Session = Depends(g
         m.title = payload.title
     if payload.description is not None:
         m.description = payload.description
+    if payload.confluence_url is not None:
+        m.confluence_url = payload.confluence_url or None
     db.commit()
     db.refresh(m)
     return m

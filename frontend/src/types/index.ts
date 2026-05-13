@@ -435,6 +435,8 @@ export interface OperationLevelItem {
   label: string;
   /** tailwind 컬러 키 — red/amber/emerald/sky/slate/purple/blue/yellow/pink/cyan/violet/orange/muted */
   color: string;
+  /** 클러스터 카드/행 앞에 표시될 이모지 1자. 비어있으면 EMOJI_OPTIONS 의 fallback 사용. */
+  icon?: string;
 }
 
 // Workflow Board — 큰 작업을 단계별로 시각화하는 기획 게시판.
@@ -471,6 +473,8 @@ export interface Workflow {
   id: string;
   title: string;
   description?: string;
+  /** 관련 Confluence 문서 링크 (선택) */
+  confluenceUrl?: string;
   steps: WorkflowStep[];
   edges: WorkflowEdge[];
   createdAt: string;
@@ -484,11 +488,13 @@ export interface WorkflowListResponse {
 export interface WorkflowCreate {
   title: string;
   description?: string;
+  confluenceUrl?: string;
 }
 
 export interface WorkflowUpdate {
   title?: string;
   description?: string;
+  confluenceUrl?: string;
 }
 
 export interface WorkflowStepCreate {
@@ -635,6 +641,8 @@ export interface MindMap {
   id: string;
   title: string;
   description?: string;
+  /** 관련 Confluence 문서 링크 (선택) */
+  confluenceUrl?: string;
   nodes: MindMapNode[];
   createdAt: string;
   updatedAt: string;
@@ -644,6 +652,7 @@ export interface MindMapListItem {
   id: string;
   title: string;
   description?: string;
+  confluenceUrl?: string;
   nodeCount: number;
   createdAt: string;
   updatedAt: string;
@@ -652,11 +661,13 @@ export interface MindMapListItem {
 export interface MindMapCreate {
   title: string;
   description?: string;
+  confluenceUrl?: string;
 }
 
 export interface MindMapUpdate {
   title?: string;
   description?: string;
+  confluenceUrl?: string;
 }
 
 export interface MindMapNodeCreate {
@@ -1125,6 +1136,8 @@ export interface CommandEntry {
   pinned: boolean;
   sortOrder: number;
   author?: string | null;
+  /** 관련 Confluence 문서 링크 (선택) */
+  confluenceUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1140,6 +1153,7 @@ export interface CommandEntryCreate {
   pinned?: boolean;
   sortOrder?: number;
   author?: string;
+  confluenceUrl?: string;
 }
 
 // ── MinIO / AIStor 수집 응답 ──────────────────────────────────────────

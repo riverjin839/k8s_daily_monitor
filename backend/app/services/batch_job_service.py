@@ -1,6 +1,7 @@
 """Glue between BatchJob DB rows and registered executors."""
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
@@ -13,6 +14,9 @@ from app.services.batch_jobs import (
     ExecutionResult,
     get_executor,
 )
+from app.services.secret_box import decrypt as decrypt_secret
+
+logger = logging.getLogger(__name__)
 
 
 class BatchJobNotFound(Exception):
@@ -44,6 +48,20 @@ async def execute_job(
     target_host = host or job.default_host
     if not target_host:
         raise ValueError("host is required (no default_host set on the job)")
+
+    # Fall back to credentials saved on the job (used by scheduled runs).
+    # Manual runs typically supply their own.
+    if password is None and private_key is None:
+        if job.encrypted_password:
+            try:
+                password = decrypt_secret(job.encrypted_password)
+            except ValueError:
+                logger.warning("BatchJob %s: failed to decrypt saved password", job.id)
+        if private_key is None and job.encrypted_private_key:
+            try:
+                private_key = decrypt_secret(job.encrypted_private_key)
+            except ValueError:
+                logger.warning("BatchJob %s: failed to decrypt saved private key", job.id)
 
     merged_params = executor.merge_params(saved=job.params, override=param_override)
     ctx = ExecutionContext(

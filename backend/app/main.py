@@ -383,9 +383,12 @@ def _run_migrations():
                 with engine.begin() as conn:
                     conn.execute(text(f"ALTER TABLE work_guides ADD COLUMN {col_name} {col_type}"))
 
-    # confluence_url 컬럼 — 모든 게시글 (tasks/issues/ops_notes/work_guides)에
-    # 공통으로 Confluence 문서 링크를 저장하기 위해 일괄 추가.
-    for tbl in ("tasks", "issues", "ops_notes", "work_guides"):
+    # confluence_url 컬럼 — 모든 작성형 엔티티 (tasks/issues/ops_notes/work_guides/
+    # command_entries/workflows/mindmaps)에 공통으로 Confluence 문서 링크를 저장.
+    for tbl in (
+        "tasks", "issues", "ops_notes", "work_guides",
+        "command_entries", "workflows", "mindmaps",
+    ):
         if tbl in inspector.get_table_names():
             cols = [col["name"] for col in inspector.get_columns(tbl)]
             if "confluence_url" not in cols:
@@ -415,6 +418,17 @@ def _run_migrations():
                     with engine.begin() as conn:
                         conn.execute(text("ALTER TABLE node_server_specs ALTER COLUMN disk_type TYPE VARCHAR(255)"))
                 break
+
+    # batch_jobs: 저장형 자격증명 컬럼 추가 (스케줄 실행용)
+    if "batch_jobs" in inspector.get_table_names():
+        bj_cols = [col["name"] for col in inspector.get_columns("batch_jobs")]
+        for col_name, col_type in [
+            ("encrypted_password", "TEXT"),
+            ("encrypted_private_key", "TEXT"),
+        ]:
+            if col_name not in bj_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE batch_jobs ADD COLUMN {col_name} {col_type}"))
 
 
 def _seed_default_metric_cards():

@@ -8,6 +8,7 @@ Adds cluster/namespace/pod browsing endpoints so the UI can drill down from a
 selected cluster instead of forcing the user to paste pod info manually.
 """
 
+import fnmatch
 import logging
 import os
 from datetime import datetime
@@ -494,6 +495,27 @@ def fetch_incident_context(
 
 
 # ── helpers ─────────────────────────────────────────────────────────
+
+
+def _matches_csv_glob(name: str, csv_glob: str) -> bool:
+    """CSV 로 구분된 glob 패턴 중 하나라도 매치하면 True.
+
+    빈 문자열(공백만 포함 포함) 이면 "필터 없음" 으로 간주해 True 반환.
+    빈 세그먼트(연속 콤마)는 무시 — 그 자체로 모든 것을 매치하지 않음.
+
+    예:
+        _matches_csv_glob("kube-system", "kube-*,monitoring") -> True
+        _matches_csv_glob("default",     "kube-*,monitoring") -> False
+        _matches_csv_glob("anything",    "")                  -> True
+    """
+    if not csv_glob.strip():
+        return True
+    for pat in csv_glob.split(","):
+        pat = pat.strip()
+        if pat and fnmatch.fnmatch(name, pat):
+            return True
+    return False
+
 
 _BAD_WAITING_REASONS = {
     "CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull",

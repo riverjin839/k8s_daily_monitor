@@ -14,6 +14,7 @@ from app.services.deep_checkers.cert_expiry_checker import CertExpiryChecker
 from app.services.deep_checkers.cni_flow_checker import CniFlowChecker
 from app.services.deep_checkers.coredns_health_checker import CoreDnsHealthChecker
 from app.services.deep_checkers.etcd_defrag_checker import EtcdDefragChecker
+from app.services.deep_checkers.external_to_pod_checker import ExternalToPodChecker
 from app.services.deep_checkers.image_pull_checker import ImagePullChecker
 from app.services.deep_checkers.node_pressure_checker import NodePressureChecker
 from app.services.deep_checkers.oom_events_checker import OomEventsChecker
@@ -225,6 +226,39 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
             ],
             default_thresholds={"warning_count": 1, "critical_count": 5},
             default_params={"window_hours": 24},
+        ),
+    ),
+    "external_to_pod": (
+        ExternalToPodChecker,
+        DeepCheckTypeSpec(
+            check_type="external_to_pod",
+            display_name="외부 → 내부 Pod 호출",
+            description=(
+                "관리 backend (DevOps Management 가 기동된 클러스터) 에서 대상 클러스터의 "
+                "외부 노출 endpoint (URL 또는 host:port) 로 호출을 시도해 실패율 점검. "
+                "endpoints 가 비면 Cluster.api_endpoint + api_probe_path 를 자동 사용."
+            ),
+            threshold_fields=[
+                DeepCheckFieldSpec("warning_failure_pct", "float", "실패율 경고 (%)", 10),
+                DeepCheckFieldSpec("critical_failure_pct", "float", "실패율 심각 (%)", 30),
+            ],
+            param_fields=[
+                DeepCheckFieldSpec("endpoints", "list", "추가 endpoint (URL 또는 host:port, 줄바꿈 구분)", []),
+                DeepCheckFieldSpec("api_probe_path", "string", "api_endpoint 자동 probe 경로", "/healthz"),
+                DeepCheckFieldSpec("http_timeout_seconds", "int", "HTTP/TCP timeout (초)", 5),
+                DeepCheckFieldSpec("per_endpoint_retries", "int", "endpoint 당 재시도 횟수", 0),
+                DeepCheckFieldSpec("verify_tls", "boolean", "TLS 인증서 검증", False),
+                DeepCheckFieldSpec("caller_label", "string", "호출자(외부) 라벨", "management-cluster (devops_management)"),
+            ],
+            default_thresholds={"warning_failure_pct": 10, "critical_failure_pct": 30},
+            default_params={
+                "endpoints": [],
+                "api_probe_path": "/healthz",
+                "http_timeout_seconds": 5,
+                "per_endpoint_retries": 0,
+                "verify_tls": False,
+                "caller_label": "management-cluster (devops_management)",
+            },
         ),
     ),
     "pod_to_pod": (

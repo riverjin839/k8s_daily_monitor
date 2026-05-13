@@ -69,17 +69,20 @@ class WorkflowEdgeResponse(BaseModel):
 class WorkflowCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
+    confluence_url: Optional[str] = Field(None, max_length=2048)
 
 
 class WorkflowUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
+    confluence_url: Optional[str] = Field(None, max_length=2048)
 
 
 class WorkflowResponse(BaseModel):
     id: UUID
     title: str
     description: Optional[str] = None
+    confluence_url: Optional[str] = None
     steps: List[WorkflowStepResponse] = []
     edges: List[WorkflowEdgeResponse] = []
     created_at: datetime

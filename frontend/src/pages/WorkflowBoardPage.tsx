@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   GitFork, Plus, Trash2, Check, X, ChevronRight,
   Pencil, Zap, Play, GitBranch, Clock, Bell,
-  ZoomIn, ZoomOut, Maximize2, LayoutGrid, Link2,
+  ZoomIn, ZoomOut, Maximize2, LayoutGrid, Link2, ExternalLink,
 } from 'lucide-react';
 import { workflowsApi } from '@/services/api';
 import { useToast } from '@/components/common';
@@ -162,6 +162,9 @@ export function WorkflowBoardPage() {
   // workflow create
   const [showCreateWf, setShowCreateWf] = useState(false);
   const [newWfTitle, setNewWfTitle] = useState('');
+  const [newWfConfluence, setNewWfConfluence] = useState('');
+  const [editingHeaderConfluence, setEditingHeaderConfluence] = useState(false);
+  const [headerConfluenceDraft, setHeaderConfluenceDraft] = useState('');
 
   // step editing
   const [editingStep, setEditingStep] = useState<string | null>(null);
@@ -221,12 +224,14 @@ export function WorkflowBoardPage() {
 
   // ── mutations ─────────────────────────────────────────────────────────────────
   const createWorkflow = useMutation({
-    mutationFn: (title: string) => workflowsApi.create({ title }),
+    mutationFn: ({ title, confluenceUrl }: { title: string; confluenceUrl?: string }) =>
+      workflowsApi.create({ title, confluenceUrl }),
     onSuccess: (res) => {
       invalidate();
       setSelectedId(res.data.id);
       setShowCreateWf(false);
       setNewWfTitle('');
+      setNewWfConfluence('');
     },
   });
 
@@ -435,29 +440,44 @@ export function WorkflowBoardPage() {
         </div>
 
         {showCreateWf && (
-          <div className="px-3 py-3 border-b border-border bg-secondary/30">
+          <div className="px-3 py-3 border-b border-border bg-secondary/30 space-y-2">
             <input
               type="text"
               value={newWfTitle}
               onChange={(e) => setNewWfTitle(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && newWfTitle.trim()) createWorkflow.mutate(newWfTitle.trim());
-                if (e.key === 'Escape') { setShowCreateWf(false); setNewWfTitle(''); }
+                if (e.key === 'Enter' && newWfTitle.trim()) {
+                  createWorkflow.mutate({
+                    title: newWfTitle.trim(),
+                    confluenceUrl: newWfConfluence.trim() || undefined,
+                  });
+                }
+                if (e.key === 'Escape') { setShowCreateWf(false); setNewWfTitle(''); setNewWfConfluence(''); }
               }}
               placeholder="워크플로우 이름"
               className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded focus:outline-none focus:border-primary"
               autoFocus
             />
-            <div className="flex gap-2 mt-2">
+            <input
+              type="url"
+              value={newWfConfluence}
+              onChange={(e) => setNewWfConfluence(e.target.value)}
+              placeholder="Confluence URL (선택)"
+              className="w-full px-2 py-1.5 text-xs bg-background border border-border rounded focus:outline-none focus:border-primary"
+            />
+            <div className="flex gap-2">
               <button
-                onClick={() => newWfTitle.trim() && createWorkflow.mutate(newWfTitle.trim())}
+                onClick={() => newWfTitle.trim() && createWorkflow.mutate({
+                  title: newWfTitle.trim(),
+                  confluenceUrl: newWfConfluence.trim() || undefined,
+                })}
                 disabled={!newWfTitle.trim()}
                 className="flex-1 px-2 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
               >
                 생성
               </button>
               <button
-                onClick={() => { setShowCreateWf(false); setNewWfTitle(''); }}
+                onClick={() => { setShowCreateWf(false); setNewWfTitle(''); setNewWfConfluence(''); }}
                 className="flex-1 px-2 py-1 text-xs bg-secondary text-foreground rounded hover:bg-secondary/80"
               >
                 취소
@@ -600,6 +620,71 @@ export function WorkflowBoardPage() {
                       {selectedWf.title}
                     </h2>
                     <Pencil className="w-3 h-3 text-muted-foreground/40 group-hover/title:text-primary transition-colors flex-shrink-0" />
+                  </button>
+                )}
+
+                {/* Confluence 링크 — 설정되어 있으면 열기 + ✏ 로 인라인 편집, 없으면 + Confluence */}
+                {editingHeaderConfluence ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="url"
+                      value={headerConfluenceDraft}
+                      onChange={(e) => setHeaderConfluenceDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          updateWorkflow.mutate({
+                            id: selectedWf.id,
+                            d: { confluenceUrl: headerConfluenceDraft.trim() || undefined },
+                          });
+                          setEditingHeaderConfluence(false);
+                        }
+                        if (e.key === 'Escape') setEditingHeaderConfluence(false);
+                      }}
+                      placeholder="Confluence URL"
+                      className="text-[11px] bg-background border border-primary rounded px-2 py-0.5 focus:outline-none w-64"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => {
+                        updateWorkflow.mutate({
+                          id: selectedWf.id,
+                          d: { confluenceUrl: headerConfluenceDraft.trim() || undefined },
+                        });
+                        setEditingHeaderConfluence(false);
+                      }}
+                      className="p-1 rounded text-emerald-400 hover:bg-emerald-500/10"
+                    >
+                      <Check className="w-3 h-3" />
+                    </button>
+                    <button onClick={() => setEditingHeaderConfluence(false)} className="p-1 rounded text-muted-foreground hover:bg-secondary">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : selectedWf.confluenceUrl ? (
+                  <div className="inline-flex items-center gap-0.5">
+                    <a
+                      href={selectedWf.confluenceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                      title={selectedWf.confluenceUrl}
+                    >
+                      <ExternalLink className="w-3 h-3" /> Confluence
+                    </a>
+                    <button
+                      onClick={() => { setHeaderConfluenceDraft(selectedWf.confluenceUrl ?? ''); setEditingHeaderConfluence(true); }}
+                      className="p-0.5 rounded text-muted-foreground/50 hover:text-primary hover:bg-secondary"
+                      title="Confluence 링크 수정"
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setHeaderConfluenceDraft(''); setEditingHeaderConfluence(true); }}
+                    className="text-[11px] px-1.5 py-0.5 rounded-full border border-dashed border-border text-muted-foreground/70 hover:text-primary hover:border-primary/40 transition-colors inline-flex items-center gap-1"
+                  >
+                    <Link2 className="w-3 h-3" /> Confluence
                   </button>
                 )}
                 {/* 진행률 바 + 상태별 카운트 — 기획 게시판이라 진행 추적이 핵심 */}

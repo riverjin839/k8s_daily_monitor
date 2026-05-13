@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 from uuid import UUID
 from typing import Optional, Any
@@ -46,6 +46,7 @@ class MindMapNodeResponse(MindMapNodeBase):
 class MindMapBase(BaseModel):
     title: str
     description: Optional[str] = None
+    confluence_url: Optional[str] = Field(default=None, max_length=2048)
 
 
 class MindMapCreate(MindMapBase):
@@ -55,6 +56,7 @@ class MindMapCreate(MindMapBase):
 class MindMapUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
+    confluence_url: Optional[str] = Field(default=None, max_length=2048)
 
 
 class MindMapResponse(MindMapBase):

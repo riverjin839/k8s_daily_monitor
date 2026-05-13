@@ -31,6 +31,8 @@ class CommandEntry(Base):
     # 수동 정렬 — 동일 importance / pinned 안에서 정렬 키
     sort_order = Column(Integer, nullable=False, default=1000)
     author = Column(String(100), nullable=True)
+    # Confluence 문서 링크 (선택)
+    confluence_url = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

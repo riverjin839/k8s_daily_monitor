@@ -17,6 +17,7 @@ from app.services.deep_checkers.etcd_defrag_checker import EtcdDefragChecker
 from app.services.deep_checkers.image_pull_checker import ImagePullChecker
 from app.services.deep_checkers.node_pressure_checker import NodePressureChecker
 from app.services.deep_checkers.oom_events_checker import OomEventsChecker
+from app.services.deep_checkers.pod_to_pod_checker import PodToPodChecker
 from app.services.deep_checkers.pvc_health_checker import PvcHealthChecker
 from app.services.deep_checkers.stuck_terminating_checker import StuckTerminatingChecker
 
@@ -224,6 +225,38 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
             ],
             default_thresholds={"warning_count": 1, "critical_count": 5},
             default_params={"window_hours": 24},
+        ),
+    ),
+    "pod_to_pod": (
+        PodToPodChecker,
+        DeepCheckTypeSpec(
+            check_type="pod_to_pod",
+            display_name="Pod-to-pod 연결성",
+            description=(
+                "일회용 busybox 파드를 띄워 무작위 워크로드 파드 IP:포트 로 "
+                "nc TCP probe 를 돌려 실패율 점검 (pods.create 권한 필요)"
+            ),
+            threshold_fields=[
+                DeepCheckFieldSpec("warning_failure_pct", "float", "실패율 경고 (%)", 10),
+                DeepCheckFieldSpec("critical_failure_pct", "float", "실패율 심각 (%)", 30),
+            ],
+            param_fields=[
+                DeepCheckFieldSpec("targets_max", "int", "샘플링할 타깃 pod 개수", 8),
+                DeepCheckFieldSpec("per_probe_timeout", "int", "probe 1건 timeout (초)", 3),
+                DeepCheckFieldSpec("probe_namespace", "string", "probe pod 가 생성될 namespace", "default"),
+                DeepCheckFieldSpec("image", "string", "probe 컨테이너 이미지", "busybox:1.36"),
+                DeepCheckFieldSpec("skip_host_network", "boolean", "hostNetwork pod 제외", True),
+                DeepCheckFieldSpec("namespaces", "list", "대상 namespace 화이트리스트 (빈값=전체)", []),
+            ],
+            default_thresholds={"warning_failure_pct": 10, "critical_failure_pct": 30},
+            default_params={
+                "targets_max": 8,
+                "per_probe_timeout": 3,
+                "probe_namespace": "default",
+                "image": "busybox:1.36",
+                "skip_host_network": True,
+                "namespaces": [],
+            },
         ),
     ),
 }

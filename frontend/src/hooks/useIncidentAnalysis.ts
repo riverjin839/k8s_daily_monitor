@@ -1,6 +1,18 @@
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { analyzeApi } from '@/services/api';
 import type { IncidentAnalysisRequest } from '@/types';
+
+/** 값이 N ms 동안 안정되면 그 시점의 값을 반환. 타이핑 중 매 키 입력마다
+ *  refetch 가 발생하지 않게 하기 위함. */
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebounced(value), delayMs);
+    return () => window.clearTimeout(t);
+  }, [value, delayMs]);
+  return debounced;
+}
 
 export function useAnalyzerHealth() {
   return useQuery({
@@ -22,20 +34,26 @@ export function useAnalyzeIncident() {
  *
  *  큰 클러스터 대비 — 기본은 fast path (백엔드 with_counts=false) 로 ns 이름만 빠르게.
  *  ``onlyWithIssues=true`` 거나 ``withCounts=true`` 일 때만 클러스터 전체 pod fetch
- *  (느린 경로) 가 발동된다. */
+ *  (느린 경로) 가 발동된다. ``namespacePattern`` / ``podPattern`` 으로 그 비용을 좁힐 수 있다.
+ *
+ *  패턴 값은 300ms 동안 안정된 뒤에야 queryKey 에 반영 — 타이핑 중 refetch 폭주 방지. */
 export function useAnalyzeNamespaces(
   clusterId: string,
   onlyWithIssues = false,
   withCounts = false,
+  namespacePattern = '',
+  podPattern = '',
 ) {
+  const dNsPattern  = useDebouncedValue(namespacePattern, 300);
+  const dPodPattern = useDebouncedValue(podPattern, 300);
   return useQuery({
-    queryKey: ['analyzer', 'namespaces', clusterId, onlyWithIssues, withCounts],
+    queryKey: ['analyzer', 'namespaces', clusterId, onlyWithIssues, withCounts, dNsPattern, dPodPattern],
     queryFn: () =>
-      analyzeApi.listNamespaces(clusterId, onlyWithIssues, withCounts).then((r) => r.data),
+      analyzeApi
+        .listNamespaces(clusterId, onlyWithIssues, withCounts, dNsPattern, dPodPattern)
+        .then((r) => r.data),
     enabled: !!clusterId,
     staleTime: 1000 * 30,
-    // 큰 클러스터에서 with_counts/only_with_issues 가 켜진 경우 axios 기본 0(no-timeout) 또는
-    // 너무 짧은 값이면 502/504 가 사용자에게 노출됨. 명시적으로 2분 허용.
   });
 }
 

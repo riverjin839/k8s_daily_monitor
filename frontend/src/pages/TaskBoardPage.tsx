@@ -1,46 +1,19 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ClusterSidebar, ViewModeBar } from '@/components/common';
-import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, GripVertical, Kanban, GitBranch } from 'lucide-react';
+import { Plus, Download, ListTodo, Search, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { TaskCalendar, TaskKanban, TaskTableRow, AddTaskRow } from '@/components/tasks';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
-import { ServiceChip } from '@/components/services/ServiceChip';
 import { MODULE_CONFIG } from '@/components/tasks/taskKanbanUtils';
 import { useTasks, useCreateTask, useDeleteTask } from '@/hooks/useTasks';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { tasksApi } from '@/services/api';
 import { useLocalOrder } from '@/hooks/useLocalOrder';
-import { stripHtml } from '@/lib/utils';
 import { Task, TaskModule } from '@/types';
-
-function formatDateTime(dateStr?: string | null): string {
-  if (!dateStr) return '-';
-  const d = new Date(dateStr);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function hasLocalImages(id: string): boolean {
-  try {
-    const raw = localStorage.getItem('k8s:img:task:' + id);
-    if (!raw) return false;
-    const arr = JSON.parse(raw) as string[];
-    return arr.length > 0;
-  } catch {
-    return false;
-  }
-}
-
-const PRIORITY_STYLES: Record<string, { dot: string; label: string; text: string }> = {
-  high: { dot: 'bg-red-500', label: '높음', text: 'text-red-400' },
-  medium: { dot: 'bg-blue-500', label: '보통', text: 'text-blue-400' },
-  low: { dot: 'bg-slate-400', label: '낮음', text: 'text-slate-400' },
-};
 
 type ViewMode = 'table' | 'calendar' | 'kanban';
 

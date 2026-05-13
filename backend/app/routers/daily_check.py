@@ -43,6 +43,13 @@ class DailyCheckResponse(BaseModel):
     warning_messages: Optional[list]
     checked_at: datetime
     check_duration_seconds: Optional[int]
+    # AI 자동 리뷰 (review_service.py 가 채움)
+    ai_summary: Optional[str] = None
+    ai_remediation: Optional[str] = None
+    ai_diff: Optional[dict] = None
+    ai_trend: Optional[dict] = None
+    ai_status: Optional[str] = None
+    ai_generated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

@@ -58,6 +58,22 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.run_batch_job_dispatcher",
         "schedule": crontab(minute="*"),
     },
+    # Deep check — daily check 15분 뒤. Super Pod (centralized) 모드용.
+    "daily-deep-check-morning": {
+        "task": "app.celery_app.run_deep_check_all",
+        "schedule": crontab(hour=9, minute=15),
+        "args": ("morning",),
+    },
+    "daily-deep-check-noon": {
+        "task": "app.celery_app.run_deep_check_all",
+        "schedule": crontab(hour=13, minute=15),
+        "args": ("noon",),
+    },
+    "daily-deep-check-evening": {
+        "task": "app.celery_app.run_deep_check_all",
+        "schedule": crontab(hour=18, minute=15),
+        "args": ("evening",),
+    },
 }
 
 
@@ -258,6 +274,77 @@ def run_batch_job_dispatcher(self):
             "dispatched_ids": dispatched,
             "skipped": skipped_reasons,
             "executed_at": now.isoformat(),
+        }
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_review_and_notify")
+def run_review_and_notify(self, daily_check_log_id: str):
+    """Ollama 기반 AI 리뷰 생성 → DailyCheckLog 에 저장 → 알림 채널 fan-out.
+
+    DailyChecker.run_daily_check() commit 직후 .delay() 로 호출된다.
+    Ollama / Notifier 가 fail-safe 라 이 태스크가 raise 해도 점검 자체는 영향 없음.
+    """
+    from app.database import SessionLocal
+    from app.services.review_service import ReviewService
+
+    db = SessionLocal()
+    try:
+        svc = ReviewService(db)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(svc.review_and_persist(daily_check_log_id))
+        finally:
+            loop.close()
+
+        # 알림은 best-effort. 실패해도 리뷰 결과는 남는다.
+        try:
+            from app.services.notifier import notify_for_check_log
+            notify_for_check_log(db, daily_check_log_id)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Notifier dispatch failed")
+
+        return {
+            "daily_check_log_id": daily_check_log_id,
+            "ai_status": result.get("ai_status"),
+        }
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.run_deep_check_all")
+def run_deep_check_all(self, schedule_type: str = "manual"):
+    """모든 클러스터에 대해 deep check 를 centralized 모드로 실행.
+
+    각 클러스터의 가장 최근 DailyCheckLog 에 결과를 묶어 저장한다.
+    """
+    from app.database import SessionLocal
+    from app.models import Cluster
+    from app.services.deep_check_service import DeepCheckService
+
+    db = SessionLocal()
+    try:
+        svc = DeepCheckService(db)
+        clusters = db.query(Cluster).all()
+        results = []
+        for cluster in clusters:
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    n = loop.run_until_complete(svc.run_for_cluster(str(cluster.id)))
+                finally:
+                    loop.close()
+                results.append({"cluster": cluster.name, "checks_run": n})
+            except Exception as e:
+                results.append({"cluster": cluster.name, "error": str(e)})
+        return {
+            "schedule_type": schedule_type,
+            "executed_at": datetime.now().isoformat(),
+            "results": results,
         }
     finally:
         db.close()

@@ -47,6 +47,10 @@ from app.routers import (
     ansible_files_router,
     ansible_inventories_router,
     auth_router,
+    deep_check_router,
+    deep_check_ingest_router,
+    deep_check_definitions_router,
+    notifications_router,
 )
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
@@ -419,6 +423,50 @@ def _run_migrations():
                         conn.execute(text("ALTER TABLE node_server_specs ALTER COLUMN disk_type TYPE VARCHAR(255)"))
                 break
 
+    # daily_check_logs: AI 자동 리뷰 필드 추가
+    if "daily_check_logs" in inspector.get_table_names():
+        dcl_cols = [c["name"] for c in inspector.get_columns("daily_check_logs")]
+        for col_name, col_type in [
+            ("ai_summary", "TEXT"),
+            ("ai_remediation", "TEXT"),
+            ("ai_diff", "JSONB"),
+            ("ai_trend", "JSONB"),
+            ("ai_status", "VARCHAR(20)"),
+            ("ai_generated_at", "TIMESTAMP WITHOUT TIME ZONE"),
+        ]:
+            if col_name not in dcl_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE daily_check_logs ADD COLUMN {col_name} {col_type}"
+                    ))
+
+    # deep_check_definitions / deep_check_results — Super Pod 결과 저장.
+    # SQLAlchemy create_all 이 이미 생성하지만, 명시적으로 인덱스/idempotent 보장.
+    if "deep_check_definitions" in inspector.get_table_names():
+        with engine.begin() as conn:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_deep_check_definitions_cluster "
+                "ON deep_check_definitions(cluster_id)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_deep_check_definitions_type "
+                "ON deep_check_definitions(check_type)"
+            ))
+    if "deep_check_results" in inspector.get_table_names():
+        with engine.begin() as conn:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_deep_check_results_cluster "
+                "ON deep_check_results(cluster_id)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_deep_check_results_daily_log "
+                "ON deep_check_results(daily_check_log_id)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_deep_check_results_checked_at "
+                "ON deep_check_results(checked_at)"
+            ))
+
     # batch_jobs: 저장형 자격증명 컬럼 추가 (스케줄 실행용)
     if "batch_jobs" in inspector.get_table_names():
         bj_cols = [col["name"] for col in inspector.get_columns("batch_jobs")]
@@ -658,6 +706,38 @@ def _seed_default_playbooks():
         db.close()
 
 
+def _seed_default_deep_check_definitions():
+    """Seed default DeepCheckDefinition rows if the table is empty.
+
+    Registry 의 모든 check_type 을 글로벌 (cluster_id=NULL) 정의로 1개씩 등록.
+    이미 행이 있으면 사용자 편집 보존을 위해 건너뜀.
+    """
+    from app.models.deep_check import DeepCheckDefinition
+    from app.services.deep_checkers import REGISTRY
+
+    db = SessionLocal()
+    try:
+        if db.query(DeepCheckDefinition).count() > 0:
+            return
+        sort_order = 0
+        for ct, (_, spec) in REGISTRY.items():
+            db.add(DeepCheckDefinition(
+                cluster_id=None,
+                check_type=ct,
+                name=spec.display_name,
+                description=spec.description,
+                enabled=True,
+                schedule_cron=None,
+                thresholds=dict(spec.default_thresholds),
+                params=dict(spec.default_params),
+                sort_order=sort_order,
+            ))
+            sort_order += 10
+        db.commit()
+    finally:
+        db.close()
+
+
 def _seed_initial_admin():
     """Create the bootstrap admin if no users exist yet. Idempotent."""
     db = SessionLocal()
@@ -684,6 +764,7 @@ async def lifespan(app: FastAPI):
     _seed_default_metric_cards()
     _seed_default_trend_sources()
     _seed_default_playbooks()
+    _seed_default_deep_check_definitions()
     _seed_initial_admin()
     yield
     # Shutdown: 필요한 정리 작업
@@ -723,6 +804,8 @@ app.add_middleware(
 # Public routers (no auth) — login + liveness/readiness probes.
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
+# Super pod ingest 는 bearer 토큰만 자체 검증 — JWT 의존성 없음.
+app.include_router(deep_check_ingest_router, prefix="/api/v1")
 
 # Protected routers — every endpoint below requires a valid JWT.
 _auth = [Depends(get_current_user)]
@@ -761,6 +844,10 @@ app.include_router(batch_jobs_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(commands_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ansible_files_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ansible_inventories_router, prefix="/api/v1", dependencies=_auth)
+# Deep check 결과 조회/관리/이력 — JWT 보호.
+app.include_router(deep_check_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(deep_check_definitions_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(notifications_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/")

@@ -1192,4 +1192,64 @@ export const batchJobsApi = {
     api.get<{ data: BatchJobRun[] }>(`/batch-jobs/${id}/runs`, { params: { limit } }),
 };
 
+// ─── Deep Check / Daily Check Review / Notifications ─────────────────
+
+import type {
+  DeepCheckDefinition,
+  DeepCheckDefinitionInput,
+  DeepCheckResult,
+  DeepCheckReview,
+  DeepCheckTestResult,
+  DeepCheckTypeSchema,
+  DailyCheckTrend,
+  NotificationChannel,
+  NotificationChannelInput,
+  NotificationLogEntry,
+} from '@/types';
+
+export const deepCheckApi = {
+  listResults: (clusterId: string, params?: { limit?: number; offset?: number }) =>
+    api.get<DeepCheckResult[]>(`/deep-check/results/${clusterId}`, { params }),
+  latestResults: (clusterId: string) =>
+    api.get<DeepCheckResult[]>(`/deep-check/results/${clusterId}/latest`),
+  review: (dailyCheckLogId: string) =>
+    api.get<DeepCheckReview>(`/deep-check/review/${dailyCheckLogId}`),
+  regenerateReview: (dailyCheckLogId: string) =>
+    api.post<DeepCheckReview>(`/deep-check/review/${dailyCheckLogId}/regenerate`),
+  trend: (clusterId: string, days = 7) =>
+    api.get<DailyCheckTrend>(`/deep-check/trend/${clusterId}`, { params: { days } }),
+  runNow: (clusterId: string) =>
+    api.post<{ status: string; checksRun: number }>(`/deep-check/run/${clusterId}`),
+};
+
+export const deepCheckDefinitionsApi = {
+  listCheckTypes: () => api.get<DeepCheckTypeSchema[]>('/deep-check/check-types'),
+  list: (params?: { clusterId?: string; includeGlobal?: boolean }) =>
+    api.get<DeepCheckDefinition[]>('/deep-check/definitions', { params }),
+  get: (id: string) => api.get<DeepCheckDefinition>(`/deep-check/definitions/${id}`),
+  create: (data: DeepCheckDefinitionInput) =>
+    api.post<DeepCheckDefinition>('/deep-check/definitions', data),
+  update: (id: string, data: DeepCheckDefinitionInput) =>
+    api.put<DeepCheckDefinition>(`/deep-check/definitions/${id}`, data),
+  remove: (id: string) => api.delete(`/deep-check/definitions/${id}`),
+  test: (id: string, clusterId?: string) =>
+    api.post<DeepCheckTestResult>(
+      `/deep-check/definitions/${id}/test`,
+      undefined,
+      { params: clusterId ? { cluster_id: clusterId } : undefined },
+    ),
+};
+
+export const notificationsApi = {
+  list: () => api.get<NotificationChannel[]>('/notifications/channels'),
+  create: (data: NotificationChannelInput) =>
+    api.post<NotificationChannel>('/notifications/channels', data),
+  update: (id: string, data: NotificationChannelInput) =>
+    api.put<NotificationChannel>(`/notifications/channels/${id}`, data),
+  remove: (id: string) => api.delete(`/notifications/channels/${id}`),
+  test: (id: string) => api.post<NotificationLogEntry>(`/notifications/test/${id}`),
+  log: (limit = 50) =>
+    api.get<NotificationLogEntry[]>('/notifications/log', { params: { limit } }),
+};
+
 export default api;

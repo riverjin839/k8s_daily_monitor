@@ -267,6 +267,47 @@ openclaw:
     intervalSeconds: "30"
 
 # ============================================
+# Super Pod — Deep Daily Check
+# 같은 backend 이미지를 새 엔트리포인트로 띄워, 인증서 만료/etcd 단편화/
+# CNI flow/PVC/이미지풀/RBAC 등 deep check 를 수행한다.
+# ============================================
+deepcheck:
+  # -- centralized 모드 CronJob 활성화 (관리 클러스터에서 모든 등록 클러스터 점검)
+  enabled: true
+  # -- 09:15/13:15/18:15 KST (= UTC 00:15/04:15/09:15)
+  schedule: "15 0,4,9 * * *"
+  # -- 동일 backend 이미지 재사용
+  image:
+    repository: ""        # 빈 값이면 backend.image.repository 사용
+    tag: ""               # 빈 값이면 backend.image.tag 사용
+    pullPolicy: IfNotPresent
+  # -- 1회 실행 timeout (초)
+  activeDeadlineSeconds: 1200
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  # -- Job 보관 개수
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  # -- Ingest 토큰 (in-cluster 모드 대상 클러스터에서 push 시 사용)
+  ingestToken: "change-me-in-production"
+  # -- 알림 채널 기본값. UI 에서 NotificationChannel 로 동적으로도 추가 가능.
+  notifications:
+    slack:
+      webhookUrl: ""
+    smtp:
+      host: ""
+      port: 587
+      user: ""
+      password: ""
+      from: "k8s-monitor@example.com"
+      useTLS: true
+
+# ============================================
 # NodePort (폐쇄망/개발용)
 # ============================================
 nodePort:

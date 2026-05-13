@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: k8s-monitor-agent
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - cronjob.yaml
+  # secret.yaml 은 secret.yaml.tmpl 에서 복사해 손으로 채운 뒤 추가하세요.
+  # - secret.yaml

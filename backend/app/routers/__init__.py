@@ -37,6 +37,9 @@ from app.routers.ansible_assets import (
     inv_router as ansible_inventories_router,
 )
 from app.routers.auth import router as auth_router
+from app.routers.deep_check import router as deep_check_router, ingest_router as deep_check_ingest_router
+from app.routers.deep_check_definitions import router as deep_check_definitions_router
+from app.routers.notifications import router as notifications_router
 
 __all__ = [
     "clusters_router",
@@ -76,4 +79,8 @@ __all__ = [
     "ansible_files_router",
     "ansible_inventories_router",
     "auth_router",
+    "deep_check_router",
+    "deep_check_ingest_router",
+    "deep_check_definitions_router",
+    "notifications_router",
 ]

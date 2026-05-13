@@ -1659,3 +1659,172 @@ export interface ServiceCatalogItem {
 }
 export interface ServiceCatalogResponse { services: ServiceCatalogItem[] }
 export interface ServiceEntryListResponse { data: ServiceEntry[]; total: number }
+
+// ─── Deep Check / Super Pod / 알림 ─────────────────────────────────────
+
+export type DeepCheckType =
+  | 'cert_expiry'
+  | 'etcd_defrag'
+  | 'cni_flow'
+  | 'pvc_health'
+  | 'image_pull'
+  | 'audit_rbac'
+  | string;
+
+export interface DeepCheckFieldSpec {
+  name: string;
+  type: 'int' | 'float' | 'string' | 'boolean' | 'list' | string;
+  label: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  default: any;
+  help?: string | null;
+}
+
+export interface DeepCheckTypeSchema {
+  checkType: DeepCheckType;
+  displayName: string;
+  description: string;
+  thresholdFields: DeepCheckFieldSpec[];
+  paramFields: DeepCheckFieldSpec[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  defaultThresholds: Record<string, any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  defaultParams: Record<string, any>;
+}
+
+export interface DeepCheckDefinition {
+  id: string;
+  clusterId?: string | null;
+  checkType: DeepCheckType;
+  name: string;
+  description?: string | null;
+  enabled: boolean;
+  scheduleCron?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  thresholds?: Record<string, any> | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  params?: Record<string, any> | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type DeepCheckDefinitionInput = Omit<
+  DeepCheckDefinition,
+  'id' | 'createdAt' | 'updatedAt'
+>;
+
+export interface DeepCheckResult {
+  id: string;
+  clusterId: string;
+  dailyCheckLogId?: string | null;
+  definitionId?: string | null;
+  checkType: DeepCheckType;
+  status: Status;
+  message?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  details?: Record<string, any> | null;
+  durationMs: number;
+  checkedAt: string;
+}
+
+export interface DeepCheckTestResult {
+  definitionId: string;
+  checkType: DeepCheckType;
+  status: Status;
+  message: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  details?: Record<string, any> | null;
+  durationMs: number;
+  persistedResultId?: string;
+}
+
+export interface DiffSummary {
+  available: boolean;
+  previousLogId?: string;
+  previousCheckedAt?: string | null;
+  errorsAdded?: string[];
+  errorsRemoved?: string[];
+  warningsAdded?: string[];
+  warningsRemoved?: string[];
+  statusChanged?: boolean;
+  previousStatus?: string | null;
+  currentStatus?: string | null;
+  readyNodesDelta?: number;
+}
+
+export interface TrendPoint {
+  checkedAt: string | null;
+  status: string;
+  errors: number;
+  warnings: number;
+  readyNodes: number;
+  totalNodes: number;
+}
+
+export interface TrendSummary {
+  days: number;
+  available: boolean;
+  totals?: Record<string, number>;
+  points: TrendPoint[];
+}
+
+export interface DailyCheckTrend {
+  clusterId: string;
+  days: number;
+  points: Array<{
+    id: string;
+    checkedAt: string | null;
+    overallStatus: string;
+    scheduleType?: string | null;
+    readyNodes: number;
+    totalNodes: number;
+    errors: number;
+    warnings: number;
+  }>;
+  totals: Record<string, number>;
+}
+
+export interface DeepCheckReview {
+  dailyCheckLogId: string;
+  clusterId: string;
+  overallStatus: Status;
+  aiSummary?: string | null;
+  aiRemediation?: string | null;
+  aiDiff?: DiffSummary | null;
+  aiTrend?: TrendSummary | null;
+  aiStatus?: string | null;
+  aiGeneratedAt?: string | null;
+  deepResults: DeepCheckResult[];
+}
+
+export type NotificationChannelType = 'slack' | 'email' | 'webhook' | 'k8s_event';
+
+export interface NotificationChannel {
+  id: string;
+  name: string;
+  channelType: NotificationChannelType;
+  enabled: boolean;
+  clusterId?: string | null;
+  minSeverity: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  config?: Record<string, any> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type NotificationChannelInput = Omit<
+  NotificationChannel,
+  'id' | 'createdAt' | 'updatedAt'
+>;
+
+export interface NotificationLogEntry {
+  id: string;
+  channelId?: string | null;
+  dailyCheckLogId?: string | null;
+  status: string;
+  subject?: string | null;
+  body?: string | null;
+  error?: string | null;
+  sentAt: string;
+}

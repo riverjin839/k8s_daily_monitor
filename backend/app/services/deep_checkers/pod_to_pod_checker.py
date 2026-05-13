@@ -10,6 +10,8 @@ podIP:컨테이너포트 로 ``nc -z -w <timeout>`` TCP probe 를 돌린다. 결
 - ``per_probe_timeout``   : nc -w 값 (초, 기본 3).
 - ``image``               : probe 컨테이너 이미지 (기본 busybox:1.36).
 - ``skip_host_network``   : hostNetwork pod 제외 (기본 true).
+- ``probe_namespace``     : 일회용 probe pod 가 생성될 namespace (기본 ``devops``).
+                            해당 ns 가 대상 클러스터에 없거나 pods.create 권한이 없으면 pending.
 
 임계:
 - ``warning_failure_pct`` : 실패율 ≥ X 면 warning (기본 10).
@@ -51,7 +53,7 @@ class PodToPodChecker(DeepCheckerBase):
         per_probe_timeout = int(ctx.params.get("per_probe_timeout", 3))
         image = ctx.params.get("image", "busybox:1.36")
         skip_host_network = bool(ctx.params.get("skip_host_network", True))
-        probe_namespace = ctx.params.get("probe_namespace", "default")
+        probe_namespace = ctx.params.get("probe_namespace", "devops")
         seed = ctx.params.get("seed")  # 재현용 옵션
 
         # 1) 타깃 pod 후보 수집

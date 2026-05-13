@@ -5,3 +5,12 @@ metadata:
   labels:
     app.kubernetes.io/name: k8s-monitor-agent
     app.kubernetes.io/part-of: k8s-daily-monitor
+---
+# pod_to_pod 체커의 일회용 probe pod 가 띄워질 ns. 이미 존재하면 apply 가 멱등.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: devops
+  labels:
+    app.kubernetes.io/name: deepcheck-probe
+    app.kubernetes.io/part-of: k8s-daily-monitor

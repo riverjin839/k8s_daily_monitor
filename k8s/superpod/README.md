@@ -47,3 +47,8 @@ kubectl logs -n k8s-monitor-agent -l job-name=test-now
 | 404 Cluster not found | CLUSTER_ID 가 관리 backend 에 등록되지 않음 |
 | `cert_expiry` 가 항상 pending | kubeadm 미설치 또는 pods/exec 거부 |
 | `cni_flow` 가 항상 pending | Cilium / Hubble 미설치 (정상 동작) |
+| `pod_to_pod` 가 항상 pending | `devops` ns 미존재 또는 pods.create 거부 |
+
+`pod_to_pod` 체커는 일회용 busybox probe pod 를 `devops` ns 에 띄웁니다.
+`namespace.yaml` 이 해당 ns 도 함께 생성하므로 별도 작업이 필요 없습니다.
+다른 ns 를 쓰려면 UI 에서 정의의 `probe_namespace` 파라미터를 변경하세요.

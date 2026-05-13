@@ -277,7 +277,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
             param_fields=[
                 DeepCheckFieldSpec("targets_max", "int", "샘플링할 타깃 pod 개수", 8),
                 DeepCheckFieldSpec("per_probe_timeout", "int", "probe 1건 timeout (초)", 3),
-                DeepCheckFieldSpec("probe_namespace", "string", "probe pod 가 생성될 namespace", "default"),
+                DeepCheckFieldSpec("probe_namespace", "string", "probe pod 가 생성될 namespace", "devops"),
                 DeepCheckFieldSpec("image", "string", "probe 컨테이너 이미지", "busybox:1.36"),
                 DeepCheckFieldSpec("skip_host_network", "boolean", "hostNetwork pod 제외", True),
                 DeepCheckFieldSpec("namespaces", "list", "대상 namespace 화이트리스트 (빈값=전체)", []),
@@ -286,7 +286,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
             default_params={
                 "targets_max": 8,
                 "per_probe_timeout": 3,
-                "probe_namespace": "default",
+                "probe_namespace": "devops",
                 "image": "busybox:1.36",
                 "skip_host_network": True,
                 "namespaces": [],

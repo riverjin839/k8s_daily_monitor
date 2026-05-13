@@ -5,12 +5,12 @@ import { Plus, Download, Pencil, Trash2, ListTodo, Search, X, ImagePlus, Calenda
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { TaskCalendar, TaskKanban } from '@/components/tasks';
+import { TaskCalendar, TaskKanban, TaskTableRow, AddTaskRow } from '@/components/tasks';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { ServiceChip } from '@/components/services/ServiceChip';
 import { MODULE_CONFIG } from '@/components/tasks/taskKanbanUtils';
-import { useTasks, useDeleteTask } from '@/hooks/useTasks';
+import { useTasks, useCreateTask, useDeleteTask } from '@/hooks/useTasks';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { tasksApi } from '@/services/api';
@@ -90,25 +90,6 @@ function SortTh({
   );
 }
 
-function SortableTaskRow({
-  id, isDragDisabled, children,
-}: { id: string; isDragDisabled: boolean; children: React.ReactNode }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: isDragDisabled });
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
-  return (
-    <tr ref={setNodeRef} style={style} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
-      <td className="px-2 py-3 w-7">
-        {!isDragDisabled && (
-          <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground p-0.5 rounded">
-            <GripVertical className="w-4 h-4" />
-          </button>
-        )}
-      </td>
-      {children}
-    </tr>
-  );
-}
-
 export function TaskBoardPage() {
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>('table');
@@ -184,6 +165,7 @@ export function TaskBoardPage() {
     : dndTasks;
 
   const deleteTask = useDeleteTask();
+  const createTask = useCreateTask();
 
   const handleDelete = (task: Task) => {
     if (!confirm(`"${task.taskCategory}" 작업을 삭제하시겠습니까?`)) return;
@@ -492,113 +474,23 @@ export function TaskBoardPage() {
                 <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={(e: DragEndEvent) => { if (e.over) dndHandleDragEnd(String(e.active.id), String(e.over.id)); }}>
                   <SortableContext items={sortedTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
                   <tbody>
-                  {sortedTasks.map((task) => {
-                    const pStyle = PRIORITY_STYLES[task.priority] ?? PRIORITY_STYLES.medium;
-                    const hasImages = hasLocalImages(task.id);
-                    const ks = task.kanbanStatus ?? 'todo';
-                    const KS_DOT: Record<string, string> = {
-                      backlog: 'bg-slate-400', todo: 'bg-blue-400', in_progress: 'bg-amber-400',
-                      review_test: 'bg-purple-400', done: 'bg-emerald-400',
-                    };
-                    const KS_TEXT: Record<string, string> = {
-                      backlog: 'text-slate-400', todo: 'text-blue-400', in_progress: 'text-amber-400',
-                      review_test: 'text-purple-400', done: 'text-emerald-400',
-                    };
-                    const KS_LABEL: Record<string, string> = {
-                      backlog: 'Backlog', todo: 'To Do', in_progress: 'In Progress',
-                      review_test: 'Review', done: 'Done',
-                    };
-                    return (
-                      <SortableTaskRow key={task.id} id={task.id} isDragDisabled={!!sortKey}>
-                        <td className="px-4 py-3 cursor-pointer" onClick={() => openTaskDetail(task)}>
-                          <span className="flex items-center gap-1.5">
-                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${KS_DOT[ks] ?? 'bg-slate-400'}`} />
-                            <span className={`text-xs font-medium whitespace-nowrap ${KS_TEXT[ks] ?? 'text-slate-400'}`}>
-                              {KS_LABEL[ks] ?? ks}
-                            </span>
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 cursor-pointer" onClick={() => openTaskDetail(task)}>
-                          <span className="flex items-center gap-1.5">
-                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${pStyle.dot}`} />
-                            <span className={`text-xs font-medium ${pStyle.text}`}>{pStyle.label}</span>
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 font-medium whitespace-nowrap cursor-pointer" onClick={() => openTaskDetail(task)}>
-                          <div className="flex items-center gap-1.5">
-                            <span className="px-2 py-0.5 text-[11px] rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                              정: {task.primaryAssignee || task.assignee}
-                            </span>
-                            {task.secondaryAssignee && (
-                              <span className="px-2 py-0.5 text-[11px] rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                                부: {task.secondaryAssignee}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap cursor-pointer" onClick={() => openTaskDetail(task)}>
-                          {task.clusterName || '-'}
-                        </td>
-                        <td className="px-4 py-3 cursor-pointer" onClick={() => openTaskDetail(task)}>
-                          <div className="flex items-center gap-1 flex-wrap">
-                            <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
-                              {task.taskCategory}
-                            </span>
-                            {task.service && <ServiceChip service={task.service} />}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => openTaskDetail(task)}>
-                          <div className="flex items-start gap-1.5">
-                            <p className="line-clamp-2 text-foreground/90">{stripHtml(task.taskContent)}</p>
-                            {hasImages && (
-                              <span title="이미지 첨부 있음"><ImagePlus className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" /></span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 max-w-xs cursor-pointer" onClick={() => openTaskDetail(task)}>
-                          <p className="line-clamp-2 text-muted-foreground">
-                            {stripHtml(task.resultContent) || '-'}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => openTaskDetail(task)}>
-                          {formatDateTime(task.scheduledAt)}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-mono text-xs cursor-pointer" onClick={() => openTaskDetail(task)}>
-                          {formatDateTime(task.completedAt)}
-                        </td>
-                        <td className="px-4 py-3 max-w-[120px] cursor-pointer" onClick={() => openTaskDetail(task)}>
-                          <p className="line-clamp-2 text-muted-foreground text-xs">
-                            {task.remarks || '-'}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleEdit(task); }}
-                              className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
-                              title="수정"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleAddSubTask(task); }}
-                              className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-primary"
-                              title="하위 작업 추가"
-                            >
-                              <GitBranch className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDelete(task); }}
-                              className="p-1.5 hover:bg-red-500/10 rounded-md transition-colors text-muted-foreground hover:text-red-400"
-                              title="삭제"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </SortableTaskRow>
-                    );
-                  })}
+                  {sortedTasks.map((task) => (
+                    <TaskTableRow
+                      key={task.id}
+                      task={task}
+                      clusters={clusters}
+                      isDragDisabled={!!sortKey}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                      onAddSubTask={handleAddSubTask}
+                    />
+                  ))}
+                  <AddTaskRow
+                    clusters={clusters}
+                    defaultClusterId={filterClusterId || undefined}
+                    defaultAssignee={filterAssignee || undefined}
+                    onCreate={(data) => createTask.mutate(data)}
+                  />
                 </tbody>
                 </SortableContext>
                 </DndContext>

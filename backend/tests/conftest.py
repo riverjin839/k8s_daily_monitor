@@ -1,42 +1,42 @@
 """
 Shared pytest configuration and fixtures.
 
-Stubs out optional/heavy third-party modules that are not installed in the
-current test environment so that collection of pure-unit tests (e.g.
-test_csv_glob.py) works without requiring the full production dependency set.
+When the test environment is missing optional third-party modules that pytest
+collection touches via app imports, register minimal stubs so pure-unit tests
+(e.g. test_csv_glob.py) can still be collected and run. If the real module is
+already importable (CI, full dev env) we leave it alone — the stub MUST NOT
+shadow the real package.
 """
+import importlib.util
 import os
 import sys
 import types
 
 
-def _make_stub(name: str) -> types.ModuleType:
+def _stub_if_missing(name: str) -> types.ModuleType | None:
+    """Register a stub module under `name` only if the real one isn't importable."""
+    if name in sys.modules:
+        return sys.modules[name]
+    if importlib.util.find_spec(name) is not None:
+        return None
     mod = types.ModuleType(name)
     sys.modules[name] = mod
     return mod
 
 
-# ── Stub modules that are not pip-installable in this env ─────────────────
+# ── Optional deps that only some tests need ─────────────────────────────
+# `feedparser` is used by trends/rss_collector; `jose` by app.auth.security.
+# Real packages exist in CI/full-dev requirements.txt and will be left alone.
 
-for _missing in ("feedparser", "jose"):
-    if _missing not in sys.modules:
-        _make_stub(_missing)
+_stub_if_missing("feedparser")
 
-# jose sub-modules referenced by app.auth.security
-for _sub in ("jose.jwt", "jose.JWTError"):
-    pkg, _, _ = _sub.partition(".")
-    if _sub not in sys.modules:
-        _stub = _make_stub(_sub)
-        # expose JWTError as a class so `from jose import JWTError` works
-        if _sub == "jose.JWTError":
-            pass  # handled below
-
-# Make `from jose import jwt, JWTError` importable
-_jose = sys.modules.get("jose") or _make_stub("jose")
-if not hasattr(_jose, "jwt"):
-    _jose.jwt = _make_stub("jose.jwt")  # type: ignore[attr-defined]
-if not hasattr(_jose, "JWTError"):
-    _jose.JWTError = Exception  # type: ignore[attr-defined]
+if _stub_if_missing("jose") is not None:
+    # Real jose absent — also stub the symbols app code imports.
+    jose = sys.modules["jose"]
+    if not hasattr(jose, "jwt"):
+        jose.jwt = _stub_if_missing("jose.jwt") or types.ModuleType("jose.jwt")
+    if not hasattr(jose, "JWTError"):
+        jose.JWTError = Exception  # type: ignore[attr-defined]
 
 
 # ── Standard env-vars required by app.config / SQLAlchemy engine init ──────

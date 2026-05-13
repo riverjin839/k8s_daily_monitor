@@ -1,20 +1,14 @@
-import { useState, useMemo } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2, ArrowUpRight, Cable } from 'lucide-react';
+import { Pencil, Trash2, AlertTriangle, RefreshCw, Loader2, ArrowUpRight, Cable, Server } from 'lucide-react';
 import type { Cluster, ClusterCustomField } from '@/types';
 import { useUpdateCluster } from '@/hooks/useCluster';
-import { InlineEdit } from '@/components/common';
+import { InlineEdit, ClusterIconPicker } from '@/components/common';
+import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { STATUS_STYLE } from './constants';
-import { useOperationLevels, levelBadgeClass, levelLabel, levelColor, levelIcon } from '@/hooks/useOperationLevels';
+import { useOperationLevels, levelBadgeClass, levelLabel, levelColor } from '@/hooks/useOperationLevels';
 import { ClusterCustomCell } from './ClusterCustomCell';
-import {
-  extractInterfaceIps,
-  extractInternalIps,
-  groupInternalIps,
-  groupNodeIpsByInterface,
-  groupLegacyNodeIps,
-  parseNodeIps,
-} from './internalIp';
+import { extractInterfaceIps, extractInternalIps, groupInternalIps, parseNodeIps } from './internalIp';
 
 interface ClusterTableRowProps {
   cluster: Cluster;
@@ -76,10 +70,15 @@ function EditableCell({
 export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, onCilium, onAutoUpdate, autoUpdatingId, customFields = [], onCollectNodeIps, collectingNodeIpsId, onCollectNics }: ClusterTableRowProps) {
   const updateCluster = useUpdateCluster();
   const [editingField, setEditingField] = useState<EditField>(null);
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const iconAnchorRef = useRef<HTMLButtonElement | null>(null);
 
   const quickUpdate = (patch: Partial<Cluster>) => {
     updateCluster.mutate({ id: cluster.id, data: patch }, { onSettled: () => setEditingField(null) });
   };
+
+  const resolvedIcon = resolveClusterIcon(cluster.icon);
+  const FallbackIcon = Server;
   const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
   const { data: opsLevels } = useOperationLevels();
   const lv = cluster.operationLevel ? levelBadgeClass(levelColor(opsLevels, cluster.operationLevel)) : undefined;
@@ -100,18 +99,33 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       <td className="px-3 py-2.5">
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />
-          {cluster.operationLevel && (
-            <span
-              className="text-base leading-none flex-shrink-0"
-              title={`운영레벨: ${levelLabel(opsLevels, cluster.operationLevel)}`}
-            >
-              {levelIcon(opsLevels, cluster.operationLevel)}
-            </span>
-          )}
+          <button
+            ref={iconAnchorRef}
+            type="button"
+            onClick={() => setIconPickerOpen(true)}
+            className="flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors flex-shrink-0"
+            title="사이드바 아이콘 변경 (현재: status 자동)"
+            aria-label="아이콘 변경"
+          >
+            {resolvedIcon?.kind === 'text'
+              ? <span className="text-base leading-none" aria-hidden>{resolvedIcon.value}</span>
+              : resolvedIcon?.kind === 'lucide'
+                ? <resolvedIcon.Component className="w-4 h-4" />
+                : <FallbackIcon className="w-4 h-4 opacity-50" />}
+          </button>
           <span className="font-medium text-sm text-foreground">{cluster.name}</span>
         </div>
         {cluster.hostname && (
           <p className="text-[10px] font-mono text-muted-foreground mt-0.5 ml-4">{cluster.hostname}</p>
+        )}
+        {iconPickerOpen && (
+          <ClusterIconPicker
+            value={cluster.icon}
+            clusterName={cluster.name}
+            anchorRect={iconAnchorRef.current?.getBoundingClientRect() ?? null}
+            onChange={(next) => updateCluster.mutate({ id: cluster.id, data: { icon: next } })}
+            onClose={() => setIconPickerOpen(false)}
+          />
         )}
       </td>
       <td className="px-3 py-2.5">
@@ -152,9 +166,8 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             {(opsLevels ?? []).map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
           </select>
         ) : cluster.operationLevel ? (
-          <span className={`inline-flex items-center gap-0.5 text-[11px] px-2 py-0.5 rounded-full border ${lv}`}>
-            <span>{levelIcon(opsLevels, cluster.operationLevel)}</span>
-            <span>{levelLabel(opsLevels, cluster.operationLevel)}</span>
+          <span className={`text-[11px] px-2 py-0.5 rounded-full border ${lv}`}>
+            {levelLabel(opsLevels, cluster.operationLevel)}
           </span>
         ) : <span className="text-muted-foreground/60 text-xs">-</span>}
       </EditableCell>
@@ -338,9 +351,8 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
         </div>
       </td>
 
-      {/* 노드 IP 목록 — INTERNAL_IP 와 동일한 정규식/Glob 표기로 묶어 표시.
-          (인터페이스명, scope) 단위로 그룹핑 후 /24 단위 마지막 옥텟 압축. */}
-      <td className="px-3 py-2.5 align-top">
+      {/* 노드 IP 목록 — 노드당 여러 IP (bond0/bond1) + public/private 스코프 표시 */}
+      <td className="px-3 py-2.5">
         {(() => {
           if (!cluster.nodeIps) {
             const isCollecting = collectingNodeIpsId === cluster.id;
@@ -366,84 +378,97 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
             );
           }
           try {
-            const entries = parseNodeIps(cluster.nodeIps);
-            if (entries.length === 0) {
-              return <p className="text-[10px] font-mono text-muted-foreground truncate">{cluster.nodeIps}</p>;
-            }
-            const nodeCount = entries.length;
-            const masterCount = entries.filter((n) => n.master).length;
-            const hasIfaces = entries.some((n) => (n.interfaces?.length ?? 0) > 0);
-
-            if (hasIfaces) {
-              const buckets = groupNodeIpsByInterface(entries);
-              const pubBuckets = buckets.filter((b) => b.scope === 'public').length;
-              return (
-                <div className="text-[11px] font-mono space-y-1">
-                  {buckets.map((b) => {
-                    const isPub = b.scope === 'public';
-                    return (
-                      <div key={`${b.iface}-${b.scope}`} className="space-y-0.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-foreground/80 font-medium">{b.iface}</span>
-                          <span
-                            className={`text-[9px] px-1 rounded ${
-                              isPub
-                                ? 'bg-amber-500/10 text-amber-500'
-                                : b.scope === 'private'
-                                  ? 'bg-sky-500/10 text-sky-500'
-                                  : 'bg-muted text-muted-foreground/70'
-                            }`}
-                            title={`scope: ${b.scope}`}
-                          >
-                            {b.scope}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground/60 ml-auto tabular-nums">
-                            {b.ips.length}
-                          </span>
-                        </div>
-                        <div className="pl-2 space-y-0.5">
-                          {b.groups.map((g, i) => (
-                            <p
-                              key={`${b.iface}-${b.scope}-${i}`}
-                              className="text-foreground tabular-nums"
-                              title={b.ips.join(', ')}
-                            >
-                              {g}
-                            </p>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div className="flex items-center gap-2 pt-0.5 text-[10px] text-muted-foreground/80">
-                    <span title="kubectl 로 수집된 노드 수">노드 {nodeCount}{masterCount > 0 && ` (master ${masterCount})`}</span>
-                    {pubBuckets > 0 && (
-                      <span className="text-amber-500/80" title="public IP 보유 (iface, scope) 버킷 수">
-                        public {pubBuckets}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            }
-
-            // legacy — interfaces 미수집, .ip/.ips 만 있음
-            const legacy = groupLegacyNodeIps(entries);
+            const arr = JSON.parse(cluster.nodeIps) as {
+              name: string;
+              ip?: string;
+              ips?: string[];
+              externalIp?: string;
+              external_ip?: string;
+              master?: boolean;
+              interfaces?: { name: string; ips: string[]; scopes?: string[]; operstate?: string | null }[];
+            }[];
+            const shown = arr.slice(0, 4);
+            const rest = arr.length - shown.length;
+            const multiCount = arr.filter((n) => (n.ips?.length ?? 0) > 1).length;
+            const hasIfaces = arr.some((n) => (n.interfaces?.length ?? 0) > 0);
+            const pubCount = arr.reduce((s, n) =>
+              s + (n.interfaces ?? []).reduce((s2, ifc) =>
+                s2 + (ifc.scopes ?? []).filter((sc) => sc === 'public').length, 0), 0);
             return (
               <div className="text-[11px] font-mono space-y-0.5">
-                {legacy.groups.length > 0 ? (
-                  legacy.groups.map((g, i) => (
-                    <p key={i} className="text-foreground tabular-nums" title={legacy.ips.join(', ')}>{g}</p>
-                  ))
-                ) : (
-                  <p className="text-muted-foreground/60">-</p>
-                )}
-                <div className="flex items-center gap-2 pt-0.5 text-[10px] text-muted-foreground/80">
-                  <span>노드 {nodeCount}{masterCount > 0 && ` (master ${masterCount})`}</span>
-                  <span>· IP {legacy.ips.length}</span>
-                  <span className="text-muted-foreground/60" title="NIC 상세 미수집 — 'NIC 수집' 실행 시 인터페이스별로 분리됩니다.">
-                    NIC 미수집
-                  </span>
+                {shown.map((n) => {
+                  const ifaces = n.interfaces ?? [];
+                  if (ifaces.length > 0) {
+                    return (
+                      <div key={n.name} className="space-y-0.5"
+                        title={`${n.name}${n.externalIp ? ` · ext: ${n.externalIp}` : ''}`}>
+                        <div className={`flex items-center gap-1 ${n.master ? 'text-foreground' : 'text-foreground/80'}`}>
+                          {n.master && <span className="inline-block w-1 h-1 rounded-full bg-primary align-middle" />}
+                          <span className="text-[10px] text-muted-foreground/80 truncate max-w-[120px]">{n.name}</span>
+                        </div>
+                        {ifaces.map((ifc) => {
+                          const scopes = ifc.scopes ?? [];
+                          const ips = ifc.ips ?? [];
+                          return (
+                            <div key={`${n.name}-${ifc.name}`} className="flex items-center gap-1 flex-wrap pl-2">
+                              <span className="text-[9px] text-muted-foreground/70">{ifc.name}</span>
+                              {ips.map((ip, i) => {
+                                const sc = scopes[i] ?? 'unknown';
+                                const isPub = sc === 'public';
+                                return (
+                                  <span key={ip}
+                                    className={`text-[10px] px-1 rounded ${
+                                      isPub
+                                        ? 'bg-amber-500/10 text-amber-500'
+                                        : 'bg-sky-500/10 text-sky-500'
+                                    }`}
+                                    title={isPub ? 'public' : sc}>
+                                    {ip}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  }
+                  // legacy 포맷 — interfaces 없는 경우
+                  const ips = n.ips && n.ips.length > 0 ? n.ips : (n.ip ? [n.ip] : []);
+                  return (
+                    <div key={n.name} className={n.master ? 'text-foreground' : 'text-muted-foreground'}
+                      title={`${n.name}${n.externalIp ? ` · ext: ${n.externalIp}` : ''}`}>
+                      {n.master && <span className="inline-block w-1 h-1 rounded-full bg-primary mr-1 align-middle" />}
+                      {ips.length === 0
+                        ? <span className="text-muted-foreground/60">?</span>
+                        : ips.length === 1
+                          ? ips[0]
+                          : (
+                            <span>
+                              {ips[0]}
+                              <span className="text-muted-foreground/60"> +{ips.length - 1}</span>
+                            </span>
+                          )}
+                    </div>
+                  );
+                })}
+                {rest > 0 && <p className="text-muted-foreground/70">+{rest} more</p>}
+                <div className="flex items-center gap-2 pt-0.5">
+                  {multiCount > 0 && (
+                    <span className="text-[10px] text-primary/70" title="노드당 IP 여러 개 (bond0/bond1 등)">
+                      다중 IP {multiCount}대
+                    </span>
+                  )}
+                  {pubCount > 0 && (
+                    <span className="text-[10px] text-amber-500/80" title="public IP 보유 NIC 수">
+                      public {pubCount}건
+                    </span>
+                  )}
+                  {!hasIfaces && (
+                    <span className="text-[10px] text-muted-foreground/60" title="NIC 상세 미수집 — 'NIC 수집' 실행 시 채워집니다.">
+                      NIC 미수집
+                    </span>
+                  )}
                 </div>
               </div>
             );

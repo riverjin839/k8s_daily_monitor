@@ -337,6 +337,7 @@ export function NodeSpecPage() {
           onSelect={setClusterId}
           allowAll
           allLabel="전체 (등록 + 미배정)"
+          iconOnly
         />
 
         <div className="flex-1 min-w-0">

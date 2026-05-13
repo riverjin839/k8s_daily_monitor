@@ -42,6 +42,7 @@ export function NodeLabelsPage() {
           clusters={clusters}
           selectedId={activeClusterId || null}
           onSelect={(id) => setSelectedClusterId(id ?? '')}
+          iconOnly
         />
         <div className="flex-1 min-w-0">
         {/* Header */}

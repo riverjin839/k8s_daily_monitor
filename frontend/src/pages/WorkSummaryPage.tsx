@@ -32,6 +32,7 @@ export function WorkSummaryPage() {
           onSelect={setSelectedClusterId}
           allowAll
           allLabel="전체 현황"
+          iconOnly
         />
 
         <main className="flex-1 min-w-0 space-y-3">

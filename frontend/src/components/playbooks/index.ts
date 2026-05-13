@@ -1,4 +1,5 @@
 export { PlaybookCard } from './PlaybookCard';
-export { PlaybookTable } from './PlaybookTable';
+export { PlaybookListRow } from './PlaybookListRow';
+export { PlaybookLogDialog } from './PlaybookLogDialog';
 export { AddPlaybookModal } from './AddPlaybookModal';
 export { RunCredsModal } from './RunCredsModal';

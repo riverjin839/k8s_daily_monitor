@@ -61,6 +61,7 @@ export function NodeImagesPage() {
           clusters={clusters}
           selectedId={activeClusterId || null}
           onSelect={(id) => setSelectedClusterId(id ?? '')}
+          iconOnly
         />
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-6">

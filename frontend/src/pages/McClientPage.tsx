@@ -134,7 +134,7 @@ export function McClientPage() {
   return (
     <div className="min-h-screen bg-background">
       <main className="mx-auto px-6 py-6 flex gap-5">
-        <ClusterSidebar clusters={clusters} selectedId={clusterId || null} onSelect={(id) => { setClusterId(id ?? ''); setResult(null); }} />
+        <ClusterSidebar clusters={clusters} selectedId={clusterId || null} onSelect={(id) => { setClusterId(id ?? ''); setResult(null); }} iconOnly />
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-6">

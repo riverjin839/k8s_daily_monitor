@@ -5,7 +5,7 @@ import {
   GitCommit, RefreshCw, Square, Clock, Share2, X, ChevronDown, ChevronUp,
   Server, Cpu, Network, Settings2, HardDrive, Search, FileSpreadsheet, FileText,
 } from 'lucide-react';
-import { useClusters, useReorderClusters } from '@/hooks/useCluster';
+import { useClusters } from '@/hooks/useCluster';
 import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, SkeletonCard } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { versionsApi, type ComponentSnapshot } from '@/services/api';
@@ -807,7 +807,6 @@ function DiffPanel({
 export function VersionsPage() {
   const queryClient = useQueryClient();
   const { data: clusters = [] } = useClusters();
-  const reorder = useReorderClusters();
   const toast = useToast();
   const [clusterId, setClusterId] = useState<string>('');
   const [etcdModalOpen, setEtcdModalOpen] = useState(false);
@@ -930,12 +929,7 @@ export function VersionsPage() {
           clusters={clusters}
           selectedId={clusterId || null}
           onSelect={(id) => setClusterId(id ?? '')}
-          onReorder={(ids) => {
-            reorder.mutate(ids, {
-              onSuccess: () => toast.success('순서 저장됨', '클러스터 정렬을 갱신했습니다.'),
-              onError: (err: unknown) => toast.error('정렬 저장 실패', formatApiError(err)),
-            });
-          }}
+          iconOnly
         />
         <div className="flex-1 min-w-0">
         <DebugLogPanel pageKey="versions" extra={{ clusterId, components: current?.components?.length ?? 0, pending: collect.isPending }} />

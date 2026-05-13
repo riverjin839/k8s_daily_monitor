@@ -179,6 +179,7 @@ export function EtcdCtlPage() {
           clusters={clusters}
           selectedId={clusterId || null}
           onSelect={(id) => { setClusterId(id ?? ''); setResult(null); setSelectedMasterName(''); }}
+          iconOnly
         />
         <div className="flex-1 min-w-0">
         {/* 헤더 */}

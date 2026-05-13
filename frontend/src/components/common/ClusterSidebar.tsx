@@ -10,7 +10,10 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import type { Cluster, Status } from '@/types';
 import { useSidebarStore } from '@/stores/sidebarStore';
+import { useUpdateCluster } from '@/hooks/useCluster';
+import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { ResizeHandle } from './ResizeHandle';
+import { ClusterIconPicker } from './ClusterIconPicker';
 
 interface ClusterSidebarProps {
   clusters: Cluster[];
@@ -126,12 +129,17 @@ interface IconRailButtonProps {
   label: string;
   /** 우측 상단 작은 상태 도트 색상 (Tailwind class). 미지정 시 도트 미표시. */
   dotClass?: string;
-  Icon: React.ComponentType<{ className?: string }>;
+  /** 표시할 lucide 컴포넌트. emojiText 와 동시 지정되면 emojiText 우선. */
+  Icon?: React.ComponentType<{ className?: string }>;
+  /** 표시할 텍스트(주로 emoji 1자). Icon 보다 우선. */
+  emojiText?: string;
   active?: boolean;
   onClick: () => void;
+  /** 우클릭 핸들러 — 클러스터 행에서 아이콘 picker 호출에 사용. */
+  onContextMenu?: (e: React.MouseEvent) => void;
 }
 
-function IconRailButton({ label, dotClass, Icon, active, onClick }: IconRailButtonProps) {
+function IconRailButton({ label, dotClass, Icon, emojiText, active, onClick, onContextMenu }: IconRailButtonProps) {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   // viewport 좌표 — 부모 overflow 를 회피하기 위해 portal 로 렌더한다.
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
@@ -151,6 +159,7 @@ function IconRailButton({ label, dotClass, Icon, active, onClick }: IconRailButt
         type="button"
         aria-label={label}
         onClick={onClick}
+        onContextMenu={onContextMenu}
         onMouseEnter={showTooltip}
         onMouseLeave={hideTooltip}
         onFocus={showTooltip}
@@ -164,7 +173,11 @@ function IconRailButton({ label, dotClass, Icon, active, onClick }: IconRailButt
         {active && (
           <span aria-hidden className="absolute left-0 top-1.5 -translate-x-[3px] w-1 h-7 bg-primary rounded-r" />
         )}
-        <Icon className="w-5 h-5" />
+        {emojiText
+          ? <span className="text-lg leading-none select-none" aria-hidden>{emojiText}</span>
+          : Icon
+            ? <Icon className="w-5 h-5" />
+            : <Server className="w-5 h-5" />}
         {dotClass && (
           <span
             aria-hidden
@@ -192,7 +205,52 @@ function IconRailButton({ label, dotClass, Icon, active, onClick }: IconRailButt
  */
 function ClusterSidebarIconRail({
   clusters, selectedId, onSelect, highlightActive, allowAll, allLabel,
-}: Pick<ClusterSidebarProps, 'clusters' | 'selectedId' | 'onSelect' | 'highlightActive' | 'allowAll' | 'allLabel'>) {
+  multiSelect, selectedIds, onMultiSelectChange,
+}: Pick<ClusterSidebarProps,
+  'clusters' | 'selectedId' | 'onSelect' | 'highlightActive' | 'allowAll' | 'allLabel'
+  | 'multiSelect' | 'selectedIds' | 'onMultiSelectChange'
+>) {
+  const selectedSet = multiSelect ? new Set(selectedIds ?? []) : null;
+  const isAllActive = multiSelect
+    ? (selectedSet?.size ?? 0) === 0
+    : selectedId === null;
+
+  // 우클릭 시 띄우는 아이콘 picker 의 대상 cluster 와 anchor 좌표.
+  const [pickerTarget, setPickerTarget] = useState<Cluster | null>(null);
+  const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null);
+  const updateCluster = useUpdateCluster();
+
+  // multiSelect 에서 "전체" 클릭 → 선택 비우기 (=전체로 간주). 단일 모드에서는 onSelect(null).
+  const handleAllClick = () => {
+    if (multiSelect && onMultiSelectChange) onMultiSelectChange([]);
+    else onSelect(null);
+  };
+
+  // multiSelect 에서 개별 클릭 → 토글. 단일 모드에서는 onSelect(id).
+  const handleClusterClick = (id: string) => {
+    if (multiSelect && onMultiSelectChange) {
+      const next = new Set(selectedSet ?? []);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      // 원본 cluster 순서를 유지해서 내려준다.
+      onMultiSelectChange(clusters.map((c) => c.id).filter((cid) => next.has(cid)));
+    } else {
+      onSelect(id);
+    }
+  };
+
+  const handleContext = (e: React.MouseEvent, cluster: Cluster) => {
+    e.preventDefault();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setPickerAnchor(rect);
+    setPickerTarget(cluster);
+  };
+
+  const handlePickerChange = (next: string | null) => {
+    if (!pickerTarget) return;
+    updateCluster.mutate({ id: pickerTarget.id, data: { icon: next } });
+  };
+
   return (
     <aside
       style={{ width: ICON_RAIL_WIDTH }}
@@ -201,32 +259,59 @@ function ClusterSidebarIconRail({
       <div className="flex flex-col items-center gap-1">
         {allowAll && (
           <IconRailButton
-            label={`${allLabel ?? '전체'} (${clusters.length})`}
+            label={multiSelect
+              ? `${allLabel ?? '전체'} — 선택 비우기 (${selectedSet?.size ?? 0}/${clusters.length})`
+              : `${allLabel ?? '전체'} (${clusters.length})`}
             Icon={LayoutGrid}
-            active={selectedId === null && (highlightActive ?? true)}
-            onClick={() => onSelect(null)}
+            active={isAllActive && (highlightActive ?? true)}
+            onClick={handleAllClick}
           />
         )}
         {clusters.length === 0 ? (
           <p className="px-1 py-3 text-[10px] text-muted-foreground/70 text-center">없음</p>
         ) : (
           clusters.map((c) => {
-            const Icon = STATUS_ICON[c.status] ?? Server;
             const subtitle = [c.region, c.operationLevel].filter(Boolean).join(' · ');
-            const tooltip = subtitle ? `${c.name} · ${subtitle}` : c.name;
+            const isActive = multiSelect
+              ? !!selectedSet?.has(c.id)
+              : (highlightActive ?? true) && c.id === selectedId;
+            const baseTooltip = subtitle ? `${c.name} · ${subtitle}` : c.name;
+            const tooltip = multiSelect
+              ? `${baseTooltip}${isActive ? ' (선택됨 — 클릭하면 해제)' : ' (클릭하면 선택)'} · 우클릭: 아이콘 변경`
+              : `${baseTooltip} · 우클릭: 아이콘 변경`;
+
+            // 사용자 지정 아이콘이 있으면 그걸 사용, 없으면 status 기반 fallback.
+            const resolved = resolveClusterIcon(c.icon);
+            const FallbackIcon = STATUS_ICON[c.status] ?? Server;
+            const lucideIcon: React.ComponentType<{ className?: string }> =
+              resolved?.kind === 'lucide' ? resolved.Component : FallbackIcon;
+            const emojiText = resolved?.kind === 'text' ? resolved.value : undefined;
+
             return (
               <IconRailButton
                 key={c.id}
                 label={tooltip}
-                Icon={Icon}
+                Icon={lucideIcon}
+                emojiText={emojiText}
                 dotClass={STATUS_DOT[c.status] ?? 'bg-slate-400'}
-                active={(highlightActive ?? true) && c.id === selectedId}
-                onClick={() => onSelect(c.id)}
+                active={isActive}
+                onClick={() => handleClusterClick(c.id)}
+                onContextMenu={(e) => handleContext(e, c)}
               />
             );
           })
         )}
       </div>
+
+      {pickerTarget && (
+        <ClusterIconPicker
+          value={pickerTarget.icon}
+          clusterName={pickerTarget.name}
+          anchorRect={pickerAnchor}
+          onChange={handlePickerChange}
+          onClose={() => { setPickerTarget(null); setPickerAnchor(null); }}
+        />
+      )}
     </aside>
   );
 }
@@ -245,7 +330,8 @@ export function ClusterSidebar({
   const [sortMode, setSortMode] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
-  // 아이콘 레일 모드 — 메인 사이드바 스타일. multiSelect/onReorder 와 함께 쓰이는 경우는 없음.
+  // 아이콘 레일 모드 — 메인 사이드바 스타일. multiSelect 와 함께 쓰일 수 있음 (PlaybooksPage).
+  // onReorder 와 같이 쓰는 경우는 현재 없음 — 사용 시 정렬 토글은 노출되지 않음.
   if (iconOnly) {
     return (
       <ClusterSidebarIconRail
@@ -255,6 +341,9 @@ export function ClusterSidebar({
         highlightActive={highlightActive}
         allowAll={allowAll}
         allLabel={allLabel}
+        multiSelect={multiSelect}
+        selectedIds={selectedIds}
+        onMultiSelectChange={onMultiSelectChange}
       />
     );
   }

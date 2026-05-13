@@ -46,6 +46,8 @@ class ClusterBase(BaseModel):
     hostname: Optional[str] = None
     bgp_enabled: Optional[bool] = None
     as_number: Optional[str] = None
+    # 사이드바 표시용 사용자 지정 아이콘 — lucide-react 컴포넌트 이름 또는 emoji 1자.
+    icon: Optional[str] = Field(default=None, max_length=64)
 
 
 class ClusterCreate(ClusterBase):
@@ -84,6 +86,7 @@ class ClusterUpdate(BaseModel):
     hostname: Optional[str] = None
     bgp_enabled: Optional[bool] = None
     as_number: Optional[str] = None
+    icon: Optional[str] = Field(default=None, max_length=64)
 
 
 class ClusterResponse(ClusterBase):

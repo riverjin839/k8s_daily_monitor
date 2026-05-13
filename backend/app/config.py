@@ -55,7 +55,27 @@ class Settings(BaseSettings):
 
     # Kubeconfig 저장 디렉토리 (content 방식으로 등록 시 사용)
     kubeconfig_store_dir: str = "/tmp/k8s-monitor/kubeconfigs"
-    
+
+    # ─── Super Pod / Deep check ─────────────────────────────
+    # in_cluster | centralized — 같은 backend 이미지로 두 모드 모두 띄울 수 있음.
+    superpod_mode: str = "centralized"
+    # in-cluster CronJob 이 결과를 push 할 대상 (management cluster ingest URL).
+    superpod_ingest_url: str = ""
+    superpod_ingest_token: str = ""
+    # in_cluster 모드일 때 자기 자신 클러스터 식별자 (UUID 문자열 또는 이름).
+    superpod_cluster_id: str = ""
+    # 관리 네임스페이스 — K8sEvent 채널에서 사용.
+    mgmt_namespace: str = "k8s-monitor"
+
+    # ─── 알림 채널 기본값 ───────────────────────────────────
+    # SLACK_WEBHOOK_URL 은 위 OpenClaw 와 공유.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "k8s-monitor@example.com"
+    smtp_use_tls: bool = True
+
     class Config:
         env_file = ".env"
         case_sensitive = False

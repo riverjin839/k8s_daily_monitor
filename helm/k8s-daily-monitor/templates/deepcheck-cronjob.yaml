@@ -1,0 +1,49 @@
+{{- if .Values.deepcheck.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: deepcheck
+  labels:
+    app.kubernetes.io/name: deepcheck
+    app.kubernetes.io/component: superpod
+    {{- include "k8s-daily-monitor.labels" . | nindent 4 }}
+spec:
+  schedule: "{{ .Values.deepcheck.schedule }}"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: {{ .Values.deepcheck.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.deepcheck.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: {{ .Values.deepcheck.activeDeadlineSeconds }}
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: deepcheck
+            app.kubernetes.io/component: superpod
+            app.kubernetes.io/part-of: k8s-daily-monitor
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ .Values.serviceAccount.name }}
+          {{- with .Values.global.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: superpod
+              image: {{ include "k8s-daily-monitor.image" (dict "global" .Values.global "repository" (default .Values.backend.image.repository .Values.deepcheck.image.repository) "tag" (default .Values.backend.image.tag .Values.deepcheck.image.tag)) }}
+              imagePullPolicy: {{ default .Values.backend.image.pullPolicy .Values.deepcheck.image.pullPolicy }}
+              command: ["python", "-m", "app.superpod.runner"]
+              env:
+                - name: SUPERPOD_MODE
+                  value: "centralized"
+                - name: LOG_LEVEL
+                  value: "INFO"
+              envFrom:
+                - configMapRef:
+                    name: k8s-monitor-config
+                - secretRef:
+                    name: k8s-monitor-secret
+              resources:
+                {{- toYaml .Values.deepcheck.resources | nindent 16 }}
+{{- end }}

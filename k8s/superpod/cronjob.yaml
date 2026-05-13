@@ -1,0 +1,49 @@
+# in-cluster Super Pod CronJob — 대상 클러스터 내부에서 실행되어 deep check 결과를
+# 관리 backend 의 /api/v1/deep-check/ingest 로 push.
+#
+# 같은 backend 이미지를 재사용: command 만 `python -m app.superpod.runner` 로 교체.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: superpod-agent
+  namespace: k8s-monitor-agent
+  labels:
+    app.kubernetes.io/name: superpod-agent
+    app.kubernetes.io/part-of: k8s-daily-monitor
+spec:
+  schedule: "15 0,4,9 * * *"   # 09:15 / 13:15 / 18:15 KST
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 900
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: superpod-agent
+        spec:
+          restartPolicy: Never
+          serviceAccountName: superpod-agent
+          containers:
+            - name: superpod
+              # 관리 backend 와 동일한 이미지. Air-gap 에서는 사내 레지스트리로 교체.
+              image: ghcr.io/riverjin839/devops_management-backend:latest
+              imagePullPolicy: IfNotPresent
+              command: ["python", "-m", "app.superpod.runner"]
+              env:
+                - name: SUPERPOD_MODE
+                  value: "in_cluster"
+                - name: LOG_LEVEL
+                  value: "INFO"
+              envFrom:
+                - secretRef:
+                    name: superpod-agent-config
+              resources:
+                requests:
+                  memory: "256Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "1Gi"
+                  cpu: "500m"

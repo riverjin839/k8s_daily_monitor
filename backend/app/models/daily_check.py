@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Enum, ForeignKey, Integer, Boolean, Time
+from sqlalchemy import Column, String, DateTime, Enum, ForeignKey, Integer, Boolean, Time, Text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -59,6 +59,14 @@ class DailyCheckLog(Base):
     # 메타 정보
     checked_at = Column(DateTime, default=datetime.utcnow)
     check_duration_seconds = Column(Integer, nullable=True)
+
+    # AI 자동 리뷰 (review_service 가 점검 직후 채움 — Ollama 미가용이면 NULL)
+    ai_summary = Column(Text, nullable=True)
+    ai_remediation = Column(Text, nullable=True)
+    ai_diff = Column(JSONB, nullable=True)        # 어제 대비 added/removed/changed
+    ai_trend = Column(JSONB, nullable=True)       # 최근 7일 추이
+    ai_status = Column(String(20), nullable=True) # ok | offline | error
+    ai_generated_at = Column(DateTime, nullable=True)
 
     # Relationships
     cluster = relationship("Cluster", backref="daily_check_logs")

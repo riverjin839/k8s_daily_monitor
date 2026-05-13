@@ -84,6 +84,17 @@ class DailyChecker:
         self.db.commit()
         self.db.refresh(check_log)
 
+        # AI 자동 리뷰 + 알림은 Celery 로 비동기 위임 (점검 자체에는 영향 없음).
+        # broker(Redis) 가 없거나 worker 가 꺼져 있어도 silently skip.
+        try:
+            from app.celery_app import run_review_and_notify
+            run_review_and_notify.delay(str(check_log.id))
+        except Exception:
+            import logging
+            logging.getLogger(__name__).debug(
+                "Skipped AI review dispatch (Celery unavailable)", exc_info=True
+            )
+
         return check_log
 
     async def _check_api_server(self, cluster: Cluster) -> dict:

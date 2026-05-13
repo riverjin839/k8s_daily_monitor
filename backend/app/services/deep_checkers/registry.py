@@ -12,9 +12,13 @@ from app.services.deep_checkers.audit_rbac_checker import AuditRbacChecker
 from app.services.deep_checkers.base import DeepCheckerBase
 from app.services.deep_checkers.cert_expiry_checker import CertExpiryChecker
 from app.services.deep_checkers.cni_flow_checker import CniFlowChecker
+from app.services.deep_checkers.coredns_health_checker import CoreDnsHealthChecker
 from app.services.deep_checkers.etcd_defrag_checker import EtcdDefragChecker
 from app.services.deep_checkers.image_pull_checker import ImagePullChecker
+from app.services.deep_checkers.node_pressure_checker import NodePressureChecker
+from app.services.deep_checkers.oom_events_checker import OomEventsChecker
 from app.services.deep_checkers.pvc_health_checker import PvcHealthChecker
+from app.services.deep_checkers.stuck_terminating_checker import StuckTerminatingChecker
 
 
 @dataclass
@@ -149,6 +153,77 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
                 "audit_namespace": "kube-system",
                 "audit_configmap_name": "audit-policy",
             },
+        ),
+    ),
+    "node_pressure": (
+        NodePressureChecker,
+        DeepCheckTypeSpec(
+            check_type="node_pressure",
+            display_name="노드 Pressure / Condition",
+            description="DiskPressure / MemoryPressure / PIDPressure / NetworkUnavailable / NotReady 점검",
+            threshold_fields=[
+                DeepCheckFieldSpec("warning_count", "int", "영향 노드 경고 (개)", 1),
+                DeepCheckFieldSpec("critical_count", "int", "영향 노드 심각 (개)", 3),
+            ],
+            default_thresholds={"warning_count": 1, "critical_count": 3},
+            default_params={},
+        ),
+    ),
+    "coredns_health": (
+        CoreDnsHealthChecker,
+        DeepCheckTypeSpec(
+            check_type="coredns_health",
+            display_name="CoreDNS 상태",
+            description="kube-dns 파드 Ready 비율 + 최근 로그에서 error/failed 라인 비율",
+            threshold_fields=[
+                DeepCheckFieldSpec("warning_error_rate_pct", "float", "에러율 경고 (%)", 1),
+                DeepCheckFieldSpec("critical_error_rate_pct", "float", "에러율 심각 (%)", 5),
+            ],
+            param_fields=[
+                DeepCheckFieldSpec("namespace", "string", "네임스페이스", "kube-system"),
+                DeepCheckFieldSpec("label_selector", "string", "Pod label selector", "k8s-app=kube-dns"),
+                DeepCheckFieldSpec("log_tail_lines", "int", "로그 tail 라인 수", 500),
+            ],
+            default_thresholds={
+                "warning_error_rate_pct": 1,
+                "critical_error_rate_pct": 5,
+            },
+            default_params={
+                "namespace": "kube-system",
+                "label_selector": "k8s-app=kube-dns",
+                "log_tail_lines": 500,
+            },
+        ),
+    ),
+    "stuck_terminating": (
+        StuckTerminatingChecker,
+        DeepCheckTypeSpec(
+            check_type="stuck_terminating",
+            display_name="Stuck Terminating Pods",
+            description="Terminating 상태로 N분 이상 머무는 pod 검출",
+            threshold_fields=[
+                DeepCheckFieldSpec("warning_minutes", "int", "경고 (분)", 5),
+                DeepCheckFieldSpec("critical_minutes", "int", "심각 (분)", 30),
+            ],
+            default_thresholds={"warning_minutes": 5, "critical_minutes": 30},
+            default_params={},
+        ),
+    ),
+    "oom_events": (
+        OomEventsChecker,
+        DeepCheckTypeSpec(
+            check_type="oom_events",
+            display_name="OOM / Evicted 이벤트",
+            description="최근 N시간 Warning 이벤트 중 OOMKilling / Evicted / SystemOOM 카운트",
+            threshold_fields=[
+                DeepCheckFieldSpec("warning_count", "int", "경고 (건)", 1),
+                DeepCheckFieldSpec("critical_count", "int", "심각 (건)", 5),
+            ],
+            param_fields=[
+                DeepCheckFieldSpec("window_hours", "int", "관측 윈도 (시간)", 24),
+            ],
+            default_thresholds={"warning_count": 1, "critical_count": 5},
+            default_params={"window_hours": 24},
         ),
     ),
 }

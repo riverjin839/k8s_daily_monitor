@@ -1,10 +1,10 @@
 import { useId, useMemo, useState } from 'react';
 import {
-  Pencil, Plus, Search, Terminal, Trash2, Pin, AlertTriangle, Copy, Check,
+  Pencil, Plus, Search, Terminal, Trash2, Pin, AlertTriangle, Copy, Check, ExternalLink,
 } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
-import { ConfirmDialog, useToast } from '@/components/common';
+import { ConfirmDialog, ConfluenceUrlInput, useToast } from '@/components/common';
 import {
   useCommands, useCreateCommand, useDeleteCommand, useUpdateCommand,
 } from '@/hooks/useCommands';
@@ -83,6 +83,7 @@ function FormModal({ open, initial, onClose }: FormModalProps) {
   const [tags, setTags] = useState(initial?.tags ?? '');
   const [importance, setImportance] = useState<CommandImportance>(initial?.importance ?? 'medium');
   const [pinned, setPinned] = useState(initial?.pinned ?? false);
+  const [confluenceUrl, setConfluenceUrl] = useState(initial?.confluenceUrl ?? '');
   const [error, setError] = useState<string | null>(null);
 
   const fid = useId();
@@ -105,6 +106,7 @@ function FormModal({ open, initial, onClose }: FormModalProps) {
       tags: tags.trim() || undefined,
       importance,
       pinned,
+      confluenceUrl: confluenceUrl.trim() || undefined,
     };
     try {
       if (initial) {
@@ -226,6 +228,12 @@ function FormModal({ open, initial, onClose }: FormModalProps) {
               className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl"
             />
           </div>
+
+          <ConfluenceUrlInput
+            id={f('confluence')}
+            value={confluenceUrl}
+            onChange={setConfluenceUrl}
+          />
 
           {error && <div className="text-xs text-red-500">{error}</div>}
         </div>
@@ -420,6 +428,17 @@ export function CommandsPage() {
                                 </span>
                               ))}
                             </div>
+                          )}
+                          {e.confluenceUrl && (
+                            <a
+                              href={e.confluenceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors w-fit"
+                              title={e.confluenceUrl}
+                            >
+                              <ExternalLink className="w-2.5 h-2.5" /> Confluence
+                            </a>
                           )}
                         </div>
                       </td>

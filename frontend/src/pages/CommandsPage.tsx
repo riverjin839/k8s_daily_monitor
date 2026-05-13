@@ -1,10 +1,11 @@
 import { useId, useMemo, useState } from 'react';
 import {
-  Pencil, Plus, Search, Terminal, Trash2, Pin, AlertTriangle, Copy, Check, ExternalLink,
+  Plus, Search, Terminal, AlertTriangle,
 } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
 import { ConfirmDialog, ConfluenceUrlInput, useToast } from '@/components/common';
+import { CommandsTable } from '@/components/commands/CommandsTable';
 import {
   useCommands, useCreateCommand, useDeleteCommand, useUpdateCommand,
 } from '@/hooks/useCommands';
@@ -30,38 +31,6 @@ const IMPORTANCE_META: Record<CommandImportance, {
 };
 
 const IMPORTANCE_OPTIONS: CommandImportance[] = ['info', 'low', 'medium', 'high', 'critical'];
-
-function ImportanceBadge({ value }: { value: CommandImportance }) {
-  const meta = IMPORTANCE_META[value] ?? IMPORTANCE_META.medium;
-  return (
-    <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${meta.badge}`}>
-      {value === 'critical' && <AlertTriangle className="w-3 h-3" />}
-      {meta.label}
-    </span>
-  );
-}
-
-function CopyButton({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
-  const toast = useToast();
-  const onCopy = () => {
-    navigator.clipboard.writeText(value).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    }).catch(() => toast.error('복사 실패', '클립보드 권한을 확인해주세요.'));
-  };
-  return (
-    <button
-      type="button"
-      onClick={onCopy}
-      title="복사"
-      className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary rounded"
-    >
-      {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-      {copied ? '복사됨' : '복사'}
-    </button>
-  );
-}
 
 // ── 추가/수정 모달 ──────────────────────────────────────────────────────────
 interface FormModalProps {
@@ -275,6 +244,8 @@ export function CommandsPage() {
 
   const { data, isLoading } = useCommands(queryParams);
   const del = useDeleteCommand();
+  const updateInline = useUpdateCommand();
+  const createInline = useCreateCommand();
 
   const entries = useMemo(() => data?.data ?? [], [data]);
 
@@ -350,122 +321,15 @@ export function CommandsPage() {
       <MacCard bodyPadding="p-0">
         {isLoading ? (
           <p className="text-xs text-muted-foreground p-5">로딩 중…</p>
-        ) : entries.length === 0 ? (
-          <p className="text-xs text-muted-foreground p-8 text-center">
-            등록된 명령어가 없습니다. 우측 상단 [새 명령어] 로 추가하세요.
-          </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-secondary/40 text-left text-[11px] text-muted-foreground">
-                  <th className="px-3 py-2 font-medium w-24">중요도</th>
-                  <th className="px-3 py-2 font-medium w-24">카테고리</th>
-                  <th className="px-3 py-2 font-medium">명령어 / 의미 / 주의사항</th>
-                  <th className="px-3 py-2 font-medium w-24 text-right">액션</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map((e) => {
-                  const meta = IMPORTANCE_META[e.importance] ?? IMPORTANCE_META.medium;
-                  return (
-                    <tr
-                      key={e.id}
-                      className={`border-b border-border last:border-b-0 hover:bg-muted/10 border-l-4 ${meta.rowAccent}`}
-                    >
-                      <td className="px-3 py-3 align-top">
-                        <div className="flex flex-col gap-1">
-                          <ImportanceBadge value={e.importance} />
-                          {e.pinned && (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-primary">
-                              <Pin className="w-3 h-3" /> 고정
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 align-top">
-                        {e.category ? (
-                          <span className="text-[11px] font-mono text-muted-foreground bg-muted/30 px-1.5 py-0.5 rounded">
-                            {e.category}
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-muted-foreground/40">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-3 align-top">
-                        <div className="space-y-1.5">
-                          <div className="flex items-start gap-2">
-                            <pre className="flex-1 text-[12px] font-mono bg-background border border-border rounded-lg px-2 py-1.5 whitespace-pre-wrap break-all">
-                              {e.command}
-                            </pre>
-                            <CopyButton value={e.command} />
-                          </div>
-                          {e.description && (
-                            <p className="text-[12px] text-foreground/90">
-                              <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1.5">의미</span>
-                              {e.description}
-                            </p>
-                          )}
-                          {e.caution && (
-                            <div className={`text-[12px] rounded-md px-2 py-1.5 border ${meta.badge}`}>
-                              <span className="text-[10px] uppercase tracking-wider mr-1.5">주의</span>
-                              {e.caution}
-                            </div>
-                          )}
-                          {e.examples && (
-                            <details className="text-[11px] text-muted-foreground">
-                              <summary className="cursor-pointer hover:text-foreground select-none">예시 보기</summary>
-                              <pre className="mt-1 font-mono bg-muted/20 border border-border rounded p-2 whitespace-pre-wrap">
-                                {e.examples}
-                              </pre>
-                            </details>
-                          )}
-                          {e.tags && (
-                            <div className="flex flex-wrap gap-1">
-                              {e.tags.split(',').map((t) => t.trim()).filter(Boolean).map((tag) => (
-                                <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                                  #{tag}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          {e.confluenceUrl && (
-                            <a
-                              href={e.confluenceUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors w-fit"
-                              title={e.confluenceUrl}
-                            >
-                              <ExternalLink className="w-2.5 h-2.5" /> Confluence
-                            </a>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 align-top text-right">
-                        <div className="inline-flex items-center gap-1">
-                          <button
-                            onClick={() => setEditing(e)}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded-md bg-secondary hover:bg-secondary/80"
-                            title="수정"
-                          >
-                            <Pencil className="w-3 h-3" /> 수정
-                          </button>
-                          <button
-                            onClick={() => setConfirmDelete(e)}
-                            className="inline-flex items-center justify-center px-1.5 py-1 text-[11px] rounded-md text-muted-foreground hover:bg-red-500/10 hover:text-red-500"
-                            title="삭제"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <CommandsTable
+            entries={entries}
+            onUpdate={(id, data) => updateInline.mutate({ id, data })}
+            onCreate={(data) => createInline.mutate(data)}
+            onDelete={(e) => setConfirmDelete(e)}
+            onTogglePin={(e) => updateInline.mutate({ id: e.id, data: { pinned: !e.pinned } })}
+            onOpenForm={(e) => setEditing(e)}
+          />
         )}
       </MacCard>
 

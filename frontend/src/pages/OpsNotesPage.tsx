@@ -283,6 +283,16 @@ export function OpsNotesPage() {
     }
   };
 
+  /** 인라인 셀 편집 — 테이블 모드에서 service / title / author 즉시 저장. */
+  const handleInlineUpdate = async (id: string, data: Parameters<typeof opsNotesApi.update>[1]) => {
+    try {
+      await opsNotesApi.update(id, data);
+      qc.invalidateQueries({ queryKey: ['ops-notes'] });
+    } catch (e) {
+      toast.error('수정 실패', formatApiError(e));
+    }
+  };
+
   // 서비스별 카운트
   const countByService = useMemo(() => {
     const map: Record<string, number> = {};
@@ -449,6 +459,7 @@ export function OpsNotesPage() {
                 onEdit={(n) => navigate(`/ops-notes/${n.id}/edit`)}
                 onDelete={handleDelete}
                 onTogglePin={handleTogglePin}
+                onUpdate={handleInlineUpdate}
                 deletingId={deletingId}
               />
             )}

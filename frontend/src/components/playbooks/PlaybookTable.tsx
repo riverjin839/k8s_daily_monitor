@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import {
   Play, Trash2, Loader2, LayoutDashboard, Pencil, GripVertical,
   ChevronUp, ChevronDown, ArrowUpDown,
@@ -6,6 +7,7 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type D
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Playbook } from '@/types';
+import { useUpdatePlaybook } from '@/hooks/usePlaybook';
 
 type PlaybookSortKey = 'name' | 'status' | 'lastRunAt';
 
@@ -118,6 +120,41 @@ function StatsCell({ playbook }: { playbook: Playbook }) {
   );
 }
 
+function InlineRowText({
+  initial, onSave, onCancel, placeholder, className = '',
+}: {
+  initial: string;
+  onSave: (v: string) => void;
+  onCancel: () => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [v, setV] = useState(initial);
+  const committed = useRef(false);
+  const commit = () => {
+    if (committed.current) return;
+    committed.current = true;
+    const t = v.trim();
+    if (t === initial.trim()) onCancel();
+    else onSave(t);
+  };
+  return (
+    <input
+      autoFocus
+      type="text"
+      value={v}
+      onChange={(e) => setV(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        if (e.key === 'Escape') { committed.current = true; onCancel(); }
+      }}
+      onBlur={commit}
+      placeholder={placeholder}
+      className={`w-full px-2 py-1 text-sm bg-background border border-primary/40 rounded focus:outline-none focus:border-primary ${className}`}
+    />
+  );
+}
+
 function SortableRow({
   playbook, isRunning, onRun, onEdit, onDelete, onToggleDashboard,
 }: {
@@ -134,6 +171,11 @@ function SortableRow({
   const meta = STATUS_META[effectiveStatus] ?? STATUS_META.unknown;
   const result = playbook.lastResult;
 
+  const updatePlaybook = useUpdatePlaybook();
+  const [editing, setEditing] = useState<null | 'name' | 'description' | 'tags'>(null);
+  const save = (patch: Partial<Playbook>) =>
+    updatePlaybook.mutate({ id: playbook.id, data: patch }, { onSettled: () => setEditing(null) });
+
   return (
     <tr ref={setNodeRef} style={style} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors">
       <td className="px-2 py-3 w-7">
@@ -146,10 +188,46 @@ function SortableRow({
         </button>
       </td>
       <td className="px-4 py-3">
-        <div className="min-w-0">
-          <p className="font-semibold text-sm truncate">{playbook.name}</p>
-          {playbook.description && (
-            <p className="text-xs text-muted-foreground truncate mt-0.5">{playbook.description}</p>
+        <div className="min-w-0 space-y-0.5">
+          {editing === 'name' ? (
+            <InlineRowText
+              initial={playbook.name}
+              onSave={(v) => v ? save({ name: v }) : setEditing(null)}
+              onCancel={() => setEditing(null)}
+              placeholder="이름"
+            />
+          ) : (
+            <p
+              className="font-semibold text-sm truncate cursor-pointer hover:text-primary transition-colors"
+              onClick={() => setEditing('name')}
+              title="클릭하여 이름 수정"
+            >
+              {playbook.name}
+            </p>
+          )}
+          {editing === 'description' ? (
+            <InlineRowText
+              initial={playbook.description ?? ''}
+              onSave={(v) => save({ description: v || undefined })}
+              onCancel={() => setEditing(null)}
+              placeholder="설명"
+              className="text-xs"
+            />
+          ) : playbook.description ? (
+            <p
+              className="text-xs text-muted-foreground truncate mt-0.5 cursor-pointer hover:text-foreground transition-colors"
+              onClick={() => setEditing('description')}
+              title="클릭하여 설명 수정"
+            >
+              {playbook.description}
+            </p>
+          ) : (
+            <p
+              className="text-xs text-muted-foreground/50 italic mt-0.5 cursor-pointer hover:text-primary transition-colors"
+              onClick={() => setEditing('description')}
+            >
+              + 설명 추가
+            </p>
           )}
         </div>
       </td>

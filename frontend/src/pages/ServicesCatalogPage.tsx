@@ -1,11 +1,22 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpen, ChevronRight, Search } from 'lucide-react';
-import { DebugLogPanel } from '@/components/common';
+import { BookOpen, ChevronRight, Search, List, LayoutGrid } from 'lucide-react';
+import { DebugLogPanel, ViewModeBar } from '@/components/common';
 import { serviceEntriesApi } from '@/services/api';
 import { colorBadgeClass } from '@/components/services/serviceCatalog';
 import { useServiceCatalog, useGetServiceDef } from '@/hooks/useServiceCatalog';
+
+const VIEW_MODE_KEY = 'k8s:services-catalog:viewMode';
+type ViewMode = 'table' | 'card';
+
+function readStoredViewMode(): ViewMode {
+  try {
+    return localStorage.getItem(VIEW_MODE_KEY) === 'card' ? 'card' : 'table';
+  } catch {
+    return 'table';
+  }
+}
 
 function relTime(iso?: string | null): string {
   if (!iso) return '-';
@@ -24,8 +35,13 @@ function relTime(iso?: string | null): string {
 
 export function ServicesCatalogPage() {
   const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>(readStoredViewMode);
   const catalog = useServiceCatalog();
   const getServiceDef = useGetServiceDef();
+
+  useEffect(() => {
+    try { localStorage.setItem(VIEW_MODE_KEY, viewMode); } catch { /* ignore */ }
+  }, [viewMode]);
 
   // 클러스터 선택 제거 — 서비스 카탈로그는 서비스 기준으로 통합 표시.
   const catalogQ = useQuery({
@@ -53,19 +69,30 @@ export function ServicesCatalogPage() {
   return (
     <div className="min-h-screen bg-background">
       <main className="mx-auto px-6 py-6">
-        <DebugLogPanel pageKey="services" extra={{ search, services: merged.length }} />
+        <DebugLogPanel pageKey="services" extra={{ search, services: merged.length, viewMode }} />
 
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
           <BookOpen className="w-6 h-6 text-primary" />
           <h1 className="text-xl font-bold">통합지식</h1>
           <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border">
             {merged.length} 서비스
           </span>
-          <div className="ml-auto relative w-64">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)}
-              placeholder="서비스 검색..."
-              className="w-full pl-8 pr-3 py-1.5 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
+          <div className="ml-auto flex items-center gap-3">
+            <ViewModeBar
+              modes={[
+                { id: 'table', label: '리스트', icon: <List       className="w-3.5 h-3.5" /> },
+                { id: 'card',  label: '카드',   icon: <LayoutGrid className="w-3.5 h-3.5" /> },
+              ]}
+              active={viewMode}
+              onChange={(v) => setViewMode(v as ViewMode)}
+              showStylePanel={false}
+            />
+            <div className="relative w-64">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)}
+                placeholder="서비스 검색..."
+                className="w-full pl-8 pr-3 py-1.5 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary" />
+            </div>
           </div>
         </div>
 
@@ -74,19 +101,103 @@ export function ServicesCatalogPage() {
           서비스 카탈로그는 <strong>Settings → 서비스</strong> 탭에서 추가/수정 가능합니다.
         </p>
 
-        <div
-          className="grid gap-3"
-          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
-        >
-          {merged.map(({ def, total, byKind, lastUpdated }) => {
-            const Icon = def.icon;
-            const cls = colorBadgeClass(def.color);
-            return (
-              <Link
-                key={def.key}
-                to={`/services/${def.key}`}
-                className="bg-card border border-border rounded-xl p-4 hover:border-primary/40 hover:shadow-md transition-all group"
-              >
+        {viewMode === 'table' ? (
+          /* ── 리스트(테이블) 뷰 — 디폴트 ─────────────────────────────── */
+          <div className="bg-card border border-border rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30">
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap w-72">서비스</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">설명</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground w-24">항목 수</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">유형별</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap w-28">최근 업데이트</th>
+                    <th className="px-4 py-3 w-8" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {merged.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                        {search.trim() ? `"${search}" 검색 결과가 없습니다.` : '등록된 서비스가 없습니다.'}
+                      </td>
+                    </tr>
+                  ) : merged.map(({ def, total, byKind, lastUpdated }) => {
+                    const Icon = def.icon;
+                    const cls = colorBadgeClass(def.color);
+                    return (
+                      <tr key={def.key} className="border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors group">
+                        <td className="px-4 py-3">
+                          <Link to={`/services/${def.key}`} className="flex items-center gap-2.5 min-w-0">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${cls}`}>
+                              <Icon className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-sm truncate group-hover:text-primary transition-colors">{def.label}</p>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground font-mono">{def.key}</span>
+                            </div>
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground max-w-md">
+                          {def.description ? (
+                            <p className="line-clamp-2">{def.description}</p>
+                          ) : (
+                            <span className="text-muted-foreground/50 italic">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {total === 0
+                            ? <span className="text-muted-foreground/50">0</span>
+                            : <span className="font-semibold text-foreground">{total}</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          {Object.keys(byKind).length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {Object.entries(byKind).map(([k, n]) => (
+                                <span key={k} className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/40 text-muted-foreground border border-border">
+                                  {k} {n}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/50">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap font-mono">
+                          {lastUpdated ? relTime(lastUpdated) : <span className="text-muted-foreground/50">-</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Link
+                            to={`/services/${def.key}`}
+                            className="inline-flex items-center text-muted-foreground/50 hover:text-primary transition-colors"
+                            aria-label={`${def.label} 상세 보기`}
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          /* ── 카드 뷰 — 옵션 ─────────────────────────────────────────── */
+          <div
+            className="grid gap-3"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
+          >
+            {merged.map(({ def, total, byKind, lastUpdated }) => {
+              const Icon = def.icon;
+              const cls = colorBadgeClass(def.color);
+              return (
+                <Link
+                  key={def.key}
+                  to={`/services/${def.key}`}
+                  className="bg-card border border-border rounded-xl p-4 hover:border-primary/40 hover:shadow-md transition-all group"
+                >
                   <div className="flex items-start gap-3 mb-3">
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${cls}`}>
                       <Icon className="w-5 h-5" />
@@ -126,7 +237,8 @@ export function ServicesCatalogPage() {
                 </Link>
               );
             })}
-        </div>
+          </div>
+        )}
       </main>
     </div>
   );

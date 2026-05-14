@@ -707,20 +707,35 @@ def _seed_default_playbooks():
 
 
 def _seed_default_deep_check_definitions():
-    """Seed default DeepCheckDefinition rows if the table is empty.
+    """Seed default DeepCheckDefinition rows — registry 에 신규 check_type 이 추가되면
+    같은 check_type 의 글로벌 정의가 없을 때만 자동 등록.
 
-    Registry 의 모든 check_type 을 글로벌 (cluster_id=NULL) 정의로 1개씩 등록.
-    이미 행이 있으면 사용자 편집 보존을 위해 건너뜀.
+    사용자가 글로벌 정의를 삭제했다면 다음 부팅 시 다시 채워진다.
+    클러스터별 정의 (cluster_id IS NOT NULL) 와 사용자 수정은 영향 없음.
     """
     from app.models.deep_check import DeepCheckDefinition
     from app.services.deep_checkers import REGISTRY
 
     db = SessionLocal()
     try:
-        if db.query(DeepCheckDefinition).count() > 0:
-            return
-        sort_order = 0
+        existing = {
+            row[0]
+            for row in db.query(DeepCheckDefinition.check_type)
+            .filter(DeepCheckDefinition.cluster_id.is_(None))
+            .all()
+        }
+        # 정렬 시작점: 기존 최대 sort_order 다음.
+        max_sort = (
+            db.query(DeepCheckDefinition.sort_order)
+            .order_by(DeepCheckDefinition.sort_order.desc())
+            .limit(1)
+            .scalar()
+        ) or 0
+        sort_order = max_sort + 10 if existing else 0
+        added = 0
         for ct, (_, spec) in REGISTRY.items():
+            if ct in existing:
+                continue
             db.add(DeepCheckDefinition(
                 cluster_id=None,
                 check_type=ct,
@@ -733,7 +748,9 @@ def _seed_default_deep_check_definitions():
                 sort_order=sort_order,
             ))
             sort_order += 10
-        db.commit()
+            added += 1
+        if added:
+            db.commit()
     finally:
         db.close()
 

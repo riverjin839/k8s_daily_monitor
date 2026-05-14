@@ -295,6 +295,8 @@ deepcheck:
   failedJobsHistoryLimit: 5
   # -- Ingest 토큰 (in-cluster 모드 대상 클러스터에서 push 시 사용)
   ingestToken: "change-me-in-production"
+  # -- pod_to_pod 체커가 일회용 probe pod 를 띄울 때 사용하는 namespace
+  probeNamespace: "devops"
   # -- 알림 채널 기본값. UI 에서 NotificationChannel 로 동적으로도 추가 가능.
   notifications:
     slack:

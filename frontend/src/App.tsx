@@ -44,6 +44,7 @@ import { TrendDigestPage } from '@/pages/TrendDigestPage';
 import { CiliumTracePage } from '@/pages/CiliumTracePage';
 import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
+import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar } from '@/components/layout';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
@@ -118,6 +119,7 @@ function AppShell() {
               <Route path="/cilium-trace" element={<CiliumTracePage />} />
               <Route path="/daily-check/review/:clusterId" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/settings" element={<DeepCheckSettingsPage />} />
+              <Route path="/docs" element={<KnowledgeHubPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
       </div>

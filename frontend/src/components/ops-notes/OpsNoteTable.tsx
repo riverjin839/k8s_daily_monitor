@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ComponentType } from 'react';
 import { Pencil, Trash2, Pin, PinOff, ExternalLink, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
 import type { OpsNote, OpsNoteUpdate } from '@/types';
 import { formatRelativeTime, stripHtml } from '@/lib/utils';
@@ -9,7 +9,7 @@ export type OpsNoteSortKey = 'title' | 'service' | 'author' | 'updatedAt';
 export interface OpsNoteServiceMeta {
   value: string;
   label: string;
-  icon: string;
+  Icon: ComponentType<{ className?: string }>;
   accent: string;
   soft: string;
 }
@@ -120,7 +120,7 @@ function OpsNoteRow({
             className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md text-white cursor-pointer ${svc.accent}`}
             title="클릭하여 서비스 변경"
           >
-            <span>{svc.icon}</span>{svc.label}
+            <svc.Icon className="w-3 h-3" />{svc.label}
           </span>
         ) : (
           <span className="text-xs text-muted-foreground cursor-pointer">{note.service}</span>

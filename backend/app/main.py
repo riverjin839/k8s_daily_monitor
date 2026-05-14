@@ -465,6 +465,30 @@ def _run_migrations():
             # check_date 도 없는 비정상 DB 일 때 조용히 skip — backend 기동은 막지 않음.
             pass
 
+    # check_logs: 구버전 누락 컬럼 방어 보충 (history.py 가 checked_at 으로 ORDER BY).
+    # daily_check_logs 와 마찬가지로 일부 오래된 prod 가 모델보다 컬럼이 적을 수 있음.
+    if "check_logs" in inspector.get_table_names():
+        cl_cols = [c["name"] for c in inspector.get_columns("check_logs")]
+        for col_name, col_type in [
+            ("checked_at", "TIMESTAMP WITHOUT TIME ZONE"),
+            ("addon_id", "UUID REFERENCES addons(id)"),
+            ("raw_output", "JSONB"),
+        ]:
+            if col_name not in cl_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE check_logs ADD COLUMN {col_name} {col_type}"
+                    ))
+        # checked_at 가 방금 추가됐다면 NOW() 로 backfill (CheckLog 는 별도 timestamp
+        # 필드가 없어 NOW() 가 최선).
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "UPDATE check_logs SET checked_at = NOW() WHERE checked_at IS NULL"
+                ))
+        except Exception:
+            pass
+
     # deep_check_definitions / deep_check_results — Super Pod 결과 저장.
     # SQLAlchemy create_all 이 이미 생성하지만, 명시적으로 인덱스/idempotent 보장.
     if "deep_check_definitions" in inspector.get_table_names():

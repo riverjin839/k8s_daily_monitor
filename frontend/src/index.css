@@ -158,10 +158,10 @@
     --sidebar-primary:          200 98% 60%;
   }
 
-  /* ── Claude theme — Anthropic 브랜드 톤 (옵션) ─────────────────────────────
-     기본 light/dark 보다 더 따뜻한 paper 배경 + 큰 radius + soft shadow +
-     코랄(#D97757) 액센트. 노트/문서 느낌으로 차분하게 보여주는 모드. */
-  html.claude {
+  /* ── default theme — Anthropic Claude 브랜드 톤 (기본값) ────────────────
+     신규 사용자가 처음 보는 테마. 따뜻한 paper 배경 + 큰 radius + soft shadow +
+     코랄(#D97757) 액센트로 노트/문서 느낌. 대안으로 light / dark / system 제공. */
+  html.default {
     --background: 36 38% 96%;          /* #F7F2EA — warm paper */
     --foreground: 28 18% 16%;          /* #2E2620 — deep cocoa */
     --card: 38 50% 99%;                /* near-white with warm tint */
@@ -219,13 +219,13 @@
   }
 }
 
-/* Claude 모드 한정 — 약한 입체감 (옵션 2)
+/* default 모드 한정 — 약한 입체감
    - 카드: drop shadow + 상단 1px 하이라이트 라인(inset) 으로 "살짝 떠있는" 느낌
    - hover 시 그림자 강도만 약간 키워 lift 표현 (transform 은 안 씀 — 텍스트 흔들림 방지)
    - 버튼(primary): 코랄 위에 미묘한 inset highlight 로 클릭 가능한 솟아오름 표현
-   - 기본 light/dark 의 flat 톤은 건드리지 않음. */
-html.claude {
-  /* depth tokens — Claude 모드 안에서만 의미 있음 */
+   - light/dark 의 flat 톤은 건드리지 않음. */
+html.default {
+  /* depth tokens — default 모드 안에서만 의미 있음 */
   --card-shadow:
     0 1px 2px rgba(46, 38, 32, 0.05),
     0 8px 24px -10px rgba(46, 38, 32, 0.10),
@@ -243,42 +243,42 @@ html.claude {
     inset 0 2px 4px rgba(46, 38, 32, 0.10);
 }
 
-html.claude .mac-shadow,
-html.claude [class*="rounded-2xl"][class*="bg-card"],
-html.claude [class*="rounded-xl"][class*="bg-card"] {
+html.default .mac-shadow,
+html.default [class*="rounded-2xl"][class*="bg-card"],
+html.default [class*="rounded-xl"][class*="bg-card"] {
   box-shadow: var(--card-shadow);
   transition: box-shadow var(--motion-base) var(--motion-ease);
 }
-html.claude .mac-shadow:hover,
-html.claude [class*="rounded-2xl"][class*="bg-card"]:hover,
-html.claude [class*="rounded-xl"][class*="bg-card"]:hover {
+html.default .mac-shadow:hover,
+html.default [class*="rounded-2xl"][class*="bg-card"]:hover,
+html.default [class*="rounded-xl"][class*="bg-card"]:hover {
   box-shadow: var(--card-shadow-hover);
 }
 
 /* primary 버튼만 살짝 솟아오른 느낌 — 부드러운 코랄 글로우 + 상단 하이라이트.
    다른 secondary/ghost 버튼은 건드리지 않아 시각 노이즈 최소화. */
-html.claude button[class*="bg-primary"]:not(:disabled),
-html.claude a[class*="bg-primary"] {
+html.default button[class*="bg-primary"]:not(:disabled),
+html.default a[class*="bg-primary"] {
   box-shadow: var(--button-shadow);
   transition: box-shadow var(--motion-fast) var(--motion-ease),
               transform var(--motion-fast) var(--motion-ease);
 }
-html.claude button[class*="bg-primary"]:not(:disabled):active,
-html.claude a[class*="bg-primary"]:active {
+html.default button[class*="bg-primary"]:not(:disabled):active,
+html.default a[class*="bg-primary"]:active {
   box-shadow: var(--button-shadow-active);
   transform: translateY(0.5px);
 }
 
 /* 입력창은 살짝 들어간 느낌 — 카드 위에 얹은 듯 보이지 않도록 inset 라인.
    focus 시 코랄 ring 은 그대로(접근성). */
-html.claude input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
-html.claude textarea,
-html.claude select {
+html.default input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+html.default textarea,
+html.default select {
   box-shadow: inset 0 1px 2px rgba(46, 38, 32, 0.05);
 }
 
 /* paper 느낌을 살리기 위해 미세한 grain 효과 (1px noise) */
-html.claude body {
+html.default body {
   background-image: radial-gradient(circle at 1px 1px, rgba(46, 38, 32, 0.025) 1px, transparent 0);
   background-size: 24px 24px;
 }

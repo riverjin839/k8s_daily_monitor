@@ -8,6 +8,7 @@ Adds cluster/namespace/pod browsing endpoints so the UI can drill down from a
 selected cluster instead of forcing the user to paste pod info manually.
 """
 
+import fnmatch
 import logging
 import os
 from datetime import datetime
@@ -235,6 +236,8 @@ def list_namespaces(
     cluster_id: UUID,
     only_with_issues: bool = False,
     with_counts: bool = False,
+    namespace_pattern: str = "",
+    pod_pattern: str = "",
     db: Session = Depends(get_db),
 ):
     """장애 분석 UI 의 namespace 드롭다운용.
@@ -245,8 +248,15 @@ def list_namespaces(
     **느린 경로 (opt-in)**:
       - ``only_with_issues=true`` → 비정상 pod 가 있는 ns 만 (필터)
       - ``with_counts=true``      → 각 ns 의 pod 수 + 이상 여부 표기
-    둘 중 하나라도 켜지면 ``list_pod_for_all_namespaces`` 를 페이지네이션으로
-    스트리밍하면서 불필요한 본문(annotations 등)을 무시한다.
+    둘 중 하나라도 켜지면 pod fetch 가 발동된다. 이 때 비용을 줄이기 위해:
+
+      - ``namespace_pattern`` (CSV glob, 예: "kube-*,monitoring") 이 주어지면 ns 페이지네이션
+        fetch 직후 인메모리에서 1차 필터 → pod fetch 대상 ns 가 줄어든다.
+      - 필터 후 ns 가 50개 이하면 ns 별 ``list_namespaced_pod`` 를 순차 호출해 클러스터
+        전체 pod (수만~수십만 개) fetch 를 피한다. 50개 초과면 기존처럼
+        ``list_pod_for_all_namespaces`` 한 방으로 가져온 뒤 인메모리 필터.
+      - ``pod_pattern`` 이 주어지면 pod 순회 중에 매칭되는 pod 만 ``_is_pod_unhealthy``
+        평가 대상이 된다.
 
     namespace 자체도 페이지네이션(_continue) 으로 가져와 ns 가 1만개여도 견딘다.
     """
@@ -268,7 +278,6 @@ def list_namespaces(
             if not token:
                 break
     except Exception as e:
-        # 타임아웃이면 504, 그 외는 502.
         msg = str(e)[:200]
         is_timeout = "timeout" in msg.lower() or "timed out" in msg.lower()
         raise HTTPException(
@@ -276,27 +285,65 @@ def list_namespaces(
             detail=f"namespace 조회 실패: {msg}",
         ) from e
 
+    # 1.5) namespace_pattern 으로 1차 필터 — pod fetch 비용 절감.
+    if namespace_pattern.strip():
+        ns_items = [
+            ns for ns in ns_items
+            if _matches_csv_glob(ns.metadata.name, namespace_pattern)
+        ]
+
     counts: dict[str, int] = {}
     unhealthy: dict[str, bool] = {}
 
     # 2) pod fetch — 사용자가 명시적으로 요구할 때만.
-    if only_with_issues or with_counts:
+    if (only_with_issues or with_counts) and ns_items:
+        # 필터 후 ns 가 적게 남았으면 ns 별 순차 fetch (큰 클러스터에서 압도적으로 빠름).
+        target_ns_names = {ns.metadata.name for ns in ns_items}
+        use_per_ns = len(target_ns_names) <= 50
+
+        def _consume_pod(p) -> None:
+            ns_name = p.metadata.namespace
+            if ns_name not in target_ns_names:
+                return
+            if pod_pattern.strip() and not _matches_csv_glob(p.metadata.name, pod_pattern):
+                return
+            if with_counts:
+                counts[ns_name] = counts.get(ns_name, 0) + 1
+            if _is_pod_unhealthy(p):
+                unhealthy[ns_name] = True
+
         try:
-            pod_token: str | None = None
-            for _ in range(200):
-                kwargs = {"_request_timeout": _K8S_POD_LIST_TIMEOUT, "limit": _K8S_POD_LIST_PAGE}
-                if pod_token:
-                    kwargs["_continue"] = pod_token
-                page = v1.list_pod_for_all_namespaces(**kwargs)
-                for p in page.items:
-                    ns = p.metadata.namespace
-                    if with_counts:
-                        counts[ns] = counts.get(ns, 0) + 1
-                    if _is_pod_unhealthy(p):
-                        unhealthy[ns] = True
-                pod_token = (page.metadata._continue or None) if page.metadata else None
-                if not pod_token:
-                    break
+            if use_per_ns:
+                for ns_name in target_ns_names:
+                    pod_token: str | None = None
+                    for _ in range(200):
+                        kwargs = {
+                            "_request_timeout": _K8S_POD_LIST_TIMEOUT,
+                            "limit": _K8S_POD_LIST_PAGE,
+                        }
+                        if pod_token:
+                            kwargs["_continue"] = pod_token
+                        page = v1.list_namespaced_pod(ns_name, **kwargs)
+                        for p in page.items:
+                            _consume_pod(p)
+                        pod_token = (page.metadata._continue or None) if page.metadata else None
+                        if not pod_token:
+                            break
+            else:
+                pod_token = None
+                for _ in range(200):
+                    kwargs = {
+                        "_request_timeout": _K8S_POD_LIST_TIMEOUT,
+                        "limit": _K8S_POD_LIST_PAGE,
+                    }
+                    if pod_token:
+                        kwargs["_continue"] = pod_token
+                    page = v1.list_pod_for_all_namespaces(**kwargs)
+                    for p in page.items:
+                        _consume_pod(p)
+                    pod_token = (page.metadata._continue or None) if page.metadata else None
+                    if not pod_token:
+                        break
         except Exception as e:
             # pod 조회 실패는 경고만 — namespace 리스트 자체는 반환.
             logger.warning("pod list 실패 (counts/unhealthy 미반영): %s", str(e)[:200])
@@ -494,6 +541,27 @@ def fetch_incident_context(
 
 
 # ── helpers ─────────────────────────────────────────────────────────
+
+
+def _matches_csv_glob(name: str, csv_glob: str) -> bool:
+    """CSV 로 구분된 glob 패턴 중 하나라도 매치하면 True.
+
+    빈 문자열(공백만 포함 포함) 이면 "필터 없음" 으로 간주해 True 반환.
+    빈 세그먼트(연속 콤마)는 무시 — 그 자체로 모든 것을 매치하지 않음.
+
+    예:
+        _matches_csv_glob("kube-system", "kube-*,monitoring") -> True
+        _matches_csv_glob("default",     "kube-*,monitoring") -> False
+        _matches_csv_glob("anything",    "")                  -> True
+    """
+    if not csv_glob.strip():
+        return True
+    for pat in csv_glob.split(","):
+        pat = pat.strip()
+        if pat and fnmatch.fnmatch(name, pat):
+            return True
+    return False
+
 
 _BAD_WAITING_REASONS = {
     "CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull",

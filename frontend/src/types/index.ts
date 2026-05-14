@@ -1626,7 +1626,7 @@ export interface MindMapNodeUpdate {
 }
 
 // ── Service Entries (서비스별 히스토리/지식관리) ─────────────────
-export type ServiceEntryKind = 'note' | 'guide' | 'troubleshoot' | 'history' | 'link';
+export type ServiceEntryKind = 'note' | 'guide' | 'troubleshoot' | 'history' | 'link' | 'command';
 
 export interface ServiceEntry {
   id: string;

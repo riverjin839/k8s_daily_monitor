@@ -10,10 +10,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import type { Cluster, Status } from '@/types';
 import { useSidebarStore } from '@/stores/sidebarStore';
-import { useUpdateCluster } from '@/hooks/useCluster';
 import { resolveClusterIcon } from '@/lib/clusterIcons';
 import { ResizeHandle } from './ResizeHandle';
-import { ClusterIconPicker } from './ClusterIconPicker';
 
 interface ClusterSidebarProps {
   clusters: Cluster[];
@@ -135,11 +133,9 @@ interface IconRailButtonProps {
   emojiText?: string;
   active?: boolean;
   onClick: () => void;
-  /** 우클릭 핸들러 — 클러스터 행에서 아이콘 picker 호출에 사용. */
-  onContextMenu?: (e: React.MouseEvent) => void;
 }
 
-function IconRailButton({ label, dotClass, Icon, emojiText, active, onClick, onContextMenu }: IconRailButtonProps) {
+function IconRailButton({ label, dotClass, Icon, emojiText, active, onClick }: IconRailButtonProps) {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   // viewport 좌표 — 부모 overflow 를 회피하기 위해 portal 로 렌더한다.
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
@@ -159,7 +155,6 @@ function IconRailButton({ label, dotClass, Icon, emojiText, active, onClick, onC
         type="button"
         aria-label={label}
         onClick={onClick}
-        onContextMenu={onContextMenu}
         onMouseEnter={showTooltip}
         onMouseLeave={hideTooltip}
         onFocus={showTooltip}
@@ -215,10 +210,8 @@ function ClusterSidebarIconRail({
     ? (selectedSet?.size ?? 0) === 0
     : selectedId === null;
 
-  // 우클릭 시 띄우는 아이콘 picker 의 대상 cluster 와 anchor 좌표.
-  const [pickerTarget, setPickerTarget] = useState<Cluster | null>(null);
-  const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null);
-  const updateCluster = useUpdateCluster();
+  // 사이드바에서는 아이콘 변경을 허용하지 않는다. 변경은 시스템 등록된 클러스터 관리 화면
+  // (/cluster-manage) 의 테이블 첫 컬럼에서만 가능하도록 권한을 한정.
 
   // multiSelect 에서 "전체" 클릭 → 선택 비우기 (=전체로 간주). 단일 모드에서는 onSelect(null).
   const handleAllClick = () => {
@@ -237,18 +230,6 @@ function ClusterSidebarIconRail({
     } else {
       onSelect(id);
     }
-  };
-
-  const handleContext = (e: React.MouseEvent, cluster: Cluster) => {
-    e.preventDefault();
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setPickerAnchor(rect);
-    setPickerTarget(cluster);
-  };
-
-  const handlePickerChange = (next: string | null) => {
-    if (!pickerTarget) return;
-    updateCluster.mutate({ id: pickerTarget.id, data: { icon: next } });
   };
 
   return (
@@ -277,8 +258,8 @@ function ClusterSidebarIconRail({
               : (highlightActive ?? true) && c.id === selectedId;
             const baseTooltip = subtitle ? `${c.name} · ${subtitle}` : c.name;
             const tooltip = multiSelect
-              ? `${baseTooltip}${isActive ? ' (선택됨 — 클릭하면 해제)' : ' (클릭하면 선택)'} · 우클릭: 아이콘 변경`
-              : `${baseTooltip} · 우클릭: 아이콘 변경`;
+              ? `${baseTooltip}${isActive ? ' (선택됨 — 클릭하면 해제)' : ' (클릭하면 선택)'}`
+              : baseTooltip;
 
             // 사용자 지정 아이콘이 있으면 그걸 사용, 없으면 status 기반 fallback.
             const resolved = resolveClusterIcon(c.icon);
@@ -296,22 +277,11 @@ function ClusterSidebarIconRail({
                 dotClass={STATUS_DOT[c.status] ?? 'bg-slate-400'}
                 active={isActive}
                 onClick={() => handleClusterClick(c.id)}
-                onContextMenu={(e) => handleContext(e, c)}
               />
             );
           })
         )}
       </div>
-
-      {pickerTarget && (
-        <ClusterIconPicker
-          value={pickerTarget.icon}
-          clusterName={pickerTarget.name}
-          anchorRect={pickerAnchor}
-          onChange={handlePickerChange}
-          onClose={() => { setPickerTarget(null); setPickerAnchor(null); }}
-        />
-      )}
     </aside>
   );
 }

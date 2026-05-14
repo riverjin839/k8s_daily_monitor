@@ -72,9 +72,9 @@ const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ classNam
 ];
 
 const DEFAULT_TITLE = 'DEVOPS MANAGEMENT';
-// 라이트 → 다크 → 시스템 → Claude → 라이트 …
-const THEME_CYCLE: Record<Theme, Theme> = { light: 'dark', dark: 'system', system: 'claude', claude: 'light' };
-const THEME_LABEL: Record<Theme, string> = { dark: '다크', light: '라이트', system: '시스템', claude: 'Claude' };
+// default(Claude paper) → 라이트 → 다크 → 시스템 → default …
+const THEME_CYCLE: Record<Theme, Theme> = { default: 'light', light: 'dark', dark: 'system', system: 'default' };
+const THEME_LABEL: Record<Theme, string> = { default: '기본', light: '라이트', dark: '다크', system: '시스템' };
 
 // ── 호버 툴팁이 붙은 아이콘 버튼 — 레일에서 사용 ────────────────────────────
 interface RailIconButtonProps {
@@ -450,9 +450,9 @@ export function Sidebar() {
           <RailIconButton
             label={`테마: ${THEME_LABEL[theme]}`}
             Icon={
-              theme === 'dark'   ? Moon
-              : theme === 'light'  ? Sun
-              : theme === 'claude' ? Sparkles
+              theme === 'default' ? Sparkles
+              : theme === 'light'   ? Sun
+              : theme === 'dark'    ? Moon
               : Monitor
             }
             onClick={() => setTheme(THEME_CYCLE[theme])}

@@ -2,27 +2,27 @@ import { create } from 'zustand';
 
 /**
  * 테마 모드.
- * - `light` / `dark` : 기본 라이트 / 다크 (Databricks-leaning).
+ * - `default`       : 기본 테마 — Anthropic Claude 브랜드 톤 (따뜻한 페이퍼 배경 +
+ *                     큰 radius + 은은한 그림자 + 코랄 #D97757 accent). 신규 사용자
+ *                     첫 진입 시 보이는 화면.
+ * - `light` / `dark`: Databricks-leaning 라이트 / 다크 (대안).
  * - `system`        : OS 환경설정 따라가는 라이트/다크.
- * - `claude`        : Anthropic Claude 브랜드 톤 — 따뜻한 페이퍼 배경 + 큰 radius +
- *                     은은한 그림자 + 코랄(#D97757) accent. 데스크톱 도구라기보다
- *                     문서/노트 느낌의 분위기로 차분하게 보여주는 옵션.
  */
-export type Theme = 'dark' | 'light' | 'system' | 'claude';
+export type Theme = 'default' | 'dark' | 'light' | 'system';
 
 function getSystemPreference(): 'dark' | 'light' {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-const ALL_CLASSES = ['light', 'dark', 'claude'] as const;
+const ALL_CLASSES = ['light', 'dark', 'default'] as const;
 
 function applyTheme(theme: Theme) {
   const root = document.documentElement;
   // 기존 모드 클래스 제거
   for (const c of ALL_CLASSES) root.classList.remove(c);
 
-  if (theme === 'claude') {
-    root.classList.add('claude');
+  if (theme === 'default') {
+    root.classList.add('default');
   } else {
     const resolved = theme === 'system' ? getSystemPreference() : theme;
     root.classList.add(resolved);
@@ -31,17 +31,22 @@ function applyTheme(theme: Theme) {
 }
 
 // Apply theme immediately on module load (before React renders)
-const _stored = localStorage.getItem('k8s:theme');
+// 레거시 'claude' 값은 'default' 로 자동 마이그레이션 (호환성).
+let _stored = localStorage.getItem('k8s:theme');
+if (_stored === 'claude') {
+  _stored = 'default';
+  localStorage.setItem('k8s:theme', 'default');
+}
 const _initial: Theme = (
-  _stored === 'dark' || _stored === 'light' || _stored === 'system' || _stored === 'claude'
+  _stored === 'default' || _stored === 'dark' || _stored === 'light' || _stored === 'system'
     ? _stored
-    : 'light'
+    : 'default'
 );
 applyTheme(_initial);
 
 // Listen for system preference changes when theme is 'system'
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-  const current = (localStorage.getItem('k8s:theme') as Theme | null) ?? 'light';
+  const current = (localStorage.getItem('k8s:theme') as Theme | null) ?? 'default';
   if (current === 'system') applyTheme('system');
 });
 

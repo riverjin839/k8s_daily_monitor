@@ -423,10 +423,24 @@ def _run_migrations():
                         conn.execute(text("ALTER TABLE node_server_specs ALTER COLUMN disk_type TYPE VARCHAR(255)"))
                 break
 
-    # daily_check_logs: AI 자동 리뷰 필드 추가
+    # daily_check_logs: AI 자동 리뷰 필드 추가 + 구버전 누락 컬럼 방어 보충
     if "daily_check_logs" in inspector.get_table_names():
         dcl_cols = [c["name"] for c in inspector.get_columns("daily_check_logs")]
+        # 신규/누락 가능 컬럼 일괄 ADD. 오래 전 배포된 prod 의 경우 model 보다 컬럼이 적을 수
+        # 있어 (예: checked_at, check_duration_seconds 누락) 새 코드 ORDER BY 가 실패하는
+        # 버그가 보고돼 — 가능한 모든 누락 컬럼을 멱등으로 보충한다.
         for col_name, col_type in [
+            # 모델에 일찍부터 있던 컬럼들 — 일부 오래된 DB 에는 빠져 있을 수 있음
+            ("checked_at", "TIMESTAMP WITHOUT TIME ZONE"),
+            ("check_duration_seconds", "INTEGER"),
+            ("api_server_details", "JSONB"),
+            ("components_status", "JSONB"),
+            ("nodes_status", "JSONB"),
+            ("system_pods_status", "JSONB"),
+            ("resource_summary", "JSONB"),
+            ("error_messages", "JSONB"),
+            ("warning_messages", "JSONB"),
+            # AI 자동 리뷰 (Phase 1)
             ("ai_summary", "TEXT"),
             ("ai_remediation", "TEXT"),
             ("ai_diff", "JSONB"),
@@ -439,6 +453,17 @@ def _run_migrations():
                     conn.execute(text(
                         f"ALTER TABLE daily_check_logs ADD COLUMN {col_name} {col_type}"
                     ))
+        # checked_at 가 방금 추가됐다면 기존 행 backfill — check_date 를 기본값으로 사용.
+        # 이미 있으면 NULL 인 행만 (혹시 모를) 안전망으로 채움.
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "UPDATE daily_check_logs SET checked_at = check_date "
+                    "WHERE checked_at IS NULL"
+                ))
+        except Exception:
+            # check_date 도 없는 비정상 DB 일 때 조용히 skip — backend 기동은 막지 않음.
+            pass
 
     # deep_check_definitions / deep_check_results — Super Pod 결과 저장.
     # SQLAlchemy create_all 이 이미 생성하지만, 명시적으로 인덱스/idempotent 보장.

@@ -18,7 +18,7 @@ import {
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
 import { clustersApi } from '@/services/api';
-import { ResizeGrip } from '@/components/common';
+import { ResizeGrip, DoubleScrollX} from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { MacCard } from '@/components/ui/MacCard';
 
@@ -810,7 +810,7 @@ export function CidrCalculatorPage() {
               </div>
 
               {/* Comparison table */}
-              <div className="overflow-x-auto border border-border rounded-md">
+              <DoubleScrollX className="border border-border rounded-md">
                 <table
                   className="text-xs"
                   style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}
@@ -916,7 +916,7 @@ export function CidrCalculatorPage() {
                     })}
                   </tbody>
                 </table>
-              </div>
+              </DoubleScrollX>
 
               {/* Registered cluster overlap check — entry ↔ cluster 페어로 표시 */}
               {clusters.length > 0 && (() => {

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Pencil, Trash2, Pin, PinOff, ExternalLink, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
 import type { OpsNote, OpsNoteUpdate } from '@/types';
 import { formatRelativeTime, stripHtml } from '@/lib/utils';
+import { DoubleScrollX } from '@/components/common';
 
 export type OpsNoteSortKey = 'title' | 'service' | 'author' | 'updatedAt';
 
@@ -261,7 +262,7 @@ export function OpsNoteTable({
 
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden">
-      <div className="overflow-x-auto">
+      <DoubleScrollX>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30">
@@ -293,7 +294,7 @@ export function OpsNoteTable({
             ))}
           </tbody>
         </table>
-      </div>
+      </DoubleScrollX>
     </div>
   );
 }

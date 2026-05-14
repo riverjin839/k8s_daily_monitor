@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClusterSidebar, ViewModeBar } from '@/components/common';
+import { ClusterSidebar, ViewModeBar, DoubleScrollX} from '@/components/common';
 import { Plus, Download, ListTodo, Search, X, CalendarDays, List, ChevronUp, ChevronDown, ArrowUpDown, Kanban } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -406,7 +406,7 @@ export function TaskBoardPage() {
           </div>
         ) : (
           <div className="bg-card border border-border rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
+            <DoubleScrollX>
               <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
                 <colgroup>
                   {(['drag', 'status', 'priority', 'assignee', 'cluster', 'category', 'content', 'result', 'scheduledAt', 'completedAt', 'remarks', 'actions'] as const).map((k) => (
@@ -468,7 +468,7 @@ export function TaskBoardPage() {
                 </SortableContext>
                 </DndContext>
               </table>
-            </div>
+            </DoubleScrollX>
           </div>
         ))}
         </div>

@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
-import { ConfirmDialog, LogViewer, MasterHostPicker } from '@/components/common';
+import { ConfirmDialog, LogViewer, MasterHostPicker, DoubleScrollX} from '@/components/common';
 import { useClusters } from '@/hooks/useCluster';
 import {
   useBatchJobRuns,
@@ -577,7 +577,7 @@ function JobRunsModal({ job, onSelectRun, onClose }: JobRunsModalProps) {
             <p className="text-xs text-muted-foreground p-3">아직 실행 이력이 없습니다.</p>
           ) : (
             <div className="border border-border rounded-xl overflow-hidden">
-              <div className="overflow-x-auto">
+              <DoubleScrollX>
                 <table className="w-full text-[11px]">
                   <thead>
                     <tr className="text-left text-muted-foreground border-b border-border bg-muted/20">
@@ -614,7 +614,7 @@ function JobRunsModal({ job, onSelectRun, onClose }: JobRunsModalProps) {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </DoubleScrollX>
             </div>
           )}
         </div>
@@ -871,7 +871,7 @@ export function BatchJobsPage() {
         ) : columns.length === 0 ? (
           <p className="text-xs text-muted-foreground p-5">사용 가능한 잡 타입이 없습니다 — 백엔드 batch-jobs/types 응답을 확인해 주세요.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <DoubleScrollX>
             <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
               <colgroup>
                 <col style={{ width: 200 }} />
@@ -920,7 +920,7 @@ export function BatchJobsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </DoubleScrollX>
         )}
       </MacCard>
 

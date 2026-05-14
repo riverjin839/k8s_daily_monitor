@@ -5,6 +5,7 @@ import type { NodeSummary } from '@/services/api';
 import type { EtcdSystemdCollectResponse } from '@/types';
 import { useQuery } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
+import { DoubleScrollX } from '@/components/common';
 
 interface Props {
   open: boolean;
@@ -238,7 +239,7 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
                 </span>
                 <span className="text-[10px] text-muted-foreground ml-auto">component: {result.componentKey}</span>
               </div>
-              <div className="overflow-x-auto">
+              <DoubleScrollX>
                 <table className="w-full text-xs">
                   <thead className="bg-muted/30">
                     <tr className="text-left text-[10px] text-muted-foreground">
@@ -269,7 +270,7 @@ export function EtcdSystemdModal({ open, clusterId, onClose }: Props) {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </DoubleScrollX>
               {result.errors.length > 0 && (
                 <div className="px-3 py-2 text-[11px] text-amber-400 border-t border-border bg-amber-500/5">
                   {result.errors.length}건 오류: {result.errors.slice(0, 3).join(' / ')}

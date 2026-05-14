@@ -3,6 +3,7 @@ import { Play, Square, CheckCircle2, XCircle, Info, AlertTriangle, RefreshCw } f
 import { topologyTraceApi } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 import type { HubbleFlow, HubbleFlowsResponse } from '@/types';
+import { DoubleScrollX } from '@/components/common';
 
 interface Props {
   clusterId: string;
@@ -188,7 +189,7 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
             )}
           </div>
           <div className="bg-card border border-border rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
+            <DoubleScrollX>
               <table className="w-full text-sm">
                 <thead className="bg-muted/30 text-left">
                   <tr>
@@ -207,7 +208,7 @@ export function HubbleTimeline({ clusterId, initialFromPod, initialToPod, initia
                   ) : resp.flows.map((f, i) => <FlowRow key={i} f={f} />)}
                 </tbody>
               </table>
-            </div>
+            </DoubleScrollX>
           </div>
         </>
       )}

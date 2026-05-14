@@ -45,6 +45,7 @@ import { CiliumTracePage } from '@/pages/CiliumTracePage';
 import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage';
+import { HomePage } from '@/pages/HomePage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar } from '@/components/layout';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
@@ -69,7 +70,8 @@ function AppShell() {
         style={{ marginLeft: NAV_WIDTH }}
       >
             <Routes>
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/" element={<HomePage />} />
+              <Route path="/cluster-overview" element={<Dashboard />} />
               <Route path="/playbooks" element={<PlaybooksPage />} />
               <Route path="/issues" element={<IssueBoardPage />} />
               <Route path="/issues/new" element={<IssueFormPage />} />

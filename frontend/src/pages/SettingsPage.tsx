@@ -11,7 +11,7 @@ import { useClusterStore } from '@/stores/clusterStore';
 import { AddClusterModal, KubeconfigEditModal } from '@/components/dashboard';
 import { Cluster, ManagementServer, ManagementServerCreate, Assignee } from '@/types';
 import { getStatusIcon, formatDateTime, formatApiError } from '@/lib/utils';
-import { useToast, ResizeGrip } from '@/components/common';
+import { useToast, ResizeGrip, DoubleScrollX} from '@/components/common';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 
@@ -826,7 +826,7 @@ export function SettingsPage() {
             </button>
           </div>
 
-          <div className="overflow-x-auto">
+          <DoubleScrollX>
             <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
               <colgroup>
                 {(['empId', 'name', 'email', 'ip', 'primaryRole', 'secondaryRole', 'actions'] as const).map((k) => (
@@ -983,7 +983,7 @@ export function SettingsPage() {
                 )}
               </tbody>
             </table>
-          </div>
+          </DoubleScrollX>
         </div>}
 
         {/* Debug 탭: 대시보드 별 상세 로그 토글 */}

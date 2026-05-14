@@ -6,7 +6,7 @@ import {
   Server, Cpu, Network, Settings2, HardDrive, Search, FileSpreadsheet, FileText,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, SkeletonCard } from '@/components/common';
+import { ClusterSidebar, DebugLogPanel, useToast, EmptyState, SkeletonCard, DoubleScrollX} from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import { versionsApi, type ComponentSnapshot } from '@/services/api';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
@@ -561,7 +561,7 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
           <p className="text-[10px] text-muted-foreground uppercase mb-1 tracking-wider">
             Pools ({pools.length})
           </p>
-          <div className="overflow-x-auto rounded-md border border-border">
+          <DoubleScrollX className="rounded-md border border-border">
             <table className="w-full text-[11px]">
               <thead className="bg-muted/40">
                 <tr className="text-left">
@@ -586,7 +586,7 @@ function MinioTenantDetails({ data }: { data: Record<string, unknown> }) {
                 ))}
               </tbody>
             </table>
-          </div>
+          </DoubleScrollX>
         </div>
       )}
 

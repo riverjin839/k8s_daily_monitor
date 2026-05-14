@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { BookOpen, ChevronRight, Search, List, LayoutGrid } from 'lucide-react';
-import { DebugLogPanel, ViewModeBar } from '@/components/common';
+import { DebugLogPanel, ViewModeBar, DoubleScrollX} from '@/components/common';
 import { serviceEntriesApi } from '@/services/api';
 import { colorBadgeClass } from '@/components/services/serviceCatalog';
 import { useServiceCatalog, useGetServiceDef } from '@/hooks/useServiceCatalog';
@@ -104,7 +104,7 @@ export function ServicesCatalogPage() {
         {viewMode === 'table' ? (
           /* ── 리스트(테이블) 뷰 — 디폴트 ─────────────────────────────── */
           <div className="bg-card border border-border rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
+            <DoubleScrollX>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
@@ -181,7 +181,7 @@ export function ServicesCatalogPage() {
                   })}
                 </tbody>
               </table>
-            </div>
+            </DoubleScrollX>
           </div>
         ) : (
           /* ── 카드 뷰 — 옵션 ─────────────────────────────────────────── */

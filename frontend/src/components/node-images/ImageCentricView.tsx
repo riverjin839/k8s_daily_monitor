@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Layers, Server } from 'lucide-react';
 import type { NodeImagesInfo } from '@/hooks/useNodeImages';
 import { formatBytes, pickPrimaryName } from './utils';
+import { DoubleScrollX } from '@/components/common';
 
 interface Props {
   nodes: NodeImagesInfo[];
@@ -106,7 +107,7 @@ export function ImageCentricView({ nodes, searchQuery }: Props) {
           {totalNodes}개 노드 기준
         </p>
       </div>
-      <div className="overflow-x-auto">
+      <DoubleScrollX>
         <table className="w-full text-sm">
           <thead className="bg-muted/20">
             <tr>
@@ -177,7 +178,7 @@ export function ImageCentricView({ nodes, searchQuery }: Props) {
             })}
           </tbody>
         </table>
-      </div>
+      </DoubleScrollX>
     </div>
   );
 }

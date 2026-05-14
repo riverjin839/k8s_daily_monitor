@@ -20,4 +20,5 @@ export { ResizeGrip } from './ResizeGrip';
 export { MasterHostPicker } from './MasterHostPicker';
 export { ConfluenceUrlInput } from './ConfluenceUrlInput';
 export { SidePane } from './SidePane';
+export { DoubleScrollX } from './DoubleScrollX';
 export { SearchableSelect } from './SearchableSelect';

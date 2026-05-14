@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import type { CommandEntry, CommandEntryCreate, CommandImportance } from '@/types';
 import { IMPORTANCE_OPTIONS, IMPORTANCE_META } from './constants';
+import { DoubleScrollX } from '@/components/common';
 
 function ImportanceBadge({ value, onClick, title }: { value: CommandImportance; onClick?: () => void; title?: string }) {
   const meta = IMPORTANCE_META[value] ?? IMPORTANCE_META.medium;
@@ -515,7 +516,7 @@ export function CommandsTable({
   entries, onUpdate, onCreate, onDelete, onTogglePin, onOpenForm,
 }: CommandsTableProps) {
   return (
-    <div className="overflow-x-auto">
+    <DoubleScrollX>
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border bg-secondary/40 text-left text-[11px] text-muted-foreground">
@@ -539,6 +540,6 @@ export function CommandsTable({
           <AddCommandRow onCreate={onCreate} />
         </tbody>
       </table>
-    </div>
+    </DoubleScrollX>
   );
 }

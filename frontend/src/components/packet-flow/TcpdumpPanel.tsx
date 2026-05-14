@@ -7,7 +7,7 @@ import {
 import { bulkExecApi, topologyTraceApi } from '@/services/api';
 import type { NodeSummary } from '@/services/api';
 import type { TcpdumpCaptureResponse, TcpdumpPacketRow } from '@/types';
-import { ConfirmDialog, LogViewer } from '@/components/common';
+import { ConfirmDialog, LogViewer, DoubleScrollX} from '@/components/common';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
 
 interface Props {
@@ -53,7 +53,7 @@ function PacketTable({ rows }: { rows: TcpdumpPacketRow[] }) {
     );
   }
   return (
-    <div className="overflow-x-auto">
+    <DoubleScrollX>
       <table className="w-full text-sm">
         <thead className="bg-muted/30 text-left sticky top-0">
           <tr>
@@ -90,7 +90,7 @@ function PacketTable({ rows }: { rows: TcpdumpPacketRow[] }) {
           ))}
         </tbody>
       </table>
-    </div>
+    </DoubleScrollX>
   );
 }
 

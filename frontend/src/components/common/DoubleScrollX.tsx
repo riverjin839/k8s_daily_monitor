@@ -1,0 +1,110 @@
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+
+interface DoubleScrollXProps {
+  children: ReactNode;
+  /** wrapper 의 추가 클래스 — border / rounded / 등 outer 스타일링 */
+  className?: string;
+  /** 상단 스크롤 레일 높이(px). 기본 12px (OS 기본 스크롤바 두께 정도). */
+  topRailHeight?: number;
+}
+
+/**
+ * 가로 스크롤이 필요한 표/리스트를 감싸 **위·아래 양쪽에 스크롤바**를 노출하는 래퍼.
+ *
+ * - 본문은 ``overflow-x-auto`` 컨테이너에 그대로 렌더 (기존 패턴과 동일).
+ * - 본문 위에 1px 높이의 더미 div 를 가진 별도 스크롤 컨테이너를 두고, 본문의
+ *   ``scrollWidth`` 만큼 더미 폭을 맞춰 OS 가 상단 스크롤바를 그리도록 한다.
+ * - 두 컨테이너의 ``scrollLeft`` 를 양방향으로 동기화 (재귀 방지 lock).
+ * - 본문이 실제로 overflow 하지 않으면 상단 레일을 숨김 (height: 0) — wide 가 아닌
+ *   상태에서 빈 회색 바가 보이지 않도록.
+ *
+ * 사용:
+ * ```tsx
+ * <DoubleScrollX className="rounded-xl border border-border">
+ *   <table>...</table>
+ * </DoubleScrollX>
+ * ```
+ */
+export function DoubleScrollX({
+  children,
+  className = '',
+  topRailHeight = 12,
+}: DoubleScrollXProps) {
+  const topRef = useRef<HTMLDivElement | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const [innerWidth, setInnerWidth] = useState(0);
+  const [scrollable, setScrollable] = useState(false);
+
+  // 위·아래 scrollLeft 동기화 — 재귀 호출을 막기 위해 lock 사용.
+  useEffect(() => {
+    const top = topRef.current;
+    const bottom = bottomRef.current;
+    if (!top || !bottom) return;
+
+    let lock = false;
+    const onTop = () => {
+      if (lock) return;
+      lock = true;
+      bottom.scrollLeft = top.scrollLeft;
+      // 다음 tick 에 unlock — bottom 의 scroll 이벤트가 다시 들어오지 않도록.
+      requestAnimationFrame(() => { lock = false; });
+    };
+    const onBottom = () => {
+      if (lock) return;
+      lock = true;
+      top.scrollLeft = bottom.scrollLeft;
+      requestAnimationFrame(() => { lock = false; });
+    };
+
+    top.addEventListener('scroll', onTop, { passive: true });
+    bottom.addEventListener('scroll', onBottom, { passive: true });
+    return () => {
+      top.removeEventListener('scroll', onTop);
+      bottom.removeEventListener('scroll', onBottom);
+    };
+  }, []);
+
+  // 본문 scrollWidth / clientWidth 를 추적해 상단 더미 폭과 노출 여부 갱신.
+  useEffect(() => {
+    const bottom = bottomRef.current;
+    if (!bottom) return;
+    const update = () => {
+      const sw = bottom.scrollWidth;
+      const cw = bottom.clientWidth;
+      setInnerWidth(sw);
+      setScrollable(sw > cw + 1);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(bottom);
+    // 행 추가/삭제 같은 자식 변화도 반영
+    const mo = new MutationObserver(update);
+    mo.observe(bottom, { childList: true, subtree: true, attributes: true });
+    window.addEventListener('resize', update);
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+
+  return (
+    <div className={className}>
+      {/* 상단 스크롤 레일 — overflow 가 실제로 발생할 때만 노출 */}
+      <div
+        ref={topRef}
+        className="overflow-x-auto"
+        style={{
+          height: scrollable ? topRailHeight : 0,
+          transition: 'height 80ms linear',
+        }}
+        aria-hidden
+      >
+        <div style={{ width: innerWidth || 1, height: 1 }} />
+      </div>
+      <div ref={bottomRef} className="overflow-x-auto">
+        {children}
+      </div>
+    </div>
+  );
+}

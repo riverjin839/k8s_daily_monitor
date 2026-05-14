@@ -1,6 +1,6 @@
 import { useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ViewModeBar, DebugLogPanel, useToast } from '@/components/common';
+import { ViewModeBar, DebugLogPanel, useToast, DoubleScrollX } from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 import {
   Server, AlertTriangle, Search, ChevronDown,
@@ -508,7 +508,7 @@ export function ClusterManagePage() {
           </div>
         ) : viewMode === 'table' ? (
           <div className="rounded-xl border border-border overflow-hidden">
-            <div className="overflow-x-auto">
+            <DoubleScrollX>
               <table className="text-sm border-collapse" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
                 <colgroup>
                   {COLUMNS.map((c) => <col key={c.key} style={{ width: `${colW.getWidth(c.key)}px` }} />)}
@@ -585,7 +585,7 @@ export function ClusterManagePage() {
                   })}
                 </tbody>
               </table>
-            </div>
+            </DoubleScrollX>
           </div>
         ) : (
           <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

@@ -5,7 +5,7 @@ import type { NodeSummary } from '@/services/api';
 import type { NodeNicsCollectResponse } from '@/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
-import { useToast } from '@/components/common';
+import { useToast, DoubleScrollX} from '@/components/common';
 import { formatApiError } from '@/lib/utils';
 
 interface Props {
@@ -266,7 +266,7 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
                     : '변경 없음 (이전 스냅샷과 동일)'}
                 </span>
               </div>
-              <div className="overflow-x-auto">
+              <DoubleScrollX>
                 <table className="w-full text-xs">
                   <thead className="bg-muted/30">
                     <tr className="text-left text-[10px] text-muted-foreground">
@@ -337,7 +337,7 @@ export function NodeNicsCollectModal({ open, clusterId, onClose }: Props) {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </DoubleScrollX>
               {result.errors.length > 0 && (
                 <div className="px-3 py-2 text-[11px] text-amber-500 border-t border-border bg-amber-500/5">
                   {result.errors.length}건 오류: {result.errors.slice(0, 3).join(' / ')}

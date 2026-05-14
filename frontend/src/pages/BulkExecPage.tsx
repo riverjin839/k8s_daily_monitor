@@ -6,7 +6,7 @@ import {
   Wifi, FileText, ShieldAlert, Zap, Clock, Download, LayoutList, Rows, Server,
 } from 'lucide-react';
 import { useClusters } from '@/hooks/useCluster';
-import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands, DebugLogPanel, Skeleton, EmptyState, ResizeGrip } from '@/components/common';
+import { ConfirmDialog, LogViewer, ClusterSidebar, SavedCommands, DebugLogPanel, Skeleton, EmptyState, ResizeGrip, DoubleScrollX} from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { bulkExecApi, type NodeSummary, type BulkExecResponse, type BulkExecResultItem } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
@@ -319,7 +319,7 @@ function SummaryResultsTable({
   });
 
   return (
-    <div className="overflow-x-auto">
+    <DoubleScrollX>
       <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
         <colgroup>
           {(['node', 'status', 'exit', 'output'] as const).map((k) => (
@@ -418,7 +418,7 @@ function SummaryResultsTable({
           })}
         </tbody>
       </table>
-    </div>
+    </DoubleScrollX>
   );
 }
 
@@ -1074,7 +1074,7 @@ export function BulkExecPage() {
             {resultView === 'summary' ? (
               <SummaryResultsTable results={runResponse.results} globalFilter={globalFilter} />
             ) : (
-              <div className="overflow-x-auto">
+              <DoubleScrollX>
                 <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
                   <colgroup>
                     {(['expand', 'host', 'status', 'exit', 'dur', 'summary'] as const).map((k) => (
@@ -1111,7 +1111,7 @@ export function BulkExecPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </DoubleScrollX>
             )}
           </section>
         )}

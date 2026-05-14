@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, Copy, Check, Terminal, AlertTriangle, XCircle, CheckCircle } from 'lucide-react';
 import type { Playbook } from '@/types';
+import { DoubleScrollX } from '@/components/common';
 
 interface PlaybookLogDialogProps {
   playbook: Playbook | null;
@@ -125,7 +126,7 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
           {Object.keys(hosts).length > 0 && (
             <section>
               <SectionTitle title="호스트별 결과" />
-              <div className="overflow-x-auto rounded-lg border border-border">
+              <DoubleScrollX className="rounded-lg border border-border">
                 <table className="w-full text-xs">
                   <thead className="bg-secondary/50">
                     <tr>
@@ -150,7 +151,7 @@ export function PlaybookLogDialog({ playbook, onClose }: PlaybookLogDialogProps)
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </DoubleScrollX>
             </section>
           )}
 

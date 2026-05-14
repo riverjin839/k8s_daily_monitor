@@ -7,8 +7,7 @@ import {
 import { useClusters } from '@/hooks/useCluster';
 import {
   ClusterSidebar, DebugLogPanel, ConfirmDialog, GridCell, InlineTextCell, useToast,
-  SkeletonTable, EmptyState, ResizeGrip,
-} from '@/components/common';
+  SkeletonTable, EmptyState, ResizeGrip, DoubleScrollX} from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { formatApiError } from '@/lib/utils';
 import { useAbortableMutation } from '@/hooks/useAbortableMutation';
@@ -453,7 +452,7 @@ export function NodeSpecPage() {
 
           {/* 테이블 */}
           <div ref={tableRef} tabIndex={-1} className="bg-card border border-border rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
+            <DoubleScrollX>
               <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
                 <colgroup>
                   {GRID_COLS.map((k) => <col key={k} style={{ width: `${colW.getWidth(k)}px` }} />)}
@@ -663,7 +662,7 @@ export function NodeSpecPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </DoubleScrollX>
           </div>
 
           <p className="text-[11px] text-muted-foreground mt-2 flex items-center gap-1">

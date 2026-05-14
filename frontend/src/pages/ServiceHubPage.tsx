@@ -205,9 +205,9 @@ export function ServiceHubPage() {
             <EmptyState
               icon={Icon}
               title={`${def.label} 에 등록된 항목이 없습니다`}
-              description="가이드 / 트러블슈팅 / 변경이력 / 메모 / 링크 / 주요 명령어 중 원하는 종류로 시작하세요."
+              description="가이드 / 트러블슈팅 / 변경이력 / 메모 / 링크 중 원하는 종류로 시작하세요."
               action={{ label: '운영 가이드 추가', onClick: () => setCreating('guide') }}
-              secondaryAction={{ label: '주요 명령어/파라미터 추가', onClick: () => setCreating('command') }}
+              secondaryAction={{ label: '트러블슈팅 추가', onClick: () => setCreating('troubleshoot') }}
             />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ComponentType } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   HelpCircle, Plus, Pencil, Trash2, X, Pin, PinOff, Search, MessageSquare,
   Sparkles, ChevronRight, FileQuestion, ExternalLink, List, LayoutGrid,
+  PenLine, Ship, KeyRound, Bug, Hammer, RefreshCw, Package, Layers,
 } from 'lucide-react';
 import { RichContent } from '@/components/editor';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -14,14 +15,23 @@ import { MacCard } from '@/components/ui/MacCard';
 import { OpsNoteTable, type OpsNoteSortKey } from '@/components/ops-notes/OpsNoteTable';
 
 // ── 서비스 목록 ───────────────────────────────────────────────────────────────
-const SERVICES = [
-  { value: 'k8s',       label: 'Kubernetes', icon: '☸', accent: 'bg-sky-500',     ring: 'ring-sky-500/30',     soft: 'bg-sky-500/10 text-sky-600 dark:text-sky-300' },
-  { value: 'keycloak',  label: 'Keycloak',   icon: '🔑', accent: 'bg-orange-500',  ring: 'ring-orange-500/30',  soft: 'bg-orange-500/10 text-orange-600 dark:text-orange-300' },
-  { value: 'cilium',    label: 'Cilium',     icon: '🐝', accent: 'bg-yellow-500',  ring: 'ring-yellow-500/30',  soft: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-300' },
-  { value: 'jenkins',   label: 'Jenkins',    icon: '🏗', accent: 'bg-blue-500',    ring: 'ring-blue-500/30',    soft: 'bg-blue-500/10 text-blue-600 dark:text-blue-300' },
-  { value: 'argocd',    label: 'ArgoCD',     icon: '🔄', accent: 'bg-violet-500',  ring: 'ring-violet-500/30',  soft: 'bg-violet-500/10 text-violet-600 dark:text-violet-300' },
-  { value: 'nexus',     label: 'Nexus',      icon: '📦', accent: 'bg-emerald-500', ring: 'ring-emerald-500/30', soft: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300' },
-  { value: 'etc',       label: '기타',         icon: '📋', accent: 'bg-slate-500',   ring: 'ring-slate-500/30',   soft: 'bg-slate-500/10 text-slate-600 dark:text-slate-300' },
+type ServiceMeta = {
+  value: string;
+  label: string;
+  Icon: ComponentType<{ className?: string }>;
+  accent: string;
+  ring: string;
+  soft: string;
+};
+
+const SERVICES: ServiceMeta[] = [
+  { value: 'k8s',      label: 'Kubernetes', Icon: Ship,      accent: 'bg-sky-500',     ring: 'ring-sky-500/30',     soft: 'bg-sky-500/10 text-sky-600 dark:text-sky-300' },
+  { value: 'keycloak', label: 'Keycloak',   Icon: KeyRound,  accent: 'bg-orange-500',  ring: 'ring-orange-500/30',  soft: 'bg-orange-500/10 text-orange-600 dark:text-orange-300' },
+  { value: 'cilium',   label: 'Cilium',     Icon: Bug,       accent: 'bg-yellow-500',  ring: 'ring-yellow-500/30',  soft: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-300' },
+  { value: 'jenkins',  label: 'Jenkins',    Icon: Hammer,    accent: 'bg-blue-500',    ring: 'ring-blue-500/30',    soft: 'bg-blue-500/10 text-blue-600 dark:text-blue-300' },
+  { value: 'argocd',   label: 'ArgoCD',     Icon: RefreshCw, accent: 'bg-violet-500',  ring: 'ring-violet-500/30',  soft: 'bg-violet-500/10 text-violet-600 dark:text-violet-300' },
+  { value: 'nexus',    label: 'Nexus',      Icon: Package,   accent: 'bg-emerald-500', ring: 'ring-emerald-500/30', soft: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300' },
+  { value: 'etc',      label: '기타',        Icon: Layers,    accent: 'bg-slate-500',   ring: 'ring-slate-500/30',   soft: 'bg-slate-500/10 text-slate-600 dark:text-slate-300' },
 ];
 const SERVICE_MAP = Object.fromEntries(SERVICES.map((s) => [s.value, s]));
 
@@ -47,6 +57,7 @@ type CardTab = 'answer' | 'history';
 
 function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) {
   const svc = SERVICE_MAP[note.service];
+  const SvcIcon = svc?.Icon;
   const tint = CARD_TINT[note.color] ?? CARD_TINT.yellow;
   const hasBack = Boolean(note.backContent?.trim());
   const hasAnswer = Boolean(note.content?.trim());
@@ -71,7 +82,8 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
       <header className="flex items-center justify-between gap-2 pl-4 pr-2 pt-3">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md text-white ${svc?.accent ?? 'bg-slate-500'}`}>
-            {svc?.icon} {svc?.label ?? note.service}
+            {SvcIcon && <SvcIcon className="w-3 h-3" />}
+            {svc?.label ?? note.service}
           </span>
           {note.pinned && (
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-primary/15 text-primary">
@@ -165,7 +177,13 @@ function QnaCard({ note, onOpen, onEdit, onDelete, onTogglePin }: QnaCardProps) 
       {/* 푸터 */}
       <footer className="flex items-center justify-between gap-2 px-4 py-2 border-t border-border/60 bg-background/40 text-[11px] text-muted-foreground">
         <span className="truncate flex-1 min-w-0 flex items-center gap-1.5">
-          {note.author ? <>✍ {note.author}</> : <span className="opacity-60">작성자 없음</span>}
+          {note.author ? (
+            <span className="inline-flex items-center gap-1">
+              <PenLine className="w-3 h-3" /> {note.author}
+            </span>
+          ) : (
+            <span className="opacity-60">작성자 없음</span>
+          )}
           {note.confluenceUrl && (
             <a
               href={note.confluenceUrl}
@@ -375,6 +393,7 @@ export function OpsNotesPage() {
               const count = countByService[s.value] ?? 0;
               const isActive = filterService === s.value;
               if (count === 0 && !isActive) return null;
+              const Icon = s.Icon;
               return (
                 <button
                   key={s.value}
@@ -385,7 +404,7 @@ export function OpsNotesPage() {
                       : 'bg-background border-border text-muted-foreground hover:border-primary/50'
                   }`}
                 >
-                  <span>{s.icon}</span>{s.label}
+                  <Icon className="w-3.5 h-3.5" />{s.label}
                   <span className="opacity-70">({count})</span>
                 </button>
               );

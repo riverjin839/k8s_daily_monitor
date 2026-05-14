@@ -6,7 +6,7 @@ import {
   Pencil, Moon, Sun, Monitor, X, LogOut, User, ChevronRight,
   ClipboardList, CalendarCheck2, Link2, Tags, Calculator, GitFork, BookMarked, Layers, Boxes,
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
-  ClipboardCheck, ListTree, Waves, TerminalSquare,
+  ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
@@ -18,9 +18,11 @@ import { InlineEdit } from '@/components/common';
 // ── Nav registry ──────────────────────────────────────────────────────────────
 // `/services` (통합 지식/SOP) 는 운영 기준 섹션에서 제거됨 — flyout 에서 보이지 않음.
 const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ className?: string }> }> = {
-  '/':                   { defaultLabel: 'Dashboard',      icon: LayoutDashboard },
+  '/':                   { defaultLabel: '홈 (Today)',     icon: Home },
+  '/cluster-overview':   { defaultLabel: '클러스터 현황',  icon: LayoutDashboard },
   '/daily-check/review': { defaultLabel: '일일 점검 리뷰',  icon: ClipboardCheck },
   '/daily-check/settings':{ defaultLabel: 'Deep Check 설정', icon: Sparkles },
+  '/docs':               { defaultLabel: '지식 허브 홈',    icon: Library },
   '/playbooks':          { defaultLabel: 'Playbooks',      icon: BookOpen },
   '/issues':             { defaultLabel: '이슈 게시판',    icon: ClipboardList },
   '/tasks':              { defaultLabel: '작업 게시판',    icon: ListTodo },
@@ -55,7 +57,9 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
 };
 
 // docs 그룹의 서브섹션. /services (통합 지식/SOP) 은 운영 기준에서 제거됨.
+// 첫 줄 `/docs` 는 지식 허브 랜딩(미리보기 + 통합 검색) 페이지.
 const DOCS_SECTIONS: Array<{ id: string; label: string; paths: string[] }> = [
+  { id: 'home',  label: '허브 홈',     paths: ['/docs'] },
   { id: 'ops',   label: '운영 기준',  paths: ['/ops-notes'] },
   { id: 'work',  label: '작업 기준',  paths: ['/work-guides', '/commands', '/tasks'] },
   { id: 'issue', label: '이슈/장애',   paths: ['/issues', '/incident-analysis'] },
@@ -65,7 +69,7 @@ const DOCS_SECTIONS: Array<{ id: string; label: string; paths: string[] }> = [
 // 사이드바 레일에 표시되는 그룹들
 type GroupId = 'monitoring' | 'work' | 'cluster' | 'analysis' | 'docs' | 'system';
 const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[] }> = [
-  { id: 'monitoring', label: '모니터링', icon: LayoutDashboard, paths: ['/', '/daily-check/review', '/daily-check/settings', '/playbooks'] },
+  { id: 'monitoring', label: '모니터링', icon: LayoutDashboard, paths: ['/', '/cluster-overview', '/daily-check/review', '/daily-check/settings', '/playbooks'] },
   { id: 'work',       label: '작업관리', icon: ListTodo,        paths: ['/issues', '/tasks', '/todo-today', '/work-summary', '/members'] },
   { id: 'cluster',    label: '클러스터', icon: Server,          paths: ['/cluster-manage', '/node-specs', '/versions', '/bulk-exec', '/etcdctl', '/batch-jobs', '/mc', '/kernel-params', '/infra-topology', '/links', '/node-labels', '/node-images', '/cidr'] },
   { id: 'analysis',   label: 'AI 분석',  icon: Sparkles,        paths: ['/incident-analysis', '/packet-flow', '/cilium-trace', '/ontology', '/trends'] },

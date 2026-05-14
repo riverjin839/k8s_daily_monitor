@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import {
-  CheckCircle, Clock, Eye, History,
+  CheckCircle, ChevronDown, Clock, History, Pencil,
   Play, Plus, ShieldAlert, Trash2, Wifi, XCircle, ListTree,
 } from 'lucide-react';
 
@@ -14,6 +14,7 @@ import {
   useCreateBatchJob,
   useDeleteBatchJob,
   useRunBatchJob,
+  useUpdateBatchJob,
 } from '@/hooks/useBatchJobs';
 import type { BatchJob, BatchJobRun } from '@/services/api';
 import { formatApiError } from '@/lib/utils';
@@ -39,18 +40,22 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-interface CreateJobModalProps {
+interface JobFormModalProps {
   open: boolean;
   /** Empty string → modal lets the user pick from all clusters. */
   clusterId: string;
   defaultJobType?: string;
+  /** When set, the modal switches to edit mode and pre-fills from this job. */
+  editingJob?: BatchJob | null;
   onClose: () => void;
-  onCreated: () => void;
+  onSaved: () => void;
 }
 
-function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }: CreateJobModalProps) {
+function JobFormModal({ open, clusterId, defaultJobType, editingJob, onClose, onSaved }: JobFormModalProps) {
+  const isEdit = !!editingJob;
   const typesQ = useBatchJobTypes();
   const create = useCreateBatchJob();
+  const update = useUpdateBatchJob();
   const { data: clusters = [] } = useClusters();
 
   const [selectedClusterId, setSelectedClusterId] = useState(clusterId);
@@ -63,8 +68,11 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
   const [defaultPort, setDefaultPort] = useState(22);
   const [defaultUsername, setDefaultUsername] = useState('root');
   const [cron, setCron] = useState('');
+  const [enabled, setEnabled] = useState(true);
   const [savedPassword, setSavedPassword] = useState('');
   const [savedPrivateKey, setSavedPrivateKey] = useState('');
+  const [clearPassword, setClearPassword] = useState(false);
+  const [clearPrivateKey, setClearPrivateKey] = useState(false);
   const [paramsJson, setParamsJson] = useState('{}');
   const [error, setError] = useState<string | null>(null);
 
@@ -76,23 +84,57 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
     [typesQ.data, jobType],
   );
 
-  // 모달이 열릴 때마다 props 의 clusterId 가 우선; 비어있으면 사용자가 직접 선택.
+  // 모달이 열릴 때 폼 상태 초기화 — 편집 모드면 잡 값으로, 신규면 props 기본값으로.
   useEffect(() => {
     if (!open) return;
-    setSelectedClusterId(clusterId);
-  }, [open, clusterId]);
+    if (editingJob) {
+      setSelectedClusterId(editingJob.clusterId);
+      setName(editingJob.name);
+      setDescription(editingJob.description ?? '');
+      setJobType(editingJob.jobType);
+      setDefaultHost(editingJob.defaultHost ?? '');
+      setHostSelectedName('');
+      setHostCustom(editingJob.defaultHost ?? '');
+      setDefaultPort(editingJob.defaultPort);
+      setDefaultUsername(editingJob.defaultUsername);
+      setCron(editingJob.cron ?? '');
+      setEnabled(editingJob.enabled);
+      setParamsJson(JSON.stringify(editingJob.params ?? {}, null, 2));
+      setSavedPassword('');
+      setSavedPrivateKey('');
+      setClearPassword(false);
+      setClearPrivateKey(false);
+      setError(null);
+    } else {
+      setSelectedClusterId(clusterId);
+      setName('');
+      setDescription('');
+      setJobType(defaultJobType ?? '');
+      setDefaultHost('');
+      setHostSelectedName('');
+      setHostCustom('');
+      setDefaultPort(22);
+      setDefaultUsername('root');
+      setCron('');
+      setEnabled(true);
+      setSavedPassword('');
+      setSavedPrivateKey('');
+      setClearPassword(false);
+      setClearPrivateKey(false);
+      setError(null);
+    }
+  }, [open, editingJob, clusterId, defaultJobType]);
 
-  // 모달이 열릴 때마다 defaultJobType 우선, 없으면 첫 번째 타입을 기본값으로.
+  // 신규 모드에서 jobType 이 비어 있으면 첫 번째 타입을 기본값으로.
   useEffect(() => {
-    if (!open) return;
-    if (defaultJobType) {
-      setJobType(defaultJobType);
-    } else if (!jobType && typesQ.data && typesQ.data.length > 0) {
+    if (!open || isEdit) return;
+    if (!jobType && typesQ.data && typesQ.data.length > 0) {
       setJobType(typesQ.data[0].jobType);
     }
-  }, [open, defaultJobType, typesQ.data, jobType]);
+  }, [open, isEdit, typesQ.data, jobType]);
 
   useEffect(() => {
+    if (isEdit) return;
     if (selectedType) {
       setParamsJson(JSON.stringify(selectedType.defaultParams ?? {}, null, 2));
       if (!name) setName(selectedType.label);
@@ -116,33 +158,61 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
       setError('name, jobType, cluster 는 필수입니다.');
       return;
     }
-    if (cron.trim() && !savedPassword && !savedPrivateKey) {
-      setError('cron 스케줄을 사용하려면 저장된 자격증명(비밀번호 또는 개인키)이 필요합니다.');
-      return;
+    if (cron.trim()) {
+      const willHaveCreds = isEdit
+        ? (
+            (!clearPassword && (editingJob?.hasSavedPassword || !!savedPassword)) ||
+            (!clearPrivateKey && (editingJob?.hasSavedPrivateKey || !!savedPrivateKey))
+          )
+        : (!!savedPassword || !!savedPrivateKey);
+      if (!willHaveCreds) {
+        setError('cron 스케줄을 사용하려면 저장된 자격증명(비밀번호 또는 개인키)이 필요합니다.');
+        return;
+      }
     }
     try {
-      await create.mutateAsync({
-        clusterId: selectedClusterId,
-        name: name.trim(),
-        description: description.trim() || undefined,
-        jobType,
-        defaultHost: defaultHost.trim() || undefined,
-        defaultPort,
-        defaultUsername: defaultUsername.trim() || 'root',
-        cron: cron.trim() || undefined,
-        params,
-        savedPassword: savedPassword || undefined,
-        savedPrivateKey: savedPrivateKey || undefined,
-      });
-      onCreated();
+      if (isEdit && editingJob) {
+        await update.mutateAsync({
+          id: editingJob.id,
+          data: {
+            name: name.trim(),
+            description: description.trim(),
+            defaultHost: defaultHost.trim(),
+            defaultPort,
+            defaultUsername: defaultUsername.trim() || 'root',
+            cron: cron.trim(),
+            enabled,
+            params,
+            savedPassword: savedPassword || undefined,
+            savedPrivateKey: savedPrivateKey || undefined,
+            clearSavedPassword: clearPassword || undefined,
+            clearSavedPrivateKey: clearPrivateKey || undefined,
+          },
+        });
+      } else {
+        await create.mutateAsync({
+          clusterId: selectedClusterId,
+          name: name.trim(),
+          description: description.trim() || undefined,
+          jobType,
+          defaultHost: defaultHost.trim() || undefined,
+          defaultPort,
+          defaultUsername: defaultUsername.trim() || 'root',
+          cron: cron.trim() || undefined,
+          enabled,
+          params,
+          savedPassword: savedPassword || undefined,
+          savedPrivateKey: savedPrivateKey || undefined,
+        });
+      }
+      onSaved();
       onClose();
-      setName(''); setDescription(''); setDefaultHost(''); setCron('');
-      setHostSelectedName(''); setHostCustom('');
-      setSavedPassword(''); setSavedPrivateKey('');
     } catch (e) {
       setError(formatApiError(e));
     }
   };
+
+  const pending = create.isPending || update.isPending;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
@@ -151,12 +221,12 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
         onClick={(e) => e.stopPropagation()}
       >
         <header className="px-5 py-3 border-b border-border flex items-center justify-between">
-          <h3 className="text-sm font-semibold">새 배치 잡 등록</h3>
+          <h3 className="text-sm font-semibold">{isEdit ? '배치 잡 수정' : '새 배치 잡 등록'}</h3>
           <button onClick={onClose} className="text-xs text-muted-foreground hover:text-foreground">닫기</button>
         </header>
 
         <div className="p-5 space-y-4">
-          {!clusterId && (
+          {!clusterId && !isEdit && (
             <div>
               <label htmlFor={f('cluster')} className="block text-xs text-muted-foreground mb-1">클러스터</label>
               <select
@@ -176,12 +246,15 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
           )}
 
           <div>
-            <label htmlFor={f('jobType')} className="block text-xs text-muted-foreground mb-1">Job Type</label>
+            <label htmlFor={f('jobType')} className="block text-xs text-muted-foreground mb-1">
+              Job Type {isEdit && <span className="text-muted-foreground/60">(수정 불가)</span>}
+            </label>
             <select
               id={f('jobType')}
               value={jobType}
               onChange={(e) => setJobType(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl"
+              disabled={isEdit}
+              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <option value="">선택하세요…</option>
               {(typesQ.data ?? []).map((t) => (
@@ -189,6 +262,9 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
                   {t.label} ({t.jobType})
                 </option>
               ))}
+              {isEdit && jobType && !typesQ.data?.some((t) => t.jobType === jobType) && (
+                <option value={jobType}>{jobType}</option>
+              )}
             </select>
             {selectedType?.description && (
               <p className="mt-1 text-[11px] text-muted-foreground">{selectedType.description}</p>
@@ -288,35 +364,93 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
             )}
           </div>
 
+          {isEdit && (
+            <div className="flex items-center gap-2">
+              <input
+                id={f('enabled')}
+                type="checkbox"
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+                className="w-3.5 h-3.5"
+              />
+              <label htmlFor={f('enabled')} className="text-xs text-foreground select-none">
+                활성 <span className="text-muted-foreground">— 비활성 시 cron 스케줄러가 건너뜁니다.</span>
+              </label>
+            </div>
+          )}
+
           <details className="border border-border rounded-xl px-3 py-2" open={!!cron.trim()}>
             <summary className="text-xs font-medium cursor-pointer">
               저장된 자격증명 <span className="text-muted-foreground">(스케줄 실행 전용 — 선택)</span>
+              {isEdit && (
+                <span className="ml-2 text-[10px]">
+                  {editingJob?.hasSavedPassword && (
+                    <span className="text-emerald-600 mr-1.5">● 비밀번호 저장됨</span>
+                  )}
+                  {editingJob?.hasSavedPrivateKey && (
+                    <span className="text-emerald-600">● 개인키 저장됨</span>
+                  )}
+                  {!editingJob?.hasSavedPassword && !editingJob?.hasSavedPrivateKey && (
+                    <span className="text-muted-foreground">(저장된 자격증명 없음)</span>
+                  )}
+                </span>
+              )}
             </summary>
             <p className="mt-2 text-[11px] text-muted-foreground">
               cron 으로 자동 실행할 때 SSH 인증에 사용됩니다. 수동 실행에서는 실행 모달에서 별도 입력하면 되므로 비워두어도 무방합니다.
               값은 서버의 <code className="font-mono">SECRET_KEY</code> 로 암호화되어 저장됩니다.
+              {isEdit && ' 비워두면 기존 값을 유지합니다.'}
             </p>
             <div className="mt-2 space-y-2">
               <div>
-                <label htmlFor={f('savedPw')} className="block text-xs text-muted-foreground mb-1">저장 비밀번호</label>
+                <label htmlFor={f('savedPw')} className="block text-xs text-muted-foreground mb-1">
+                  저장 비밀번호
+                  {isEdit && editingJob?.hasSavedPassword && (
+                    <label className="ml-2 inline-flex items-center gap-1 text-[10px] text-red-500">
+                      <input
+                        type="checkbox"
+                        checked={clearPassword}
+                        onChange={(e) => setClearPassword(e.target.checked)}
+                        className="w-3 h-3"
+                      />
+                      저장된 비밀번호 삭제
+                    </label>
+                  )}
+                </label>
                 <input
                   id={f('savedPw')}
                   type="password"
                   value={savedPassword}
                   onChange={(e) => setSavedPassword(e.target.value)}
-                  className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl"
+                  disabled={clearPassword}
+                  placeholder={isEdit && editingJob?.hasSavedPassword ? '비워두면 기존 값 유지' : ''}
+                  className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl disabled:opacity-50"
                   autoComplete="new-password"
                 />
               </div>
               <div>
-                <label htmlFor={f('savedPem')} className="block text-xs text-muted-foreground mb-1">저장 개인키 (PEM)</label>
+                <label htmlFor={f('savedPem')} className="block text-xs text-muted-foreground mb-1">
+                  저장 개인키 (PEM)
+                  {isEdit && editingJob?.hasSavedPrivateKey && (
+                    <label className="ml-2 inline-flex items-center gap-1 text-[10px] text-red-500">
+                      <input
+                        type="checkbox"
+                        checked={clearPrivateKey}
+                        onChange={(e) => setClearPrivateKey(e.target.checked)}
+                        className="w-3 h-3"
+                      />
+                      저장된 개인키 삭제
+                    </label>
+                  )}
+                </label>
                 <textarea
                   id={f('savedPem')}
                   value={savedPrivateKey}
                   onChange={(e) => setSavedPrivateKey(e.target.value)}
+                  disabled={clearPrivateKey}
                   rows={3}
-                  placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
-                  className="w-full px-3 py-2 text-xs bg-background border border-border rounded-xl font-mono"
+                  placeholder={isEdit && editingJob?.hasSavedPrivateKey ? '비워두면 기존 값 유지' : '-----BEGIN OPENSSH PRIVATE KEY-----'}
+                  className="w-full px-3 py-2 text-xs bg-background border border-border rounded-xl font-mono disabled:opacity-50"
                 />
               </div>
             </div>
@@ -331,10 +465,10 @@ function CreateJobModal({ open, clusterId, defaultJobType, onClose, onCreated }:
           </button>
           <button
             onClick={submit}
-            disabled={create.isPending}
+            disabled={pending}
             className="px-3 py-1.5 text-xs rounded-xl bg-primary text-primary-foreground disabled:opacity-60"
           >
-            {create.isPending ? '등록 중…' : '등록'}
+            {pending ? (isEdit ? '저장 중…' : '등록 중…') : (isEdit ? '저장' : '등록')}
           </button>
         </footer>
       </div>
@@ -546,79 +680,63 @@ function RunModal({ job, onClose }: RunModalProps) {
   );
 }
 
-// ── 단일 잡의 최근 실행 이력 모달 ──────────────────────────────────────────
-interface JobRunsModalProps {
-  job: BatchJob;
+// ── 단일 잡 아래에 인라인으로 접히는 실행 이력 ─────────────────────────────
+interface InlineRunHistoryProps {
+  jobId: string;
   onSelectRun: (run: BatchJobRun) => void;
-  onClose: () => void;
 }
 
-function JobRunsModal({ job, onSelectRun, onClose }: JobRunsModalProps) {
-  const runsQ = useBatchJobRuns(job.id);
+function InlineRunHistory({ jobId, onSelectRun }: InlineRunHistoryProps) {
+  const runsQ = useBatchJobRuns(jobId);
   const runs = runsQ.data ?? [];
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? runs.slice(0, 30) : runs.slice(0, 6);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div
-        className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-3xl max-h-[92vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="px-5 py-3 border-b border-border flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold">{job.name} — 실행 이력</h3>
-            <p className="text-[11px] text-muted-foreground font-mono">{job.jobType}</p>
-          </div>
-          <button onClick={onClose} className="text-xs text-muted-foreground hover:text-foreground">닫기</button>
-        </header>
-        <div className="p-3">
-          {runsQ.isLoading ? (
-            <p className="text-xs text-muted-foreground p-3">로딩 중…</p>
-          ) : runs.length === 0 ? (
-            <p className="text-xs text-muted-foreground p-3">아직 실행 이력이 없습니다.</p>
-          ) : (
-            <div className="border border-border rounded-xl overflow-hidden">
-              <DoubleScrollX>
-                <table className="w-full text-[11px]">
-                  <thead>
-                    <tr className="text-left text-muted-foreground border-b border-border bg-muted/20">
-                      <th className="px-3 py-1.5 font-medium w-24">상태</th>
-                      <th className="px-3 py-1.5 font-medium">실행 시각</th>
-                      <th className="px-3 py-1.5 font-medium w-24">소요</th>
-                      <th className="px-3 py-1.5 font-medium w-20">트리거</th>
-                      <th className="px-3 py-1.5 font-medium">호스트</th>
-                      <th className="px-3 py-1.5 font-medium w-16 text-right">상세</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {runs.slice(0, 20).map((r) => (
-                      <tr
-                        key={r.id}
-                        className="border-b border-border/60 last:border-b-0 hover:bg-muted/10 cursor-pointer"
-                        onClick={() => onSelectRun(r)}
-                      >
-                        <td className="px-3 py-1.5"><StatusPill status={r.status} /></td>
-                        <td className="px-3 py-1.5 font-mono text-muted-foreground whitespace-nowrap">
-                          {r.startedAt.replace('T', ' ').slice(0, 19)}
-                        </td>
-                        <td className="px-3 py-1.5 font-mono text-muted-foreground tabular-nums">{r.durationMs}ms</td>
-                        <td className="px-3 py-1.5 text-muted-foreground">{r.trigger}</td>
-                        <td className="px-3 py-1.5 font-mono text-muted-foreground truncate max-w-[260px]">
-                          {r.host || '-'}
-                        </td>
-                        <td className="px-3 py-1.5 text-right">
-                          <span className="inline-flex items-center gap-1 text-primary hover:underline">
-                            <Eye className="w-3 h-3" />
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </DoubleScrollX>
-            </div>
-          )}
-        </div>
+    <div className="mt-1.5 rounded-md border border-border/60 bg-muted/20 overflow-hidden">
+      <div className="px-2 py-1 border-b border-border/40 bg-muted/30 flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground/80">실행 이력</span>
+        {runs.length > 0 && (
+          <span className="text-[10px] text-muted-foreground tabular-nums">{runs.length}건</span>
+        )}
       </div>
+      {runsQ.isLoading ? (
+        <p className="px-2 py-1.5 text-[10px] text-muted-foreground">로딩 중…</p>
+      ) : runs.length === 0 ? (
+        <p className="px-2 py-1.5 text-[10px] text-muted-foreground italic">
+          아직 실행 이력이 없습니다.
+        </p>
+      ) : (
+        <ul className="divide-y divide-border/40">
+          {visible.map((r) => {
+            const meta = STATUS_META[r.status] ?? STATUS_META.unknown;
+            const { Icon } = meta;
+            const time = r.startedAt.replace('T', ' ').slice(5, 16); // MM-DD HH:mm
+            return (
+              <li key={r.id}>
+                <button
+                  onClick={() => onSelectRun(r)}
+                  className="w-full flex items-center gap-1.5 px-2 py-1 text-[10px] hover:bg-muted/40 text-left"
+                  title={`${r.status} · ${r.trigger} · ${r.durationMs}ms`}
+                >
+                  <Icon className={`w-3 h-3 flex-shrink-0 ${meta.cls.split(' ').find((c) => c.startsWith('text-')) ?? ''}`} />
+                  <span className="font-mono text-foreground/80 whitespace-nowrap">{time}</span>
+                  <span className="text-muted-foreground/70 whitespace-nowrap">{r.trigger}</span>
+                  <span className="ml-auto font-mono text-muted-foreground tabular-nums">{r.durationMs}ms</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {runs.length > 6 && (
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className="w-full px-2 py-1 text-[10px] text-primary hover:bg-muted/40 border-t border-border/40"
+        >
+          {showAll ? '간단히 보기' : `더 보기 (+${Math.min(runs.length, 30) - 6})`}
+        </button>
+      )}
     </div>
   );
 }
@@ -695,19 +813,25 @@ function RunDetailModal({ run, jobName, onClose }: RunDetailModalProps) {
 // ── 매트릭스 셀 — (클러스터 × jobType) 교차점에 등록된 N개의 잡 + 각 잡의 마지막 실행 표시 ─
 interface JobCellProps {
   jobs: BatchJob[];
+  expandedIds: Set<string>;
   onRun: (job: BatchJob) => void;
-  onShowRuns: (job: BatchJob) => void;
+  onToggleHistory: (job: BatchJob) => void;
+  onEdit: (job: BatchJob) => void;
   onDelete: (job: BatchJob) => void;
   onAdd: () => void;
+  onSelectRun: (job: BatchJob, run: BatchJobRun) => void;
 }
 
 function JobEntry({
-  job, onRun, onShowRuns, onDelete,
+  job, expanded, onRun, onToggleHistory, onEdit, onDelete, onSelectRun,
 }: {
   job: BatchJob;
+  expanded: boolean;
   onRun: () => void;
-  onShowRuns: () => void;
+  onToggleHistory: () => void;
+  onEdit: () => void;
   onDelete: () => void;
+  onSelectRun: (run: BatchJobRun) => void;
 }) {
   return (
     <div className="flex flex-col gap-1">
@@ -747,11 +871,24 @@ function JobEntry({
           <Play className="w-2.5 h-2.5" />
         </button>
         <button
-          onClick={onShowRuns}
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-md bg-secondary text-secondary-foreground hover:bg-secondary/80"
-          title="실행 이력"
+          onClick={onToggleHistory}
+          aria-expanded={expanded}
+          className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-md hover:bg-secondary/80 ${
+            expanded
+              ? 'bg-primary/15 text-primary'
+              : 'bg-secondary text-secondary-foreground'
+          }`}
+          title={expanded ? '실행 이력 닫기' : '실행 이력 펼치기'}
         >
           <History className="w-2.5 h-2.5" />
+          <ChevronDown className={`w-2.5 h-2.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        </button>
+        <button
+          onClick={onEdit}
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-md text-muted-foreground hover:bg-secondary/80 hover:text-foreground"
+          title="수정"
+        >
+          <Pencil className="w-2.5 h-2.5" />
         </button>
         <button
           onClick={onDelete}
@@ -761,11 +898,12 @@ function JobEntry({
           <Trash2 className="w-2.5 h-2.5" />
         </button>
       </div>
+      {expanded && <InlineRunHistory jobId={job.id} onSelectRun={onSelectRun} />}
     </div>
   );
 }
 
-function JobCell({ jobs, onRun, onShowRuns, onDelete, onAdd }: JobCellProps) {
+function JobCell({ jobs, expandedIds, onRun, onToggleHistory, onEdit, onDelete, onAdd, onSelectRun }: JobCellProps) {
   if (jobs.length === 0) {
     return (
       <button
@@ -782,9 +920,12 @@ function JobCell({ jobs, onRun, onShowRuns, onDelete, onAdd }: JobCellProps) {
         <div key={j.id} className={idx === 0 ? 'pb-1.5' : 'py-1.5'}>
           <JobEntry
             job={j}
+            expanded={expandedIds.has(j.id)}
             onRun={() => onRun(j)}
-            onShowRuns={() => onShowRuns(j)}
+            onToggleHistory={() => onToggleHistory(j)}
+            onEdit={() => onEdit(j)}
             onDelete={() => onDelete(j)}
+            onSelectRun={(run) => onSelectRun(j, run)}
           />
         </div>
       ))}
@@ -806,10 +947,20 @@ export function BatchJobsPage() {
   const del = useDeleteBatchJob();
 
   const [createCtx, setCreateCtx] = useState<{ clusterId: string; jobType?: string } | null>(null);
+  const [editJob, setEditJob] = useState<BatchJob | null>(null);
   const [runJob, setRunJob] = useState<BatchJob | null>(null);
-  const [runsJob, setRunsJob] = useState<BatchJob | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<BatchJob | null>(null);
   const [runDetail, setRunDetail] = useState<{ run: BatchJobRun; jobName: string } | null>(null);
+
+  const toggleHistory = (job: BatchJob) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(job.id)) next.delete(job.id);
+      else next.add(job.id);
+      return next;
+    });
+  };
 
   const jobs = useMemo(() => allJobsQ.data ?? [], [allJobsQ.data]);
   const types = useMemo(() => typesQ.data ?? [], [typesQ.data]);
@@ -908,10 +1059,13 @@ export function BatchJobsPage() {
                           className="px-3 py-2 align-top border-r border-border last:border-r-0">
                           <JobCell
                             jobs={cellJobs}
+                            expandedIds={expandedIds}
                             onRun={(j) => setRunJob(j)}
-                            onShowRuns={(j) => setRunsJob(j)}
+                            onToggleHistory={toggleHistory}
+                            onEdit={(j) => setEditJob(j)}
                             onDelete={(j) => setConfirmDelete(j)}
                             onAdd={() => setCreateCtx({ clusterId: cluster.id, jobType: col.jobType })}
+                            onSelectRun={(j, run) => setRunDetail({ run, jobName: j.name })}
                           />
                         </td>
                       );
@@ -924,28 +1078,18 @@ export function BatchJobsPage() {
         )}
       </MacCard>
 
-      {createCtx && (
-        <CreateJobModal
-          open={!!createCtx}
-          clusterId={createCtx.clusterId}
-          defaultJobType={createCtx.jobType}
-          onClose={() => setCreateCtx(null)}
-          onCreated={() => allJobsQ.refetch()}
+      {(createCtx || editJob) && (
+        <JobFormModal
+          open={!!(createCtx || editJob)}
+          clusterId={editJob ? editJob.clusterId : (createCtx?.clusterId ?? '')}
+          defaultJobType={createCtx?.jobType}
+          editingJob={editJob}
+          onClose={() => { setCreateCtx(null); setEditJob(null); }}
+          onSaved={() => allJobsQ.refetch()}
         />
       )}
 
       {runJob && <RunModal job={runJob} onClose={() => setRunJob(null)} />}
-
-      {runsJob && (
-        <JobRunsModal
-          job={runsJob}
-          onSelectRun={(run) => {
-            setRunDetail({ run, jobName: runsJob.name });
-            setRunsJob(null);
-          }}
-          onClose={() => setRunsJob(null)}
-        />
-      )}
 
       {runDetail && (
         <RunDetailModal

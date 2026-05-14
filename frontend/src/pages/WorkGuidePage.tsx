@@ -378,7 +378,7 @@ export function WorkGuidePage() {
   };
 
   return (
-    <div className="flex bg-background" style={{ height: '100vh' }}>
+    <div className="flex bg-background h-[100dvh]">
       {/* Sidebar tree */}
       <aside className="w-64 flex-shrink-0 border-r border-border bg-card flex flex-col overflow-hidden">
         <div className="px-4 py-4 border-b border-border flex items-center justify-between flex-shrink-0">

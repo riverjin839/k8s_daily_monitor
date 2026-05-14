@@ -3,6 +3,7 @@ import {
   AlertTriangle, CheckCircle, Info, Loader2, Search, Zap,
   Server, Layers, Package, RefreshCw, Download, Play, Square, Filter, X,
 } from 'lucide-react';
+import { SearchableSelect } from '@/components/common';
 import {
   useAnalyzeIncident, useAnalyzerHealth,
   useAnalyzeNamespaces, useAnalyzePods, useFetchIncidentContext,
@@ -136,12 +137,18 @@ export function IncidentAnalysisPage() {
   // 백엔드의 list_namespaces 가 with_counts/only_with_issues 둘 다 false 면 pod 조회를 생략한다.
   // 사용자가 토글 켜면 느린 경로 (전체 pod fetch) 가 발동되며 axios 타임아웃도 2분 30초로 확장됨.
   const [onlyIssues, setOnlyIssues] = useState(false);
+  const [nsPattern, setNsPattern] = useState('');
+  const [podPattern, setPodPattern] = useState('');
 
   useEffect(() => {
     if (!clusterId && clusters.length > 0) setClusterId(clusters[0].id);
   }, [clusters, clusterId]);
 
-  const nsQ   = useAnalyzeNamespaces(clusterId, onlyIssues);
+  // ns 가 이미 선택돼 있으면 클러스터 전체 스캔은 불필요 — pod 쿼리에서만 onlyIssues 적용.
+  const effectiveOnlyIssues = onlyIssues && !namespace;
+  const nsQ = useAnalyzeNamespaces(
+    clusterId, effectiveOnlyIssues, false, nsPattern, podPattern,
+  );
   const podsQ = useAnalyzePods(clusterId, namespace, onlyIssues);
 
   // 클러스터 변경 시 ns/pod 초기화
@@ -326,7 +333,7 @@ export function IncidentAnalysisPage() {
               대상 선택
             </p>
             <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer"
-              title="OFF: namespace 이름만 빠르게 조회 (큰 클러스터 권장). ON: 클러스터 전체 pod 를 스캔해 비정상 ns/pod 만 추림 (느림 — 큰 클러스터에서 1분 이상 소요 가능)">
+              title="OFF: namespace 이름만 빠르게 조회 (큰 클러스터 권장). ON: 클러스터 전체 pod 를 스캔해 비정상 ns/pod 만 추림 (느림 — 큰 클러스터에서 1분 이상 소요 가능). ns 가 이미 선택돼 있으면 그 ns 만 스캔.">
               <input
                 type="checkbox"
                 checked={onlyIssues}
@@ -336,6 +343,42 @@ export function IncidentAnalysisPage() {
               이슈 있는 항목만 보기 (느림)
             </label>
           </div>
+
+          {/* 이슈만 + ns 미선택일 때 — glob 패턴으로 스캔 범위 좁히기 */}
+          {onlyIssues && !namespace && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label htmlFor={f('nsPattern')} className={lc}>
+                    Namespace 패턴 (선택)
+                  </label>
+                  <input
+                    id={f('nsPattern')}
+                    value={nsPattern}
+                    onChange={(e) => setNsPattern(e.target.value)}
+                    placeholder="kube-*,monitoring,argocd"
+                    className={`${ic} font-mono text-xs`}
+                  />
+                </div>
+                <div>
+                  <label htmlFor={f('podPattern')} className={lc}>
+                    Pod 이름 패턴 (선택)
+                  </label>
+                  <input
+                    id={f('podPattern')}
+                    value={podPattern}
+                    onChange={(e) => setPodPattern(e.target.value)}
+                    placeholder="*nginx*,*api*"
+                    className={`${ic} font-mono text-xs`}
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                💡 콤마 구분, <code>*</code> <code>?</code> 와일드카드. 비워두면 전체 ns 스캔.
+                Namespace 를 선택하면 이 입력은 사라지고 그 ns 만 스캔합니다.
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             {/* Cluster */}
@@ -369,20 +412,20 @@ export function IncidentAnalysisPage() {
                   </span>
                 )}
               </label>
-              <select
+              <SearchableSelect
                 value={namespace}
-                onChange={(e) => setNamespace(e.target.value)}
+                onChange={setNamespace}
+                options={nsQ.data?.namespaces ?? []}
+                getKey={(n) => n.name}
+                getLabel={(n) =>
+                  `${n.hasUnhealthy ? '⚠ ' : ''}${n.name}` +
+                  (typeof n.podCount === 'number' ? ` (${n.podCount} pods)` : '')
+                }
+                placeholder="namespace 검색..."
                 disabled={!clusterId || nsQ.isLoading}
-                className={ic}
-              >
-                <option value="">— namespace 선택 —</option>
-                {(nsQ.data?.namespaces ?? []).map((n) => (
-                  <option key={n.name} value={n.name}>
-                    {n.hasUnhealthy ? '⚠ ' : ''}{n.name}
-                    {typeof n.podCount === 'number' ? ` (${n.podCount} pods)` : ''}
-                  </option>
-                ))}
-              </select>
+                loading={nsQ.isLoading}
+                emptyText="namespace 없음"
+              />
               {nsQ.isError && (
                 <p className="text-[11px] text-red-400 mt-1">
                   {formatApiError(nsQ.error)}
@@ -402,19 +445,18 @@ export function IncidentAnalysisPage() {
                   </span>
                 )}
               </label>
-              <select
+              <SearchableSelect
                 value={podName}
-                onChange={(e) => setPodName(e.target.value)}
+                onChange={setPodName}
+                options={podsQ.data?.pods ?? []}
+                getKey={(p) => p.name}
+                getLabel={podOptionLabel}
+                placeholder="pod 검색..."
                 disabled={!namespace || podsQ.isLoading}
-                className={`${ic} font-mono text-xs`}
-              >
-                <option value="">— pod 선택 —</option>
-                {(podsQ.data?.pods ?? []).map((p) => (
-                  <option key={p.name} value={p.name}>
-                    {podOptionLabel(p)}
-                  </option>
-                ))}
-              </select>
+                loading={podsQ.isLoading}
+                emptyText="pod 없음"
+                className="font-mono text-xs"
+              />
               {podsQ.isError && (
                 <p className="text-[11px] text-red-400 mt-1">
                   {formatApiError(podsQ.error)}

@@ -81,42 +81,57 @@ def _safe_add_column(table: str, col_name: str, col_type: str) -> None:
         )
 
 
+def _safe_exec(sql: str, *, label: str = "") -> None:
+    """범용 DDL/DML 실행 헬퍼 — 한 트랜잭션으로 실행하고 예외는 로깅만.
+
+    DROP NOT NULL, ALTER COLUMN TYPE ... USING, UPDATE backfill, ADD CONSTRAINT
+    등 IF NOT EXISTS 가 없는 위험한 마이그레이션을 부팅 안전하게 감싼다.
+    """
+    from sqlalchemy import text as _text
+    try:
+        with engine.begin() as conn:
+            conn.execute(_text(sql))
+        if label:
+            _log.info("migration: %s ok", label)
+    except Exception as e:  # noqa: BLE001
+        _log.warning("migration: %s skipped (%s)", label or sql[:80], e)
+
+
+def _safe_create_index(name: str, table: str, expr: str) -> None:
+    """CREATE INDEX IF NOT EXISTS — 부팅 안전 헬퍼."""
+    _safe_exec(
+        f"CREATE INDEX IF NOT EXISTS {name} ON {table} {expr}",
+        label=f"index {name}",
+    )
+
+
 def _run_migrations():
     """기존 테이블에 누락된 컬럼 추가 (경량 마이그레이션)"""
     inspector = inspect(engine)
     if "addons" in inspector.get_table_names():
-        columns = [col["name"] for col in inspector.get_columns("addons")]
-        if "details" not in columns:
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE addons ADD COLUMN details JSONB"))
-        if "config" not in columns:
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE addons ADD COLUMN config JSONB"))
+        _safe_add_column("addons", "details", "JSONB")
+        _safe_add_column("addons", "config", "JSONB")
     if "playbooks" in inspector.get_table_names():
-        columns = [col["name"] for col in inspector.get_columns("playbooks")]
-        if "show_on_dashboard" not in columns:
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE playbooks ADD COLUMN show_on_dashboard BOOLEAN DEFAULT FALSE"))
-        # 신규: DB 관리형 Playbook 파일 / Inventory FK
-        if "playbook_file_id" not in columns:
-            with engine.begin() as conn:
-                conn.execute(text(
-                    "ALTER TABLE playbooks ADD COLUMN playbook_file_id UUID "
-                    "REFERENCES ansible_playbook_files(id)"
-                ))
-        if "inventory_id" not in columns:
-            with engine.begin() as conn:
-                conn.execute(text(
-                    "ALTER TABLE playbooks ADD COLUMN inventory_id UUID "
-                    "REFERENCES ansible_inventories(id)"
-                ))
-        # 기존 NOT NULL 제약 완화 — 이제 playbook_file_id 로도 충분.
-        cols_meta = {c["name"]: c for c in inspector.get_columns("playbooks")}
-        if cols_meta.get("playbook_path", {}).get("nullable") is False:
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE playbooks ALTER COLUMN playbook_path DROP NOT NULL"))
+        _safe_add_column("playbooks", "show_on_dashboard", "BOOLEAN DEFAULT FALSE")
+        # 신규 FK 컬럼 — 컬럼만 먼저, REFERENCES 는 별도 ADD CONSTRAINT 로 분리 (대상 테이블 부재 위험 격리).
+        _safe_add_column("playbooks", "playbook_file_id", "UUID")
+        _safe_add_column("playbooks", "inventory_id", "UUID")
+        _safe_exec(
+            "ALTER TABLE playbooks ADD CONSTRAINT playbooks_playbook_file_id_fkey "
+            "FOREIGN KEY (playbook_file_id) REFERENCES ansible_playbook_files(id)",
+            label="playbooks.playbook_file_id FK",
+        )
+        _safe_exec(
+            "ALTER TABLE playbooks ADD CONSTRAINT playbooks_inventory_id_fkey "
+            "FOREIGN KEY (inventory_id) REFERENCES ansible_inventories(id)",
+            label="playbooks.inventory_id FK",
+        )
+        # 기존 NOT NULL 제약 완화 — 데이터에 NULL 있을 수 있어 위험. 실패해도 부팅 진행.
+        _safe_exec(
+            "ALTER TABLE playbooks ALTER COLUMN playbook_path DROP NOT NULL",
+            label="playbooks.playbook_path DROP NOT NULL",
+        )
     if "clusters" in inspector.get_table_names():
-        columns = [col["name"] for col in inspector.get_columns("clusters")]
         new_cluster_cols = [
             ("region", "VARCHAR(100)"),
             ("operation_level", "VARCHAR(50)"),
@@ -150,13 +165,11 @@ def _run_migrations():
             ("icon", "VARCHAR(64)"),
         ]
         for col_name, col_type in new_cluster_cols:
-            if col_name not in columns:
-                with engine.begin() as conn:
-                    conn.execute(text(f"ALTER TABLE clusters ADD COLUMN {col_name} {col_type}"))
+            _safe_add_column("clusters", col_name, col_type)
 
         # seq 백필 — 기존 레코드는 created_at 순서대로 1000, 1010, 1020, ...
         # 새 컬럼이 막 추가됐다면 모두 default(1000) 이라 정렬이 안정적이지 않다.
-        if "seq" in [c["name"] for c in inspector.get_columns("clusters")]:
+        try:
             with engine.begin() as conn:
                 rows = conn.execute(text(
                     "SELECT id FROM clusters WHERE seq = 1000 ORDER BY created_at"
@@ -167,20 +180,15 @@ def _run_migrations():
                             text("UPDATE clusters SET seq = :seq WHERE id = :id"),
                             {"seq": 1000 + i * 10, "id": row[0]},
                         )
+        except Exception as e:  # noqa: BLE001
+            _log.warning("migration: clusters.seq backfill skipped — %s", e)
 
-        # 길이 확장 — VARCHAR(32) 에서 VARCHAR(128) 로. 일부 배포판 버전 문자열이
-        # 32자를 초과해 StringDataRightTruncation 발생 이력. 이미 128 이면 no-op.
-        cols_meta = inspector.get_columns("clusters")
+        # 길이 확장 — VARCHAR(32) → VARCHAR(128). 이미 128 이면 _safe_exec 가 no-op (Postgres 가 같은 타입 ALTER 는 허용).
         for col_name in ("k8s_version", "cilium_version"):
-            meta = next((c for c in cols_meta if c["name"] == col_name), None)
-            if meta is None:
-                continue
-            cur_len = getattr(meta.get("type"), "length", None)
-            if cur_len is not None and cur_len < 128:
-                with engine.begin() as conn:
-                    conn.execute(text(
-                        f"ALTER TABLE clusters ALTER COLUMN {col_name} TYPE VARCHAR(128)"
-                    ))
+            _safe_exec(
+                f"ALTER TABLE clusters ALTER COLUMN {col_name} TYPE VARCHAR(128)",
+                label=f"clusters.{col_name} extend to VARCHAR(128)",
+            )
 
         # 백필: kubeconfig_content 가 NULL 인 기존 레코드 중 파일이 남아있으면 DB 로 복사
         # (/tmp 기반 저장소라 재시작 후 파일이 사라지면 영원히 못 살리므로 한 번은 시도)
@@ -208,124 +216,109 @@ def _run_migrations():
             pass
     # trend_sources: 마지막 수집 상태 컬럼 추가
     if "trend_sources" in inspector.get_table_names():
-        ts_cols = [c["name"] for c in inspector.get_columns("trend_sources")]
         for col_name, col_type in [
             ("last_status", "VARCHAR(20)"),
             ("last_message", "TEXT"),
             ("last_item_count", "INTEGER DEFAULT 0"),
             ("last_collected_at", "TIMESTAMP WITHOUT TIME ZONE"),
         ]:
-            if col_name not in ts_cols:
-                with engine.begin() as conn:
-                    conn.execute(text(f"ALTER TABLE trend_sources ADD COLUMN {col_name} {col_type}"))
+            _safe_add_column("trend_sources", col_name, col_type)
 
     if "issues" in inspector.get_table_names():
-        issue_cols = [col["name"] for col in inspector.get_columns("issues")]
-        if "detail_content" not in issue_cols:
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE issues ADD COLUMN detail_content TEXT"))
+        _safe_add_column("issues", "detail_content", "TEXT")
         # 통합지식 service tag — ui_settings.serviceCatalog 의 slug 와 연결
-        if "service" not in issue_cols:
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE issues ADD COLUMN service VARCHAR(64)"))
-                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_issues_service ON issues (service)"))
+        _safe_add_column("issues", "service", "VARCHAR(64)")
+        _safe_create_index("ix_issues_service", "issues", "(service)")
     if "workflow_steps" in inspector.get_table_names():
-        wf_step_cols = [col["name"] for col in inspector.get_columns("workflow_steps")]
-        for col_name, col_type, default in [
-            ("step_type", "VARCHAR(50)", "'action'"),
-            ("status", "VARCHAR(20)", "'idle'"),
-        ]:
-            if col_name not in wf_step_cols:
-                with engine.begin() as conn:
-                    conn.execute(text(
-                        f"ALTER TABLE workflow_steps ADD COLUMN {col_name} {col_type} NOT NULL DEFAULT {default}"
-                    ))
-        # 워크플로 노드 연계 컬럼
-        for col_name, col_type in [("reference_type", "VARCHAR(50)"), ("reference_id", "VARCHAR(100)")]:
-            if col_name not in wf_step_cols:
-                with engine.begin() as conn:
-                    conn.execute(text(f"ALTER TABLE workflow_steps ADD COLUMN {col_name} {col_type}"))
+        _safe_add_column("workflow_steps", "step_type", "VARCHAR(50) NOT NULL DEFAULT 'action'")
+        _safe_add_column("workflow_steps", "status", "VARCHAR(20) NOT NULL DEFAULT 'idle'")
+        _safe_add_column("workflow_steps", "reference_type", "VARCHAR(50)")
+        _safe_add_column("workflow_steps", "reference_id", "VARCHAR(100)")
         # 상태 어휘 변경 — 실행엔진(idle/running/success/failed) → 기획 게시판(todo/in-progress/blocked/done).
-        # 기존 데이터를 새 값으로 한 번만 매핑. 이미 매핑됐으면 no-op.
-        with engine.begin() as conn:
-            conn.execute(text(
-                "UPDATE workflow_steps SET status = CASE status "
-                "  WHEN 'idle' THEN 'todo' "
-                "  WHEN 'running' THEN 'in-progress' "
-                "  WHEN 'success' THEN 'done' "
-                "  WHEN 'failed' THEN 'blocked' "
-                "  ELSE status END "
-                "WHERE status IN ('idle','running','success','failed')"
-            ))
+        # 기존 데이터를 새 값으로 매핑. 이미 매핑됐으면 WHERE 조건이 0건이라 no-op.
+        _safe_exec(
+            "UPDATE workflow_steps SET status = CASE status "
+            "  WHEN 'idle' THEN 'todo' "
+            "  WHEN 'running' THEN 'in-progress' "
+            "  WHEN 'success' THEN 'done' "
+            "  WHEN 'failed' THEN 'blocked' "
+            "  ELSE status END "
+            "WHERE status IN ('idle','running','success','failed')",
+            label="workflow_steps.status remap",
+        )
     # tasks: Date → DateTime 마이그레이션 + 칸반 보드 필드 추가
     if "tasks" in inspector.get_table_names():
         task_col_map = {col["name"]: col["type"].__class__.__name__ for col in inspector.get_columns("tasks")}
+        # Date → Timestamp 타입 변경. USING cast 실패 가능 (잘못된 데이터) — _safe_exec 로 격리.
         for col_name in ("scheduled_at", "completed_at"):
             if col_name in task_col_map and task_col_map[col_name].upper() == "DATE":
-                with engine.begin() as conn:
-                    conn.execute(text(
-                        f"ALTER TABLE tasks ALTER COLUMN {col_name} TYPE TIMESTAMP WITHOUT TIME ZONE "
-                        f"USING {col_name}::TIMESTAMP WITHOUT TIME ZONE"
-                    ))
+                _safe_exec(
+                    f"ALTER TABLE tasks ALTER COLUMN {col_name} TYPE TIMESTAMP WITHOUT TIME ZONE "
+                    f"USING {col_name}::TIMESTAMP WITHOUT TIME ZONE",
+                    label=f"tasks.{col_name} Date→Timestamp",
+                )
         # 칸반 보드 신규 컬럼
-        task_cols = list(task_col_map.keys())
-        kanban_status_is_new = "kanban_status" not in task_cols
-        new_task_kanban_cols = [
-            ("kanban_status", "VARCHAR(20) NOT NULL DEFAULT 'todo'"),
-            ("module", "VARCHAR(50)"),
-            ("type_label", "VARCHAR(20)"),
-            ("effort_hours", "INTEGER"),
-            ("done_condition", "TEXT"),
-            # 통합지식 service tag — ui_settings.serviceCatalog 의 slug 와 연결
-            ("service", "VARCHAR(64)"),
-        ]
-        for col_name, col_type in new_task_kanban_cols:
-            if col_name not in task_cols:
-                with engine.begin() as conn:
-                    conn.execute(text(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_type}"))
-        # 기존 completed_at 있는 레코드 → done 으로 동기화 (최초 마이그레이션 1회만)
-        if kanban_status_is_new:
-            with engine.begin() as conn:
-                conn.execute(text("UPDATE tasks SET kanban_status = 'done' WHERE completed_at IS NOT NULL"))
-        # Task: parent_id for sub-tasks
-        if "parent_id" not in task_cols:
-            with engine.begin() as conn:
-                conn.execute(text('ALTER TABLE tasks ADD COLUMN parent_id UUID REFERENCES tasks(id) ON DELETE CASCADE'))
-            import logging as _logging
-            _logging.getLogger(__name__).info("Migration: added tasks.parent_id")
-        # Task: issue_id — 작업에 연결된 이슈 (optional)
-        if "issue_id" not in task_cols:
-            with engine.begin() as conn:
-                conn.execute(text('ALTER TABLE tasks ADD COLUMN issue_id UUID REFERENCES issues(id) ON DELETE SET NULL'))
-    # issues: Date → DateTime 마이그레이션
+        _safe_add_column("tasks", "kanban_status", "VARCHAR(20) NOT NULL DEFAULT 'todo'")
+        _safe_add_column("tasks", "module", "VARCHAR(50)")
+        _safe_add_column("tasks", "type_label", "VARCHAR(20)")
+        _safe_add_column("tasks", "effort_hours", "INTEGER")
+        _safe_add_column("tasks", "done_condition", "TEXT")
+        # 통합지식 service tag — ui_settings.serviceCatalog 의 slug 와 연결
+        _safe_add_column("tasks", "service", "VARCHAR(64)")
+        _safe_create_index("ix_tasks_service", "tasks", "(service)")
+        # 기존 completed_at 있는 레코드 → done 으로 동기화. 이미 done 이면 idempotent.
+        _safe_exec(
+            "UPDATE tasks SET kanban_status = 'done' "
+            "WHERE completed_at IS NOT NULL AND kanban_status != 'done'",
+            label="tasks.kanban_status sync from completed_at",
+        )
+        # Sub-task / issue link FK 컬럼 — 컬럼만 먼저, FK constraint 는 별도.
+        _safe_add_column("tasks", "parent_id", "UUID")
+        _safe_add_column("tasks", "issue_id", "UUID")
+        _safe_exec(
+            "ALTER TABLE tasks ADD CONSTRAINT tasks_parent_id_fkey "
+            "FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE",
+            label="tasks.parent_id FK",
+        )
+        _safe_exec(
+            "ALTER TABLE tasks ADD CONSTRAINT tasks_issue_id_fkey "
+            "FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE SET NULL",
+            label="tasks.issue_id FK",
+        )
+    # issues: Date → DateTime + primary/secondary assignee
     if "issues" in inspector.get_table_names():
         issue_col_map = {col["name"]: col["type"].__class__.__name__ for col in inspector.get_columns("issues")}
         for col_name in ("occurred_at", "resolved_at"):
             if col_name in issue_col_map and issue_col_map[col_name].upper() == "DATE":
-                with engine.begin() as conn:
-                    conn.execute(text(
-                        f"ALTER TABLE issues ALTER COLUMN {col_name} TYPE TIMESTAMP WITHOUT TIME ZONE "
-                        f"USING {col_name}::TIMESTAMP WITHOUT TIME ZONE"
-                    ))
-        if "primary_assignee" not in issue_col_map:
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE issues ADD COLUMN primary_assignee VARCHAR(100)"))
-                conn.execute(text("UPDATE issues SET primary_assignee = assignee WHERE primary_assignee IS NULL"))
-                conn.execute(text("ALTER TABLE issues ALTER COLUMN primary_assignee SET NOT NULL"))
-        if "secondary_assignee" not in issue_col_map:
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE issues ADD COLUMN secondary_assignee VARCHAR(100)"))
+                _safe_exec(
+                    f"ALTER TABLE issues ALTER COLUMN {col_name} TYPE TIMESTAMP WITHOUT TIME ZONE "
+                    f"USING {col_name}::TIMESTAMP WITHOUT TIME ZONE",
+                    label=f"issues.{col_name} Date→Timestamp",
+                )
+        # 3-step primary_assignee 마이그레이션 — 각 단계 격리. UPDATE 가 비어도 SET NOT NULL 진행해도 됨
+        # (assignee 자체가 NOT NULL 이면 primary_assignee 도 NOT NULL 가능).
+        _safe_add_column("issues", "primary_assignee", "VARCHAR(100)")
+        _safe_exec(
+            "UPDATE issues SET primary_assignee = assignee WHERE primary_assignee IS NULL",
+            label="issues.primary_assignee backfill",
+        )
+        _safe_exec(
+            "ALTER TABLE issues ALTER COLUMN primary_assignee SET NOT NULL",
+            label="issues.primary_assignee SET NOT NULL",
+        )
+        _safe_add_column("issues", "secondary_assignee", "VARCHAR(100)")
 
     if "tasks" in inspector.get_table_names():
-        task_cols = [col["name"] for col in inspector.get_columns("tasks")]
-        if "primary_assignee" not in task_cols:
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE tasks ADD COLUMN primary_assignee VARCHAR(100)"))
-                conn.execute(text("UPDATE tasks SET primary_assignee = assignee WHERE primary_assignee IS NULL"))
-                conn.execute(text("ALTER TABLE tasks ALTER COLUMN primary_assignee SET NOT NULL"))
-        if "secondary_assignee" not in task_cols:
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE tasks ADD COLUMN secondary_assignee VARCHAR(100)"))
+        _safe_add_column("tasks", "primary_assignee", "VARCHAR(100)")
+        _safe_exec(
+            "UPDATE tasks SET primary_assignee = assignee WHERE primary_assignee IS NULL",
+            label="tasks.primary_assignee backfill",
+        )
+        _safe_exec(
+            "ALTER TABLE tasks ALTER COLUMN primary_assignee SET NOT NULL",
+            label="tasks.primary_assignee SET NOT NULL",
+        )
+        _safe_add_column("tasks", "secondary_assignee", "VARCHAR(100)")
 
 
     # clusters: statusenum 에 'pending' 값 추가 (PostgreSQL enum 확장)
@@ -367,19 +360,13 @@ def _run_migrations():
                 "ON infra_nodes(cluster_id, hostname)"
             ))
     else:
-        infra_cols = [col["name"] for col in inspector.get_columns("infra_nodes")]
-        if "version" not in infra_cols:
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE infra_nodes ADD COLUMN version INTEGER NOT NULL DEFAULT 1"))
-        with engine.begin() as conn:
-            conn.execute(text(
-                "CREATE UNIQUE INDEX IF NOT EXISTS uq_infra_nodes_cluster_hostname "
-                "ON infra_nodes(cluster_id, hostname)"
-            ))
-            conn.execute(text(
-                "CREATE INDEX IF NOT EXISTS ix_infra_nodes_cluster_hostname "
-                "ON infra_nodes(cluster_id, hostname)"
-            ))
+        _safe_add_column("infra_nodes", "version", "INTEGER NOT NULL DEFAULT 1")
+        _safe_exec(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_infra_nodes_cluster_hostname "
+            "ON infra_nodes(cluster_id, hostname)",
+            label="unique index infra_nodes(cluster_id, hostname)",
+        )
+        _safe_create_index("ix_infra_nodes_cluster_hostname", "infra_nodes", "(cluster_id, hostname)")
 
     # topology_audit_logs: 토폴로지 변경 감사 로그
     if "topology_audit_logs" not in inspector.get_table_names():
@@ -402,14 +389,8 @@ def _run_migrations():
 
     # work_guides: 계층 구조 + 정렬 컬럼 추가
     if "work_guides" in inspector.get_table_names():
-        wg_cols = [col["name"] for col in inspector.get_columns("work_guides")]
-        for col_name, col_type in [
-            ("parent_id", "UUID"),
-            ("sort_order", "INTEGER NOT NULL DEFAULT 0"),
-        ]:
-            if col_name not in wg_cols:
-                with engine.begin() as conn:
-                    conn.execute(text(f"ALTER TABLE work_guides ADD COLUMN {col_name} {col_type}"))
+        _safe_add_column("work_guides", "parent_id", "UUID")
+        _safe_add_column("work_guides", "sort_order", "INTEGER NOT NULL DEFAULT 0")
 
     # confluence_url 컬럼 — 모든 작성형 엔티티 (tasks/issues/ops_notes/work_guides/
     # command_entries/workflows/mindmaps)에 공통으로 Confluence 문서 링크를 저장.
@@ -418,34 +399,20 @@ def _run_migrations():
         "command_entries", "workflows", "mindmaps",
     ):
         if tbl in inspector.get_table_names():
-            cols = [col["name"] for col in inspector.get_columns(tbl)]
-            if "confluence_url" not in cols:
-                with engine.begin() as conn:
-                    conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN confluence_url TEXT"))
+            _safe_add_column(tbl, "confluence_url", "TEXT")
 
     # node_server_specs: 자산 대장 신규 필드
     if "node_server_specs" in inspector.get_table_names():
-        ns_cols_info = inspector.get_columns("node_server_specs")
-        ns_cols = [col["name"] for col in ns_cols_info]
-        for col_name, col_type in [
-            ("is_ssd", "BOOLEAN"),
-            ("is_vm", "BOOLEAN"),
-            ("current_usage", "VARCHAR(255)"),
-            ("purchase_purpose", "VARCHAR(255)"),
-            ("non_os_disk_gb", "INTEGER"),
-        ]:
-            if col_name not in ns_cols:
-                with engine.begin() as conn:
-                    conn.execute(text(f"ALTER TABLE node_server_specs ADD COLUMN {col_name} {col_type}"))
-
-        # disk_type: VARCHAR(32) → VARCHAR(255) 로 확장 ("NVMe (nvme0n1, ...)" 같은 자동수집 문자열 수용)
-        for col in ns_cols_info:
-            if col["name"] == "disk_type":
-                col_len = getattr(col["type"], "length", None)
-                if col_len is not None and col_len < 255:
-                    with engine.begin() as conn:
-                        conn.execute(text("ALTER TABLE node_server_specs ALTER COLUMN disk_type TYPE VARCHAR(255)"))
-                break
+        _safe_add_column("node_server_specs", "is_ssd", "BOOLEAN")
+        _safe_add_column("node_server_specs", "is_vm", "BOOLEAN")
+        _safe_add_column("node_server_specs", "current_usage", "VARCHAR(255)")
+        _safe_add_column("node_server_specs", "purchase_purpose", "VARCHAR(255)")
+        _safe_add_column("node_server_specs", "non_os_disk_gb", "INTEGER")
+        # disk_type: VARCHAR(32) → VARCHAR(255). 이미 255 이상이면 _safe_exec 가 no-op.
+        _safe_exec(
+            "ALTER TABLE node_server_specs ALTER COLUMN disk_type TYPE VARCHAR(255)",
+            label="node_server_specs.disk_type extend",
+        )
 
     # daily_check_logs: AI 자동 리뷰 필드 추가 + 구버전 누락 컬럼 방어 보충
     # 각 ALTER 는 _safe_add_column 으로 IF NOT EXISTS + try/except 처리되어 한 컬럼이
@@ -472,14 +439,18 @@ def _run_migrations():
         ]:
             _safe_add_column("daily_check_logs", col_name, col_type)
         # checked_at 가 방금 추가됐다면 기존 행 backfill — check_date 를 기본값으로 사용.
-        try:
-            with engine.begin() as conn:
-                conn.execute(text(
-                    "UPDATE daily_check_logs SET checked_at = check_date "
-                    "WHERE checked_at IS NULL"
-                ))
-        except Exception as e:  # noqa: BLE001
-            _log.warning("migration: daily_check_logs.checked_at backfill skipped — %s", e)
+        _safe_exec(
+            "UPDATE daily_check_logs SET checked_at = check_date WHERE checked_at IS NULL",
+            label="daily_check_logs.checked_at backfill",
+        )
+        # 인덱스 — daily_check 결과 라우터가 ORDER BY checked_at DESC 를 자주 함.
+        _safe_create_index(
+            "ix_daily_check_logs_checked_at", "daily_check_logs", "(checked_at DESC)"
+        )
+        _safe_create_index(
+            "ix_daily_check_logs_cluster_checked", "daily_check_logs",
+            "(cluster_id, checked_at DESC)",
+        )
 
     # check_logs: 구버전 누락 컬럼 방어 보충 (history.py 가 checked_at 으로 ORDER BY)
     if "check_logs" in inspector.get_table_names():
@@ -489,63 +460,34 @@ def _run_migrations():
             ("raw_output", "JSONB"),
         ]:
             _safe_add_column("check_logs", col_name, col_type)
-        # FK constraint 별도 추가 (이미 있으면 IF NOT EXISTS 가 없으므로 try/except)
-        try:
-            with engine.begin() as conn:
-                conn.execute(text(
-                    "ALTER TABLE check_logs "
-                    "ADD CONSTRAINT check_logs_addon_id_fkey "
-                    "FOREIGN KEY (addon_id) REFERENCES addons(id)"
-                ))
-            _log.info("migration: added check_logs.addon_id FK")
-        except Exception:
-            # 이미 있거나 (DuplicateObject) addons 없음 — 모두 정상 skip
-            pass
-        try:
-            with engine.begin() as conn:
-                conn.execute(text(
-                    "UPDATE check_logs SET checked_at = NOW() WHERE checked_at IS NULL"
-                ))
-        except Exception as e:  # noqa: BLE001
-            _log.warning("migration: check_logs.checked_at backfill skipped — %s", e)
+        # FK constraint 별도 추가 (이미 있거나 addons 부재 모두 silently skip)
+        _safe_exec(
+            "ALTER TABLE check_logs ADD CONSTRAINT check_logs_addon_id_fkey "
+            "FOREIGN KEY (addon_id) REFERENCES addons(id)",
+            label="check_logs.addon_id FK",
+        )
+        _safe_exec(
+            "UPDATE check_logs SET checked_at = NOW() WHERE checked_at IS NULL",
+            label="check_logs.checked_at backfill",
+        )
+        # 인덱스 — history.py 가 ORDER BY checked_at DESC 빈번.
+        _safe_create_index("ix_check_logs_checked_at", "check_logs", "(checked_at DESC)")
+        _safe_create_index("ix_check_logs_cluster_addon", "check_logs", "(cluster_id, addon_id)")
 
     # deep_check_definitions / deep_check_results — Super Pod 결과 저장.
     # SQLAlchemy create_all 이 이미 생성하지만, 명시적으로 인덱스/idempotent 보장.
     if "deep_check_definitions" in inspector.get_table_names():
-        with engine.begin() as conn:
-            conn.execute(text(
-                "CREATE INDEX IF NOT EXISTS ix_deep_check_definitions_cluster "
-                "ON deep_check_definitions(cluster_id)"
-            ))
-            conn.execute(text(
-                "CREATE INDEX IF NOT EXISTS ix_deep_check_definitions_type "
-                "ON deep_check_definitions(check_type)"
-            ))
+        _safe_create_index("ix_deep_check_definitions_cluster", "deep_check_definitions", "(cluster_id)")
+        _safe_create_index("ix_deep_check_definitions_type", "deep_check_definitions", "(check_type)")
     if "deep_check_results" in inspector.get_table_names():
-        with engine.begin() as conn:
-            conn.execute(text(
-                "CREATE INDEX IF NOT EXISTS ix_deep_check_results_cluster "
-                "ON deep_check_results(cluster_id)"
-            ))
-            conn.execute(text(
-                "CREATE INDEX IF NOT EXISTS ix_deep_check_results_daily_log "
-                "ON deep_check_results(daily_check_log_id)"
-            ))
-            conn.execute(text(
-                "CREATE INDEX IF NOT EXISTS ix_deep_check_results_checked_at "
-                "ON deep_check_results(checked_at)"
-            ))
+        _safe_create_index("ix_deep_check_results_cluster", "deep_check_results", "(cluster_id)")
+        _safe_create_index("ix_deep_check_results_daily_log", "deep_check_results", "(daily_check_log_id)")
+        _safe_create_index("ix_deep_check_results_checked_at", "deep_check_results", "(checked_at DESC)")
 
     # batch_jobs: 저장형 자격증명 컬럼 추가 (스케줄 실행용)
     if "batch_jobs" in inspector.get_table_names():
-        bj_cols = [col["name"] for col in inspector.get_columns("batch_jobs")]
-        for col_name, col_type in [
-            ("encrypted_password", "TEXT"),
-            ("encrypted_private_key", "TEXT"),
-        ]:
-            if col_name not in bj_cols:
-                with engine.begin() as conn:
-                    conn.execute(text(f"ALTER TABLE batch_jobs ADD COLUMN {col_name} {col_type}"))
+        _safe_add_column("batch_jobs", "encrypted_password", "TEXT")
+        _safe_add_column("batch_jobs", "encrypted_private_key", "TEXT")
 
 
 def _seed_default_metric_cards():

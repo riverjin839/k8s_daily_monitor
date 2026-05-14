@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 
-EntryKind = Literal["note", "guide", "troubleshoot", "history", "link"]
+EntryKind = Literal["note", "guide", "troubleshoot", "history", "link", "command"]
 
 
 class ServiceEntryBase(BaseModel):

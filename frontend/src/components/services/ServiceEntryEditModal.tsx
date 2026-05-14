@@ -206,6 +206,7 @@ export function ServiceEntryEditModal({
                   : form.kind === 'troubleshoot' ? '증상 / 원인 / 해결 과정 / 재발 방지...'
                   : form.kind === 'history' ? '무엇을 변경/조치했는지 — 영향 범위, 결과, 후속...'
                   : form.kind === 'link' ? '이 리소스에 대한 짧은 설명...'
+                  : form.kind === 'command' ? '자주 쓰는 CLI / kubectl / helm / API 호출과 핵심 파라미터를 정리하세요.\n예: kubectl -n kube-system get pods --field-selector status.phase!=Running'
                   : '메모 내용...'
                 }
               />

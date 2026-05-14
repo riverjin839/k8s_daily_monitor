@@ -3,7 +3,7 @@
 
 설계 원칙:
  - 서비스 카탈로그(`service` 키)는 frontend 에서 정의(슬러그 단위) — 백엔드는 검증 안 함.
- - `kind` 로 항목 종류 구분: note / guide / troubleshoot / history / link.
+ - `kind` 로 항목 종류 구분: note / guide / troubleshoot / history / link / command.
  - cluster_id 는 optional — 특정 클러스터에 묶이거나 전역(공통 지식).
  - tags / pinned / author / severity 부가 메타.
 """
@@ -31,7 +31,7 @@ class ServiceEntry(Base):
     # 특정 클러스터에 한정된 항목인지 (NULL 이면 모든 클러스터에 공통)
     cluster_id = Column(UUID(as_uuid=True), ForeignKey("clusters.id", ondelete="SET NULL"), nullable=True)
     # 항목 종류
-    kind = Column(String(32), nullable=False, default="note")  # note / guide / troubleshoot / history / link
+    kind = Column(String(32), nullable=False, default="note")  # note / guide / troubleshoot / history / link / command
     title = Column(String(255), nullable=False)
     content = Column(Text, nullable=False, default="")          # rich HTML or markdown
     # link 종류일 때 사용

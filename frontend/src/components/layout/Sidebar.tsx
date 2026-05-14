@@ -19,6 +19,8 @@ import { InlineEdit } from '@/components/common';
 // `/services` (통합 지식/SOP) 는 운영 기준 섹션에서 제거됨 — flyout 에서 보이지 않음.
 const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ className?: string }> }> = {
   '/':                   { defaultLabel: 'Dashboard',      icon: LayoutDashboard },
+  '/daily-check/review': { defaultLabel: '일일 점검 리뷰',  icon: ClipboardCheck },
+  '/daily-check/settings':{ defaultLabel: 'Deep Check 설정', icon: Sparkles },
   '/playbooks':          { defaultLabel: 'Playbooks',      icon: BookOpen },
   '/issues':             { defaultLabel: '이슈 게시판',    icon: ClipboardList },
   '/tasks':              { defaultLabel: '작업 게시판',    icon: ListTodo },
@@ -63,7 +65,7 @@ const DOCS_SECTIONS: Array<{ id: string; label: string; paths: string[] }> = [
 // 사이드바 레일에 표시되는 그룹들
 type GroupId = 'monitoring' | 'work' | 'cluster' | 'analysis' | 'docs' | 'system';
 const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[] }> = [
-  { id: 'monitoring', label: '모니터링', icon: LayoutDashboard, paths: ['/', '/playbooks'] },
+  { id: 'monitoring', label: '모니터링', icon: LayoutDashboard, paths: ['/', '/daily-check/review', '/daily-check/settings', '/playbooks'] },
   { id: 'work',       label: '작업관리', icon: ListTodo,        paths: ['/issues', '/tasks', '/todo-today', '/work-summary', '/members'] },
   { id: 'cluster',    label: '클러스터', icon: Server,          paths: ['/cluster-manage', '/node-specs', '/versions', '/bulk-exec', '/etcdctl', '/batch-jobs', '/mc', '/kernel-params', '/infra-topology', '/links', '/node-labels', '/node-images', '/cidr'] },
   { id: 'analysis',   label: 'AI 분석',  icon: Sparkles,        paths: ['/incident-analysis', '/packet-flow', '/cilium-trace', '/ontology', '/trends'] },

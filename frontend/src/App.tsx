@@ -117,6 +117,7 @@ function AppShell() {
               <Route path="/trends" element={<TrendDigestPage />} />
               <Route path="/cilium-trace" element={<CiliumTracePage />} />
               <Route path="/daily-check/review/:clusterId" element={<DailyCheckReviewPage />} />
+              <Route path="/daily-check/review" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/settings" element={<DeepCheckSettingsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

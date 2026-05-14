@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -55,6 +56,29 @@ from app.routers import (
 from app.auth.deps import get_current_user
 from app.auth.security import hash_password
 from app.models.user import User
+
+
+_log = logging.getLogger("k8s_monitor.migration")
+
+
+def _safe_add_column(table: str, col_name: str, col_type: str) -> None:
+    """ALTER TABLE ... ADD COLUMN IF NOT EXISTS 를 단일 트랜잭션으로 실행.
+
+    PostgreSQL 9.6+ 의 IF NOT EXISTS 를 사용해 중복 추가 시도에도 멱등. 발생한
+    예외는 모두 잡아 로깅만 하고 부팅 자체를 막지 않는다 (defensive — 마이그레이션
+    실패가 backend 기동 자체를 막아 CrashLoopBackOff 가 되던 문제 해결).
+    """
+    from sqlalchemy import text as _text
+    try:
+        with engine.begin() as conn:
+            conn.execute(_text(
+                f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type}"
+            ))
+        _log.info("migration: ensured %s.%s exists", table, col_name)
+    except Exception as e:  # noqa: BLE001
+        _log.warning(
+            "migration: failed to add %s.%s (%s) — continuing", table, col_name, e
+        )
 
 
 def _run_migrations():
@@ -424,11 +448,9 @@ def _run_migrations():
                 break
 
     # daily_check_logs: AI 자동 리뷰 필드 추가 + 구버전 누락 컬럼 방어 보충
+    # 각 ALTER 는 _safe_add_column 으로 IF NOT EXISTS + try/except 처리되어 한 컬럼이
+    # 실패해도 다른 컬럼은 계속 진행, 부팅 자체는 막히지 않는다.
     if "daily_check_logs" in inspector.get_table_names():
-        dcl_cols = [c["name"] for c in inspector.get_columns("daily_check_logs")]
-        # 신규/누락 가능 컬럼 일괄 ADD. 오래 전 배포된 prod 의 경우 model 보다 컬럼이 적을 수
-        # 있어 (예: checked_at, check_duration_seconds 누락) 새 코드 ORDER BY 가 실패하는
-        # 버그가 보고돼 — 가능한 모든 누락 컬럼을 멱등으로 보충한다.
         for col_name, col_type in [
             # 모델에 일찍부터 있던 컬럼들 — 일부 오래된 DB 에는 빠져 있을 수 있음
             ("checked_at", "TIMESTAMP WITHOUT TIME ZONE"),
@@ -448,46 +470,44 @@ def _run_migrations():
             ("ai_status", "VARCHAR(20)"),
             ("ai_generated_at", "TIMESTAMP WITHOUT TIME ZONE"),
         ]:
-            if col_name not in dcl_cols:
-                with engine.begin() as conn:
-                    conn.execute(text(
-                        f"ALTER TABLE daily_check_logs ADD COLUMN {col_name} {col_type}"
-                    ))
+            _safe_add_column("daily_check_logs", col_name, col_type)
         # checked_at 가 방금 추가됐다면 기존 행 backfill — check_date 를 기본값으로 사용.
-        # 이미 있으면 NULL 인 행만 (혹시 모를) 안전망으로 채움.
         try:
             with engine.begin() as conn:
                 conn.execute(text(
                     "UPDATE daily_check_logs SET checked_at = check_date "
                     "WHERE checked_at IS NULL"
                 ))
-        except Exception:
-            # check_date 도 없는 비정상 DB 일 때 조용히 skip — backend 기동은 막지 않음.
-            pass
+        except Exception as e:  # noqa: BLE001
+            _log.warning("migration: daily_check_logs.checked_at backfill skipped — %s", e)
 
-    # check_logs: 구버전 누락 컬럼 방어 보충 (history.py 가 checked_at 으로 ORDER BY).
-    # daily_check_logs 와 마찬가지로 일부 오래된 prod 가 모델보다 컬럼이 적을 수 있음.
+    # check_logs: 구버전 누락 컬럼 방어 보충 (history.py 가 checked_at 으로 ORDER BY)
     if "check_logs" in inspector.get_table_names():
-        cl_cols = [c["name"] for c in inspector.get_columns("check_logs")]
         for col_name, col_type in [
             ("checked_at", "TIMESTAMP WITHOUT TIME ZONE"),
-            ("addon_id", "UUID REFERENCES addons(id)"),
+            ("addon_id", "UUID"),  # FK 는 따로 추가 — ADD COLUMN IF NOT EXISTS 는 REFERENCES 함께 못 씀
             ("raw_output", "JSONB"),
         ]:
-            if col_name not in cl_cols:
-                with engine.begin() as conn:
-                    conn.execute(text(
-                        f"ALTER TABLE check_logs ADD COLUMN {col_name} {col_type}"
-                    ))
-        # checked_at 가 방금 추가됐다면 NOW() 로 backfill (CheckLog 는 별도 timestamp
-        # 필드가 없어 NOW() 가 최선).
+            _safe_add_column("check_logs", col_name, col_type)
+        # FK constraint 별도 추가 (이미 있으면 IF NOT EXISTS 가 없으므로 try/except)
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE check_logs "
+                    "ADD CONSTRAINT check_logs_addon_id_fkey "
+                    "FOREIGN KEY (addon_id) REFERENCES addons(id)"
+                ))
+            _log.info("migration: added check_logs.addon_id FK")
+        except Exception:
+            # 이미 있거나 (DuplicateObject) addons 없음 — 모두 정상 skip
+            pass
         try:
             with engine.begin() as conn:
                 conn.execute(text(
                     "UPDATE check_logs SET checked_at = NOW() WHERE checked_at IS NULL"
                 ))
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            _log.warning("migration: check_logs.checked_at backfill skipped — %s", e)
 
     # deep_check_definitions / deep_check_results — Super Pod 결과 저장.
     # SQLAlchemy create_all 이 이미 생성하지만, 명시적으로 인덱스/idempotent 보장.
@@ -824,14 +844,26 @@ def _seed_initial_admin():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: DB 테이블 생성
-    Base.metadata.create_all(bind=engine)
-    _run_migrations()
-    _seed_default_metric_cards()
-    _seed_default_trend_sources()
-    _seed_default_playbooks()
-    _seed_default_deep_check_definitions()
-    _seed_initial_admin()
+    # Startup: DB 테이블 생성 + 마이그레이션 + seed.
+    # 각 단계는 개별 try/except 로 격리해 한 군데 실패가 backend 전체를 막아
+    # CrashLoopBackOff 가 되는 일을 방지한다. 실패는 로그로 남기되 부팅은 계속.
+    _startup_log = logging.getLogger("k8s_monitor.startup")
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:  # noqa: BLE001
+        _startup_log.exception("create_all failed — continuing: %s", e)
+    for step_name, step in [
+        ("migrations", _run_migrations),
+        ("seed_metric_cards", _seed_default_metric_cards),
+        ("seed_trend_sources", _seed_default_trend_sources),
+        ("seed_playbooks", _seed_default_playbooks),
+        ("seed_deep_check_definitions", _seed_default_deep_check_definitions),
+        ("seed_initial_admin", _seed_initial_admin),
+    ]:
+        try:
+            step()
+        except Exception as e:  # noqa: BLE001
+            _startup_log.exception("startup step '%s' failed — continuing: %s", step_name, e)
     yield
     # Shutdown: 필요한 정리 작업
 

@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, RotateCcw } from 'lucide-react';
-import { CLUSTER_ICON_OPTIONS, CLUSTER_EMOJI_SUGGESTIONS, resolveClusterIcon } from '@/lib/clusterIcons';
+import {
+  CLUSTER_ICON_GROUPS,
+  CLUSTER_EMOJI_GROUPS,
+  resolveClusterIcon,
+} from '@/lib/clusterIcons';
 
 interface ClusterIconPickerProps {
   /** 현재 저장된 icon 값 (lucide 이름 / emoji / null). */
@@ -17,8 +21,8 @@ interface ClusterIconPickerProps {
 
 type Tab = 'icons' | 'emoji';
 
-const POPOVER_WIDTH = 320;
-const POPOVER_MAX_HEIGHT = 420;
+const POPOVER_WIDTH = 360;
+const POPOVER_MAX_HEIGHT = 520;
 
 /** 클러스터 사이드바 아이콘을 사용자가 선택하는 picker.
  *  - lucide 아이콘 그리드 (화이트리스트)
@@ -139,30 +143,42 @@ export function ClusterIconPicker({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-2">
+        <div className="flex-1 overflow-y-auto p-2 space-y-3">
           {tab === 'icons' ? (
-            <div className="grid grid-cols-6 gap-1">
-              {Object.entries(CLUSTER_ICON_OPTIONS).map(([name, Icon]) => {
-                const isActive = value === name;
-                return (
-                  <button
-                    key={name}
-                    onClick={() => handleSelectLucide(name)}
-                    title={name}
-                    className={`flex items-center justify-center aspect-square rounded-md transition-colors ${
-                      isActive
-                        ? 'bg-primary/15 text-primary ring-1 ring-primary/40'
-                        : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                  </button>
-                );
-              })}
-            </div>
+            CLUSTER_ICON_GROUPS.map((group) => (
+              <section key={group.key}>
+                <header className="flex items-baseline gap-2 px-1 mb-1.5">
+                  <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {group.label}
+                  </h3>
+                  {group.hint && (
+                    <p className="text-[10px] text-muted-foreground/70 truncate">{group.hint}</p>
+                  )}
+                </header>
+                <div className="grid grid-cols-7 gap-1">
+                  {group.items.map(({ name, Component: Icon }) => {
+                    const isActive = value === name;
+                    return (
+                      <button
+                        key={name}
+                        onClick={() => handleSelectLucide(name)}
+                        title={name}
+                        className={`flex items-center justify-center aspect-square rounded-md transition-colors ${
+                          isActive
+                            ? 'bg-primary/15 text-primary ring-1 ring-primary/40'
+                            : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                        }`}
+                      >
+                        <Icon className="w-5 h-5" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))
           ) : (
-            <div className="space-y-2">
-              <div className="flex items-center gap-1">
+            <div className="space-y-3">
+              <div className="flex items-center gap-1 px-1">
                 <input
                   type="text"
                   value={emojiInput}
@@ -180,25 +196,37 @@ export function ClusterIconPicker({
                   적용
                 </button>
               </div>
-              <p className="text-[10px] text-muted-foreground/70 px-1">아래에서 빠르게 선택:</p>
-              <div className="grid grid-cols-10 gap-1">
-                {CLUSTER_EMOJI_SUGGESTIONS.map((e) => {
-                  const isActive = value === e;
-                  return (
-                    <button
-                      key={e}
-                      onClick={() => handleSelectEmoji(e)}
-                      className={`flex items-center justify-center aspect-square rounded-md text-lg leading-none transition-colors ${
-                        isActive
-                          ? 'bg-primary/15 ring-1 ring-primary/40'
-                          : 'hover:bg-secondary'
-                      }`}
-                    >
-                      {e}
-                    </button>
-                  );
-                })}
-              </div>
+              {CLUSTER_EMOJI_GROUPS.map((group) => (
+                <section key={group.key}>
+                  <header className="flex items-baseline gap-2 px-1 mb-1.5">
+                    <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {group.label}
+                    </h3>
+                    {group.hint && (
+                      <p className="text-[10px] text-muted-foreground/70 truncate">{group.hint}</p>
+                    )}
+                  </header>
+                  <div className="grid grid-cols-10 gap-1">
+                    {group.items.map((e) => {
+                      const isActive = value === e;
+                      return (
+                        <button
+                          key={e}
+                          onClick={() => handleSelectEmoji(e)}
+                          title={e}
+                          className={`flex items-center justify-center aspect-square rounded-md text-lg leading-none transition-colors ${
+                            isActive
+                              ? 'bg-primary/15 ring-1 ring-primary/40'
+                              : 'hover:bg-secondary'
+                          }`}
+                        >
+                          {e}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
             </div>
           )}
         </div>

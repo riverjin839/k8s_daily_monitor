@@ -200,7 +200,7 @@ export function TaskBoardPage() {
           onSelect={(id) => setFilterClusterId(id ?? '')}
           allowAll
           allLabel="전체 작업"
-          title="클러스터"
+          iconOnly
         />
         <div className="flex-1 min-w-0">
         {/* Page Header */}

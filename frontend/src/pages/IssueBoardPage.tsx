@@ -179,7 +179,7 @@ export function IssueBoardPage() {
           onSelect={(id) => setFilterClusterId(id ?? '')}
           allowAll
           allLabel="전체 이슈"
-          title="클러스터"
+          iconOnly
         />
         <div className="flex-1 min-w-0">
         {/* Page Header */}

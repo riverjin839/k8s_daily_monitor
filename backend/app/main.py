@@ -190,6 +190,12 @@ def _run_migrations():
                 label=f"clusters.{col_name} extend to VARCHAR(128)",
             )
 
+        # icon: VARCHAR(64) → TEXT — 업로드된 이미지의 base64 data URL (수 KB) 저장용.
+        _safe_exec(
+            "ALTER TABLE clusters ALTER COLUMN icon TYPE TEXT",
+            label="clusters.icon extend to TEXT (for data URL)",
+        )
+
         # 백필: kubeconfig_content 가 NULL 인 기존 레코드 중 파일이 남아있으면 DB 로 복사
         # (/tmp 기반 저장소라 재시작 후 파일이 사라지면 영원히 못 살리므로 한 번은 시도)
         import os as _os

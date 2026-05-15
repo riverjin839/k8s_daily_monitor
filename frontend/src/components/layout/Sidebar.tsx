@@ -4,7 +4,7 @@ import { useLocation, Link } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, ListTodo, Sparkles, Settings, Server,
   Pencil, Moon, Sun, Monitor, X, LogOut, User, ChevronRight,
-  ClipboardList, CalendarCheck2, Link2, Tags, Calculator, GitFork, BookMarked, Layers, Boxes,
+  CalendarCheck2, Link2, Tags, Calculator, GitFork, BookMarked, Layers, Boxes,
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home,
 } from 'lucide-react';
@@ -24,8 +24,7 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
   '/daily-check/settings':{ defaultLabel: 'Deep Check 설정', icon: Sparkles },
   '/docs':               { defaultLabel: '지식 허브 홈',    icon: Library },
   '/playbooks':          { defaultLabel: 'Playbooks',      icon: BookOpen },
-  '/issues':             { defaultLabel: '이슈 게시판',    icon: ClipboardList },
-  '/tasks':              { defaultLabel: '작업 게시판',    icon: ListTodo },
+  '/work-items':         { defaultLabel: '작업 / 이슈',    icon: ListTodo },
   '/todo-today':         { defaultLabel: '오늘 할일',      icon: CalendarCheck2 },
   '/work-summary':       { defaultLabel: '업무 현황',      icon: BarChart3 },
   '/members':            { defaultLabel: '멤버별 업무',    icon: Users },
@@ -61,8 +60,8 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
 const DOCS_SECTIONS: Array<{ id: string; label: string; paths: string[] }> = [
   { id: 'home',  label: '허브 홈',     paths: ['/docs'] },
   { id: 'ops',   label: '운영 기준',  paths: ['/ops-notes'] },
-  { id: 'work',  label: '작업 기준',  paths: ['/work-guides', '/commands', '/tasks'] },
-  { id: 'issue', label: '이슈/장애',   paths: ['/issues', '/incident-analysis'] },
+  { id: 'work',  label: '작업 기준',  paths: ['/work-guides', '/commands', '/work-items'] },
+  { id: 'issue', label: '이슈/장애',   paths: ['/work-items', '/incident-analysis'] },
   { id: 'flow',  label: '흐름/설계',  paths: ['/workflow', '/wbs', '/mindmap'] },
 ];
 
@@ -71,7 +70,7 @@ type GroupId = 'monitoring' | 'work' | 'cluster' | 'analysis' | 'docs' | 'system
 const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[] }> = [
   // 홈(/) 은 좌측 상단 로고 버튼이 담당하므로 그룹 paths 에서 제외.
   { id: 'monitoring', label: '모니터링', icon: LayoutDashboard, paths: ['/cluster-overview', '/daily-check/review', '/daily-check/settings', '/playbooks'] },
-  { id: 'work',       label: '작업관리', icon: ListTodo,        paths: ['/issues', '/tasks', '/todo-today', '/work-summary', '/members'] },
+  { id: 'work',       label: '작업관리', icon: ListTodo,        paths: ['/work-items', '/todo-today', '/work-summary', '/members'] },
   { id: 'cluster',    label: '클러스터', icon: Server,          paths: ['/cluster-manage', '/node-specs', '/versions', '/bulk-exec', '/etcdctl', '/batch-jobs', '/mc', '/kernel-params', '/infra-topology', '/links', '/node-labels', '/node-images', '/cidr'] },
   { id: 'analysis',   label: 'AI 분석',  icon: Sparkles,        paths: ['/incident-analysis', '/packet-flow', '/cilium-trace', '/ontology', '/trends'] },
   { id: 'docs',       label: '지식 허브', icon: BookOpen,        paths: [] },  // sections 사용

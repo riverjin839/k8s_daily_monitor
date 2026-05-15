@@ -3,7 +3,7 @@ import {
   CalendarDays, X, Loader2, AlertTriangle, Server, Users, Tag,
   CheckCircle2, ChevronRight,
 } from 'lucide-react';
-import { useCreateTask } from '@/hooks/useTasks';
+import { useCreateWorkItem } from '@/hooks/useWorkItems';
 import { useClusters } from '@/hooks/useCluster';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useToast } from '@/components/common';
@@ -17,7 +17,7 @@ interface QuickAddTaskModalProps {
   /** 클러스터 사이드바에서 선택된 클러스터 — 미리 채움 (선택). */
   defaultClusterId?: string | null;
   onClose: () => void;
-  /** 등록 후 caller 가 추가로 처리할 후크 (선택). 기본은 useCreateTask 가 캐시 무효화. */
+  /** 등록 후 caller 가 추가로 처리할 후크 (선택). 기본은 useCreateWorkItem 가 캐시 무효화. */
   onCreated?: () => void;
 }
 
@@ -54,7 +54,7 @@ function formatDateLabel(date: string): string {
 /**
  * 메인 화면 달력에서 날짜 클릭 시 띄우는 빠른 일정 등록 모달.
  *
- * 백엔드의 `tasks` 테이블을 그대로 사용한다 — `scheduledAt` 가 일정의 시점.
+ * 백엔드의 `items` 테이블을 그대로 사용한다 — `startedAt` 가 일정의 시점.
  * 자세한 옵션(서비스 태그, 모듈, effortHours 등)은 작업 게시판 정식 폼에서
  * 추가/수정한다는 가정.
  */
@@ -67,11 +67,11 @@ export function QuickAddTaskModal({
 
   const { data: clusters = [] } = useClusters();
   const { data: assignees = [] } = useAssignees();
-  const createMut = useCreateTask();
+  const createMut = useCreateWorkItem();
 
-  const [taskContent, setTaskContent] = useState('');
+  const [content, setTaskContent] = useState('');
   const [assignee, setAssignee] = useState('');
-  const [taskCategory, setTaskCategory] = useState(PRESET_CATEGORIES[0]);
+  const [category, setTaskCategory] = useState(PRESET_CATEGORIES[0]);
   const [priority, setPriority] = useState<'high' | 'medium' | 'low'>('medium');
   const [kanbanStatus, setKanbanStatus] = useState<KanbanStatus>('todo');
   const [time, setTime] = useState('09:00');
@@ -94,7 +94,7 @@ export function QuickAddTaskModal({
 
   if (!open) return null;
 
-  const canSubmit = taskContent.trim().length > 0
+  const canSubmit = content.trim().length > 0
     && assignee.trim().length > 0
     && !createMut.isPending;
 
@@ -105,11 +105,12 @@ export function QuickAddTaskModal({
     try {
       const cluster = clusters.find((c) => c.id === clusterId);
       await createMut.mutateAsync({
+        type: 'task',
         assignee: assignee.trim(),
         primaryAssignee: assignee.trim(),
-        taskCategory: taskCategory.trim() || '일반 업무',
-        taskContent: taskContent.trim(),
-        scheduledAt: buildScheduledAtIso(defaultDate, time),
+        category: category.trim() || '일반 업무',
+        content: content.trim(),
+        startedAt: buildScheduledAtIso(defaultDate, time),
         priority,
         kanbanStatus,
         clusterId: cluster?.id,
@@ -159,7 +160,7 @@ export function QuickAddTaskModal({
             <input
               id={f('content')}
               type="text"
-              value={taskContent}
+              value={content}
               onChange={(e) => setTaskContent(e.target.value)}
               placeholder="예) 노드 NIC 점검, master1 kubelet 재기동…"
               autoFocus
@@ -247,7 +248,7 @@ export function QuickAddTaskModal({
               <input
                 id={f('cat')}
                 list={f('cat-list')}
-                value={taskCategory}
+                value={category}
                 onChange={(e) => setTaskCategory(e.target.value)}
                 placeholder="예) 점검, 배포…"
                 className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"

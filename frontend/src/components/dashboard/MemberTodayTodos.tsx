@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { ArrowRight, CalendarCheck2, CheckCircle2, Clock, CircleDashed } from 'lucide-react';
-import { todayTasksApi } from '@/services/api';
+import { todayWorkItemsApi } from '@/services/api';
 import { stripHtml } from '@/lib/utils';
 import { KanbanStatus } from '@/types';
 
@@ -26,8 +26,8 @@ function todayKey(): string {
 export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
   const date = todayKey();
   const { data, isLoading } = useQuery({
-    queryKey: ['tasks', 'today', date],
-    queryFn: () => todayTasksApi.getSummary(date).then((r) => r.data),
+    queryKey: ['items', 'today', date],
+    queryFn: () => todayWorkItemsApi.getSummary(date).then((r) => r.data),
     refetchInterval: 60000,
   });
 
@@ -139,7 +139,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                           t.kanbanStatus === 'done' ? 'text-muted-foreground line-through' : 'text-foreground'
                         }`}
                       >
-                        {stripHtml(t.taskContent) || t.taskCategory}
+                        {stripHtml(t.content) || t.category}
                       </span>
                       {t.clusterName && (
                         <span className="text-[10px] text-muted-foreground/80 flex-shrink-0 hidden md:inline">

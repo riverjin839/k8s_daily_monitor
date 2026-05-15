@@ -5,10 +5,9 @@ import {
   ChevronLeft, ChevronRight, ArrowRight, CheckCircle2, Clock, ShieldAlert,
   Plus, CalendarPlus, X,
 } from 'lucide-react';
-import { useTasks } from '@/hooks/useTasks';
-import { useIssues } from '@/hooks/useIssues';
+import { useWorkItems } from '@/hooks/useWorkItems';
 import { stripHtml } from '@/lib/utils';
-import { Task, Issue, KanbanStatus } from '@/types';
+import { WorkItem, KanbanStatus } from '@/types';
 import { QuickAddTaskModal } from './QuickAddTaskModal';
 
 interface WorkCalendarProps {
@@ -16,9 +15,9 @@ interface WorkCalendarProps {
 }
 
 interface DayBucket {
-  scheduled: Task[];
-  completed: Task[];
-  issues: Issue[];
+  scheduled: WorkItem[];   // type='task' 이고 startedAt 이 해당일
+  completed: WorkItem[];   // type='task' 이고 closedAt 이 해당일
+  issues: WorkItem[];      // type='issue' 이고 startedAt 이 해당일
 }
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -68,12 +67,10 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
   // null 이면 popover 닫힘.
   const [popoverAnchor, setPopoverAnchor] = useState<DOMRect | null>(null);
 
-  const { data: tasksData } = useTasks();
-  const { data: issuesData } = useIssues();
+  const { data: workItemsData } = useWorkItems();
 
   const buckets = useMemo<Map<string, DayBucket>>(() => {
-    const tasks = tasksData?.data ?? [];
-    const issues = issuesData?.data ?? [];
+    const all = workItemsData?.data ?? [];
     const map = new Map<string, DayBucket>();
     const ensure = (k: string): DayBucket => {
       let b = map.get(k);
@@ -83,21 +80,21 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
       }
       return b;
     };
-    for (const t of tasks) {
-      if (selectedClusterId && t.clusterId !== selectedClusterId) continue;
-      const sched = parseDate(t.scheduledAt);
-      if (sched) ensure(toDateKey(sched)).scheduled.push(t);
-      if (t.completedAt && t.kanbanStatus === 'done') {
-        const done = parseDate(t.completedAt);
-        if (done) ensure(toDateKey(done)).completed.push(t);
+    for (const w of all) {
+      if (selectedClusterId && w.clusterId !== selectedClusterId) continue;
+      if (w.type === 'task') {
+        const sched = parseDate(w.startedAt);
+        if (sched) ensure(toDateKey(sched)).scheduled.push(w);
+        if (w.closedAt && w.kanbanStatus === 'done') {
+          const done = parseDate(w.closedAt);
+          if (done) ensure(toDateKey(done)).completed.push(w);
+        }
+      } else if (w.type === 'issue') {
+        if (w.startedAt) ensure(w.startedAt.slice(0, 10)).issues.push(w);
       }
     }
-    for (const i of issues) {
-      if (selectedClusterId && i.clusterId !== selectedClusterId) continue;
-      if (i.occurredAt) ensure(i.occurredAt).issues.push(i);
-    }
     return map;
-  }, [tasksData, issuesData, selectedClusterId]);
+  }, [workItemsData, selectedClusterId]);
 
   const grid = useMemo(() => buildMonthGrid(cursor.y, cursor.m), [cursor]);
 
@@ -303,21 +300,21 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
                         <DayChip
                           color="emerald"
                           count={b.completed.length}
-                          label={truncate(stripHtml(b.completed[0].taskContent) || '완료')}
+                          label={truncate(stripHtml(b.completed[0].content) || '완료')}
                         />
                       )}
                       {b.scheduled.length > 0 && (
                         <DayChip
                           color="blue"
                           count={b.scheduled.length}
-                          label={truncate(stripHtml(b.scheduled[0].taskContent) || '예정')}
+                          label={truncate(stripHtml(b.scheduled[0].content) || '예정')}
                         />
                       )}
                       {b.issues.length > 0 && (
                         <DayChip
                           color="amber"
                           count={b.issues.length}
-                          label={truncate(stripHtml(b.issues[0].issueContent) || '이슈')}
+                          label={truncate(stripHtml(b.issues[0].content) || '이슈')}
                         />
                       )}
                     </div>
@@ -471,7 +468,7 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
               count={bucket.completed.length}
               items={bucket.completed.map((t) => ({
                 id: t.id,
-                primary: stripHtml(t.taskContent) || t.taskCategory,
+                primary: stripHtml(t.content) || t.category,
                 meta: `${t.assignee || '미지정'} · ${STATUS_LABEL[t.kanbanStatus]}`,
               }))}
             />
@@ -483,7 +480,7 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
               count={bucket.scheduled.length}
               items={bucket.scheduled.map((t) => ({
                 id: t.id,
-                primary: stripHtml(t.taskContent) || t.taskCategory,
+                primary: stripHtml(t.content) || t.category,
                 meta: `${t.assignee || '미지정'} · ${STATUS_LABEL[t.kanbanStatus]}`,
               }))}
             />
@@ -495,8 +492,8 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
               count={bucket.issues.length}
               items={bucket.issues.map((i) => ({
                 id: i.id,
-                primary: stripHtml(i.issueContent) || i.issueArea,
-                meta: `${i.assignee || '미지정'}${i.resolvedAt ? ' · 해결' : ''}`,
+                primary: stripHtml(i.content) || i.category,
+                meta: `${i.assignee || '미지정'}${i.closedAt ? ' · 해결' : ''}`,
               }))}
             />
           )}

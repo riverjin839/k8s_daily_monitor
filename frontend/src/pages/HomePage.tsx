@@ -13,10 +13,9 @@ import { YesterdayChanges } from '@/components/dashboard/YesterdayChanges';
 import { useAuthStore } from '@/stores/authStore';
 import { useClusterStore } from '@/stores/clusterStore';
 import { useClusters } from '@/hooks/useCluster';
-import { useIssues } from '@/hooks/useIssues';
-import { useTasks } from '@/hooks/useTasks';
+import { useWorkItems } from '@/hooks/useWorkItems';
 import { stripHtml } from '@/lib/utils';
-import type { Cluster, Issue, Task } from '@/types';
+import type { Cluster, WorkItem } from '@/types';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function todayKey(): string {
@@ -137,23 +136,23 @@ function BatchCheckCard({ clusters, selectedClusterId }: BatchCheckCardProps) {
 
 // ── 미해결 이슈 카드 ─────────────────────────────────────────────────────────
 interface OpenIssuesCardProps {
-  issues: Issue[];
+  items: WorkItem[];
   isLoading: boolean;
   selectedClusterId: string | null;
   myName: string | null;
 }
 
-function OpenIssuesCard({ issues, isLoading, selectedClusterId, myName }: OpenIssuesCardProps) {
+function OpenIssuesCard({ items, isLoading, selectedClusterId, myName }: OpenIssuesCardProps) {
   const [onlyMine, setOnlyMine] = useState(false);
 
   const list = useMemo(() => {
-    let l = issues.filter((i) => !i.resolvedAt);
+    let l = items.filter((i) => !i.closedAt);
     if (selectedClusterId) l = l.filter((i) => i.clusterId === selectedClusterId);
     if (onlyMine && myName) {
       l = l.filter((i) => i.primaryAssignee === myName || i.assignee === myName || i.secondaryAssignee === myName);
     }
-    return l.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)).slice(0, 6);
-  }, [issues, selectedClusterId, onlyMine, myName]);
+    return l.sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, 6);
+  }, [items, selectedClusterId, onlyMine, myName]);
 
   return (
     <MacCard title="해결해야 할 이슈" bodyPadding="p-4">
@@ -174,7 +173,7 @@ function OpenIssuesCard({ issues, isLoading, selectedClusterId, myName }: OpenIs
               <span className="text-muted-foreground">내 이슈만</span>
             </label>
           )}
-          <Link to="/issues" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+          <Link to="/items" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
             전체 보기 <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
@@ -195,20 +194,20 @@ function OpenIssuesCard({ issues, isLoading, selectedClusterId, myName }: OpenIs
           {list.map((i) => (
             <li key={i.id}>
               <Link
-                to={`/issues/${i.id}`}
+                to={`/work-items/${i.id}`}
                 className="block px-3 py-2 rounded-lg border border-border bg-card/40 hover:border-primary/40 hover:bg-secondary transition-colors min-w-0"
               >
                 <div className="flex items-start gap-2 min-w-0">
                   <span className="w-2 h-2 rounded-full bg-red-500 mt-1.5 flex-shrink-0" aria-hidden />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground line-clamp-1">
-                      {stripHtml(i.issueContent) || i.issueArea}
+                      {stripHtml(i.content) || i.category}
                     </p>
                     <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-muted-foreground flex-wrap">
-                      <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary">{i.issueArea}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary">{i.category}</span>
                       <span>정: {i.primaryAssignee || i.assignee}</span>
                       {i.clusterName && <span>· {i.clusterName}</span>}
-                      <span className="ml-auto tabular-nums">{i.occurredAt}</span>
+                      <span className="ml-auto tabular-nums">{i.startedAt}</span>
                     </div>
                   </div>
                 </div>
@@ -221,12 +220,12 @@ function OpenIssuesCard({ issues, isLoading, selectedClusterId, myName }: OpenIs
   );
 }
 
-// ── 다음 일정 (Task.scheduledAt 가장 가까운 미완료) ─────────────────────────────
-function nextDueTask(tasks: Task[]): Task | null {
+// ── 다음 일정 (WorkItem.startedAt 가장 가까운 미완료) ─────────────────────────────
+function nextDueTask(items: WorkItem[]): WorkItem | null {
   const now = Date.now();
-  const candidates = tasks
-    .filter((t) => t.scheduledAt && t.kanbanStatus !== 'done')
-    .map((t) => ({ t, ms: new Date(t.scheduledAt as string).getTime() }))
+  const candidates = items
+    .filter((t) => t.startedAt && t.kanbanStatus !== 'done')
+    .map((t) => ({ t, ms: new Date(t.startedAt as string).getTime() }))
     .filter(({ ms }) => Number.isFinite(ms) && ms >= now - 1000 * 60 * 60 * 24)
     .sort((a, b) => a.ms - b.ms);
   return candidates[0]?.t ?? null;
@@ -242,10 +241,12 @@ export function HomePage() {
   const { clusters } = useClusterStore();
   const { isLoading: clustersLoading } = useClusters();
 
-  const { data: tasksData, isLoading: tasksLoading } = useTasks();
-  const { data: issuesData, isLoading: issuesLoading } = useIssues();
-  const allTasks  = useMemo<Task[]>(()  => tasksData?.data  ?? [], [tasksData]);
-  const allIssues = useMemo<Issue[]>(() => issuesData?.data ?? [], [issuesData]);
+  const { data: workItemsData, isLoading: workItemsLoading } = useWorkItems();
+  const allWorkItems = useMemo<WorkItem[]>(() => workItemsData?.data ?? [], [workItemsData]);
+  const allTasks  = useMemo<WorkItem[]>(() => allWorkItems.filter((w) => w.type === 'task'), [allWorkItems]);
+  const allIssues = useMemo<WorkItem[]>(() => allWorkItems.filter((w) => w.type === 'issue'), [allWorkItems]);
+  const tasksLoading = workItemsLoading;
+  const issuesLoading = workItemsLoading;
 
   // ── KPI 계산 ──
   const today = todayKey();
@@ -258,16 +259,16 @@ export function HomePage() {
         t.primaryAssignee === myName ||
         t.secondaryAssignee === myName;
       if (!match) return false;
-      const due = t.scheduledAt?.slice(0, 10);
+      const due = t.startedAt?.slice(0, 10);
       return !due || due <= today;
     });
   }, [allTasks, myName, today]);
 
-  const openIssueCount = useMemo(() => allIssues.filter((i) => !i.resolvedAt).length, [allIssues]);
+  const openIssueCount = useMemo(() => allIssues.filter((i) => !i.closedAt).length, [allIssues]);
   const criticalClusters = useMemo(() => clusters.filter((c) => c.status === 'critical').length, [clusters]);
   const upcomingTask = useMemo(() => nextDueTask(allTasks), [allTasks]);
-  const upcomingLabel = upcomingTask?.scheduledAt
-    ? new Date(upcomingTask.scheduledAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const upcomingLabel = upcomingTask?.startedAt
+    ? new Date(upcomingTask.startedAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     : '없음';
 
   // ── 인사말 ──
@@ -320,7 +321,7 @@ export function HomePage() {
               hint="건"
               Icon={AlertCircle}
               accent="text-red-500"
-              to="/issues"
+              to="/items"
             />
             <KpiCell
               label="위험 클러스터"
@@ -335,7 +336,7 @@ export function HomePage() {
               value={upcomingLabel}
               Icon={CalendarClock}
               accent="text-sky-500"
-              to="/tasks"
+              to="/items"
             />
           </div>
 
@@ -347,10 +348,10 @@ export function HomePage() {
             </MacCard>
 
             {/* 캘린더 */}
-            <MacCard title="이번 달 일정 (Task 마감일)" bodyPadding="p-4">
+            <MacCard title="이번 달 일정 (WorkItem 마감일)" bodyPadding="p-4">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
                 <CalendarDays className="w-4 h-4 text-primary" />
-                <span>Task 의 예정일 · 이슈 발생일 마크</span>
+                <span>WorkItem 의 예정일 · 이슈 발생일 마크</span>
               </div>
               <WorkCalendar selectedClusterId={selectedClusterId} />
             </MacCard>
@@ -360,7 +361,7 @@ export function HomePage() {
 
             {/* 미해결 이슈 */}
             <OpenIssuesCard
-              issues={allIssues}
+              items={allIssues}
               isLoading={issuesLoading || tasksLoading}
               selectedClusterId={selectedClusterId}
               myName={myName}

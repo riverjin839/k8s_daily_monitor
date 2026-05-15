@@ -49,13 +49,13 @@ export function IssueFormPage() {
         </div>
       </div>
 
-      <main className="max-w-[1400px] mx-auto px-8 pt-10 pb-16">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground tracking-tight">{pageTitle}</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+      <main className="max-w-[1400px] mx-auto px-6 pt-4 pb-6">
+        <div className="mb-3">
+          <h1 className="text-xl font-bold text-foreground tracking-tight">{pageTitle}</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
             {isEdit
-              ? '필요한 항목을 수정한 뒤 폼 하단의 저장 버튼을 누르세요.'
-              : '담당자, 영역, 발생일을 입력하고 이슈 내용·조치 내용을 작성하세요.'}
+              ? '필요한 항목을 수정한 뒤 저장 버튼을 누르세요.'
+              : '담당자/영역/발생일 후 이슈 내용을 작성하세요. 조치·상세·옵션은 접혀 있습니다.'}
           </p>
         </div>
 

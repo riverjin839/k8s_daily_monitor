@@ -279,7 +279,7 @@ export function HomePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto px-3 lg:px-4 xl:px-6 py-3 flex gap-3 max-w-[1600px]">
+      <div className="px-3 lg:px-4 xl:px-6 py-3 flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={selectedClusterId}

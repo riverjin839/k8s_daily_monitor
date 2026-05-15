@@ -276,7 +276,7 @@ export function TodoTodayPage() {
   };
 
   const handleEdit = (item: WorkItem) => {
-    navigate(`/work-items/${item.id}/edit`);
+    navigate(`/tasks-mgmt/${item.id}/edit`);
   };
 
   const totalToday = data?.totalToday ?? 0;
@@ -340,7 +340,7 @@ export function TodoTodayPage() {
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
           <button
-            onClick={() => navigate('/work-items/new')}
+            onClick={() => navigate('/tasks-mgmt/new')}
             className="flex items-center gap-1.5 px-3 py-2 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
           >
             <Plus className="w-4 h-4" />

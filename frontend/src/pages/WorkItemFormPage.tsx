@@ -11,7 +11,10 @@ export function WorkItemFormPage() {
   const isEdit = !!id;
   const parentId = searchParams.get('parentId') || undefined;
   const queryType = searchParams.get('type');
-  const defaultType: WorkItemType = queryType === 'issue' ? 'issue' : 'task';
+  const VALID_TYPES: WorkItemType[] = ['task', 'issue', 'meeting', 'training', 'etc'];
+  const defaultType: WorkItemType = VALID_TYPES.includes(queryType as WorkItemType)
+    ? (queryType as WorkItemType)
+    : 'task';
 
   const { data: listData } = useWorkItems();
   const editTask = isEdit ? listData?.data.find((x) => x.id === id) ?? null : null;
@@ -25,7 +28,7 @@ export function WorkItemFormPage() {
             <ListTodo className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
             <p className="text-muted-foreground mb-4">작업을 찾을 수 없습니다.</p>
             <button
-              onClick={() => navigate('/work-items')}
+              onClick={() => navigate('/tasks-mgmt')}
               className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg"
             >
               작업 목록으로
@@ -43,7 +46,7 @@ export function WorkItemFormPage() {
       <div className="sticky top-0 z-10 bg-background/85 backdrop-blur-md border-b border-border">
         <div className="max-w-[1400px] mx-auto px-8 py-2.5 flex items-center gap-2">
           <button
-            onClick={() => navigate('/work-items')}
+            onClick={() => navigate('/tasks-mgmt')}
             className="p-1.5 hover:bg-secondary rounded-lg transition-colors text-muted-foreground hover:text-foreground"
             title="목록으로"
           >
@@ -81,8 +84,8 @@ export function WorkItemFormPage() {
           initial={editTask ?? undefined}
           defaultType={defaultType}
           parentItem={parentItem}
-          onCancel={() => navigate('/work-items')}
-          onSaved={() => navigate('/work-items')}
+          onCancel={() => navigate('/tasks-mgmt')}
+          onSaved={() => navigate('/tasks-mgmt')}
         />
       </main>
     </div>

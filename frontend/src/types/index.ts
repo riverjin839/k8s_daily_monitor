@@ -275,15 +275,15 @@ export interface MetricCard {
   updatedAt: string;
 }
 
-// Work Item Board — 이슈와 작업 통합 모델
-export type WorkItemType = 'issue' | 'task';
+// Work Item Board — 업무 통합 모델 (작업/이슈/회의/교육/기타)
+export type WorkItemType = 'task' | 'issue' | 'meeting' | 'training' | 'etc';
 export type KanbanStatus = 'backlog' | 'todo' | 'in_progress' | 'review_test' | 'done';
 export type WorkItemModule = 'k8s' | 'keycloak' | 'nexus' | 'cilium' | 'argocd' | 'jenkins' | 'backend' | 'frontend' | 'monitoring' | 'infra';
 export type WorkItemTypeLabel = 'feature' | 'bug' | 'chore' | 'docs' | 'security';
 
 export interface WorkItem {
   id: string;
-  /** 'issue' | 'task' — top-level 디스크리미네이터. 생성 시 결정, 변경 불가. */
+  /** 업무 유형 디스크리미네이터 (task/issue/meeting/training/etc). 생성 시 결정, 변경 불가. */
   type: WorkItemType;
   assignee: string;
   primaryAssignee: string;

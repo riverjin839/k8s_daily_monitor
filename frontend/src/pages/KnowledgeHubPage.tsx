@@ -273,7 +273,7 @@ export function KnowledgeHubPage() {
         statusLabel: resolved ? '조치완료' : '미조치',
         statusTone: resolved ? 'emerald' : 'red',
         updatedAt: i.updatedAt,
-        href: `/work-items/${i.id}`,
+        href: `/tasks-mgmt/${i.id}`,
         searchBlob: `${i.content} ${i.resolution ?? ''} ${i.category} ${i.assignee} ${i.clusterName ?? ''}`.toLowerCase(),
       });
     }
@@ -604,7 +604,7 @@ export function KnowledgeHubPage() {
               <div className="grid grid-cols-2 gap-2 mb-3">
                 <NavTile to="/work-guides" label="작업 가이드" count={guides.length} Icon={BookMarked} description="운영 절차·트러블슈팅" />
                 <NavTile to="/commands"    label="주요 명령어" count={commands.length} Icon={Terminal} description="kubectl·etcdctl·etc." />
-                <NavTile to="/work-items"       label="작업 게시판" Icon={ClipboardList} description="Kanban 작업 보드" />
+                <NavTile to="/tasks-mgmt"       label="업무 관리" Icon={ClipboardList} description="작업·이슈·회의·교육·기타" />
                 <NavTile to="/todo-today"  label="오늘 할일"   Icon={ClipboardList} description="하루 단위 todo" />
               </div>
 
@@ -662,7 +662,7 @@ export function KnowledgeHubPage() {
             {/* 이슈 / 장애 */}
             <MacCard title="이슈 / 장애" bodyPadding="p-4">
               <div className="grid grid-cols-2 gap-2 mb-3">
-                <NavTile to="/work-items"        label="이슈 게시판"   count={workItems.filter((w) => w.type === 'issue').length} Icon={AlertCircle} description="등록된 운영 이슈" />
+                <NavTile to="/tasks-mgmt"        label="이슈 게시판"   count={workItems.filter((w) => w.type === 'issue').length} Icon={AlertCircle} description="등록된 운영 이슈" />
                 <NavTile to="/incident-analysis"  label="장애 로그 분석" Icon={Zap} description="AI 기반 사고 분석" />
               </div>
 
@@ -671,7 +671,7 @@ export function KnowledgeHubPage() {
                   <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
                     미해결 이슈 · {openIssues.length}
                   </span>
-                  <SectionMoreLink to="/work-items" />
+                  <SectionMoreLink to="/tasks-mgmt" />
                 </div>
                 {issueLoading ? (
                   <div className="space-y-1.5">
@@ -686,7 +686,7 @@ export function KnowledgeHubPage() {
                     {openIssues.map((i) => (
                       <PreviewRow
                         key={i.id}
-                        to={`/work-items/${i.id}`}
+                        to={`/tasks-mgmt/${i.id}`}
                         title={i.content.split('\n')[0]}
                         meta={i.startedAt}
                         Icon={AlertCircle}

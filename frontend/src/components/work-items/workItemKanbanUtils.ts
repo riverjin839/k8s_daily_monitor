@@ -1,6 +1,19 @@
-import type { WorkItem, KanbanStatus, WorkItemModule, WorkItemTypeLabel } from '@/types';
+import { ListTodo, AlertTriangle, Users, GraduationCap, MoreHorizontal, type LucideIcon } from 'lucide-react';
+import type { WorkItem, KanbanStatus, WorkItemModule, WorkItemType, WorkItemTypeLabel } from '@/types';
 
 export type { KanbanStatus };
+
+// ── 업무 유형(task/issue/meeting/training/etc) 공통 메타 ─────────────────────
+// 게시판 탭, 캘린더 범례, QuickAdd picker, CSV 라벨 등에서 공통으로 사용.
+export const WORK_ITEM_TYPE_ORDER: WorkItemType[] = ['task', 'issue', 'meeting', 'training', 'etc'];
+
+export const WORK_ITEM_TYPE_CONFIG: Record<WorkItemType, { label: string; Icon: LucideIcon; cls: string }> = {
+  task:     { label: '작업', Icon: ListTodo,        cls: 'bg-blue-500/10 text-blue-700 dark:text-blue-300' },
+  issue:    { label: '이슈', Icon: AlertTriangle,   cls: 'bg-red-500/10 text-red-700 dark:text-red-300' },
+  meeting:  { label: '회의', Icon: Users,           cls: 'bg-violet-500/10 text-violet-700 dark:text-violet-300' },
+  training: { label: '교육', Icon: GraduationCap,   cls: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
+  etc:      { label: '기타', Icon: MoreHorizontal,  cls: 'bg-slate-500/10 text-slate-700 dark:text-slate-300' },
+};
 
 // ── 컬럼 정의 ─────────────────────────────────────────────────────────────────
 export interface KanbanColumnConfig {

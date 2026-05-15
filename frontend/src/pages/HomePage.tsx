@@ -194,7 +194,7 @@ function OpenIssuesCard({ items, isLoading, selectedClusterId, myName }: OpenIss
           {list.map((i) => (
             <li key={i.id}>
               <Link
-                to={`/work-items/${i.id}`}
+                to={`/tasks-mgmt/${i.id}`}
                 className="block px-3 py-2 rounded-lg border border-border bg-card/40 hover:border-primary/40 hover:bg-secondary transition-colors min-w-0"
               >
                 <div className="flex items-start gap-2 min-w-0">

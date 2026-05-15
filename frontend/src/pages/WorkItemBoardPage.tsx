@@ -7,7 +7,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { WorkItemCalendar, WorkItemKanban, WorkItemTableRow, AddWorkItemRow } from '@/components/work-items';
 import { ResizeGrip } from '@/components/common';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
-import { MODULE_CONFIG } from '@/components/work-items/workItemKanbanUtils';
+import { MODULE_CONFIG, WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER } from '@/components/work-items/workItemKanbanUtils';
 import { useWorkItems, useCreateWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
 import { useClusters } from '@/hooks/useCluster';
 import { useClusterStore } from '@/stores/clusterStore';
@@ -143,30 +143,30 @@ export function WorkItemBoardPage() {
   const createTask = useCreateWorkItem();
 
   const handleDelete = (item: WorkItem) => {
-    if (!confirm(`"${item.category}" 작업을 삭제하시겠습니까?`)) return;
+    if (!confirm(`"${item.category}" 업무를 삭제하시겠습니까?`)) return;
     deleteTask.mutate(item.id);
     localStorage.removeItem('k8s:img:work-item:' + item.id);
   };
 
   // 행/카드의 ✏️ 버튼 — 수정 라우트로 진입.
   const handleEdit = (item: WorkItem) => {
-    navigate(`/work-items/${item.id}/edit`);
+    navigate(`/tasks-mgmt/${item.id}/edit`);
   };
 
   // 하위 작업 등록.
   const handleAddSubItem = (item: WorkItem) => {
-    navigate(`/work-items/new?parentId=${item.id}`);
+    navigate(`/tasks-mgmt/new?parentId=${item.id}`);
   };
 
   // 신규 등록 — type tab 의 현재 값으로 기본 type 결정 (전체 탭이면 task 가 기본).
   const handleCreateNew = () => {
     const t = typeFilter === 'all' ? 'task' : typeFilter;
-    navigate(`/work-items/new?type=${t}`);
+    navigate(`/tasks-mgmt/new?type=${t}`);
   };
 
   // 행 / 카드 클릭 — read 라우트로 진입.
   const openTaskDetail = (item: WorkItem) => {
-    navigate(`/work-items/${item.id}`);
+    navigate(`/tasks-mgmt/${item.id}`);
   };
 
   const handleExportCsv = async () => {
@@ -207,7 +207,7 @@ export function WorkItemBoardPage() {
           selectedId={filterClusterId || null}
           onSelect={(id) => setFilterClusterId(id ?? '')}
           allowAll
-          allLabel="전체 작업"
+          allLabel="전체 업무"
           iconOnly
         />
         <div className="flex-1 min-w-0">
@@ -215,7 +215,7 @@ export function WorkItemBoardPage() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <ListTodo className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold">작업 관리 게시판</h1>
+            <h1 className="text-xl font-bold">업무 관리 게시판</h1>
             {items.length > 0 && (
               <div className="flex items-center gap-2 ml-4">
                 <span className="text-xs px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-400 border border-slate-500/30">
@@ -267,30 +267,41 @@ export function WorkItemBoardPage() {
               className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
-              작업 등록
+              업무 등록
             </button>
           </div>
         </div>
 
-        {/* Type 탭 — 전체 / 이슈 / 작업 */}
-        <div className="flex items-center gap-1.5 mb-3">
-          {([
-            { key: 'all', label: '전체' },
-            { key: 'task', label: '작업' },
-            { key: 'issue', label: '이슈' },
-          ] as Array<{ key: WorkItemType | 'all'; label: string }>).map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setTypeFilter(tab.key)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                typeFilter === tab.key
-                  ? 'bg-primary/10 text-primary border-primary/30'
-                  : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        {/* Type 탭 — 전체 / 작업 / 이슈 / 회의 / 교육 / 기타 */}
+        <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+          <button
+            onClick={() => setTypeFilter('all')}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+              typeFilter === 'all'
+                ? 'bg-primary/10 text-primary border-primary/30'
+                : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            전체
+          </button>
+          {WORK_ITEM_TYPE_ORDER.map((key) => {
+            const cfg = WORK_ITEM_TYPE_CONFIG[key];
+            const isActive = typeFilter === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setTypeFilter(key)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors inline-flex items-center gap-1.5 ${
+                  isActive
+                    ? `${cfg.cls} border-current`
+                    : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <cfg.Icon className="w-3.5 h-3.5" />
+                {cfg.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* 모듈 뷰 탭 */}
@@ -348,7 +359,7 @@ export function WorkItemBoardPage() {
               type="text"
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
-              placeholder="작업 분류 검색"
+              placeholder="분류 검색"
               className="px-3 py-2 text-sm bg-background border border-border rounded-lg"
             />
 

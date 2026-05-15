@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { Plus, Settings2 } from 'lucide-react';
+import { Plus, Settings2, ChevronDown } from 'lucide-react';
 import { Issue, IssueCreate, IssueUpdate } from '@/types';
 import { loadIssueImages, saveIssueImages } from '@/lib/issueImages';
 import { RichTextEditor } from '@/components/editor';
@@ -181,14 +181,14 @@ export function IssueForm({ initial, onCancel, onSaved, embedded = false }: Issu
   };
 
   const inputClass =
-    'w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary';
-  const labelClass = 'block text-sm font-medium mb-1';
+    'w-full px-2.5 py-1.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary';
+  const labelClass = 'block text-[11px] font-medium text-muted-foreground mb-1';
   const submitting = createIssue.isPending || updateIssue.isPending;
 
   const formInner = (
-    <form id="issue-form" onSubmit={handleSubmit} className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {/* 담당자(정/부) */}
+    <form id="issue-form" onSubmit={handleSubmit} className="space-y-3">
+      {/* ── Meta strip — 담당자/클러스터/서비스/이슈 부분 1줄 컴팩트 ─────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
         <div>
           <label htmlFor={f('primary')} className={labelClass}>담당자(정) *</label>
           <input
@@ -206,19 +206,19 @@ export function IssueForm({ initial, onCancel, onSaved, embedded = false }: Issu
               <option key={a.name} value={a.name} />
             ))}
           </datalist>
-          <label htmlFor={f('secondary')} className={`${labelClass} mt-3`}>담당자(부)</label>
+        </div>
+        <div>
+          <label htmlFor={f('secondary')} className={labelClass}>담당자(부)</label>
           <input
             id={f('secondary')}
             type="text"
             value={secondaryAssignee}
             onChange={(e) => setSecondaryAssignee(e.target.value)}
-            placeholder="보조 담당자"
+            placeholder="보조"
             className={inputClass}
             list="issue-assignee-list"
           />
         </div>
-
-        {/* 대상 클러스터 / 서비스 / 이슈 부분 */}
         <div>
           <label htmlFor={f('cluster')} className={labelClass}>대상 클러스터</label>
           <select
@@ -232,10 +232,10 @@ export function IssueForm({ initial, onCancel, onSaved, embedded = false }: Issu
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-
-          <label htmlFor={f('service')} className={`${labelClass} mt-3`}
-            title="통합지식 서비스 카탈로그(Settings → 서비스)와 연결되는 tag.">
-            서비스 (통합지식 tag)
+        </div>
+        <div>
+          <label htmlFor={f('service')} className={labelClass} title="통합지식 서비스 카탈로그 tag">
+            서비스
           </label>
           <select
             id={f('service')}
@@ -250,131 +250,106 @@ export function IssueForm({ initial, onCancel, onSaved, embedded = false }: Issu
                 <option key={s.key} value={s.key}>{s.label}</option>
               ))}
           </select>
-
-          <div className="flex items-center justify-between mt-3 mb-1">
-            <label htmlFor={f('issueArea')} className="text-sm font-medium">이슈 부분 *</label>
+        </div>
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label htmlFor={f('issueArea')} className="text-[11px] font-medium text-muted-foreground">이슈 부분 *</label>
             <button
               type="button"
               onClick={() => setShowAreaManage((v) => !v)}
-              className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
               title="이슈 부분 관리"
             >
-              <Settings2 className="w-3 h-3" />
+              <Settings2 className="w-2.5 h-2.5" />
               관리
             </button>
           </div>
-          <div className="flex gap-2">
+          {issueArea === '기타' ? (
+            <div className="flex gap-1">
+              <select
+                id={f('issueArea')}
+                value={issueArea}
+                onChange={(e) => setIssueArea(e.target.value)}
+                className={`${inputClass} w-20 flex-shrink-0`}
+                required
+              >
+                <option value="">—</option>
+                {allAreas.map((area) => (
+                  <option key={area} value={area}>{area}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={issueAreaCustom}
+                onChange={(e) => setIssueAreaCustom(e.target.value)}
+                placeholder="직접 입력"
+                className={`${inputClass} flex-1 min-w-0`}
+                required
+              />
+            </div>
+          ) : (
             <select
               id={f('issueArea')}
               value={issueArea}
               onChange={(e) => setIssueArea(e.target.value)}
-              className={`${inputClass} flex-1`}
-              required={issueArea !== '기타'}
+              className={inputClass}
+              required
             >
               <option value="">— 선택 —</option>
               {allAreas.map((area) => (
                 <option key={area} value={area}>{area}</option>
               ))}
             </select>
-            {issueArea === '기타' && (
-              <input
-                type="text"
-                value={issueAreaCustom}
-                onChange={(e) => setIssueAreaCustom(e.target.value)}
-                placeholder="직접 입력"
-                className={`${inputClass} flex-1`}
-                required
-              />
-            )}
-          </div>
-          {showAreaManage && (
-            <div className="mt-2 p-3 bg-muted/20 border border-border rounded-lg space-y-2">
-              {customAreas.length > 0 && (
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground font-medium">사용자 분류</p>
-                  {customAreas.map((a) => (
-                    <div key={a} className="flex items-center justify-between py-0.5">
-                      <span className="text-xs text-foreground/80">{a}</span>
-                      <button
-                        type="button"
-                        onClick={() => deleteCustomArea(a)}
-                        className="text-xs text-muted-foreground hover:text-red-400 transition-colors px-1"
-                        title="삭제"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="flex gap-1.5">
-                <input
-                  type="text"
-                  value={newAreaInput}
-                  onChange={(e) => setNewAreaInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); addCustomArea(); }
-                  }}
-                  placeholder="새 이슈 부분 입력 (예: Backup, IDM)"
-                  className="flex-1 px-2 py-1 text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-                <button
-                  type="button"
-                  onClick={addCustomArea}
-                  className="flex items-center gap-0.5 px-2 py-1 text-xs bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded transition-colors"
-                >
-                  <Plus className="w-3 h-3" />
-                  추가
-                </button>
-              </div>
-            </div>
           )}
         </div>
       </div>
 
-      {/* 이슈 내용 */}
-      <div>
-        <label htmlFor={f('issueContent')} className={labelClass}>이슈 내용 *</label>
-        <div id={f('issueContent')}>
-          <RichTextEditor
-            value={issueContent}
-            onChange={setIssueContent}
-            placeholder="발생한 이슈를 상세히 기술하세요"
-            minHeight="180px"
-            onImagePaste={handleImagePaste}
-          />
+      {/* 이슈 부분 관리 패널 — 토글 */}
+      {showAreaManage && (
+        <div className="p-2.5 bg-muted/20 border border-border rounded-lg space-y-2">
+          {customAreas.length > 0 && (
+            <div className="flex items-center flex-wrap gap-1.5">
+              <span className="text-[10px] text-muted-foreground font-medium mr-1">사용자 분류:</span>
+              {customAreas.map((a) => (
+                <span key={a} className="inline-flex items-center gap-0.5 text-[10px] bg-card border border-border rounded px-1.5 py-0.5">
+                  {a}
+                  <button
+                    type="button"
+                    onClick={() => deleteCustomArea(a)}
+                    className="text-muted-foreground hover:text-red-400 transition-colors"
+                    title="삭제"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-1.5">
+            <input
+              type="text"
+              value={newAreaInput}
+              onChange={(e) => setNewAreaInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); addCustomArea(); }
+              }}
+              placeholder="새 이슈 부분 (예: Backup, IDM)"
+              className="flex-1 px-2 py-1 text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <button
+              type="button"
+              onClick={addCustomArea}
+              className="flex items-center gap-0.5 px-2 py-1 text-xs bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded transition-colors"
+            >
+              <Plus className="w-3 h-3" />
+              추가
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* 조치 내용 */}
-      <div>
-        <label htmlFor={f('actionContent')} className={labelClass}>조치 내용</label>
-        <div id={f('actionContent')}>
-          <RichTextEditor
-            value={actionContent}
-            onChange={setActionContent}
-            placeholder="취한 조치를 기술하세요 (선택 사항)"
-            minHeight="140px"
-            onImagePaste={handleImagePaste}
-          />
-        </div>
-      </div>
-
-      {/* 상세 내용 */}
-      <div>
-        <label htmlFor={f('detailContent')} className={labelClass}>상세 내용</label>
-        <div id={f('detailContent')}>
-          <RichTextEditor
-            value={detailContent}
-            onChange={setDetailContent}
-            placeholder="추가적인 상세 내용, 로그, 재현 방법 등을 기술하세요 (선택 사항)"
-            minHeight="180px"
-            onImagePaste={handleImagePaste}
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      {/* ── 일시 — 발생/조치 2칸 컴팩트 ───────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
         <div>
           <label htmlFor={f('occurredAt')} className={labelClass}>이슈 발생일시 *</label>
           <input
@@ -386,7 +361,6 @@ export function IssueForm({ initial, onCancel, onSaved, embedded = false }: Issu
             required
           />
         </div>
-
         <div>
           <label htmlFor={f('resolvedAt')} className={labelClass}>이슈 조치일시</label>
           <input
@@ -397,39 +371,100 @@ export function IssueForm({ initial, onCancel, onSaved, embedded = false }: Issu
             className={inputClass}
           />
         </div>
+      </div>
 
-        <div>
-          <label htmlFor={f('remarks')} className={labelClass}>비고</label>
-          <input
-            id={f('remarks')}
-            type="text"
-            value={remarks}
-            onChange={(e) => setRemarks(e.target.value)}
-            placeholder="추가 메모 (선택 사항)"
-            className={inputClass}
+      {/* ── 이슈 내용 ★ 가장 중요 — 키움 ───────────────────────────────── */}
+      <div>
+        <label htmlFor={f('issueContent')} className="block text-sm font-semibold text-foreground mb-1.5">
+          이슈 내용 <span className="text-primary">*</span>
+        </label>
+        <div id={f('issueContent')}>
+          <RichTextEditor
+            value={issueContent}
+            onChange={setIssueContent}
+            placeholder="발생한 이슈를 상세히 기술하세요"
+            minHeight="340px"
+            onImagePaste={handleImagePaste}
           />
         </div>
-
-        <ConfluenceUrlInput
-          id={f('confluenceUrl')}
-          value={confluenceUrl}
-          onChange={setConfluenceUrl}
-        />
       </div>
+
+      {/* ── 조치 내용 — 접이식 (default closed) ──────────────────────────── */}
+      <details className="group rounded-lg border border-border bg-muted/10 open:bg-card open:shadow-sm">
+        <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-medium select-none">
+          <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
+          <span>조치 내용</span>
+          <span className="text-[11px] text-muted-foreground/70">(클릭해서 펼치기 — 선택 입력)</span>
+        </summary>
+        <div className="px-3 pb-3">
+          <RichTextEditor
+            value={actionContent}
+            onChange={setActionContent}
+            placeholder="취한 조치를 기술하세요"
+            minHeight="160px"
+            onImagePaste={handleImagePaste}
+          />
+        </div>
+      </details>
+
+      {/* ── 상세 내용 — 접이식 (default closed) ──────────────────────────── */}
+      <details className="group rounded-lg border border-border bg-muted/10 open:bg-card open:shadow-sm">
+        <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-medium select-none">
+          <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
+          <span>상세 내용</span>
+          <span className="text-[11px] text-muted-foreground/70">(로그 · 재현 방법 등 — 선택 입력)</span>
+        </summary>
+        <div className="px-3 pb-3">
+          <RichTextEditor
+            value={detailContent}
+            onChange={setDetailContent}
+            placeholder="추가적인 상세 내용, 로그, 재현 방법 등을 기술하세요"
+            minHeight="180px"
+            onImagePaste={handleImagePaste}
+          />
+        </div>
+      </details>
+
+      {/* ── 추가 옵션 — 접이식 (Confluence + 비고) ───────────────────────── */}
+      <details className="group rounded-lg border border-border bg-muted/10 open:bg-card open:shadow-sm">
+        <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm font-medium select-none">
+          <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open:rotate-180" />
+          <span>추가 옵션</span>
+          <span className="text-[11px] text-muted-foreground/70">(Confluence · 비고)</span>
+        </summary>
+        <div className="px-3 pb-3 space-y-2.5">
+          <ConfluenceUrlInput
+            id={f('confluenceUrl')}
+            value={confluenceUrl}
+            onChange={setConfluenceUrl}
+          />
+          <div>
+            <label htmlFor={f('remarks')} className={labelClass}>비고</label>
+            <input
+              id={f('remarks')}
+              type="text"
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+              placeholder="추가 메모 (선택 사항)"
+              className={inputClass}
+            />
+          </div>
+        </div>
+      </details>
 
       {/* 푸터 액션 — 폼 안에 둬서 SidePane / 풀페이지 둘 다 일관 */}
       <div className="flex justify-end gap-2 pt-2 border-t border-border">
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+          className="px-4 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
         >
           취소
         </button>
         <button
           type="submit"
           disabled={submitting}
-          className="px-4 py-2 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-60"
+          className="px-4 py-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-60"
         >
           {submitting ? '저장 중…' : isEdit ? '저장' : '등록'}
         </button>
@@ -439,7 +474,7 @@ export function IssueForm({ initial, onCancel, onSaved, embedded = false }: Issu
 
   if (embedded) return formInner;
   return (
-    <div className="bg-card border border-border rounded-2xl p-8 mac-shadow">
+    <div className="bg-card border border-border rounded-2xl p-5 mac-shadow">
       {formInner}
     </div>
   );

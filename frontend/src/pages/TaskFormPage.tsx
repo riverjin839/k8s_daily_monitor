@@ -60,16 +60,18 @@ export function TaskFormPage() {
         </div>
       </div>
 
-      <main className="max-w-[1400px] mx-auto px-8 pt-10 pb-16">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground tracking-tight">{pageTitle}</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {parentTask
-              ? '상위 작업의 분류와 담당자가 자동으로 채워집니다.'
-              : isEdit
-                ? '필요한 항목을 수정한 뒤 폼 하단의 저장 버튼을 누르세요.'
-                : '담당자, 분류, 일정을 입력하고 작업 내용을 작성하세요.'}
-          </p>
+      <main className="max-w-[1400px] mx-auto px-6 pt-4 pb-6">
+        <div className="mb-3 flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold text-foreground tracking-tight">{pageTitle}</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {parentTask
+                ? '상위 작업의 분류와 담당자가 자동으로 채워집니다.'
+                : isEdit
+                  ? '필요한 항목을 수정한 뒤 저장 버튼을 누르세요.'
+                  : '담당자/분류/일정 후 작업 내용을 작성하세요. 결과·추가 옵션은 접혀 있습니다.'}
+            </p>
+          </div>
         </div>
 
         <TaskForm

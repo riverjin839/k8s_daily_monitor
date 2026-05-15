@@ -43,6 +43,9 @@ import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage';
 import { HomePage } from '@/pages/HomePage';
+import { UsersPage } from '@/pages/UsersPage';
+import { AuditLogsPage } from '@/pages/AuditLogsPage';
+import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar } from '@/components/layout';
 import { NAV_WIDTH } from '@/stores/sidebarStore';
@@ -119,6 +122,9 @@ function AppShell() {
               <Route path="/daily-check/review" element={<DailyCheckReviewPage />} />
               <Route path="/daily-check/settings" element={<DeepCheckSettingsPage />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />
+              <Route path="/settings/users" element={<UsersPage />} />
+              <Route path="/settings/audit-logs" element={<AuditLogsPage />} />
+              <Route path="/me/change-password" element={<ChangePasswordPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
       </div>

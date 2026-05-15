@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Cluster
 from app.models.work_item import WorkItem
+from app.models.user import User
+from app.auth.deps import require_operator
 from app.schemas.work_item import (
     WorkItemCreate,
     WorkItemUpdate,
@@ -258,7 +260,11 @@ def get_work_item(item_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=WorkItemResponse, status_code=status.HTTP_201_CREATED)
-def create_work_item(payload: WorkItemCreate, db: Session = Depends(get_db)):
+def create_work_item(
+    payload: WorkItemCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     cluster_name = payload.cluster_name
     if payload.cluster_id and not cluster_name:
         cluster = db.query(Cluster).filter(Cluster.id == payload.cluster_id).first()
@@ -283,7 +289,12 @@ def create_work_item(payload: WorkItemCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/{item_id}", response_model=WorkItemResponse)
-def update_work_item(item_id: UUID, payload: WorkItemUpdate, db: Session = Depends(get_db)):
+def update_work_item(
+    item_id: UUID,
+    payload: WorkItemUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found")
@@ -309,7 +320,12 @@ def update_work_item(item_id: UUID, payload: WorkItemUpdate, db: Session = Depen
 
 
 @router.patch("/{item_id}/status", response_model=WorkItemStatusResponse)
-def patch_status(item_id: UUID, payload: WorkItemStatusPatch, db: Session = Depends(get_db)):
+def patch_status(
+    item_id: UUID,
+    payload: WorkItemStatusPatch,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     """칸반 상태 이동 — type 무관 in_progress 총합으로 WIP 체크. done 이동 시 closed_at 자동 set."""
     item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
     if not item:
@@ -335,7 +351,11 @@ def patch_status(item_id: UUID, payload: WorkItemStatusPatch, db: Session = Depe
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_work_item(item_id: UUID, db: Session = Depends(get_db)):
+def delete_work_item(
+    item_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
     item = db.query(WorkItem).filter(WorkItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found")

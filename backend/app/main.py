@@ -47,6 +47,7 @@ from app.routers import (
     ansible_files_router,
     ansible_inventories_router,
     auth_router,
+    audit_logs_router,
     deep_check_router,
     deep_check_ingest_router,
     deep_check_definitions_router,
@@ -599,6 +600,19 @@ def _run_migrations():
         _safe_add_column("batch_jobs", "encrypted_password", "TEXT")
         _safe_add_column("batch_jobs", "encrypted_private_key", "TEXT")
 
+    # users: 강제 비밀번호 변경 플래그 + 레거시 role 정규화
+    if "users" in inspector.get_table_names():
+        _safe_add_column("users", "must_change_password", "BOOLEAN NOT NULL DEFAULT FALSE")
+        # 레거시: 'user' role 을 'viewer' 로 일회성 변환. 신규 코드는 'viewer/operator/admin' 만 사용.
+        _safe_exec(
+            "UPDATE users SET role='viewer' WHERE role='user'",
+            label="users.role 'user' → 'viewer'",
+        )
+
+    # audit_logs: create_all 이 테이블 자체는 만들지만 보조 인덱스만 명시.
+    if "audit_logs" in inspector.get_table_names():
+        _safe_create_index("ix_audit_logs_created_at_desc", "audit_logs", "(created_at DESC)")
+
 
 def _seed_default_metric_cards():
     """Seed default PromQL metric cards if the table is empty."""
@@ -877,7 +891,10 @@ def _seed_default_deep_check_definitions():
 
 
 def _seed_initial_admin():
-    """Create the bootstrap admin if no users exist yet. Idempotent."""
+    """Create the bootstrap admin if no users exist yet. Idempotent.
+
+    Initial admin is forced to change its password on first login.
+    """
     db = SessionLocal()
     try:
         if db.query(User).count() > 0:
@@ -887,6 +904,7 @@ def _seed_initial_admin():
             hashed_password=hash_password(settings.initial_admin_password),
             role="admin",
             display_name="Administrator",
+            must_change_password=True,
         )
         db.add(admin)
         db.commit()
@@ -997,6 +1015,7 @@ app.include_router(ansible_inventories_router, prefix="/api/v1", dependencies=_a
 app.include_router(deep_check_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(deep_check_definitions_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(notifications_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(audit_logs_router, prefix="/api/v1", dependencies=_auth)
 
 
 @app.get("/")

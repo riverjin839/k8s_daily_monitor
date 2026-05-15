@@ -7,6 +7,7 @@ import { PlaybookCard, PlaybookListRow, PlaybookLogDialog, AddPlaybookModal, Run
 import type { PlaybookFormSubmit } from '@/components/playbooks/AddPlaybookModal';
 import type { PlaybookSshCreds } from '@/types';
 import { ClusterSidebar } from '@/components/common';
+import { RoleGate } from '@/components/auth/RoleGate';
 import { usePlaybooks, useCreatePlaybook, useUpdatePlaybook, useDeletePlaybook, useRunPlaybook, useToggleDashboard } from '@/hooks/usePlaybook';
 import { playbooksApi } from '@/services/api';
 import { usePlaybookStore } from '@/stores/playbookStore';
@@ -329,23 +330,27 @@ export function PlaybooksPage() {
                     <Download className="w-4 h-4" />
                     Export .md
                   </button>
-                  <button
-                    onClick={handleRunAll}
-                    className="px-4 py-2 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors flex items-center gap-2"
-                  >
-                    <Play className="w-4 h-4" />
-                    Run All
-                  </button>
+                  <RoleGate allow={['admin', 'operator']}>
+                    <button
+                      onClick={handleRunAll}
+                      className="px-4 py-2 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                    >
+                      <Play className="w-4 h-4" />
+                      Run All
+                    </button>
+                  </RoleGate>
                 </>
               )}
 
-              <button
-                onClick={() => { setEditPlaybook(null); setShowAdd(true); }}
-                className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                Register Playbook
-              </button>
+              <RoleGate allow={['admin', 'operator']}>
+                <button
+                  onClick={() => { setEditPlaybook(null); setShowAdd(true); }}
+                  className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Register Playbook
+                </button>
+              </RoleGate>
             </div>
           </div>
 
@@ -372,12 +377,14 @@ export function PlaybooksPage() {
                   ? 'No playbooks registered yet'
                   : '선택한 클러스터에 등록된 playbook이 없습니다'}
               </p>
-              <button
-                onClick={() => { setEditPlaybook(null); setShowAdd(true); }}
-                className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
-              >
-                + Register your first playbook
-              </button>
+              <RoleGate allow={['admin', 'operator']}>
+                <button
+                  onClick={() => { setEditPlaybook(null); setShowAdd(true); }}
+                  className="px-4 py-2 text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg transition-colors"
+                >
+                  + Register your first playbook
+                </button>
+              </RoleGate>
             </div>
           ) : viewMode === 'list' ? (
             <DndContext

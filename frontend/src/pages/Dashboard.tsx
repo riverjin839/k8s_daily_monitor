@@ -431,8 +431,8 @@ export function Dashboard() {
             </MacCard>
           )}
 
-          {/* ── 작업 / 이슈 현황 ─────────────────────────────────────────── */}
-          <MacCard title="작업 / 이슈 현황" bodyPadding="p-4"
+          {/* ── 업무 현황 ─────────────────────────────────────────── */}
+          <MacCard title="업무 현황" bodyPadding="p-4"
             className={dashboardPlaybooks.length === 0 ? 'lg:col-span-2' : ''}>
             <KanbanSummaryCharts
               items={allWorkItems}

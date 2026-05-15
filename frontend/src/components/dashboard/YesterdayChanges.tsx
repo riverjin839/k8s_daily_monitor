@@ -200,16 +200,10 @@ export function YesterdayChanges({ selectedClusterId }: YesterdayChangesProps) {
 
       <div className="flex items-center justify-end gap-3 text-[11px]">
         <Link
-          to="/work-items"
+          to="/tasks-mgmt"
           className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors"
         >
-          작업 게시판 <ArrowRight className="w-3 h-3" />
-        </Link>
-        <Link
-          to="/work-items"
-          className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors"
-        >
-          이슈 게시판 <ArrowRight className="w-3 h-3" />
+          업무 관리 게시판 <ArrowRight className="w-3 h-3" />
         </Link>
       </div>
     </div>

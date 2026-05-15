@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
-WorkItemType = Literal["issue", "task"]
+WorkItemType = Literal["task", "issue", "meeting", "training", "etc"]
 KanbanStatus = Literal["backlog", "todo", "in_progress", "review_test", "done"]
 Priority = Literal["high", "medium", "low"]
 ModuleName = Literal[

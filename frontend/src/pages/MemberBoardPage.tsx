@@ -340,8 +340,8 @@ export function MemberBoardPage() {
               <MemberSection
                 key={b.assignee}
                 bucket={b}
-                onTaskClick={(t) => navigate(`/work-items/${t.id}/edit`)}
-                onIssueClick={(i) => navigate(`/work-items/${i.id}/edit`)}
+                onTaskClick={(t) => navigate(`/tasks-mgmt/${t.id}/edit`)}
+                onIssueClick={(i) => navigate(`/tasks-mgmt/${i.id}/edit`)}
               />
             ))}
           </div>

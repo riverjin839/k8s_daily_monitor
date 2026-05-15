@@ -69,7 +69,8 @@ const DOCS_SECTIONS: Array<{ id: string; label: string; paths: string[] }> = [
 // 사이드바 레일에 표시되는 그룹들
 type GroupId = 'monitoring' | 'work' | 'cluster' | 'analysis' | 'docs' | 'system';
 const GROUPS: Array<{ id: GroupId; label: string; icon: ComponentType<{ className?: string }>; paths: string[] }> = [
-  { id: 'monitoring', label: '모니터링', icon: LayoutDashboard, paths: ['/', '/cluster-overview', '/daily-check/review', '/daily-check/settings', '/playbooks'] },
+  // 홈(/) 은 좌측 상단 로고 버튼이 담당하므로 그룹 paths 에서 제외.
+  { id: 'monitoring', label: '모니터링', icon: LayoutDashboard, paths: ['/cluster-overview', '/daily-check/review', '/daily-check/settings', '/playbooks'] },
   { id: 'work',       label: '작업관리', icon: ListTodo,        paths: ['/issues', '/tasks', '/todo-today', '/work-summary', '/members'] },
   { id: 'cluster',    label: '클러스터', icon: Server,          paths: ['/cluster-manage', '/node-specs', '/versions', '/bulk-exec', '/etcdctl', '/batch-jobs', '/mc', '/kernel-params', '/infra-topology', '/links', '/node-labels', '/node-images', '/cidr'] },
   { id: 'analysis',   label: 'AI 분석',  icon: Sparkles,        paths: ['/incident-analysis', '/packet-flow', '/cilium-trace', '/ontology', '/trends'] },
@@ -424,14 +425,18 @@ export function Sidebar() {
         } as React.CSSProperties}
         className="fixed top-0 left-0 h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex flex-col z-40"
       >
-        {/* 로고 */}
+        {/* 로고 — 클릭 시 홈으로. 좌측 상단의 공식 홈 버튼 역할. */}
         <div className="flex items-center justify-center py-3 border-b border-border flex-shrink-0">
-          <div
-            className="w-9 h-9 bg-gradient-to-br from-primary to-sky-700 rounded-md flex items-center justify-center text-white text-sm shadow-sm"
-            title={title}
+          <Link
+            to="/"
+            title={`${title} — 홈`}
+            aria-label="홈으로 이동"
+            className={`w-9 h-9 bg-gradient-to-br from-primary to-sky-700 rounded-md flex items-center justify-center text-white text-sm shadow-sm transition-transform hover:scale-105 active:scale-95 ${
+              location.pathname === '/' ? 'ring-2 ring-primary/50' : ''
+            }`}
           >
             ☸
-          </div>
+          </Link>
         </div>
 
         {/* 그룹 아이콘 레일 */}

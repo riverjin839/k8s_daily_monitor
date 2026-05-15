@@ -5,8 +5,7 @@ from app.models.daily_check import DailyCheckLog, CheckSchedule, CheckScheduleTy
 from app.models.playbook import Playbook
 from app.models.ansible_assets import AnsiblePlaybookFile, AnsibleInventory
 from app.models.metric_card import MetricCard
-from app.models.issue import Issue
-from app.models.task import Task
+from app.models.work_item import WorkItem
 from app.models.app_setting import AppSetting
 from app.models.workflow import Workflow, WorkflowStep, WorkflowEdge
 from app.models.work_guide import WorkGuide
@@ -42,8 +41,7 @@ __all__ = [
     "AnsiblePlaybookFile",
     "AnsibleInventory",
     "MetricCard",
-    "Issue",
-    "Task",
+    "WorkItem",
     "AppSetting",
     "Workflow",
     "WorkflowStep",

@@ -2,12 +2,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Dashboard } from '@/pages/Dashboard';
 import { PlaybooksPage } from '@/pages/PlaybooksPage';
-import { IssueBoardPage } from '@/pages/IssueBoardPage';
-import { IssueFormPage } from '@/pages/IssueFormPage';
-import { IssueDetailPage } from '@/pages/IssueDetailPage';
-import { TaskBoardPage } from '@/pages/TaskBoardPage';
-import { TaskFormPage } from '@/pages/TaskFormPage';
-import { TaskDetailPage } from '@/pages/TaskDetailPage';
+import { WorkItemBoardPage } from '@/pages/WorkItemBoardPage';
+import { WorkItemFormPage } from '@/pages/WorkItemFormPage';
+import { WorkItemDetailPage } from '@/pages/WorkItemDetailPage';
 import { TodoTodayPage } from '@/pages/TodoTodayPage';
 import { WorkSummaryPage } from '@/pages/WorkSummaryPage';
 import { MemberBoardPage } from '@/pages/MemberBoardPage';
@@ -73,14 +70,13 @@ function AppShell() {
               <Route path="/" element={<HomePage />} />
               <Route path="/cluster-overview" element={<Dashboard />} />
               <Route path="/playbooks" element={<PlaybooksPage />} />
-              <Route path="/issues" element={<IssueBoardPage />} />
-              <Route path="/issues/new" element={<IssueFormPage />} />
-              <Route path="/issues/:id" element={<IssueDetailPage />} />
-              <Route path="/issues/:id/edit" element={<IssueDetailPage />} />
-              <Route path="/tasks" element={<TaskBoardPage />} />
-              <Route path="/tasks/new" element={<TaskFormPage />} />
-              <Route path="/tasks/:id" element={<TaskDetailPage />} />
-              <Route path="/tasks/:id/edit" element={<TaskDetailPage />} />
+              <Route path="/work-items" element={<WorkItemBoardPage />} />
+              <Route path="/work-items/new" element={<WorkItemFormPage />} />
+              <Route path="/work-items/:id" element={<WorkItemDetailPage />} />
+              <Route path="/work-items/:id/edit" element={<WorkItemDetailPage />} />
+              {/* 레거시 경로 — 통합 work-items 페이지로 type 필터를 prefill 해서 리다이렉트 */}
+              <Route path="/issues" element={<Navigate to="/work-items" replace />} />
+              <Route path="/tasks" element={<Navigate to="/work-items" replace />} />
               <Route path="/todo-today" element={<TodoTodayPage />} />
               <Route path="/work-summary" element={<WorkSummaryPage />} />
               <Route path="/members" element={<MemberBoardPage />} />

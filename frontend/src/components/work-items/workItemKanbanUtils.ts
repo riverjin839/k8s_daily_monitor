@@ -1,4 +1,4 @@
-import type { Task, KanbanStatus, TaskModule, TaskTypeLabel } from '@/types';
+import type { WorkItem, KanbanStatus, WorkItemModule, WorkItemTypeLabel } from '@/types';
 
 export type { KanbanStatus };
 
@@ -62,7 +62,7 @@ export const KANBAN_STATUS_LABEL: Record<KanbanStatus, string> = {
 };
 
 // ── 모듈 배지 설정 ─────────────────────────────────────────────────────────────
-export const MODULE_CONFIG: Record<TaskModule, { label: string; cls: string }> = {
+export const MODULE_CONFIG: Record<WorkItemModule, { label: string; cls: string }> = {
   k8s:        { label: 'K8s',       cls: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
   keycloak:   { label: 'Keycloak',  cls: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30' },
   nexus:      { label: 'Nexus',     cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
@@ -76,7 +76,7 @@ export const MODULE_CONFIG: Record<TaskModule, { label: string; cls: string }> =
 };
 
 // ── 유형 배지 설정 ─────────────────────────────────────────────────────────────
-export const TYPE_LABEL_CONFIG: Record<TaskTypeLabel, { label: string; cls: string }> = {
+export const TYPE_LABEL_CONFIG: Record<WorkItemTypeLabel, { label: string; cls: string }> = {
   feature:  { label: 'feat',     cls: 'bg-blue-500/10 text-blue-300' },
   bug:      { label: 'fix',      cls: 'bg-red-500/10 text-red-300' },
   chore:    { label: 'chore',    cls: 'bg-slate-500/10 text-slate-400' },
@@ -96,6 +96,6 @@ export function getPrevStatus(current: KanbanStatus): KanbanStatus | null {
 }
 
 // 하위 호환: 기존 코드에서 classifyTask 를 import 하는 경우를 위해 유지
-export function classifyTask(task: Task): KanbanStatus {
-  return task.kanbanStatus ?? 'todo';
+export function classifyTask(item: WorkItem): KanbanStatus {
+  return item.kanbanStatus ?? 'todo';
 }

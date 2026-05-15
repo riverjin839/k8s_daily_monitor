@@ -286,6 +286,99 @@ def compute_diff(db: Session, envelope: dict, *, include_logs: bool) -> dict:
     }
 
 
+def _legacy_remap_work_items(envelope: dict) -> None:
+    """레거시 백업 호환 — `issues` / `tasks` 테이블 행을 `work_items` 로 변환해 합친다.
+
+    Issue / Task 모델을 WorkItem 으로 통합한 이후의 환경에서, 통합 이전 시점에
+    생성된 백업 파일도 그대로 import 할 수 있도록 envelope 를 in-place 로 수정한다.
+
+    매핑 규칙은 main.py 의 backfill SQL 과 동일:
+    - issues: type='issue', issue_area→category, issue_content→content,
+      action_content→resolution, occurred_at→started_at, resolved_at→closed_at,
+      kanban_status='done' if resolved_at else 'todo', priority='medium' 기본.
+    - tasks: type='task', task_category→category, task_content→content,
+      result_content→resolution, scheduled_at→started_at, completed_at→closed_at,
+      issue_id→related_work_item_id.
+    """
+    tables = envelope.get("tables")
+    if not isinstance(tables, dict):
+        return
+
+    legacy_issues = tables.pop("issues", None) or []
+    legacy_tasks = tables.pop("tasks", None) or []
+    if not legacy_issues and not legacy_tasks:
+        return
+
+    merged: list[dict] = list(tables.get("work_items", []) or [])
+
+    for row in legacy_issues:
+        if not isinstance(row, dict):
+            continue
+        resolved = row.get("resolved_at")
+        merged.append({
+            "id": row.get("id"),
+            "type": "issue",
+            "assignee": row.get("assignee"),
+            "primary_assignee": row.get("primary_assignee") or row.get("assignee"),
+            "secondary_assignee": row.get("secondary_assignee"),
+            "cluster_id": row.get("cluster_id"),
+            "cluster_name": row.get("cluster_name"),
+            "category": row.get("issue_area"),
+            "content": row.get("issue_content"),
+            "resolution": row.get("action_content"),
+            "detail_content": row.get("detail_content"),
+            "started_at": row.get("occurred_at"),
+            "closed_at": resolved,
+            "remarks": row.get("remarks"),
+            "service": row.get("service"),
+            "confluence_url": row.get("confluence_url"),
+            "priority": "medium",
+            "kanban_status": "done" if resolved else "todo",
+            "module": None,
+            "type_label": None,
+            "effort_hours": None,
+            "done_condition": None,
+            "parent_id": None,
+            "related_work_item_id": None,
+            "created_at": row.get("created_at"),
+            "updated_at": row.get("updated_at"),
+        })
+
+    for row in legacy_tasks:
+        if not isinstance(row, dict):
+            continue
+        merged.append({
+            "id": row.get("id"),
+            "type": "task",
+            "assignee": row.get("assignee"),
+            "primary_assignee": row.get("primary_assignee") or row.get("assignee"),
+            "secondary_assignee": row.get("secondary_assignee"),
+            "cluster_id": row.get("cluster_id"),
+            "cluster_name": row.get("cluster_name"),
+            "category": row.get("task_category"),
+            "content": row.get("task_content"),
+            "resolution": row.get("result_content"),
+            "detail_content": None,
+            "started_at": row.get("scheduled_at"),
+            "closed_at": row.get("completed_at"),
+            "remarks": row.get("remarks"),
+            "service": row.get("service"),
+            "confluence_url": row.get("confluence_url"),
+            "priority": row.get("priority") or "medium",
+            "kanban_status": row.get("kanban_status") or "todo",
+            "module": row.get("module"),
+            "type_label": row.get("type_label"),
+            "effort_hours": row.get("effort_hours"),
+            "done_condition": row.get("done_condition"),
+            "parent_id": row.get("parent_id"),
+            "related_work_item_id": row.get("issue_id"),
+            "created_at": row.get("created_at"),
+            "updated_at": row.get("updated_at"),
+        })
+
+    tables["work_items"] = merged
+
+
 def apply_import(
     db: Session,
     envelope: dict,
@@ -304,6 +397,9 @@ def apply_import(
     """
     if mode not in ("merge", "replace"):
         raise ValueError(f"unknown mode: {mode}")
+
+    # 레거시 issues/tasks → work_items 통합 (in-place envelope 수정)
+    _legacy_remap_work_items(envelope)
 
     diff = compute_diff(db, envelope, include_logs=include_logs)
     if dry_run:

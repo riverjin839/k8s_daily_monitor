@@ -16,8 +16,7 @@ from app.database import get_db
 from app.models import Cluster, Addon
 from app.models.cluster import StatusEnum
 from app.models.daily_check import DailyCheckLog, CheckSchedule
-from app.models.issue import Issue
-from app.models.task import Task
+from app.models.work_item import WorkItem
 from app.services.health_checker import HealthChecker
 from app.services.config_snapshot import record_cluster_meta_snapshots
 from app.schemas import (
@@ -398,11 +397,8 @@ def delete_cluster(cluster_id: UUID, db: Session = Depends(get_db)):
     # - DailyCheckLog, CheckSchedule: cluster_id NOT NULL → 먼저 삭제
     db.query(DailyCheckLog).filter(DailyCheckLog.cluster_id == cluster_id).delete(synchronize_session=False)
     db.query(CheckSchedule).filter(CheckSchedule.cluster_id == cluster_id).delete(synchronize_session=False)
-    # - Issue, Task: cluster_id nullable → NULL 처리 (레코드 보관)
-    db.query(Issue).filter(Issue.cluster_id == cluster_id).update(
-        {"cluster_id": None}, synchronize_session=False
-    )
-    db.query(Task).filter(Task.cluster_id == cluster_id).update(
+    # - WorkItem (issue / task 통합): cluster_id nullable → NULL 처리 (레코드 보관)
+    db.query(WorkItem).filter(WorkItem.cluster_id == cluster_id).update(
         {"cluster_id": None}, synchronize_session=False
     )
 

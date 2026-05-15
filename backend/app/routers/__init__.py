@@ -6,8 +6,7 @@ from app.routers.playbooks import router as playbooks_router
 from app.routers.agent import router as agent_router
 from app.routers.promql import router as promql_router
 from app.routers.openclaw import router as openclaw_router
-from app.routers.issues import router as issues_router
-from app.routers.tasks import router as tasks_router
+from app.routers.work_items import router as work_items_router
 from app.routers.ui_settings import router as ui_settings_router
 from app.routers.node_labels import router as node_labels_router
 from app.routers.node_images import router as node_images_router
@@ -50,8 +49,7 @@ __all__ = [
     "agent_router",
     "promql_router",
     "openclaw_router",
-    "issues_router",
-    "tasks_router",
+    "work_items_router",
     "ui_settings_router",
     "node_labels_router",
     "node_images_router",

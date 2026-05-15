@@ -16,13 +16,12 @@ from app.routers import (
     daily_check_router,
     health_router,
     history_router,
-    issues_router,
     node_labels_router,
     node_images_router,
     openclaw_router,
     playbooks_router,
     promql_router,
-    tasks_router,
+    work_items_router,
     ui_settings_router,
     workflows_router,
     work_guide_router,
@@ -320,6 +319,109 @@ def _run_migrations():
         )
         _safe_add_column("tasks", "secondary_assignee", "VARCHAR(100)")
 
+    # ──────────────────────────────────────────────────────────────────────
+    # WorkItem 통합 마이그레이션 — `tasks` 테이블을 work_items 로 rename + type
+    # 디스크리미네이터 추가 + 의미 동일 컬럼 통일 (content/category/started_at/
+    # closed_at/resolution) + issues 데이터 INSERT + issues DROP.
+    #
+    # 모든 단계는 _safe_* 헬퍼로 격리되어 한 단계가 실패해도 부팅이 막히지 않는다.
+    # 기 마이그레이션된 환경(이미 work_items 가 있고 tasks 가 없는 환경)에서는
+    # 각 단계가 자체 가드(inspector 선체크)로 no-op 가 된다.
+    # ──────────────────────────────────────────────────────────────────────
+    inspector = inspect(engine)  # 위 마이그레이션이 테이블/컬럼을 변경했을 수 있어 재취득
+    existing_tables = set(inspector.get_table_names())
+
+    # 1) tasks → work_items rename (work_items 가 아직 없을 때만)
+    if "tasks" in existing_tables and "work_items" not in existing_tables:
+        _safe_exec("ALTER TABLE tasks RENAME TO work_items", label="rename tasks→work_items")
+        # FK constraint 이름도 일관성 위해 rename (실패해도 무해)
+        for old, new in (
+            ("tasks_parent_id_fkey", "work_items_parent_id_fkey"),
+            ("tasks_issue_id_fkey", "work_items_related_id_fkey"),
+            ("tasks_cluster_id_fkey", "work_items_cluster_id_fkey"),
+        ):
+            _safe_exec(
+                f"ALTER TABLE work_items RENAME CONSTRAINT {old} TO {new}",
+                label=f"rename constraint {old}→{new}",
+            )
+        existing_tables = set(inspect(engine).get_table_names())
+
+    # 2) 컬럼 rename (Task 측 명칭 → 통일 명칭)
+    if "work_items" in existing_tables:
+        wi_cols = {c["name"] for c in inspect(engine).get_columns("work_items")}
+        renames = (
+            ("task_content", "content"),
+            ("task_category", "category"),
+            ("result_content", "resolution"),
+            ("scheduled_at", "started_at"),
+            ("completed_at", "closed_at"),
+            ("issue_id", "related_work_item_id"),
+        )
+        for old, new in renames:
+            if old in wi_cols and new not in wi_cols:
+                _safe_exec(
+                    f"ALTER TABLE work_items RENAME COLUMN {old} TO {new}",
+                    label=f"rename work_items.{old}→{new}",
+                )
+        # type 디스크리미네이터 + issue 전용 detail_content 컬럼 추가
+        _safe_add_column("work_items", "type", "VARCHAR(20) NOT NULL DEFAULT 'task'")
+        _safe_add_column("work_items", "detail_content", "TEXT")
+        _safe_create_index("ix_work_items_type", "work_items", "(type)")
+        _safe_create_index("ix_work_items_started_at", "work_items", "(started_at DESC)")
+
+    # 3) issues → work_items 백필 (issues 테이블이 존재할 때만)
+    existing_tables = set(inspect(engine).get_table_names())
+    if "issues" in existing_tables and "work_items" in existing_tables:
+        _safe_exec(
+            """
+            INSERT INTO work_items (
+                id, type, assignee, primary_assignee, secondary_assignee,
+                cluster_id, cluster_name, service, confluence_url, remarks,
+                category, content, resolution, detail_content,
+                started_at, closed_at,
+                priority, kanban_status,
+                created_at, updated_at
+            )
+            SELECT
+                id, 'issue', assignee, primary_assignee, secondary_assignee,
+                cluster_id, cluster_name, service, confluence_url, remarks,
+                issue_area, issue_content, action_content, detail_content,
+                occurred_at, resolved_at,
+                'medium',
+                CASE WHEN resolved_at IS NOT NULL THEN 'done' ELSE 'todo' END,
+                created_at, updated_at
+            FROM issues
+            ON CONFLICT (id) DO NOTHING
+            """,
+            label="backfill issues→work_items",
+        )
+        # related_work_item_id FK 재구성 — 기존엔 issues 를 가리켰음. 이제 work_items 자기참조로 교체.
+        _safe_exec(
+            "ALTER TABLE work_items DROP CONSTRAINT IF EXISTS tasks_issue_id_fkey",
+            label="drop legacy tasks_issue_id_fkey",
+        )
+        _safe_exec(
+            "ALTER TABLE work_items DROP CONSTRAINT IF EXISTS work_items_related_id_fkey",
+            label="drop legacy work_items_related_id_fkey",
+        )
+        _safe_exec(
+            "ALTER TABLE work_items ADD CONSTRAINT work_items_related_work_item_id_fkey "
+            "FOREIGN KEY (related_work_item_id) REFERENCES work_items(id) ON DELETE SET NULL",
+            label="add work_items.related_work_item_id FK→work_items",
+        )
+        # 백필이 끝났으면 issues 테이블 DROP
+        _safe_exec("DROP TABLE IF EXISTS issues CASCADE", label="drop legacy issues table")
+
+    # 4) 통일 컬럼 NOT NULL 보강 — 통합 직후 NULL 값이 없을 때만 가능. 일부 행에 NULL 이
+    # 있으면 _safe_exec 가 격리해 건너뛰고 다음 부팅에서 다시 시도된다.
+    if "work_items" in set(inspect(engine).get_table_names()):
+        wi_col_info = {c["name"]: c.get("nullable", True) for c in inspect(engine).get_columns("work_items")}
+        for col in ("category", "content", "started_at", "kanban_status", "priority", "type"):
+            if col in wi_col_info and wi_col_info[col]:
+                _safe_exec(
+                    f"ALTER TABLE work_items ALTER COLUMN {col} SET NOT NULL",
+                    label=f"work_items.{col} SET NOT NULL",
+                )
 
     # clusters: statusenum 에 'pending' 값 추가 (PostgreSQL enum 확장)
     try:
@@ -394,11 +496,13 @@ def _run_migrations():
 
     # confluence_url 컬럼 — 모든 작성형 엔티티 (tasks/issues/ops_notes/work_guides/
     # command_entries/workflows/mindmaps)에 공통으로 Confluence 문서 링크를 저장.
+    # work_items 는 통합 후 명칭. tasks/issues 는 마이그레이션 이전 환경 호환.
+    _current_tables = set(inspect(engine).get_table_names())
     for tbl in (
-        "tasks", "issues", "ops_notes", "work_guides",
+        "work_items", "tasks", "issues", "ops_notes", "work_guides",
         "command_entries", "workflows", "mindmaps",
     ):
-        if tbl in inspector.get_table_names():
+        if tbl in _current_tables:
             _safe_add_column(tbl, "confluence_url", "TEXT")
 
     # node_server_specs: 자산 대장 신규 필드
@@ -856,8 +960,7 @@ app.include_router(playbooks_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(agent_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(promql_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(openclaw_router, prefix="/api/v1", dependencies=_auth)
-app.include_router(issues_router, prefix="/api/v1", dependencies=_auth)
-app.include_router(tasks_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(work_items_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ui_settings_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(node_labels_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(node_images_router, prefix="/api/v1", dependencies=_auth)

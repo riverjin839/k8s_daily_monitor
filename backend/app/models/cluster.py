@@ -73,8 +73,7 @@ class Cluster(Base):
     addons = relationship("Addon", back_populates="cluster", cascade="all, delete-orphan")
     check_logs = relationship("CheckLog", back_populates="cluster", cascade="all, delete-orphan")
     playbooks = relationship("Playbook", back_populates="cluster", cascade="all, delete-orphan")
-    issues = relationship("Issue", back_populates="cluster", foreign_keys="Issue.cluster_id")
-    tasks = relationship("Task", back_populates="cluster", foreign_keys="Task.cluster_id")
+    work_items = relationship("WorkItem", back_populates="cluster", foreign_keys="WorkItem.cluster_id")
     infra_nodes = relationship("InfraNode", back_populates="cluster", cascade="all, delete-orphan")
 
     def __repr__(self):

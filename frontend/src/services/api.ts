@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, Issue, IssueListResponse, IssueCreate, IssueUpdate, Task, TaskListResponse, TaskCreate, TaskUpdate, TaskStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookRunResult, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource } from '@/types';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, clearAuthSession, type AuthUser } from '@/stores/authStore';
 
@@ -663,16 +663,23 @@ export const promqlApi = {
     api.get<{ status: string; detail?: string }>('/promql/health', { timeout: 5000 }),
 };
 
-// Issues API
-export const issuesApi = {
-  getAll: (params?: {
-    clusterId?: string;
-    assignee?: string;
-    issueArea?: string;
-    occurredFrom?: string;
-    occurredTo?: string;
-  }) =>
-    api.get<IssueListResponse>('/issues', {
+// Work Items API — 이슈와 작업 통합. type 필터로 둘을 구분.
+export interface WorkItemFilters {
+  type?: WorkItemType;
+  clusterId?: string;
+  assignee?: string;
+  category?: string;
+  priority?: string;
+  kanbanStatus?: string;
+  module?: string;
+  startedFrom?: string;
+  startedTo?: string;
+  closed?: boolean;
+}
+
+export const workItemsApi = {
+  getAll: (params?: WorkItemFilters) =>
+    api.get<WorkItemListResponse>('/work-items', {
       params: params
         ? Object.fromEntries(
             Object.entries(params)
@@ -681,18 +688,14 @@ export const issuesApi = {
           )
         : undefined,
     }),
-  getById: (id: string) => api.get<Issue>(`/issues/${id}`),
-  create: (data: IssueCreate) => api.post<Issue>('/issues', data),
-  update: (id: string, data: IssueUpdate) => api.put<Issue>(`/issues/${id}`, data),
-  delete: (id: string) => api.delete(`/issues/${id}`),
-  exportCsv: (params?: {
-    clusterId?: string;
-    assignee?: string;
-    issueArea?: string;
-    occurredFrom?: string;
-    occurredTo?: string;
-  }) =>
-    api.get('/issues/export/csv', {
+  getById: (id: string) => api.get<WorkItem>(`/work-items/${id}`),
+  create: (data: WorkItemCreate) => api.post<WorkItem>('/work-items', data),
+  update: (id: string, data: WorkItemUpdate) => api.put<WorkItem>(`/work-items/${id}`, data),
+  patchStatus: (id: string, kanbanStatus: KanbanStatus) =>
+    api.patch<WorkItemStatusResponse>(`/work-items/${id}/status`, { kanban_status: kanbanStatus }),
+  delete: (id: string) => api.delete(`/work-items/${id}`),
+  exportCsv: (params?: Omit<WorkItemFilters, 'closed'>) =>
+    api.get('/work-items/export/csv', {
       params: params
         ? Object.fromEntries(
             Object.entries(params)
@@ -704,11 +707,11 @@ export const issuesApi = {
     }),
 };
 
-// Today Tasks Summary (ToDoToday Board)
+// Today work items summary — type='task' 만 대상 (백엔드 동일)
 export interface TodayTaskGroup {
   assignee: string;
-  todayTasks: Task[];
-  inProgressTasks: Task[];
+  todayTasks: WorkItem[];
+  inProgressTasks: WorkItem[];
 }
 
 export interface TodayTasksSummary {
@@ -718,59 +721,9 @@ export interface TodayTasksSummary {
   groups: TodayTaskGroup[];
 }
 
-export const todayTasksApi = {
+export const todayWorkItemsApi = {
   getSummary: (date?: string) =>
-    api.get<TodayTasksSummary>('/tasks/today/summary', { params: date ? { date } : {} }),
-};
-
-// Tasks API
-export const tasksApi = {
-  getAll: (params?: {
-    clusterId?: string;
-    assignee?: string;
-    taskCategory?: string;
-    priority?: string;
-    kanbanStatus?: string;
-    module?: string;
-    scheduledFrom?: string;
-    scheduledTo?: string;
-    completed?: boolean;
-  }) =>
-    api.get<TaskListResponse>('/tasks', {
-      params: params
-        ? Object.fromEntries(
-            Object.entries(params)
-              .filter(([, v]) => v !== undefined && v !== '')
-              .map(([k, v]) => [toSnakeCase(k), v])
-          )
-        : undefined,
-    }),
-  getById: (id: string) => api.get<Task>(`/tasks/${id}`),
-  create: (data: TaskCreate) => api.post<Task>('/tasks', data),
-  update: (id: string, data: TaskUpdate) => api.put<Task>(`/tasks/${id}`, data),
-  patchStatus: (id: string, kanbanStatus: KanbanStatus) =>
-    api.patch<TaskStatusResponse>(`/tasks/${id}/status`, { kanban_status: kanbanStatus }),
-  delete: (id: string) => api.delete(`/tasks/${id}`),
-  exportCsv: (params?: {
-    clusterId?: string;
-    assignee?: string;
-    taskCategory?: string;
-    priority?: string;
-    kanbanStatus?: string;
-    module?: string;
-    scheduledFrom?: string;
-    scheduledTo?: string;
-  }) =>
-    api.get('/tasks/export/csv', {
-      params: params
-        ? Object.fromEntries(
-            Object.entries(params)
-              .filter(([, v]) => v !== undefined && v !== '')
-              .map(([k, v]) => [toSnakeCase(k), v])
-          )
-        : undefined,
-      responseType: 'blob',
-    }),
+    api.get<TodayTasksSummary>('/work-items/today/summary', { params: date ? { date } : {} }),
 };
 
 export const uiSettingsApi = {

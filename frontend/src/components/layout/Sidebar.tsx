@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { createPortal } from 'react-dom';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, ListTodo, Sparkles, Settings, Server,
   Pencil, Moon, Sun, Monitor, X, LogOut, User, ChevronRight,
   CalendarCheck2, Link2, Tags, Calculator, GitFork, BookMarked, Layers, Boxes,
   Map, BarChart3, Network, Zap, Route, Share2, Rss, Users, GitCommit, Terminal, Database, Cpu, HardDrive,
   ClipboardCheck, ListTree, Waves, TerminalSquare, Library, Home,
+  KeyRound, ShieldCheck, FileSearch,
 } from 'lucide-react';
 import { useUiSettings, useUpdateUiSettings } from '@/hooks/useUiSettings';
 import { useServiceCatalog } from '@/hooks/useServiceCatalog';
@@ -222,11 +223,13 @@ function FlyoutLink({
 export function Sidebar() {
   const { theme, setTheme } = useThemeStore();
   const location = useLocation();
+  const navigate = useNavigate();
   const { data: settings } = useUiSettings();
   const updateSettings = useUpdateUiSettings();
 
   const currentUser = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.clear);
+  const isAdmin = currentUser?.role === 'admin';
 
   const [openGroup, setOpenGroup] = useState<GroupId | null>(null);
   // flyout 의 위치를 클릭한 아이콘 우측에 맞추기 위해 마지막 클릭한 버튼의 rect 를 보관.
@@ -469,9 +472,32 @@ export function Sidebar() {
           />
           {currentUser && (
             <RailIconButton
-              label={`${currentUser.displayName || currentUser.username}${currentUser.role === 'admin' ? ' · Admin' : ''}`}
+              label={`${currentUser.displayName || currentUser.username} · ${currentUser.role}`}
               Icon={User}
               onClick={() => { /* 호버 툴팁만 — 별도 동작 없음 */ }}
+            />
+          )}
+          {currentUser && (
+            <RailIconButton
+              label="비밀번호 변경"
+              Icon={KeyRound}
+              onClick={() => navigate('/me/change-password')}
+            />
+          )}
+          {isAdmin && (
+            <RailIconButton
+              label="사용자 관리"
+              Icon={ShieldCheck}
+              active={location.pathname === '/settings/users'}
+              onClick={() => navigate('/settings/users')}
+            />
+          )}
+          {isAdmin && (
+            <RailIconButton
+              label="감사 로그"
+              Icon={FileSearch}
+              active={location.pathname === '/settings/audit-logs'}
+              onClick={() => navigate('/settings/audit-logs')}
             />
           )}
           {currentUser && (

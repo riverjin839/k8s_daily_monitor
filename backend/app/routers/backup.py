@@ -10,11 +10,13 @@
 """
 import logging
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.user import User
+from app.auth.deps import require_admin
 from app.schemas.backup import (
     BackupImportPreviewResponse,
     BackupImportResponse,
@@ -26,6 +28,7 @@ from app.services.backup_service import (
     export_to_bytes,
     parse_backup,
 )
+from app.services import audit_logger
 
 _log = logging.getLogger("k8s_monitor.backup")
 
@@ -80,6 +83,7 @@ async def import_preview(
     mode: str = Form(default="merge"),
     include_logs: bool = Form(default=False),
     db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
 ):
     if mode not in ("merge", "replace"):
         raise HTTPException(status_code=422, detail="mode 는 'merge' 또는 'replace' 이어야 합니다.")
@@ -107,11 +111,13 @@ async def import_preview(
 
 @router.post("/import", response_model=BackupImportResponse)
 async def import_apply(
+    request: Request,
     file: UploadFile = File(..., description="JSON 백업 파일"),
     mode: str = Form(default="merge"),
     include_logs: bool = Form(default=False),
     confirm: bool = Form(default=False, description="replace 모드는 반드시 True 이어야 실행"),
     db: Session = Depends(get_db),
+    actor: User = Depends(require_admin),
 ):
     if mode not in ("merge", "replace"):
         raise HTTPException(status_code=422, detail="mode 는 'merge' 또는 'replace' 이어야 합니다.")
@@ -129,5 +135,27 @@ async def import_apply(
     try:
         result = apply_import(db, envelope, mode=mode, include_logs=include_logs, dry_run=False)
     except Exception as e:
+        audit_logger.record(
+            db,
+            action="backup.import",
+            actor=actor,
+            status="failure",
+            details={"mode": mode, "include_logs": include_logs, "error": str(e)[:200]},
+            request=request,
+        )
         raise HTTPException(status_code=500, detail=f"복구 실패 ({type(e).__name__}): {str(e)[:200]}") from e
+    audit_logger.record(
+        db,
+        action="backup.import",
+        actor=actor,
+        status="success",
+        details={
+            "mode": mode,
+            "include_logs": include_logs,
+            "inserted": result.get("inserted"),
+            "updated": result.get("updated"),
+            "deleted": result.get("deleted"),
+        },
+        request=request,
+    )
     return BackupImportResponse.model_validate(result)

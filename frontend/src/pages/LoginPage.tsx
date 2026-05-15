@@ -89,7 +89,7 @@ export function LoginPage() {
         </form>
 
         <p className="text-xs text-muted-foreground/70 mt-6 text-center">
-          첫 사용 시 기본 admin 계정 (admin / admin) 으로 로그인 후 비밀번호를 변경하세요.
+          첫 사용 시 기본 admin 계정 (admin / admin) 으로 로그인 후 안내에 따라 비밀번호를 변경하세요.
         </p>
       </div>
     </div>

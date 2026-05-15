@@ -130,16 +130,48 @@ api.interceptors.response.use(
 // here and auto-converted to snake_case by the request interceptor.
 export interface LoginResponse { accessToken: string; tokenType: string; user: AuthUser }
 
+export type UserRoleApi = 'admin' | 'operator' | 'viewer';
+
 export const authApi = {
   login: (username: string, password: string) =>
     api.post<LoginResponse>('/auth/login', { username, password }),
   me: () => api.get<AuthUser>('/auth/me'),
+  changeMyPassword: (currentPassword: string, newPassword: string) =>
+    api.post<AuthUser>('/auth/me/password', { currentPassword, newPassword }),
   listUsers: () => api.get<AuthUser[]>('/auth/users'),
-  createUser: (payload: { username: string; password: string; role: 'admin' | 'user'; displayName?: string }) =>
+  createUser: (payload: { username: string; password: string; role: UserRoleApi; displayName?: string }) =>
     api.post<AuthUser>('/auth/users', payload),
   deleteUser: (id: string) => api.delete(`/auth/users/${id}`),
+  updateUserRole: (id: string, role: UserRoleApi) =>
+    api.put<AuthUser>(`/auth/users/${id}/role`, { role }),
   resetPassword: (id: string, newPassword: string) =>
     api.post<AuthUser>(`/auth/users/${id}/password`, { newPassword }),
+};
+
+// ── Audit logs API ────────────────────────────────────────────────────────
+export interface AuditLogQuery {
+  page?: number;
+  pageSize?: number;
+  action?: string;
+  actorUsername?: string;
+  status?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export const auditLogsApi = {
+  list: (params: AuditLogQuery = {}) => {
+    // Manual snake_case for query params so axios doesn't double-convert.
+    const q: Record<string, string | number> = {};
+    if (params.page) q.page = params.page;
+    if (params.pageSize) q.page_size = params.pageSize;
+    if (params.action) q.action = params.action;
+    if (params.actorUsername) q.actor_username = params.actorUsername;
+    if (params.status) q.status = params.status;
+    if (params.dateFrom) q.date_from = params.dateFrom;
+    if (params.dateTo) q.date_to = params.dateTo;
+    return api.get<import('@/types').AuditLogListResponse>('/audit-logs', { params: q });
+  },
 };
 
 // Clusters API

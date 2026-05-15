@@ -1793,3 +1793,39 @@ export interface NotificationLogEntry {
   error?: string | null;
   sentAt: string;
 }
+
+// ── Auth & RBAC ────────────────────────────────────────────────────────────
+
+export type UserRole = 'admin' | 'operator' | 'viewer';
+
+export interface AuthUserDetail {
+  id: string;
+  username: string;
+  role: UserRole;
+  displayName?: string | null;
+  isActive: boolean;
+  mustChangePassword: boolean;
+  createdAt: string;
+}
+
+export interface AuditLog {
+  id: string;
+  actorUserId?: string | null;
+  actorUsername: string;
+  action: string;
+  targetType?: string | null;
+  targetId?: string | null;
+  status: 'success' | 'failure' | string;
+  ip?: string | null;
+  userAgent?: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  details?: Record<string, any> | null;
+  createdAt: string;
+}
+
+export interface AuditLogListResponse {
+  items: AuditLog[];
+  total: number;
+  page: number;
+  pageSize: number;
+}

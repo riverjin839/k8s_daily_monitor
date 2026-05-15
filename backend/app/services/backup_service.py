@@ -47,11 +47,14 @@ LOG_TABLES: frozenset[str] = frozenset({
     "ontology_events",
     "trend_items",
     "trend_digests",
+    "audit_logs",
 })
 
 # 민감 정보 포함 — 옵션으로 마스킹
 SENSITIVE_COLUMNS: dict[str, list[str]] = {
     "clusters": ["kubeconfig_content", "kubeconfig_path"],
+    # bcrypt 해시지만 외부 유출 시 오프라인 브루트포스 가능성이 있어 기본 마스킹.
+    "users": ["hashed_password"],
 }
 
 

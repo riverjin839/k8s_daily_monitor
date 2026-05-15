@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, ArrowRight, CheckCircle2, Clock, ShieldAlert,
-  Plus, CalendarPlus,
+  Plus, CalendarPlus, X,
 } from 'lucide-react';
 import { useTasks } from '@/hooks/useTasks';
 import { useIssues } from '@/hooks/useIssues';
@@ -63,6 +64,9 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
   });
   const [selected, setSelected] = useState<string>(todayKey);
   const [quickAddDate, setQuickAddDate] = useState<string | null>(null);
+  // 사이드바 아이콘 클릭 → flyout 패턴처럼, 날짜 클릭 시 popover 를 띄우기 위한 앵커.
+  // null 이면 popover 닫힘.
+  const [popoverAnchor, setPopoverAnchor] = useState<DOMRect | null>(null);
 
   const { data: tasksData } = useTasks();
   const { data: issuesData } = useIssues();
@@ -151,10 +155,18 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
     return `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEKDAYS[d.getDay()]})`;
   })();
 
+  const handleDayClick = (key: string, e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setSelected(key);
+    setPopoverAnchor(rect);
+  };
+
+  const closePopover = () => setPopoverAnchor(null);
+
   return (
     <>
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] gap-4">
-        {/* ── Calendar grid ─────────────────────────────────────────────── */}
+      <div className="space-y-3">
+        {/* ── Calendar grid (full-width — 우측 상세 패널 제거됨, 날짜 클릭 시 popover) ─ */}
         <div className="space-y-3">
           {/* Month nav row */}
           <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -234,23 +246,23 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
               return (
                 <div
                   key={key}
-                  onClick={() => setSelected(key)}
+                  onClick={(e) => handleDayClick(key, e)}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      setSelected(key);
+                      handleDayClick(key, e as unknown as React.MouseEvent<HTMLDivElement>);
                     }
                   }}
-                  className={`group relative rounded-xl border bg-card text-left cursor-pointer transition-all flex flex-col p-1.5 min-h-[78px] ${
+                  className={`group relative rounded-xl border bg-card text-left cursor-pointer transition-all flex flex-col p-2 min-h-[110px] ${
                     isSelected
                       ? 'border-primary ring-2 ring-primary/30 shadow-sm'
                       : isToday
                       ? 'border-primary/45'
                       : 'border-border/60 hover:border-primary/40 hover:shadow-sm'
                   } ${!inMonth ? 'opacity-45' : ''}`}
-                  title={`${key} · 예정 ${b.scheduled.length} · 완료 ${b.completed.length} · 이슈 ${b.issues.length}`}
+                  title={`${key} · 예정 ${b.scheduled.length} · 완료 ${b.completed.length} · 이슈 ${b.issues.length} — 클릭하면 상세`}
                 >
                   {/* Heatmap shade (background) */}
                   <span
@@ -340,92 +352,21 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
           </div>
         </div>
 
-        {/* ── Selected day detail ───────────────────────────────────────── */}
-        <div className="rounded-2xl border border-border/70 bg-card flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border/70 bg-muted/30">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold leading-tight truncate">{selectedDateLabel}</p>
-              <p className="text-[11px] text-muted-foreground tabular-nums">
-                총 {selectedBucket.scheduled.length + selectedBucket.completed.length + selectedBucket.issues.length}건
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setQuickAddDate(selected)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors mac-shadow"
-              title={`${selectedDateLabel} 에 일정 등록`}
-            >
-              <CalendarPlus className="w-3.5 h-3.5" />
-              일정 등록
-            </button>
-          </div>
-
-          <div className="px-3 py-3 space-y-3 flex-1 overflow-y-auto max-h-[360px]">
-            {selectedBucket.completed.length > 0 && (
-              <DayList
-                icon={<CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
-                title="완료"
-                count={selectedBucket.completed.length}
-                items={selectedBucket.completed.map((t) => ({
-                  id: t.id,
-                  primary: stripHtml(t.taskContent) || t.taskCategory,
-                  meta: `${t.assignee || '미지정'} · ${STATUS_LABEL[t.kanbanStatus]}`,
-                }))}
-              />
-            )}
-            {selectedBucket.scheduled.length > 0 && (
-              <DayList
-                icon={<Clock className="w-3.5 h-3.5 text-blue-500" />}
-                title="예정"
-                count={selectedBucket.scheduled.length}
-                items={selectedBucket.scheduled.map((t) => ({
-                  id: t.id,
-                  primary: stripHtml(t.taskContent) || t.taskCategory,
-                  meta: `${t.assignee || '미지정'} · ${STATUS_LABEL[t.kanbanStatus]}`,
-                }))}
-              />
-            )}
-            {selectedBucket.issues.length > 0 && (
-              <DayList
-                icon={<ShieldAlert className="w-3.5 h-3.5 text-amber-500" />}
-                title="이슈"
-                count={selectedBucket.issues.length}
-                items={selectedBucket.issues.map((i) => ({
-                  id: i.id,
-                  primary: stripHtml(i.issueContent) || i.issueArea,
-                  meta: `${i.assignee || '미지정'}${i.resolvedAt ? ' · 해결' : ''}`,
-                }))}
-              />
-            )}
-            {selectedBucket.scheduled.length === 0 &&
-              selectedBucket.completed.length === 0 &&
-              selectedBucket.issues.length === 0 && (
-                <div className="flex flex-col items-center justify-center text-center text-xs text-muted-foreground py-10 gap-2">
-                  <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center">
-                    <CalendarPlus className="w-5 h-5 opacity-50" />
-                  </div>
-                  <p>해당 날짜의 작업/이슈가 없습니다.</p>
-                  <button
-                    type="button"
-                    onClick={() => setQuickAddDate(selected)}
-                    className="mt-1 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                  >
-                    <Plus className="w-3 h-3" /> 새 일정 등록
-                  </button>
-                </div>
-              )}
-          </div>
-
-          <div className="flex items-center justify-end gap-3 px-3 py-2 border-t border-border/60">
-            <Link
-              to="/todo-today"
-              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
-            >
-              오늘 할일 상세 <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-        </div>
       </div>
+
+      {/* ── Day-detail popover — 사이드바 flyout 과 동일 패턴 ─────────────────── */}
+      {popoverAnchor && (
+        <DayDetailPopover
+          anchorRect={popoverAnchor}
+          label={selectedDateLabel}
+          bucket={selectedBucket}
+          onClose={closePopover}
+          onQuickAdd={() => {
+            closePopover();
+            setQuickAddDate(selected);
+          }}
+        />
+      )}
 
       <QuickAddTaskModal
         open={!!quickAddDate}
@@ -434,6 +375,160 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
         onClose={() => setQuickAddDate(null)}
       />
     </>
+  );
+}
+
+// ── Day-detail popover — 사이드바 그룹 flyout 패턴 그대로 (createPortal + 외부클릭 닫기) ──
+interface DayDetailPopoverProps {
+  anchorRect: DOMRect;
+  label: string;
+  bucket: DayBucket;
+  onClose: () => void;
+  onQuickAdd: () => void;
+}
+
+function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: DayDetailPopoverProps) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number }>({
+    top: anchorRect.bottom + 6,
+    left: anchorRect.left,
+  });
+
+  // viewport clamp — 화면 밖으로 새지 않도록 보정.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const POPOVER_W = 320;
+    const margin = 8;
+    let top = anchorRect.bottom + 6;
+    let left = anchorRect.left;
+    // 가로: 우측 잘림 방지
+    if (left + POPOVER_W > window.innerWidth - margin) {
+      left = Math.max(margin, window.innerWidth - POPOVER_W - margin);
+    }
+    // 세로: 화면 아래 잘리면 위로 띄움
+    const popH = el.getBoundingClientRect().height;
+    if (top + popH > window.innerHeight - margin) {
+      top = Math.max(margin, anchorRect.top - popH - 6);
+    }
+    setPos({ top, left });
+  }, [anchorRect]);
+
+  // ESC 로 닫기
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const total = bucket.scheduled.length + bucket.completed.length + bucket.issues.length;
+
+  return createPortal(
+    <>
+      {/* 외부 클릭 캐처 */}
+      <div className="fixed inset-0 z-40" onClick={onClose} aria-hidden />
+
+      <div
+        ref={ref}
+        role="dialog"
+        aria-label={`${label} 상세`}
+        style={{ top: pos.top, left: pos.left, width: 320 }}
+        className="fixed z-50 bg-card border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden"
+      >
+        <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-muted/30">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold leading-tight truncate">{label}</p>
+            <p className="text-[11px] text-muted-foreground tabular-nums">총 {total}건</p>
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              type="button"
+              onClick={onQuickAdd}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors"
+              title={`${label} 에 일정 등록`}
+            >
+              <CalendarPlus className="w-3.5 h-3.5" />
+              일정
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="닫기"
+              className="p-1 rounded text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="px-3 py-3 space-y-3 overflow-y-auto max-h-[360px]">
+          {bucket.completed.length > 0 && (
+            <DayList
+              icon={<CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
+              title="완료"
+              count={bucket.completed.length}
+              items={bucket.completed.map((t) => ({
+                id: t.id,
+                primary: stripHtml(t.taskContent) || t.taskCategory,
+                meta: `${t.assignee || '미지정'} · ${STATUS_LABEL[t.kanbanStatus]}`,
+              }))}
+            />
+          )}
+          {bucket.scheduled.length > 0 && (
+            <DayList
+              icon={<Clock className="w-3.5 h-3.5 text-blue-500" />}
+              title="예정"
+              count={bucket.scheduled.length}
+              items={bucket.scheduled.map((t) => ({
+                id: t.id,
+                primary: stripHtml(t.taskContent) || t.taskCategory,
+                meta: `${t.assignee || '미지정'} · ${STATUS_LABEL[t.kanbanStatus]}`,
+              }))}
+            />
+          )}
+          {bucket.issues.length > 0 && (
+            <DayList
+              icon={<ShieldAlert className="w-3.5 h-3.5 text-amber-500" />}
+              title="이슈"
+              count={bucket.issues.length}
+              items={bucket.issues.map((i) => ({
+                id: i.id,
+                primary: stripHtml(i.issueContent) || i.issueArea,
+                meta: `${i.assignee || '미지정'}${i.resolvedAt ? ' · 해결' : ''}`,
+              }))}
+            />
+          )}
+          {total === 0 && (
+            <div className="flex flex-col items-center justify-center text-center text-xs text-muted-foreground py-8 gap-2">
+              <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center">
+                <CalendarPlus className="w-5 h-5 opacity-50" />
+              </div>
+              <p>해당 날짜의 작업/이슈가 없습니다.</p>
+              <button
+                type="button"
+                onClick={onQuickAdd}
+                className="mt-1 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+              >
+                <Plus className="w-3 h-3" /> 새 일정 등록
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end px-3 py-1.5 border-t border-border/60 bg-muted/10">
+          <Link
+            to="/todo-today"
+            onClick={onClose}
+            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
+          >
+            오늘 할일 상세 <ArrowRight className="w-3 h-3" />
+          </Link>
+        </div>
+      </div>
+    </>,
+    document.body,
   );
 }
 

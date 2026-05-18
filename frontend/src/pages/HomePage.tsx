@@ -340,15 +340,15 @@ export function HomePage() {
             />
           </div>
 
-          {/* ── 메인 2-col ─────────────────────────────────────────── */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-            {/* 담당자별 오늘 할일 / 이슈 */}
-            <MacCard title="DevOps 담당자별 오늘 할일 / 이슈" bodyPadding="p-4">
+          {/* ── 메인 2-col (3:7 — 달력에 더 많은 가로 폭) ─────────────── */}
+          <div className="grid grid-cols-1 xl:grid-cols-10 gap-3">
+            {/* 담당자별 오늘 할일 / 이슈 — 좌측 3/10 */}
+            <MacCard title="DevOps 담당자별 오늘 할일 / 이슈" bodyPadding="p-4" rootClassName="xl:col-span-3">
               <MemberTodayTodos selectedClusterId={selectedClusterId} />
             </MacCard>
 
-            {/* 캘린더 */}
-            <MacCard title="이번 달 일정 (WorkItem 마감일)" bodyPadding="p-4">
+            {/* 캘린더 — 우측 7/10 (날짜 셀 너비 확보) */}
+            <MacCard title="이번 달 일정 (WorkItem 마감일)" bodyPadding="p-4" rootClassName="xl:col-span-7">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
                 <CalendarDays className="w-4 h-4 text-primary" />
                 <span>WorkItem 의 예정일 · 이슈 발생일 마크</span>

@@ -99,9 +99,6 @@ function CreateModal({ open, onClose }: { open: boolean; onClose: () => void }) 
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-3 py-2 bg-background border border-border rounded-xl text-sm"
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              이 계정은 다음 로그인 시 비밀번호를 변경해야 합니다.
-            </p>
           </div>
           <div>
             <label htmlFor={f('d')} className="block text-sm mb-1">표시 이름 (선택)</label>
@@ -174,7 +171,7 @@ function ResetPasswordModal({
     setSubmitting(true);
     try {
       await authApi.resetPassword(user.id, newPassword);
-      toast.success(`${user.username} 비밀번호가 재설정되었습니다. 다음 로그인 시 변경이 강제됩니다.`);
+      toast.success(`${user.username} 비밀번호가 재설정되었습니다.`);
       qc.invalidateQueries({ queryKey: ['users'] });
       onClose();
     } catch (err) {
@@ -189,7 +186,7 @@ function ResetPasswordModal({
       <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-5 mac-shadow">
         <h3 className="text-base font-bold mb-2">{user.username} 비밀번호 재설정</h3>
         <p className="text-xs text-muted-foreground mb-3">
-          새 비밀번호를 입력하세요. 사용자는 다음 로그인 시 비밀번호를 다시 변경해야 합니다.
+          새 비밀번호를 입력하세요. 변경 즉시 적용됩니다.
         </p>
         <input
           type="password"
@@ -301,7 +298,6 @@ export function UsersPage() {
               <th className="py-2 pr-3 font-medium">사용자명</th>
               <th className="py-2 pr-3 font-medium">표시 이름</th>
               <th className="py-2 pr-3 font-medium">역할</th>
-              <th className="py-2 pr-3 font-medium">비번 변경 필요</th>
               <th className="py-2 pr-3 font-medium">생성</th>
               <th className="py-2 pr-3 font-medium text-right">작업</th>
             </tr>
@@ -327,15 +323,6 @@ export function UsersPage() {
                           <option key={r.value} value={r.value}>{r.label}</option>
                         ))}
                       </select>
-                    )}
-                  </td>
-                  <td className="py-2 pr-3">
-                    {u.mustChangePassword ? (
-                      <span className="inline-flex items-center px-2 py-0.5 text-xs bg-amber-500/15 text-amber-700 border border-amber-500/30 rounded-md">
-                        예
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">아니오</span>
                     )}
                   </td>
                   <td className="py-2 pr-3 text-xs text-muted-foreground">
@@ -366,7 +353,7 @@ export function UsersPage() {
               );
             })}
             {!isFetching && sortedUsers.length === 0 && (
-              <tr><td colSpan={6} className="py-8 text-center text-muted-foreground text-sm">사용자가 없습니다.</td></tr>
+              <tr><td colSpan={5} className="py-8 text-center text-muted-foreground text-sm">사용자가 없습니다.</td></tr>
             )}
           </tbody>
         </table>

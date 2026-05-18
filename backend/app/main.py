@@ -608,6 +608,11 @@ def _run_migrations():
             "UPDATE users SET role='viewer' WHERE role='user'",
             label="users.role 'user' → 'viewer'",
         )
+        # 강제 변경 정책 폐기 — 과거 시드/리셋으로 True 였던 사용자를 모두 해제.
+        _safe_exec(
+            "UPDATE users SET must_change_password = FALSE WHERE must_change_password = TRUE",
+            label="users.must_change_password → FALSE (강제 변경 정책 해제)",
+        )
 
     # audit_logs: create_all 이 테이블 자체는 만들지만 보조 인덱스만 명시.
     if "audit_logs" in inspector.get_table_names():
@@ -891,10 +896,7 @@ def _seed_default_deep_check_definitions():
 
 
 def _seed_initial_admin():
-    """Create the bootstrap admin if no users exist yet. Idempotent.
-
-    Initial admin is forced to change its password on first login.
-    """
+    """Create the bootstrap admin if no users exist yet. Idempotent."""
     db = SessionLocal()
     try:
         if db.query(User).count() > 0:
@@ -904,7 +906,6 @@ def _seed_initial_admin():
             hashed_password=hash_password(settings.initial_admin_password),
             role="admin",
             display_name="Administrator",
-            must_change_password=True,
         )
         db.add(admin)
         db.commit()

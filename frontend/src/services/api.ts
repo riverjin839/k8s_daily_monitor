@@ -739,7 +739,9 @@ export const workItemsApi = {
     }),
 };
 
-// Today work items summary — type='task' 만 대상 (백엔드 동일)
+// Today work items summary — task + issue 모두 대상 (백엔드 동일).
+// primary_assignee 와 secondary_assignee 둘 다 그룹 키로 등록되므로 같은 아이템이
+// 두 사람의 그룹에 중복 노출될 수 있다 (협업자 가시성용).
 export interface TodayTaskGroup {
   assignee: string;
   todayTasks: WorkItem[];

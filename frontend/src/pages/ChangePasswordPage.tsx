@@ -1,25 +1,16 @@
 /**
- * Self-service password change.
- *
- * Used in two modes:
- *  - `forced` (no nav out): rendered by AuthGate when `mustChangePassword=true`.
- *    The only way out is to successfully change the password or log out.
- *  - Manual (from the user menu): standalone route `/me/change-password`.
+ * Self-service password change — 사용자 메뉴에서 호출되는 수동 비번 변경 화면.
+ * 라우트: `/me/change-password`
  */
 import { useId, useState } from 'react';
-import { Loader2, KeyRound, LogOut } from 'lucide-react';
+import { Loader2, KeyRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 
-interface Props {
-  forced?: boolean;
-}
-
-export function ChangePasswordPage({ forced = false }: Props) {
+export function ChangePasswordPage() {
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
-  const clear = useAuthStore((s) => s.clear);
   const navigate = useNavigate();
 
   const [currentPassword, setCurrentPassword] = useState('');
@@ -54,17 +45,12 @@ export function ChangePasswordPage({ forced = false }: Props) {
     setSubmitting(true);
     try {
       const res = await authApi.changeMyPassword(currentPassword, newPassword);
-      // 응답이 어떻든 강제 변경 화면을 빠져나갈 수 있도록 mustChangePassword 를 명시적으로
-      // false 로 덮어쓴다 — 백엔드 응답이 누락되거나 캐시 이슈로 true 가 와도 안전.
       setUser({ ...res.data, mustChangePassword: false });
       setSuccess('비밀번호가 변경되었습니다.');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      if (!forced) {
-        // Manual mode: go back to the previous page after a brief confirmation.
-        setTimeout(() => navigate(-1), 800);
-      }
+      setTimeout(() => navigate(-1), 800);
     } catch (err) {
       const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
         ?? (err as { message?: string })?.message
@@ -85,9 +71,7 @@ export function ChangePasswordPage({ forced = false }: Props) {
           <div>
             <h1 className="text-base font-bold leading-tight">비밀번호 변경</h1>
             <p className="text-xs text-muted-foreground">
-              {forced
-                ? '보안을 위해 최초 로그인 시 비밀번호를 변경해야 합니다.'
-                : `${user?.username ?? ''} 계정의 비밀번호를 변경합니다.`}
+              {`${user?.username ?? ''} 계정의 비밀번호를 변경합니다.`}
             </p>
           </div>
         </div>
@@ -147,27 +131,14 @@ export function ChangePasswordPage({ forced = false }: Props) {
               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
               {submitting ? '변경 중…' : '비밀번호 변경'}
             </button>
-            {forced ? (
-              <button
-                type="button"
-                onClick={() => clear()}
-                disabled={submitting}
-                className="px-3 py-2 text-sm bg-secondary border border-border rounded-xl hover:bg-muted flex items-center gap-1"
-                title="로그아웃"
-              >
-                <LogOut className="w-4 h-4" />
-                로그아웃
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => navigate(-1)}
-                disabled={submitting}
-                className="px-3 py-2 text-sm bg-secondary border border-border rounded-xl hover:bg-muted"
-              >
-                취소
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              disabled={submitting}
+              className="px-3 py-2 text-sm bg-secondary border border-border rounded-xl hover:bg-muted"
+            >
+              취소
+            </button>
           </div>
         </form>
       </div>

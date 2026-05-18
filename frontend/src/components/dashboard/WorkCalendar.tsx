@@ -468,6 +468,7 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
               icon={<CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
               title="완료"
               count={bucket.completed.length}
+              onItemClick={onClose}
               items={bucket.completed.map((t) => {
                 const TypeIcon = WORK_ITEM_TYPE_CONFIG[t.type]?.Icon;
                 return {
@@ -484,6 +485,7 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
               icon={<Clock className="w-3.5 h-3.5 text-blue-500" />}
               title="예정"
               count={bucket.scheduled.length}
+              onItemClick={onClose}
               items={bucket.scheduled.map((t) => {
                 const TypeIcon = WORK_ITEM_TYPE_CONFIG[t.type]?.Icon;
                 return {
@@ -500,6 +502,7 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
               icon={<ShieldAlert className="w-3.5 h-3.5 text-amber-500" />}
               title="이슈"
               count={bucket.issues.length}
+              onItemClick={onClose}
               items={bucket.issues.map((i) => ({
                 id: i.id,
                 primary: stripHtml(i.content) || i.category,
@@ -571,9 +574,11 @@ interface DayListProps {
   title: string;
   count: number;
   items: Array<{ id: string; primary: string; meta: string; leadingIcon?: React.ReactNode }>;
+  /** 항목 클릭 시 호출 — popover 를 닫는 용도. */
+  onItemClick?: () => void;
 }
 
-function DayList({ icon, title, count, items }: DayListProps) {
+function DayList({ icon, title, count, items, onItemClick }: DayListProps) {
   return (
     <div>
       <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
@@ -583,17 +588,21 @@ function DayList({ icon, title, count, items }: DayListProps) {
       </div>
       <ul className="space-y-1">
         {items.slice(0, 6).map((it) => (
-          <li
-            key={it.id}
-            className="text-xs px-2 py-1.5 rounded-lg bg-secondary/40 hover:bg-secondary/70 transition-colors"
-          >
-            <div className="flex items-start gap-1.5 min-w-0">
-              {it.leadingIcon && <span className="flex-shrink-0 mt-0.5">{it.leadingIcon}</span>}
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-foreground">{it.primary}</p>
-                <p className="truncate text-[10px] text-muted-foreground">{it.meta}</p>
+          <li key={it.id}>
+            <Link
+              to={`/tasks-mgmt/${it.id}`}
+              onClick={onItemClick}
+              className="block text-xs px-2 py-1.5 rounded-lg bg-secondary/40 hover:bg-secondary/70 hover:ring-1 hover:ring-primary/30 transition-colors"
+              title="상세 보기"
+            >
+              <div className="flex items-start gap-1.5 min-w-0">
+                {it.leadingIcon && <span className="flex-shrink-0 mt-0.5">{it.leadingIcon}</span>}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-foreground">{it.primary}</p>
+                  <p className="truncate text-[10px] text-muted-foreground">{it.meta}</p>
+                </div>
               </div>
-            </div>
+            </Link>
           </li>
         ))}
         {items.length > 6 && (

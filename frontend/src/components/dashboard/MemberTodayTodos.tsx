@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { ArrowRight, CalendarCheck2, CheckCircle2, Clock, CircleDashed } from 'lucide-react';
+import { ArrowRight, CalendarCheck2, CheckCircle2, Clock, CircleDashed, ShieldAlert } from 'lucide-react';
 import { todayWorkItemsApi } from '@/services/api';
 import { stripHtml } from '@/lib/utils';
 import { KanbanStatus } from '@/types';
@@ -61,7 +61,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <CalendarCheck2 className="w-4 h-4 text-primary" />
-          <span>오늘 · 멤버별 진행 현황</span>
+          <span>오늘 · 멤버별 진행 현황 (task + issue, primary/secondary 담당)</span>
         </div>
         <div className="flex items-center gap-3 text-[11px]">
           <span className="text-blue-500 dark:text-blue-400">예정 {totals.today}</span>
@@ -129,23 +129,31 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
 
                 <ul className="space-y-1">
                   {all.slice(0, 4).map((t) => (
-                    <li key={t.id} className="flex items-center gap-2 text-xs min-w-0">
-                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[t.kanbanStatus]}`} />
-                      {t.kanbanStatus === 'done' ? (
-                        <CheckCircle2 className="w-3 h-3 text-emerald-500 flex-shrink-0" />
-                      ) : null}
-                      <span
-                        className={`truncate flex-1 ${
-                          t.kanbanStatus === 'done' ? 'text-muted-foreground line-through' : 'text-foreground'
-                        }`}
+                    <li key={`${g.assignee}:${t.id}`}>
+                      <Link
+                        to={`/tasks-mgmt/${t.id}`}
+                        className="flex items-center gap-2 text-xs min-w-0 px-1 py-0.5 -mx-1 rounded hover:bg-secondary/50 transition-colors"
+                        title="상세 보기"
                       >
-                        {stripHtml(t.content) || t.category}
-                      </span>
-                      {t.clusterName && (
-                        <span className="text-[10px] text-muted-foreground/80 flex-shrink-0 hidden md:inline">
-                          {t.clusterName}
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[t.kanbanStatus]}`} />
+                        {t.type === 'issue' ? (
+                          <ShieldAlert className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                        ) : t.kanbanStatus === 'done' ? (
+                          <CheckCircle2 className="w-3 h-3 text-emerald-500 flex-shrink-0" />
+                        ) : null}
+                        <span
+                          className={`truncate flex-1 ${
+                            t.kanbanStatus === 'done' ? 'text-muted-foreground line-through' : 'text-foreground'
+                          }`}
+                        >
+                          {stripHtml(t.content) || t.category}
                         </span>
-                      )}
+                        {t.clusterName && (
+                          <span className="text-[10px] text-muted-foreground/80 flex-shrink-0 hidden md:inline">
+                            {t.clusterName}
+                          </span>
+                        )}
+                      </Link>
                     </li>
                   ))}
                   {all.length > 4 && (

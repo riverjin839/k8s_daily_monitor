@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { Dashboard } from '@/pages/Dashboard';
 import { PlaybooksPage } from '@/pages/PlaybooksPage';
 import { WorkItemBoardPage } from '@/pages/WorkItemBoardPage';
@@ -52,6 +52,11 @@ import { NAV_WIDTH } from '@/stores/sidebarStore';
 import { ToastProvider } from '@/components/common';
 import { AuthGate } from '@/components/auth/AuthGate';
 
+function RedirectWithId({ to, suffix = '' }: { to: string; suffix?: string }) {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={`${to}/${id ?? ''}${suffix}`} replace />;
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -73,13 +78,18 @@ function AppShell() {
               <Route path="/" element={<HomePage />} />
               <Route path="/cluster-overview" element={<Dashboard />} />
               <Route path="/playbooks" element={<PlaybooksPage />} />
-              <Route path="/work-items" element={<WorkItemBoardPage />} />
-              <Route path="/work-items/new" element={<WorkItemFormPage />} />
-              <Route path="/work-items/:id" element={<WorkItemDetailPage />} />
-              <Route path="/work-items/:id/edit" element={<WorkItemDetailPage />} />
-              {/* 레거시 경로 — 통합 work-items 페이지로 type 필터를 prefill 해서 리다이렉트 */}
-              <Route path="/issues" element={<Navigate to="/work-items" replace />} />
-              <Route path="/tasks" element={<Navigate to="/work-items" replace />} />
+              {/* 업무 관리 — 정식 경로 */}
+              <Route path="/tasks-mgmt" element={<WorkItemBoardPage />} />
+              <Route path="/tasks-mgmt/new" element={<WorkItemFormPage />} />
+              <Route path="/tasks-mgmt/:id" element={<WorkItemDetailPage />} />
+              <Route path="/tasks-mgmt/:id/edit" element={<WorkItemDetailPage />} />
+              {/* 레거시 경로 — /tasks-mgmt 로 리다이렉트 (북마크/외부 링크 호환) */}
+              <Route path="/work-items" element={<Navigate to="/tasks-mgmt" replace />} />
+              <Route path="/work-items/new" element={<Navigate to="/tasks-mgmt/new" replace />} />
+              <Route path="/work-items/:id" element={<RedirectWithId to="/tasks-mgmt" />} />
+              <Route path="/work-items/:id/edit" element={<RedirectWithId to="/tasks-mgmt" suffix="/edit" />} />
+              <Route path="/issues" element={<Navigate to="/tasks-mgmt" replace />} />
+              <Route path="/tasks" element={<Navigate to="/tasks-mgmt" replace />} />
               <Route path="/todo-today" element={<TodoTodayPage />} />
               <Route path="/work-summary" element={<WorkSummaryPage />} />
               <Route path="/members" element={<MemberBoardPage />} />

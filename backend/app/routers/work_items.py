@@ -64,7 +64,7 @@ def _apply_filters(query, *, type_: Optional[str], cluster_id: Optional[UUID],
 
 @router.get("", response_model=WorkItemListResponse)
 def list_work_items(
-    type: Optional[str] = Query(default=None, pattern="^(issue|task)$"),
+    type: Optional[str] = Query(default=None, pattern="^(task|issue|meeting|training|etc)$"),
     cluster_id: UUID | None = Query(default=None),
     assignee: str | None = Query(default=None),
     category: str | None = Query(default=None),
@@ -92,7 +92,7 @@ def list_work_items(
 
 @router.get("/export/csv")
 def export_csv(
-    type: Optional[str] = Query(default=None, pattern="^(issue|task)$"),
+    type: Optional[str] = Query(default=None, pattern="^(task|issue|meeting|training|etc)$"),
     cluster_id: UUID | None = Query(default=None),
     assignee: str | None = Query(default=None),
     category: str | None = Query(default=None),
@@ -133,9 +133,10 @@ def export_csv(
         "비고",
         "등록일시",
     ])
+    type_label_map = {"task": "작업", "issue": "이슈", "meeting": "회의", "training": "교육", "etc": "기타"}
     for w in items:
         writer.writerow([
-            "이슈" if w.type == "issue" else "작업",
+            type_label_map.get(w.type, w.type),
             w.primary_assignee,
             w.secondary_assignee or "",
             w.cluster_name or "",

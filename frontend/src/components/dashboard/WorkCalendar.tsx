@@ -9,14 +9,15 @@ import { useWorkItems } from '@/hooks/useWorkItems';
 import { stripHtml } from '@/lib/utils';
 import { WorkItem, KanbanStatus } from '@/types';
 import { QuickAddTaskModal } from './QuickAddTaskModal';
+import { WORK_ITEM_TYPE_CONFIG } from '@/components/work-items/workItemKanbanUtils';
 
 interface WorkCalendarProps {
   selectedClusterId: string | null;
 }
 
 interface DayBucket {
-  scheduled: WorkItem[];   // type='task' 이고 startedAt 이 해당일
-  completed: WorkItem[];   // type='task' 이고 closedAt 이 해당일
+  scheduled: WorkItem[];   // type !== 'issue' (작업/회의/교육/기타) 이고 startedAt 이 해당일
+  completed: WorkItem[];   // 작업류이고 closedAt + kanbanStatus='done'
   issues: WorkItem[];      // type='issue' 이고 startedAt 이 해당일
 }
 
@@ -82,15 +83,16 @@ export function WorkCalendar({ selectedClusterId }: WorkCalendarProps) {
     };
     for (const w of all) {
       if (selectedClusterId && w.clusterId !== selectedClusterId) continue;
-      if (w.type === 'task') {
+      if (w.type === 'issue') {
+        if (w.startedAt) ensure(w.startedAt.slice(0, 10)).issues.push(w);
+      } else {
+        // task / meeting / training / etc — 모두 scheduled 버킷으로
         const sched = parseDate(w.startedAt);
         if (sched) ensure(toDateKey(sched)).scheduled.push(w);
         if (w.closedAt && w.kanbanStatus === 'done') {
           const done = parseDate(w.closedAt);
           if (done) ensure(toDateKey(done)).completed.push(w);
         }
-      } else if (w.type === 'issue') {
-        if (w.startedAt) ensure(w.startedAt.slice(0, 10)).issues.push(w);
       }
     }
     return map;
@@ -467,11 +469,15 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
               title="완료"
               count={bucket.completed.length}
               onItemClick={onClose}
-              items={bucket.completed.map((t) => ({
-                id: t.id,
-                primary: stripHtml(t.content) || t.category,
-                meta: `${t.assignee || '미지정'} · ${STATUS_LABEL[t.kanbanStatus]}`,
-              }))}
+              items={bucket.completed.map((t) => {
+                const TypeIcon = WORK_ITEM_TYPE_CONFIG[t.type]?.Icon;
+                return {
+                  id: t.id,
+                  primary: stripHtml(t.content) || t.category,
+                  meta: `${WORK_ITEM_TYPE_CONFIG[t.type]?.label ?? t.type} · ${t.assignee || '미지정'} · ${STATUS_LABEL[t.kanbanStatus]}`,
+                  leadingIcon: TypeIcon ? <TypeIcon className="w-3.5 h-3.5 text-emerald-500" /> : null,
+                };
+              })}
             />
           )}
           {bucket.scheduled.length > 0 && (
@@ -480,11 +486,15 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
               title="예정"
               count={bucket.scheduled.length}
               onItemClick={onClose}
-              items={bucket.scheduled.map((t) => ({
-                id: t.id,
-                primary: stripHtml(t.content) || t.category,
-                meta: `${t.assignee || '미지정'} · ${STATUS_LABEL[t.kanbanStatus]}`,
-              }))}
+              items={bucket.scheduled.map((t) => {
+                const TypeIcon = WORK_ITEM_TYPE_CONFIG[t.type]?.Icon;
+                return {
+                  id: t.id,
+                  primary: stripHtml(t.content) || t.category,
+                  meta: `${WORK_ITEM_TYPE_CONFIG[t.type]?.label ?? t.type} · ${t.assignee || '미지정'} · ${STATUS_LABEL[t.kanbanStatus]}`,
+                  leadingIcon: TypeIcon ? <TypeIcon className="w-3.5 h-3.5 text-blue-500" /> : null,
+                };
+              })}
             />
           )}
           {bucket.issues.length > 0 && (
@@ -505,13 +515,13 @@ function DayDetailPopover({ anchorRect, label, bucket, onClose, onQuickAdd }: Da
               <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center">
                 <CalendarPlus className="w-5 h-5 opacity-50" />
               </div>
-              <p>해당 날짜의 작업/이슈가 없습니다.</p>
+              <p>해당 날짜에 등록된 업무가 없습니다.</p>
               <button
                 type="button"
                 onClick={onQuickAdd}
                 className="mt-1 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
               >
-                <Plus className="w-3 h-3" /> 새 일정 등록
+                <Plus className="w-3 h-3" /> 업무 등록
               </button>
             </div>
           )}
@@ -563,7 +573,7 @@ interface DayListProps {
   icon: React.ReactNode;
   title: string;
   count: number;
-  items: Array<{ id: string; primary: string; meta: string }>;
+  items: Array<{ id: string; primary: string; meta: string; leadingIcon?: React.ReactNode }>;
   /** 항목 클릭 시 호출 — popover 를 닫는 용도. */
   onItemClick?: () => void;
 }
@@ -580,13 +590,18 @@ function DayList({ icon, title, count, items, onItemClick }: DayListProps) {
         {items.slice(0, 6).map((it) => (
           <li key={it.id}>
             <Link
-              to={`/work-items/${it.id}`}
+              to={`/tasks-mgmt/${it.id}`}
               onClick={onItemClick}
               className="block text-xs px-2 py-1.5 rounded-lg bg-secondary/40 hover:bg-secondary/70 hover:ring-1 hover:ring-primary/30 transition-colors"
               title="상세 보기"
             >
-              <p className="truncate text-foreground">{it.primary}</p>
-              <p className="truncate text-[10px] text-muted-foreground">{it.meta}</p>
+              <div className="flex items-start gap-1.5 min-w-0">
+                {it.leadingIcon && <span className="flex-shrink-0 mt-0.5">{it.leadingIcon}</span>}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-foreground">{it.primary}</p>
+                  <p className="truncate text-[10px] text-muted-foreground">{it.meta}</p>
+                </div>
+              </div>
             </Link>
           </li>
         ))}

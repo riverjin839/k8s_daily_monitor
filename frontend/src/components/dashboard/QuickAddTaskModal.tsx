@@ -7,7 +7,8 @@ import { useCreateWorkItem } from '@/hooks/useWorkItems';
 import { useClusters } from '@/hooks/useCluster';
 import { useAssignees } from '@/hooks/useAssignees';
 import { useToast } from '@/components/common';
-import type { KanbanStatus } from '@/types';
+import type { KanbanStatus, WorkItemType } from '@/types';
+import { WORK_ITEM_TYPE_CONFIG, WORK_ITEM_TYPE_ORDER } from '@/components/work-items/workItemKanbanUtils';
 import { formatApiError } from '@/lib/utils';
 
 interface QuickAddTaskModalProps {
@@ -52,11 +53,11 @@ function formatDateLabel(date: string): string {
 }
 
 /**
- * 메인 화면 달력에서 날짜 클릭 시 띄우는 빠른 일정 등록 모달.
+ * 메인 화면 달력에서 날짜 클릭 시 띄우는 빠른 업무 등록 모달.
  *
- * 백엔드의 `items` 테이블을 그대로 사용한다 — `startedAt` 가 일정의 시점.
- * 자세한 옵션(서비스 태그, 모듈, effortHours 등)은 작업 게시판 정식 폼에서
- * 추가/수정한다는 가정.
+ * 백엔드의 `work_items` 테이블을 그대로 사용한다 — `startedAt` 가 일정의 시점,
+ * `type` 으로 작업/이슈/회의/교육/기타 를 구분한다. 자세한 옵션(서비스 태그,
+ * 모듈, effortHours 등)은 업무 관리 게시판의 정식 폼에서 추가/수정.
  */
 export function QuickAddTaskModal({
   open, defaultDate, defaultClusterId, onClose, onCreated,
@@ -69,6 +70,7 @@ export function QuickAddTaskModal({
   const { data: assignees = [] } = useAssignees();
   const createMut = useCreateWorkItem();
 
+  const [selectedType, setSelectedType] = useState<WorkItemType | null>(null);
   const [content, setTaskContent] = useState('');
   const [assignee, setAssignee] = useState('');
   const [category, setTaskCategory] = useState(PRESET_CATEGORIES[0]);
@@ -81,6 +83,7 @@ export function QuickAddTaskModal({
   // 모달 열릴 때마다 입력값 초기화. defaultDate / defaultClusterId 만 전파.
   useEffect(() => {
     if (!open) return;
+    setSelectedType(null);
     setTaskContent('');
     setTaskCategory(PRESET_CATEGORIES[0]);
     setPriority('medium');
@@ -94,18 +97,19 @@ export function QuickAddTaskModal({
 
   if (!open) return null;
 
-  const canSubmit = content.trim().length > 0
+  const canSubmit = selectedType !== null
+    && content.trim().length > 0
     && assignee.trim().length > 0
     && !createMut.isPending;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit || !selectedType) return;
     setError(null);
     try {
       const cluster = clusters.find((c) => c.id === clusterId);
       await createMut.mutateAsync({
-        type: 'task',
+        type: selectedType,
         assignee: assignee.trim(),
         primaryAssignee: assignee.trim(),
         category: category.trim() || '일반 업무',
@@ -116,7 +120,8 @@ export function QuickAddTaskModal({
         clusterId: cluster?.id,
         clusterName: cluster?.name,
       });
-      toast.success('일정 등록 완료', `${formatDateLabel(defaultDate)} · ${time}`);
+      const typeLabel = WORK_ITEM_TYPE_CONFIG[selectedType].label;
+      toast.success(`${typeLabel} 등록 완료`, `${formatDateLabel(defaultDate)} · ${time}`);
       onCreated?.();
       onClose();
     } catch (err) {
@@ -137,7 +142,7 @@ export function QuickAddTaskModal({
             <CalendarDays className="w-5 h-5 text-primary" />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="text-base font-semibold leading-tight">일정 등록</h2>
+            <h2 className="text-base font-semibold leading-tight">업무 등록</h2>
             <p className="text-[11px] text-muted-foreground">{formatDateLabel(defaultDate)}</p>
           </div>
           <button
@@ -152,6 +157,35 @@ export function QuickAddTaskModal({
         </div>
 
         <div className="px-5 pb-5 space-y-3.5">
+          {/* 업무 유형 picker — 작업/이슈/회의/교육/기타. 기본값 없음. */}
+          <fieldset>
+            <legend className="text-xs font-medium text-muted-foreground mb-1.5 block">
+              유형 <span className="text-red-500">*</span>
+            </legend>
+            <div className="flex items-stretch gap-1.5">
+              {WORK_ITEM_TYPE_ORDER.map((key) => {
+                const cfg = WORK_ITEM_TYPE_CONFIG[key];
+                const active = selectedType === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setSelectedType(key)}
+                    aria-pressed={active}
+                    className={`flex-1 flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-xl border text-[11px] font-medium transition-colors ${
+                      active
+                        ? `${cfg.cls} border-current ring-2 ring-primary/30`
+                        : 'bg-secondary border-border text-muted-foreground hover:text-foreground hover:bg-secondary/80'
+                    }`}
+                  >
+                    <cfg.Icon className="w-4 h-4" />
+                    {cfg.label}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
           {/* 제목 */}
           <div>
             <label htmlFor={f('content')} className="text-xs font-medium text-muted-foreground mb-1 block">
@@ -288,7 +322,7 @@ export function QuickAddTaskModal({
         {/* Footer */}
         <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-border bg-muted/30">
           <p className="text-[11px] text-muted-foreground inline-flex items-center gap-1">
-            상세 항목은 작업 게시판에서 추가 편집
+            상세 항목은 업무 관리 게시판에서 추가 편집
             <ChevronRight className="w-3 h-3" />
           </p>
           <div className="flex items-center gap-2">
@@ -310,7 +344,7 @@ export function QuickAddTaskModal({
               ) : (
                 <CheckCircle2 className="w-3.5 h-3.5" />
               )}
-              {createMut.isPending ? '등록 중…' : '일정 등록'}
+              {createMut.isPending ? '등록 중…' : '업무 등록'}
             </button>
           </div>
         </div>

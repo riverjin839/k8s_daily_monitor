@@ -21,7 +21,7 @@ export function WorkItemDetailPage() {
             <ListTodo className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
             <p className="text-muted-foreground mb-4">작업을 찾을 수 없습니다.</p>
             <button
-              onClick={() => navigate('/work-items')}
+              onClick={() => navigate('/tasks-mgmt')}
               className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg"
             >
               작업 목록으로
@@ -40,7 +40,7 @@ export function WorkItemDetailPage() {
     if (!confirm(`"${item.category}" 작업을 삭제하시겠습니까?`)) return;
     deleteTask.mutate(item.id);
     localStorage.removeItem('k8s:img:work-item:' + item.id);
-    navigate('/work-items');
+    navigate('/tasks-mgmt');
   };
 
   const pageTitle = editMode ? '작업 수정' : '작업 상세';
@@ -50,7 +50,7 @@ export function WorkItemDetailPage() {
       <div className="sticky top-0 z-10 bg-background/85 backdrop-blur-md border-b border-border">
         <div className="max-w-[1400px] mx-auto px-8 py-2.5 flex items-center gap-2">
           <button
-            onClick={() => navigate('/work-items')}
+            onClick={() => navigate('/tasks-mgmt')}
             className="p-1.5 hover:bg-secondary rounded-lg transition-colors text-muted-foreground hover:text-foreground"
             title="목록으로"
           >
@@ -61,14 +61,14 @@ export function WorkItemDetailPage() {
           {!editMode && (
             <div className="ml-auto flex items-center gap-2">
               <button
-                onClick={() => navigate(`/work-items/new?parentId=${item.id}`)}
+                onClick={() => navigate(`/tasks-mgmt/new?parentId=${item.id}`)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
                 title="하위 작업 등록"
               >
                 <Plus className="w-3.5 h-3.5" /> 하위
               </button>
               <button
-                onClick={() => navigate(`/work-items/${item.id}/edit`)}
+                onClick={() => navigate(`/tasks-mgmt/${item.id}/edit`)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"
               >
                 <Pencil className="w-3.5 h-3.5" /> 수정
@@ -93,8 +93,8 @@ export function WorkItemDetailPage() {
             </div>
             <WorkItemForm
               initial={item}
-              onCancel={() => navigate(`/work-items/${item.id}`)}
-              onSaved={() => navigate(`/work-items/${item.id}`)}
+              onCancel={() => navigate(`/tasks-mgmt/${item.id}`)}
+              onSaved={() => navigate(`/tasks-mgmt/${item.id}`)}
             />
           </>
         ) : (

@@ -131,7 +131,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
                   {all.slice(0, 4).map((t) => (
                     <li key={`${g.assignee}:${t.id}`}>
                       <Link
-                        to={`/work-items/${t.id}`}
+                        to={`/tasks-mgmt/${t.id}`}
                         className="flex items-center gap-2 text-xs min-w-0 px-1 py-0.5 -mx-1 rounded hover:bg-secondary/50 transition-colors"
                         title="상세 보기"
                       >

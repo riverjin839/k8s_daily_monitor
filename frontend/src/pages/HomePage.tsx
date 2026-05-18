@@ -194,7 +194,7 @@ function OpenIssuesCard({ items, isLoading, selectedClusterId, myName }: OpenIss
           {list.map((i) => (
             <li key={i.id}>
               <Link
-                to={`/work-items/${i.id}`}
+                to={`/tasks-mgmt/${i.id}`}
                 className="block px-3 py-2 rounded-lg border border-border bg-card/40 hover:border-primary/40 hover:bg-secondary transition-colors min-w-0"
               >
                 <div className="flex items-start gap-2 min-w-0">
@@ -279,7 +279,7 @@ export function HomePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto px-3 lg:px-4 xl:px-6 py-3 flex gap-3 max-w-[1600px]">
+      <div className="px-3 lg:px-4 xl:px-6 py-3 flex gap-3">
         <ClusterSidebar
           clusters={clusters}
           selectedId={selectedClusterId}

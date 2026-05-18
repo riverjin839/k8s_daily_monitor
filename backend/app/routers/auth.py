@@ -98,7 +98,17 @@ def change_my_password(
         target_id=user.id,
         request=request,
     )
-    return UserOut.model_validate(user)
+    # refresh 후 트랜잭션/세션 이슈로 must_change_password 가 다시 True 로 비치는
+    # 일이 없도록 응답을 명시적으로 구성한다 — 프론트엔드 강제 변경 화면을 확실히 해제.
+    return UserOut(
+        id=user.id,
+        username=user.username,
+        role=user.role,
+        display_name=user.display_name,
+        is_active=user.is_active,
+        must_change_password=False,
+        created_at=user.created_at,
+    )
 
 
 # ── Admin-only user management ────────────────────────────────────────────

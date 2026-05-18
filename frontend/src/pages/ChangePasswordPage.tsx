@@ -54,7 +54,9 @@ export function ChangePasswordPage({ forced = false }: Props) {
     setSubmitting(true);
     try {
       const res = await authApi.changeMyPassword(currentPassword, newPassword);
-      setUser(res.data);
+      // 응답이 어떻든 강제 변경 화면을 빠져나갈 수 있도록 mustChangePassword 를 명시적으로
+      // false 로 덮어쓴다 — 백엔드 응답이 누락되거나 캐시 이슈로 true 가 와도 안전.
+      setUser({ ...res.data, mustChangePassword: false });
       setSuccess('비밀번호가 변경되었습니다.');
       setCurrentPassword('');
       setNewPassword('');

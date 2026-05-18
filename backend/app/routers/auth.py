@@ -136,7 +136,6 @@ def create_user(
         hashed_password=hash_password(payload.password),
         role=payload.role,
         display_name=payload.display_name,
-        must_change_password=True,
     )
     db.add(user)
     db.commit()
@@ -227,7 +226,6 @@ def admin_reset_password(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다.")
     user.hashed_password = hash_password(payload.new_password)
-    user.must_change_password = True
     db.commit()
     db.refresh(user)
     audit_logger.record(

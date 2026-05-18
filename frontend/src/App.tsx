@@ -25,6 +25,7 @@ import { McClientPage } from '@/pages/McClientPage';
 import { WorkflowBoardPage } from '@/pages/WorkflowBoardPage';
 import { WorkGuidePage } from '@/pages/WorkGuidePage';
 import { CommandsPage } from '@/pages/CommandsPage';
+import { CommandFormPage } from '@/pages/CommandFormPage';
 import { OpsNotesPage } from '@/pages/OpsNotesPage';
 import { OpsNoteDetailPage } from '@/pages/OpsNoteDetailPage';
 import { OpsNoteFormPage } from '@/pages/OpsNoteFormPage';
@@ -117,6 +118,8 @@ function AppShell() {
               <Route path="/work-guides/:id" element={<WorkGuidePage />} />
               <Route path="/work-guides/:id/edit" element={<WorkGuidePage />} />
               <Route path="/commands" element={<CommandsPage />} />
+              <Route path="/commands/new" element={<CommandFormPage />} />
+              <Route path="/commands/:id/edit" element={<CommandFormPage />} />
               <Route path="/ops-notes" element={<OpsNotesPage />} />
               <Route path="/ops-notes/new" element={<OpsNoteFormPage />} />
               <Route path="/ops-notes/:id" element={<OpsNoteDetailPage />} />

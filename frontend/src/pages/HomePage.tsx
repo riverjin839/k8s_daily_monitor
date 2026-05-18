@@ -342,8 +342,8 @@ export function HomePage() {
 
           {/* ── 메인 2-col ─────────────────────────────────────────── */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-            {/* 담당자별 오늘 할일 */}
-            <MacCard title="DevOps 담당자별 오늘 할일" bodyPadding="p-4">
+            {/* 담당자별 오늘 할일 / 이슈 */}
+            <MacCard title="DevOps 담당자별 오늘 할일 / 이슈" bodyPadding="p-4">
               <MemberTodayTodos selectedClusterId={selectedClusterId} />
             </MacCard>
 

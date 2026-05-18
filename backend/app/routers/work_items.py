@@ -6,6 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import case
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -165,7 +166,11 @@ def export_csv(
 
 @router.get("/today/summary")
 def get_today_summary(date: Optional[str] = None, db: Session = Depends(get_db)):
-    """오늘의 작업 요약 — type='task' 만 대상. 담당자별 그룹화."""
+    """오늘의 작업/이슈 요약 — task + issue 모두 대상.
+
+    그룹 키: primary_assignee + secondary_assignee 모두 (한 항목이 두 사람의 그룹에
+    동시에 보임). priority 정렬은 의미순(high → medium → low → 그 외).
+    """
     if date:
         try:
             target = datetime.strptime(date, "%Y-%m-%d")
@@ -176,37 +181,58 @@ def get_today_summary(date: Optional[str] = None, db: Session = Depends(get_db))
     today_start = target.replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start.replace(hour=23, minute=59, second=59)
 
+    # ORDER BY 알파벳순 정렬은 'high' < 'low' < 'medium' 이 되어 의미와 어긋남.
+    # CASE 로 의미상 우선순위를 강제.
+    priority_order = case(
+        (WorkItem.priority == "high", 0),
+        (WorkItem.priority == "medium", 1),
+        (WorkItem.priority == "low", 2),
+        else_=3,
+    )
+
     today_items = (
         db.query(WorkItem)
         .filter(
-            WorkItem.type == "task",
             WorkItem.started_at >= today_start,
             WorkItem.started_at <= today_end,
         )
-        .order_by(WorkItem.primary_assignee, WorkItem.priority)
+        .order_by(WorkItem.primary_assignee, priority_order)
         .all()
     )
 
     in_progress_items = (
         db.query(WorkItem)
         .filter(
-            WorkItem.type == "task",
             WorkItem.kanban_status == "in_progress",
             ~((WorkItem.started_at >= today_start) & (WorkItem.started_at <= today_end)),
         )
-        .order_by(WorkItem.primary_assignee, WorkItem.priority)
+        .order_by(WorkItem.primary_assignee, priority_order)
         .all()
     )
 
     assignee_map: dict[str, dict] = {}
+
+    def add_to_groups(item: WorkItem, bucket_key: str) -> None:
+        # primary + secondary 모두를 후보로 — 한 항목이 협업자의 그룹에도 표시되도록.
+        # 같은 사람이 primary/secondary 둘 다인 비정상 케이스는 중복 제거.
+        names: list[str] = []
+        primary = item.primary_assignee or item.assignee
+        if primary:
+            names.append(primary)
+        if item.secondary_assignee and item.secondary_assignee not in names:
+            names.append(item.secondary_assignee)
+        if not names:
+            names.append("미지정")
+        for name in names:
+            assignee_map.setdefault(
+                name, {"assignee": name, "today_tasks": [], "in_progress_tasks": []}
+            )
+            assignee_map[name][bucket_key].append(item)
+
     for it in today_items:
-        key = it.primary_assignee or it.assignee or "미지정"
-        assignee_map.setdefault(key, {"assignee": key, "today_tasks": [], "in_progress_tasks": []})
-        assignee_map[key]["today_tasks"].append(it)
+        add_to_groups(it, "today_tasks")
     for it in in_progress_items:
-        key = it.primary_assignee or it.assignee or "미지정"
-        assignee_map.setdefault(key, {"assignee": key, "today_tasks": [], "in_progress_tasks": []})
-        assignee_map[key]["in_progress_tasks"].append(it)
+        add_to_groups(it, "in_progress_tasks")
 
     def serialize(w: WorkItem) -> dict:
         return {

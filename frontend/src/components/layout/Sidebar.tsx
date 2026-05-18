@@ -89,8 +89,9 @@ interface RailIconButtonProps {
   Icon: ComponentType<{ className?: string }>;
   active?: boolean;
   highlighted?: boolean;
-  /** 클릭 시 호출. 클릭한 버튼의 화면상 위치를 같이 넘겨 — 호출 측이 popover 앵커링에 활용. */
-  onClick: (rect: DOMRect) => void;
+  /** 클릭 시 호출. 클릭한 버튼의 화면상 위치를 같이 넘겨 — 호출 측이 popover 앵커링에 활용.
+   *  popover 가 필요 없는 단순 액션(테마 토글 / 라우팅 / 로그아웃 등) 은 rect 를 무시해도 된다. */
+  onClick: (rect?: DOMRect) => void;
   /** flyout 이 열려있을 때는 툴팁을 숨김 (중복) */
   suppressTooltip?: boolean;
 }
@@ -301,10 +302,10 @@ export function Sidebar() {
     setEditingNavPath(null);
   };
 
-  const toggleGroup = (id: GroupId, rect: DOMRect) => {
+  const toggleGroup = (id: GroupId, rect?: DOMRect) => {
     setEditMode(false);
     setOpenGroup((cur) => (cur === id ? null : id));
-    setOpenAnchor(rect);
+    if (rect) setOpenAnchor(rect);
   };
 
   // 그룹별 flyout 본문 렌더링

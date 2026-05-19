@@ -135,7 +135,7 @@ export function MemberTodayTodos({ selectedClusterId }: MemberTodayTodosProps) {
           {isToday ? '오늘 예정된 작업이 없습니다.' : '해당 날짜에 예정된 작업이 없습니다.'}
         </div>
       ) : (
-        <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
+        <div className="space-y-2.5 pr-1">
           {groups.map((g) => {
             const all = [...g.todayTasks, ...g.inProgressTasks];
             const done = all.filter((t) => t.kanbanStatus === 'done').length;

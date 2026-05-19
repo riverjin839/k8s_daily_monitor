@@ -61,10 +61,12 @@ const NAV_MAP: Record<string, { defaultLabel: string; icon: ComponentType<{ clas
 const DOCS_SECTIONS: Array<{ id: string; label: string; paths: string[] }> = [
   { id: 'home',  label: '허브 홈',     paths: ['/docs'] },
   { id: 'ops',   label: '운영 기준',  paths: ['/ops-notes'] },
-  { id: 'work',  label: '작업 기준',  paths: ['/work-guides', '/commands', '/tasks-mgmt'] },
   { id: 'issue', label: '이슈/장애',   paths: ['/tasks-mgmt', '/incident-analysis'] },
   { id: 'flow',  label: '흐름/설계',  paths: ['/workflow', '/wbs', '/mindmap'] },
 ];
+
+// 서비스 카탈로그 섹션에 포함되는 작업 기준 경로
+const WORK_STANDARD_PATHS = ['/work-guides', '/commands', '/tasks-mgmt'];
 
 // 사이드바 레일에 표시되는 그룹들
 type GroupId = 'monitoring' | 'work' | 'cluster' | 'analysis' | 'docs' | 'system';
@@ -317,24 +319,42 @@ export function Sidebar() {
     if (id === 'docs') {
       return (
         <div className="space-y-1 pb-1">
-          {servicePaths.length > 0 && (
-            <FlyoutSection title="서비스 카탈로그">
-              {servicePaths.map((p) => {
-                const entry = navMap[p];
-                if (!entry) return null;
-                return (
-                  <FlyoutLink
-                    key={p}
-                    to={p}
-                    label={getLabel(p)}
-                    Icon={entry.icon}
-                    active={location.pathname === p}
-                    onSelect={close}
-                  />
-                );
-              })}
-            </FlyoutSection>
-          )}
+          <FlyoutSection title="서비스 카탈로그">
+            {servicePaths.map((p) => {
+              const entry = navMap[p];
+              if (!entry) return null;
+              return (
+                <FlyoutLink
+                  key={p}
+                  to={p}
+                  label={getLabel(p)}
+                  Icon={entry.icon}
+                  active={location.pathname === p}
+                  onSelect={close}
+                />
+              );
+            })}
+            {servicePaths.length > 0 && (
+              <div className="mx-2 my-1 border-t border-zinc-200" />
+            )}
+            <div className="px-3 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+              작업 기준
+            </div>
+            {WORK_STANDARD_PATHS.map((p) => {
+              const entry = navMap[p];
+              if (!entry) return null;
+              return (
+                <FlyoutLink
+                  key={p}
+                  to={p}
+                  label={getLabel(p)}
+                  Icon={entry.icon}
+                  active={location.pathname === p}
+                  onSelect={close}
+                />
+              );
+            })}
+          </FlyoutSection>
           {DOCS_SECTIONS.map((sec) => (
             <FlyoutSection key={sec.id} title={sec.label}>
               {sec.paths.map((p) => {
@@ -565,7 +585,7 @@ export function Sidebar() {
             <nav className="flex-1 py-2 px-2 overflow-y-auto">
               {GROUPS.map((g) => {
                 const paths = g.id === 'docs'
-                  ? [...servicePaths, ...DOCS_SECTIONS.flatMap((s) => s.paths)]
+                  ? [...servicePaths, ...WORK_STANDARD_PATHS, ...DOCS_SECTIONS.flatMap((s) => s.paths)]
                   : g.paths;
                 if (paths.length === 0) return null;
                 return (

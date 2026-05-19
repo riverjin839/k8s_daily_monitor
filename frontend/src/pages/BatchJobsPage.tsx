@@ -16,6 +16,7 @@ import {
   BatchJobSlideOver,
   BatchJobTable,
   CreateBatchJobWizard,
+  FAILED_STATUSES,
   UnregisteredTypeChips,
   applyFilter,
   type FilterKey,
@@ -23,6 +24,9 @@ import {
 } from '@/components/batch-jobs';
 
 const DEFAULT_SORT: SortState = { key: 'lastRunAt', dir: 'desc' };
+
+/** Tailwind 의 `xl` (1280px) 미만 — 슬라이드오버 overlay 모드 트리거. */
+const OVERLAY_BREAKPOINT = '(max-width: 1279px)';
 
 export function BatchJobsPage() {
   const { data: clusters = [] } = useClusters();
@@ -64,28 +68,34 @@ export function BatchJobsPage() {
   // 좁은 뷰포트 (<1280px) 에서 슬라이드오버 overlay 모드.
   const [overlayMode, setOverlayMode] = useState(false);
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 1279px)');
+    const mq = window.matchMedia(OVERLAY_BREAKPOINT);
     const sync = () => setOverlayMode(mq.matches);
     sync();
     mq.addEventListener('change', sync);
     return () => mq.removeEventListener('change', sync);
   }, []);
 
+  const selectedCluster = useMemo(
+    () =>
+      selectedClusterId
+        ? clusters.find((c) => c.id === selectedClusterId) ?? null
+        : null,
+    [selectedClusterId, clusters],
+  );
+
   // 페이지 헤더 부제 텍스트.
   const headerSubtitle = useMemo(() => {
     if (selectedClusterId === null) {
       return `전체 ${clusters.length}개 클러스터 · 등록 잡 ${allJobs.length}`;
     }
-    const c = clusters.find((x) => x.id === selectedClusterId);
+    const c = selectedCluster;
     const stats = {
       total: scopedJobs.length,
-      failed: scopedJobs.filter((j) =>
-        ['error', 'timeout', 'auth_error', 'connect_error'].includes(j.lastStatus),
-      ).length,
+      failed: scopedJobs.filter((j) => FAILED_STATUSES.has(j.lastStatus)).length,
       running: scopedJobs.filter((j) => j.lastStatus === 'running').length,
     };
     return `${c?.name ?? selectedClusterId}${c?.region ? ` · ${c.region}` : ''} · 잡 ${stats.total} · 실패 ${stats.failed} · 실행 중 ${stats.running}`;
-  }, [selectedClusterId, clusters, allJobs.length, scopedJobs]);
+  }, [selectedClusterId, selectedCluster, clusters.length, allJobs.length, scopedJobs]);
 
   const canCreate = clusters.length > 0 && types.length > 0;
 
@@ -136,7 +146,7 @@ export function BatchJobsPage() {
             }
           >
             <Plus className="w-3.5 h-3.5" />
-            새 잡{selectedClusterId !== null && clusters.find((c) => c.id === selectedClusterId) ? ` (${clusters.find((c) => c.id === selectedClusterId)?.name})` : ''}
+            새 잡{selectedCluster ? ` (${selectedCluster.name})` : ''}
           </button>
         </div>
 

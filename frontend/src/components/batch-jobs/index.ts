@@ -5,4 +5,5 @@ export { applyFilter, FILTER_PREDICATES } from './filters';
 export { BatchJobRow } from './BatchJobRow';
 export { BatchJobTable } from './BatchJobTable';
 export { UnregisteredTypeChips } from './UnregisteredTypeChips';
+export { BatchJobSlideOver } from './BatchJobSlideOver';
 export * from './types';

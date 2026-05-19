@@ -1,5 +1,5 @@
 // frontend/src/components/batch-jobs/CreateBatchJobWizard.StepType.tsx
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
 import type { BatchJobTypeDescriptor } from '@/services/api';
 import type { Cluster } from '@/types';
 import type { WizardState } from './CreateBatchJobWizard.shared';
@@ -14,6 +14,9 @@ interface StepTypeProps {
 }
 
 export function StepType({ clusters, types, fixedClusterId, state, onChange }: StepTypeProps) {
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
+
   // 선택된 타입의 label / description 을 이름/설명에 자동 채움 (사용자가 비워둔 경우에만).
   useEffect(() => {
     const t = types.find((x) => x.jobType === state.jobType);
@@ -31,9 +34,9 @@ export function StepType({ clusters, types, fixedClusterId, state, onChange }: S
   return (
     <div className="space-y-4">
       <div>
-        <label htmlFor="wiz-cluster" className="block text-xs text-muted-foreground mb-1">클러스터</label>
+        <label htmlFor={f('cluster')} className="block text-xs text-muted-foreground mb-1">클러스터</label>
         <select
-          id="wiz-cluster"
+          id={f('cluster')}
           value={state.clusterId}
           onChange={(e) => onChange({ clusterId: e.target.value })}
           disabled={!!fixedClusterId}
@@ -49,9 +52,9 @@ export function StepType({ clusters, types, fixedClusterId, state, onChange }: S
       </div>
 
       <div>
-        <label htmlFor="wiz-job-type" className="block text-xs text-muted-foreground mb-1">잡 타입</label>
+        <label htmlFor={f('job-type')} className="block text-xs text-muted-foreground mb-1">잡 타입</label>
         <select
-          id="wiz-job-type"
+          id={f('job-type')}
           value={state.jobType}
           onChange={(e) => onChange({ jobType: e.target.value, name: '', description: '', paramsJson: '{}' })}
           className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl"
@@ -70,9 +73,9 @@ export function StepType({ clusters, types, fixedClusterId, state, onChange }: S
 
       <div className="grid grid-cols-1 gap-3">
         <div>
-          <label htmlFor="wiz-name" className="block text-xs text-muted-foreground mb-1">이름</label>
+          <label htmlFor={f('name')} className="block text-xs text-muted-foreground mb-1">이름</label>
           <input
-            id="wiz-name"
+            id={f('name')}
             value={state.name}
             onChange={(e) => onChange({ name: e.target.value })}
             className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl"
@@ -80,9 +83,9 @@ export function StepType({ clusters, types, fixedClusterId, state, onChange }: S
           />
         </div>
         <div>
-          <label htmlFor="wiz-description" className="block text-xs text-muted-foreground mb-1">설명 (선택)</label>
+          <label htmlFor={f('description')} className="block text-xs text-muted-foreground mb-1">설명 (선택)</label>
           <input
-            id="wiz-description"
+            id={f('description')}
             value={state.description}
             onChange={(e) => onChange({ description: e.target.value })}
             className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl"

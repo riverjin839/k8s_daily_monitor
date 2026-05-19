@@ -1,5 +1,5 @@
 // frontend/src/components/batch-jobs/CreateBatchJobWizard.tsx
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { BatchJob } from '@/services/api';
 import { useClusters } from '@/hooks/useCluster';
 import { useBatchJobTypes, useCreateBatchJob } from '@/hooks/useBatchJobs';
@@ -50,6 +50,19 @@ export function CreateBatchJobWizard({
       jobType: defaultJobType ?? '',
     });
   }, [open, defaultClusterId, defaultJobType]);
+
+  // ESC 로 닫기.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCloseRef.current();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   if (!open) return null;
 
@@ -110,7 +123,14 @@ export function CreateBatchJobWizard({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="button"
+      tabIndex={0}
+      aria-label="wizard 닫기"
+      onClick={onClose}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClose(); }}
+    >
       <div
         className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -124,18 +144,23 @@ export function CreateBatchJobWizard({
 
         {/* Step indicator */}
         <div className="px-5 pt-4">
-          <div className="flex items-center gap-2">
+          <ol className="flex items-center gap-2">
             {STEP_LABELS.map((label, idx) => {
               const active = idx === step;
               const done = idx < step;
               return (
-                <div key={label} className="flex items-center gap-2 flex-1">
+                <li
+                  key={label}
+                  className="flex items-center gap-2 flex-1"
+                  aria-current={active ? 'step' : undefined}
+                >
                   <div
                     className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-semibold ${
                       active ? 'bg-primary text-primary-foreground' :
                       done ? 'bg-emerald-500 text-white' :
                       'bg-secondary text-muted-foreground'
                     }`}
+                    aria-label={done ? `${label} — 완료` : label}
                   >
                     {idx + 1}
                   </div>
@@ -143,10 +168,10 @@ export function CreateBatchJobWizard({
                     {label}
                   </span>
                   {idx < STEP_LABELS.length - 1 && <div className="flex-1 h-px bg-border" />}
-                </div>
+                </li>
               );
             })}
-          </div>
+          </ol>
         </div>
 
         <div className="p-5 overflow-y-auto flex-1">
@@ -162,7 +187,7 @@ export function CreateBatchJobWizard({
           {step === 1 && <StepHost types={types} state={state} onChange={update} />}
           {step === 2 && <StepSchedule state={state} onChange={update} />}
 
-          {error && <div className="mt-3 text-xs text-red-500">{error}</div>}
+          {error && <div role="alert" className="mt-3 text-xs text-red-500">{error}</div>}
         </div>
 
         <footer className="px-5 py-3 border-t border-border flex items-center justify-between gap-2">

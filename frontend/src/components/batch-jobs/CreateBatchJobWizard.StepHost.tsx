@@ -1,4 +1,5 @@
 // frontend/src/components/batch-jobs/CreateBatchJobWizard.StepHost.tsx
+import { useId } from 'react';
 import type { BatchJobTypeDescriptor } from '@/services/api';
 import { MasterHostPicker } from '@/components/common';
 import type { WizardState } from './CreateBatchJobWizard.shared';
@@ -10,6 +11,8 @@ interface StepHostProps {
 }
 
 export function StepHost({ types, state, onChange }: StepHostProps) {
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
   const selectedType = types.find((t) => t.jobType === state.jobType);
   return (
     <div className="space-y-4">
@@ -29,9 +32,9 @@ export function StepHost({ types, state, onChange }: StepHostProps) {
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label htmlFor="wiz-port" className="block text-xs text-muted-foreground mb-1">포트</label>
+          <label htmlFor={f('port')} className="block text-xs text-muted-foreground mb-1">포트</label>
           <input
-            id="wiz-port"
+            id={f('port')}
             type="number"
             value={state.defaultPort}
             onChange={(e) => onChange({ defaultPort: Number(e.target.value) || 22 })}
@@ -39,9 +42,9 @@ export function StepHost({ types, state, onChange }: StepHostProps) {
           />
         </div>
         <div>
-          <label htmlFor="wiz-username" className="block text-xs text-muted-foreground mb-1">기본 사용자</label>
+          <label htmlFor={f('username')} className="block text-xs text-muted-foreground mb-1">기본 사용자</label>
           <input
-            id="wiz-username"
+            id={f('username')}
             value={state.defaultUsername}
             onChange={(e) => onChange({ defaultUsername: e.target.value })}
             className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl font-mono"
@@ -50,9 +53,9 @@ export function StepHost({ types, state, onChange }: StepHostProps) {
       </div>
 
       <div>
-        <label htmlFor="wiz-params" className="block text-xs text-muted-foreground mb-1">params (JSON)</label>
+        <label htmlFor={f('params')} className="block text-xs text-muted-foreground mb-1">params (JSON)</label>
         <textarea
-          id="wiz-params"
+          id={f('params')}
           value={state.paramsJson}
           onChange={(e) => onChange({ paramsJson: e.target.value })}
           rows={6}

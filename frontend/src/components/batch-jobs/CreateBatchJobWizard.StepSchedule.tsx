@@ -1,4 +1,5 @@
 // frontend/src/components/batch-jobs/CreateBatchJobWizard.StepSchedule.tsx
+import { useId } from 'react';
 import type { WizardState } from './CreateBatchJobWizard.shared';
 
 interface StepScheduleProps {
@@ -7,6 +8,8 @@ interface StepScheduleProps {
 }
 
 export function StepSchedule({ state, onChange }: StepScheduleProps) {
+  const fid = useId();
+  const f = (k: string) => `${fid}-${k}`;
   const needsCreds = !!state.cron.trim();
   const hasCreds = !!state.savedPassword || !!state.savedPrivateKey;
   const credsMissing = needsCreds && !hasCreds;
@@ -14,9 +17,9 @@ export function StepSchedule({ state, onChange }: StepScheduleProps) {
   return (
     <div className="space-y-4">
       <div>
-        <label htmlFor="wiz-cron" className="block text-xs text-muted-foreground mb-1">cron 식 (선택)</label>
+        <label htmlFor={f('cron')} className="block text-xs text-muted-foreground mb-1">cron 식 (선택)</label>
         <input
-          id="wiz-cron"
+          id={f('cron')}
           value={state.cron}
           onChange={(e) => onChange({ cron: e.target.value })}
           placeholder="0 3 * * *"
@@ -38,9 +41,9 @@ export function StepSchedule({ state, onChange }: StepScheduleProps) {
 
         <div className="space-y-2">
           <div>
-            <label htmlFor="wiz-saved-password" className="block text-xs text-muted-foreground mb-1">저장 비밀번호</label>
+            <label htmlFor={f('saved-password')} className="block text-xs text-muted-foreground mb-1">저장 비밀번호</label>
             <input
-              id="wiz-saved-password"
+              id={f('saved-password')}
               type="password"
               autoComplete="new-password"
               value={state.savedPassword}
@@ -49,9 +52,9 @@ export function StepSchedule({ state, onChange }: StepScheduleProps) {
             />
           </div>
           <div>
-            <label htmlFor="wiz-saved-private-key" className="block text-xs text-muted-foreground mb-1">저장 개인키 (PEM)</label>
+            <label htmlFor={f('saved-private-key')} className="block text-xs text-muted-foreground mb-1">저장 개인키 (PEM)</label>
             <textarea
-              id="wiz-saved-private-key"
+              id={f('saved-private-key')}
               value={state.savedPrivateKey}
               onChange={(e) => onChange({ savedPrivateKey: e.target.value })}
               rows={3}

@@ -6,4 +6,5 @@ export { BatchJobRow } from './BatchJobRow';
 export { BatchJobTable } from './BatchJobTable';
 export { UnregisteredTypeChips } from './UnregisteredTypeChips';
 export { BatchJobSlideOver } from './BatchJobSlideOver';
+export { CreateBatchJobWizard } from './CreateBatchJobWizard';
 export * from './types';

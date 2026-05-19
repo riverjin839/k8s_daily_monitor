@@ -25,7 +25,8 @@
 | `frontend/src/components/batch-jobs/index.ts` | barrel export |
 | `frontend/src/components/batch-jobs/types.ts` | `FilterKey`, `BatchJobStatus` union 등 로컬 타입 |
 | `frontend/src/components/batch-jobs/StatusPill.tsx` | 기존 inline `StatusPill` 추출 + 재사용 가능 export |
-| `frontend/src/components/batch-jobs/BatchJobFilters.tsx` | 상태 칩 + 검색 input |
+| `frontend/src/components/batch-jobs/BatchJobFilters.tsx` | 상태 칩 + 검색 input (UI 만) |
+| `frontend/src/components/batch-jobs/filters.ts` | 필터 predicates + `applyFilter` 헬퍼 (component file 과 분리 — react-refresh/only-export-components 룰 충족) |
 | `frontend/src/components/batch-jobs/BatchJobTable.tsx` | 테이블 컨테이너 + 정렬 헤더 + 빈 상태 |
 | `frontend/src/components/batch-jobs/BatchJobRow.tsx` | 행 1개 (status pill·이름·메타·meta cells) |
 | `frontend/src/components/batch-jobs/UnregisteredTypeChips.tsx` | 단일 클러스터 모드 하단 미등록 타입 칩 영역 |
@@ -162,8 +163,11 @@ EOF
 
 ## Task 2: BatchJobFilters
 
+> **Plan Correction (2026-05-19):** 원안은 `BatchJobFilters.tsx` 한 파일에 컴포넌트 + `applyFilter` 헬퍼를 같이 export 했으나 `react-refresh/only-export-components` 룰을 위반해 zero-warning 게이트를 통과하지 못함. 헬퍼와 predicates 를 `filters.ts` 로 분리해 컴포넌트 파일은 UI 만 담당하도록 수정. 외부 소비자는 barrel(`@/components/batch-jobs`) 로 import 하므로 영향 없음.
+
 **Files:**
-- Create: `frontend/src/components/batch-jobs/BatchJobFilters.tsx`
+- Create: `frontend/src/components/batch-jobs/filters.ts` (predicates + applyFilter)
+- Create: `frontend/src/components/batch-jobs/BatchJobFilters.tsx` (UI 만)
 - Modify: `frontend/src/components/batch-jobs/index.ts`
 
 - [ ] **Step 1: BatchJobFilters.tsx 작성**
@@ -291,7 +295,8 @@ export function applyFilter(jobs: BatchJob[], active: FilterKey, search: string)
 ```ts
 // frontend/src/components/batch-jobs/index.ts
 export { StatusPill } from './StatusPill';
-export { BatchJobFilters, applyFilter } from './BatchJobFilters';
+export { BatchJobFilters } from './BatchJobFilters';
+export { applyFilter, FILTER_PREDICATES } from './filters';
 export * from './types';
 ```
 
@@ -539,7 +544,8 @@ export function BatchJobTable({
 ```ts
 // frontend/src/components/batch-jobs/index.ts
 export { StatusPill } from './StatusPill';
-export { BatchJobFilters, applyFilter } from './BatchJobFilters';
+export { BatchJobFilters } from './BatchJobFilters';
+export { applyFilter, FILTER_PREDICATES } from './filters';
 export { BatchJobRow } from './BatchJobRow';
 export { BatchJobTable } from './BatchJobTable';
 export * from './types';
@@ -628,7 +634,8 @@ export function UnregisteredTypeChips({ clusterJobs, allTypes, onPick }: Unregis
 ```ts
 // frontend/src/components/batch-jobs/index.ts
 export { StatusPill } from './StatusPill';
-export { BatchJobFilters, applyFilter } from './BatchJobFilters';
+export { BatchJobFilters } from './BatchJobFilters';
+export { applyFilter, FILTER_PREDICATES } from './filters';
 export { BatchJobRow } from './BatchJobRow';
 export { BatchJobTable } from './BatchJobTable';
 export { UnregisteredTypeChips } from './UnregisteredTypeChips';
@@ -1093,7 +1100,8 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
 ```ts
 // frontend/src/components/batch-jobs/index.ts
 export { StatusPill } from './StatusPill';
-export { BatchJobFilters, applyFilter } from './BatchJobFilters';
+export { BatchJobFilters } from './BatchJobFilters';
+export { applyFilter, FILTER_PREDICATES } from './filters';
 export { BatchJobRow } from './BatchJobRow';
 export { BatchJobTable } from './BatchJobTable';
 export { UnregisteredTypeChips } from './UnregisteredTypeChips';
@@ -1643,7 +1651,8 @@ export function CreateBatchJobWizard({
 ```ts
 // frontend/src/components/batch-jobs/index.ts
 export { StatusPill } from './StatusPill';
-export { BatchJobFilters, applyFilter } from './BatchJobFilters';
+export { BatchJobFilters } from './BatchJobFilters';
+export { applyFilter, FILTER_PREDICATES } from './filters';
 export { BatchJobRow } from './BatchJobRow';
 export { BatchJobTable } from './BatchJobTable';
 export { UnregisteredTypeChips } from './UnregisteredTypeChips';

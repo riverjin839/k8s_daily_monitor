@@ -1,5 +1,5 @@
 // frontend/src/pages/BatchJobsPage.tsx
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ListTree, Plus } from 'lucide-react';
 
 import { MacCard } from '@/components/ui/MacCard';
@@ -38,32 +38,34 @@ export function BatchJobsPage() {
   const [statusFilter, setStatusFilter] = useState<FilterKey>('all');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [selectedJob, setSelectedJob] = useState<BatchJob | null>(null);
   const [wizardCtx, setWizardCtx] = useState<{ clusterId?: string; jobType?: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<BatchJob | null>(null);
 
-  const allJobs = useMemo(() => allJobsQ.data ?? [], [allJobsQ.data]);
-  const types = useMemo(() => typesQ.data ?? [], [typesQ.data]);
+  const allJobs = allJobsQ.data ?? [];
+  const types = typesQ.data ?? [];
 
   // 클러스터 격리 후 필터/검색 적용.
-  const scopedJobs = useMemo(() => {
-    if (selectedClusterId === null) return allJobs;
-    return allJobs.filter((j) => j.clusterId === selectedClusterId);
-  }, [allJobs, selectedClusterId]);
+  const scopedJobs = selectedClusterId === null
+    ? allJobs
+    : allJobs.filter((j) => j.clusterId === selectedClusterId);
 
-  const visibleJobs = useMemo(
-    () => applyFilter(scopedJobs, statusFilter, search),
-    [scopedJobs, statusFilter, search],
-  );
+  const visibleJobs = applyFilter(scopedJobs, statusFilter, search);
 
-  // 잡이 사라지면 selectedJobId 자동 정리.
-  const selectedJob = useMemo(
-    () => allJobs.find((j) => j.id === selectedJobId) ?? null,
-    [allJobs, selectedJobId],
-  );
+  // allJobs 가 바뀔 때마다 selectedJob 을 최신 데이터로 동기화.
+  // 새로 만든 잡(아직 TQ 캐시에 없음)은 wizard 가 onCreated 로 전달한
+  // 객체를 그대로 보유하므로 race condition 없이 슬라이드오버가 열린다.
+  const isLoadingJobs = allJobsQ.isLoading;
   useEffect(() => {
-    if (selectedJobId && !selectedJob) setSelectedJobId(null);
-  }, [selectedJobId, selectedJob]);
+    setSelectedJob((curr) => {
+      if (!curr) return null;
+      const fresh = allJobs.find((j) => j.id === curr.id);
+      if (fresh) return fresh;           // 최신 데이터로 sync
+      if (isLoadingJobs) return curr;    // 첫 로딩 중에는 유지
+      return null;                        // 외부에서 삭제됨
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allJobsQ.data, isLoadingJobs]);
 
   // 좁은 뷰포트 (<1280px) 에서 슬라이드오버 overlay 모드.
   const [overlayMode, setOverlayMode] = useState(false);
@@ -75,27 +77,22 @@ export function BatchJobsPage() {
     return () => mq.removeEventListener('change', sync);
   }, []);
 
-  const selectedCluster = useMemo(
-    () =>
-      selectedClusterId
-        ? clusters.find((c) => c.id === selectedClusterId) ?? null
-        : null,
-    [selectedClusterId, clusters],
-  );
+  const selectedCluster = selectedClusterId
+    ? clusters.find((c) => c.id === selectedClusterId) ?? null
+    : null;
 
   // 페이지 헤더 부제 텍스트.
-  const headerSubtitle = useMemo(() => {
-    if (selectedClusterId === null) {
-      return `전체 ${clusters.length}개 클러스터 · 등록 잡 ${allJobs.length}`;
-    }
-    const c = selectedCluster;
-    const stats = {
-      total: scopedJobs.length,
-      failed: scopedJobs.filter((j) => FAILED_STATUSES.has(j.lastStatus)).length,
-      running: scopedJobs.filter((j) => j.lastStatus === 'running').length,
-    };
-    return `${c?.name ?? selectedClusterId}${c?.region ? ` · ${c.region}` : ''} · 잡 ${stats.total} · 실패 ${stats.failed} · 실행 중 ${stats.running}`;
-  }, [selectedClusterId, selectedCluster, clusters.length, allJobs.length, scopedJobs]);
+  const headerSubtitle = selectedClusterId === null
+    ? `전체 ${clusters.length}개 클러스터 · 등록 잡 ${allJobs.length}`
+    : (() => {
+        const c = selectedCluster;
+        const stats = {
+          total: scopedJobs.length,
+          failed: scopedJobs.filter((j) => FAILED_STATUSES.has(j.lastStatus)).length,
+          running: scopedJobs.filter((j) => j.lastStatus === 'running').length,
+        };
+        return `${c?.name ?? selectedClusterId}${c?.region ? ` · ${c.region}` : ''} · 잡 ${stats.total} · 실패 ${stats.failed} · 실행 중 ${stats.running}`;
+      })();
 
   const canCreate = clusters.length > 0 && types.length > 0;
 
@@ -176,10 +173,10 @@ export function BatchJobsPage() {
                   <BatchJobTable
                     jobs={visibleJobs}
                     clusters={selectedClusterId === null ? clusters : undefined}
-                    selectedJobId={selectedJobId}
+                    selectedJobId={selectedJob?.id ?? null}
                     sort={sort}
                     onSortChange={setSort}
-                    onSelectJob={(job) => setSelectedJobId(job.id)}
+                    onSelectJob={(job) => setSelectedJob(job)}
                     emptyMessage={
                       scopedJobs.length === 0
                         ? selectedClusterId === null
@@ -204,7 +201,7 @@ export function BatchJobsPage() {
           {selectedJob && !overlayMode && (
             <BatchJobSlideOver
               job={selectedJob}
-              onClose={() => setSelectedJobId(null)}
+              onClose={() => setSelectedJob(null)}
               onDelete={setConfirmDelete}
             />
           )}
@@ -215,7 +212,7 @@ export function BatchJobsPage() {
       {selectedJob && overlayMode && (
         <BatchJobSlideOver
           job={selectedJob}
-          onClose={() => setSelectedJobId(null)}
+          onClose={() => setSelectedJob(null)}
           onDelete={setConfirmDelete}
           overlayMode
         />
@@ -228,7 +225,7 @@ export function BatchJobsPage() {
           defaultClusterId={wizardCtx.clusterId}
           defaultJobType={wizardCtx.jobType}
           onClose={() => setWizardCtx(null)}
-          onCreated={(job) => setSelectedJobId(job.id)}
+          onCreated={(job) => setSelectedJob(job)}
         />
       )}
 
@@ -242,7 +239,7 @@ export function BatchJobsPage() {
           danger
           onConfirm={async () => {
             await del.mutateAsync(confirmDelete.id);
-            if (selectedJobId === confirmDelete.id) setSelectedJobId(null);
+            if (selectedJob?.id === confirmDelete.id) setSelectedJob(null);
             setConfirmDelete(null);
           }}
           onCancel={() => setConfirmDelete(null)}

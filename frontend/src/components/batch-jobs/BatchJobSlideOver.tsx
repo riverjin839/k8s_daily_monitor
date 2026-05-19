@@ -1,5 +1,5 @@
 // frontend/src/components/batch-jobs/BatchJobSlideOver.tsx
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Play, History, Trash2, X } from 'lucide-react';
 import type { BatchJob } from '@/services/api';
 import { MacCard } from '@/components/ui/MacCard';
@@ -24,14 +24,17 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
     setRunFormOpen(false);
   }, [job.id]);
 
-  // ESC 키로 닫힘.
+  // ESC 키로 닫힘. onCloseRef 패턴으로 listener 재부착 방지.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const body = (
     <MacCard
@@ -75,7 +78,7 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
       {/* 실행 폼 — expandable */}
       {runFormOpen && (
         <div className="mb-4 pb-4 border-b border-border">
-          <RunForm job={job} />
+          <RunForm key={job.id} job={job} />
         </div>
       )}
 
@@ -93,8 +96,12 @@ export function BatchJobSlideOver({ job, onClose, onDelete, overlayMode = false 
   if (overlayMode) {
     return (
       <div
+        role="button"
+        tabIndex={0}
+        aria-label="패널 닫기"
         className="fixed inset-0 z-40 bg-black/40"
         onClick={onClose}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClose(); }}
       >
         <div
           className="absolute inset-y-0 right-0 w-[min(420px,90vw)] overflow-y-auto p-4"

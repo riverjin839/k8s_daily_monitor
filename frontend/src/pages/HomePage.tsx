@@ -342,8 +342,8 @@ export function HomePage() {
 
           {/* ── 메인 2-col (3:7 — 달력에 더 많은 가로 폭) ─────────────── */}
           <div className="grid grid-cols-1 xl:grid-cols-10 gap-3">
-            {/* 담당자별 오늘 할일 / 이슈 — 좌측 3/10 */}
-            <MacCard title="DevOps 담당자별 오늘 할일 / 이슈" bodyPadding="p-4" rootClassName="xl:col-span-3">
+            {/* 담당자별 진행 현황 — 좌측 3/10 */}
+            <MacCard title="DevOps 담당자별 진행 현황" bodyPadding="p-4" rootClassName="xl:col-span-3">
               <MemberTodayTodos selectedClusterId={selectedClusterId} />
             </MacCard>
 
